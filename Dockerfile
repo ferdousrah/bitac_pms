@@ -21,15 +21,19 @@ FROM composer:2 AS vendor
 WORKDIR /app
 
 COPY composer.json composer.lock ./
+# The composer:2 image doesn't ship every PHP extension; the *runtime* PHP image
+# (stage 3) does. We're only resolving + downloading packages here, not running
+# code, so it's safe to skip platform-extension checks at install time.
 RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
-    --no-interaction
+    --no-interaction \
+    --ignore-platform-reqs
 
 COPY . .
-RUN composer dump-autoload --optimize --no-dev
+RUN composer dump-autoload --optimize --no-dev --no-scripts
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3 — Runtime: PHP 8.2 + Apache + LibreOffice (for DWG/Office conversions)
