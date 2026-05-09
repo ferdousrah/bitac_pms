@@ -1,0 +1,44 @@
+# Local dev
+.env
+.env.local
+.env.testing
+.env.example.bak
+
+# Node / PHP build artifacts (re-built inside Docker)
+node_modules
+npm-debug.log
+vendor
+.phpunit.result.cache
+
+# Storage runtime data (mounted as Coolify persistent volumes — never bake into the image)
+storage/app/public/*
+!storage/app/public/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/fonts/*
+
+# Public build output (Vite stage rebuilds it)
+public/build
+public/hot
+public/storage
+
+# IDE / OS junk
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.github
+
+# Tests / docs that don't belong in prod images
+phpunit.xml
+tests
+docs
+*.md
+!README.md
