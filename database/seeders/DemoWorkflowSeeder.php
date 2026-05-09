@@ -197,22 +197,32 @@ class DemoWorkflowSeeder extends Seeder
         }
 
         // ==================================================================
-        // Material Requisition Notes (from MRP)
+        // Material Requisition (header + items) — phase3_pcd_module schema:
+        // a single MRN with multiple line items, replacing the old single-line MRN.
         // ==================================================================
         $mrqItems = [
-            ['material_name' => 'EN24 Steel Bar (40mm dia)', 'material_code' => 'RM-EN24-40', 'required_qty' => 81.0, 'available_qty' => 65.0, 'shortage_qty' => 16.0, 'unit' => 'kg'],
-            ['material_name' => 'Cutting Oil',               'material_code' => 'RM-CUT-OIL', 'required_qty' => 10.0, 'available_qty' => 10.0, 'shortage_qty' => 0,    'unit' => 'ltr'],
-            ['material_name' => 'Grinding Wheel',            'material_code' => 'RM-GW-125',  'required_qty' => 2.5,  'available_qty' => 2.5,  'shortage_qty' => 0,    'unit' => 'pcs'],
+            ['description' => 'EN24 Steel Bar (40mm dia)', 'unit' => 'kg',  'required_qty' => 81.0, 'stock_qty' => 65.0, 'pending_qty' => 16.0, 'issue_qty' => 65.0],
+            ['description' => 'Cutting Oil',               'unit' => 'ltr', 'required_qty' => 10.0, 'stock_qty' => 10.0, 'pending_qty' => 0.0,  'issue_qty' => 10.0],
+            ['description' => 'Grinding Wheel',            'unit' => 'pcs', 'required_qty' => 2.5,  'stock_qty' => 2.5,  'pending_qty' => 0.0,  'issue_qty' => 2.5],
         ];
 
         $procUser = User::whereHas('roles', fn($q) => $q->where('name', 'procurement-officer'))->first();
-        foreach ($mrqItems as $item) {
-            DB::table('material_requisition_notes')->insert(array_merge($item, [
-                'work_order_id' => $workOrder->id,
-                'status'        => $item['shortage_qty'] > 0 ? 'pending' : 'issued',
-                'requested_by'  => $procUser->id,
-                'created_at'    => now(),
-                'updated_at'    => now(),
+        $mrnId = DB::table('material_requisitions')->insertGetId([
+            'mrn_number'    => 'MRN-' . date('Y') . '-0001',
+            'work_order_id' => $workOrder->id,
+            'request_date'  => now()->toDateString(),
+            'requested_by'  => $procUser?->id,
+            'status'        => 'partially_issued',
+            'created_at'    => now(),
+            'updated_at'    => now(),
+        ]);
+        foreach ($mrqItems as $i => $row) {
+            DB::table('material_requisition_items')->insert(array_merge($row, [
+                'material_requisition_id' => $mrnId,
+                'item_no'                 => $i + 1,
+                'issue_date'              => $row['pending_qty'] > 0 ? null : now()->toDateString(),
+                'created_at'              => now(),
+                'updated_at'              => now(),
             ]));
         }
 
