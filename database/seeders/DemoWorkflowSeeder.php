@@ -19,6 +19,7 @@ use App\Models\QcInspection;
 use App\Models\Quotation;
 use App\Models\QuotationApproval;
 use App\Models\Rfq;
+use App\Models\RfqItem;
 use App\Models\User;
 use App\Models\WorkOrder;
 use Carbon\Carbon;
@@ -41,14 +42,21 @@ class DemoWorkflowSeeder extends Seeder
         // ==================================================================
         // RFQ
         // ==================================================================
+        // RFQ no longer has product_id/quantity directly — those moved to rfq_items
+        // (one row per line item). Create the RFQ then attach a single item for this product.
         $rfq = Rfq::create([
             'customer_id' => $customer->id,
-            'product_id'  => $product->id,
-            'quantity'    => 50,
             'required_by' => Carbon::now()->addDays(45),
             'notes'       => 'Urgently required for Q2 maintenance schedule. Standard specification.',
             'status'      => 'quoted',
             'created_by'  => $salesUser->id,
+        ]);
+        RfqItem::create([
+            'rfq_id'          => $rfq->id,
+            'product_id'      => $product->id,
+            'job_description' => $product->name,
+            'quantity'        => 50,
+            'unit'            => $product->unit ?? 'pcs',
         ]);
 
         // ==================================================================
