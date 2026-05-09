@@ -1,0 +1,268 @@
+# BITAC PMS — Project Context for Claude
+
+> **For Claude**: This file captures the architecture, conventions, and feature inventory. Read this first before making changes. Last major update: 2026-04-14.
+
+---
+
+## 🏭 What This Is
+
+**BITAC PMS** = Production Management System for **Bangladesh Industrial Technical Assistance Centre (BITAC)** — an autonomous body under the Ministry of Industries, Government of Bangladesh.
+
+BITAC is a real organization (since 1962) with 6 regional centres (Dhaka HQ, Chittagong, Chandpur, Khulna, Bogra, TTI). It does industrial training, import-substitute manufacturing, testing, and R&D for government and private sector clients (Railway, BPDB, BWDB, sugar mills, etc.).
+
+This system manages the full workflow: **IED → PCD → Shops → QC → Delivery → Invoicing**.
+
+## 🛠 Tech Stack
+
+- **Backend**: Laravel 11, PHP 8.2+, MySQL
+- **Frontend**: Inertia.js + React 18 + TypeScript + TailwindCSS
+- **Animation**: Motion (formerly Framer Motion), Lucide React icons
+- **AI**: Google Gemini 2.5 Flash (function calling, multimodal)
+- **Real-time**: Polling-based (no WebSockets configured yet — `BROADCAST_CONNECTION=null`)
+- **WebRTC**: For peer-to-peer voice calls in meetings (no server-side media)
+- **Exports**: PhpOffice/PhpPresentation (PPTX), DomPDF, PhpSpreadsheet (Excel)
+- **Permissions**: Spatie Permission package
+- **Auth**: Laravel Breeze + separate `customer` guard for Customer Portal
+
+## 📂 Project Structure Conventions
+
+```
+app/
+├── Http/Controllers/
+│   ├── Admin/              # Master data CRUD (customers, users, machines, etc.)
+│   ├── Customer/           # Customer portal (dashboard, orders, invoices)
+│   ├── Auth/               # Login/register (inc. CustomerLoginController)
+│   └── [Resource]Controller — one per module (RfqController, QuotationController, etc.)
+├── Models/                 # One per entity, singular names (Rfq, Quotation)
+├── Services/
+│   ├── AiAgent/            # GeminiChatService, ToolRegistry, ReportGenerator
+│   ├── MeetingIntelligenceService.php
+│   ├── PptxParser.php
+│   ├── SettingService.php
+│   └── RfqAutomationService.php
+├── Http/Middleware/
+│   ├── HandleInertiaRequests.php  # Shares auth/branding/chatbot to frontend
+│   └── SetActiveCenter.php        # Multi-center scoping
+└── Scopes/
+    └── CenterScope.php            # Auto-filters by center_id
+
+resources/js/
+├── Pages/                  # Inertia pages — mirror routes
+│   ├── Admin/{Resource}/(Index|CreateEdit|Show).tsx
+│   ├── Customer/           # Customer portal pages
+│   ├── Meetings/           # Meeting Room + Summary + Analytics
+│   └── ...one folder per module
+├── Components/
+│   ├── AiChat/             # ChatPanel.tsx (floating Oli), PresentationViewer.tsx
+│   ├── SortableHeader.tsx
+│   └── ...
+├── Layouts/
+│   └── AppLayout.tsx       # Main shell with sidebar + ChatPanel
+├── lib/
+│   ├── navigation.ts       # Sidebar nav config — add new pages here
+│   └── WebRTCManager.ts    # Meeting voice call manager
+└── app.tsx                 # Inertia bootstrap
+
+routes/web.php              # All routes here, grouped by module
+database/
+├── migrations/             # Timestamped — use latest +1 for new ones
+└── seeders/                # Default password: 'password' for all seeded users
+```
+
+## 🎨 UI / Styling Conventions
+
+- Use existing classes: `btn-primary`, `btn-outline`, `btn-ghost`, `card`, `card-header`, `card-body`, `form-input`, `form-textarea`, `form-label`, `form-group`, `form-error`, `alert alert-info`
+- Surface colors: `bg-surface-50/100/200`, `text-surface-400/500/800/900`
+- Brand color: `text-brand-500`, `bg-brand-50`, etc.
+- Animations: `animate-fade-in` for page loads
+- Icons: use Lucide React for most icons; Flaticon classes (`fi fi-rr-*`) are also used in legacy code
+- Currency: `৳` for BDT, numbers formatted `toLocaleString('en-IN', { minimumFractionDigits: 2 })`
+
+## 🤖 Oli (AI Assistant) — The Showpiece Feature
+
+Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
+
+- **`app/Services/AiAgent/GeminiChatService.php`** — API calls, history sanitization, system prompt (which includes BITAC knowledge + industrial production expertise)
+- **`app/Services/AiAgent/ToolRegistry.php`** — all tool declarations + implementations (1200+ lines)
+- **`resources/js/Components/AiChat/ChatPanel.tsx`** — floating chat UI (1400+ lines)
+- **`resources/js/Components/AiChat/PresentationViewer.tsx`** — fullscreen live presenter
+
+### Key Tools
+`production_monitor`, `work_order_tracker`, `machine_health_agent`, `finance_analyst`, `qc_inspector`, `quality_analyst`, `sales_pipeline_agent`, `downtime_analyst`, `excel_report_builder`, `pdf_report_builder`, `chart_generator`, `presentation_builder`, `live_presentation`, `oli_introduction`, `navigator`, `customer_creator`, `rfq_creator`, `rfq_auto_estimate`, `rfq_auto_quotation`, `rfq_analytics`, `cost_estimate_advisor`
+
+### System Prompt Notes
+- Supports English + Bangla (বাংলা), auto-detects language
+- Has BITAC knowledge built-in (history, departments, pricing groups A/B/C)
+- Has industrial production expertise (machining, welding, heat treatment, materials, tolerances)
+- Has graceful fallback for questions it can't answer
+- `oli_introduction` tool has pre-built 10-slide demo deck in EN + BN
+
+## 🤝 Meeting Room (4-Phase Feature)
+
+**Routes**: `/meetings`, `/meetings/{id}`, `/meetings/{id}/summary`, `/meeting-analytics`
+
+### Phase 1 — Text Chat + Shared Presentation
+- Multi-user meetings with unique codes (e.g. `ABCD-EFGH`)
+- 2.5s polling for sync (no WebSockets yet)
+- Oli joins every meeting as AI participant — triggered by `@oli` or "Oli" prefix
+- Full presentations load on shared screen
+
+### Phase 2 — Voice Input (Speech-to-Text)
+- Web Speech API
+- English / Bangla toggle (`en-US` / `bn-BD`)
+- Push-to-talk OR continuous listening modes
+- Real-time speaking indicators across participants
+
+### Phase 3 — WebRTC Voice Call
+- Real peer-to-peer audio (mesh topology, 2-4 participants)
+- `resources/js/lib/WebRTCManager.ts`
+- Signaling via cache-based polling
+- STUN servers: `stun.l.google.com:19302`
+- **Requires HTTPS** in production (localhost exempt)
+- Volume-level visualization per peer
+
+### Phase 4 — Meeting Intelligence
+- Auto-extracts action items + decisions every 5 messages (via Gemini)
+- Smart assignee matching (fuzzy name → user)
+- Due date parsing ("next Friday" → YYYY-MM-DD)
+- Polished meeting minutes auto-generated at meeting end
+- Post-meeting summary + analytics dashboard
+
+### Shared Screen Supports
+- Oli-generated slides (charts, KPIs, tables, bullets)
+- User-uploaded images (shown as slides with "Shared by X")
+- User-uploaded **PPTX files** — parsed via PhpPresentation, all slides pushed to shared screen
+- PDFs (download card in chat)
+
+## 🔑 Multi-Tenant / Multi-Center
+
+- All main tables have `center_id` column
+- `CenterScope` global scope auto-filters queries by active center
+- `HasCenter` trait auto-fills center_id on save
+- `super_admin` role can switch centers via session (`session('active_center_id')`)
+- Dhaka is center #1
+
+## 👥 Auth Setup
+
+- **Staff** login: `/login` → redirects to `/dashboard`
+- **Customer portal** login: `/customer/login` → redirects to `/customer/dashboard`
+- Two guards: `web` (staff, has Spatie roles) and `customer` (no roles)
+- **Default password** for all seeded users/customers: `password`
+- **Example staff**: `admin@bitac.gov.bd` / `password`
+- **Example customer**: `shoeb@acimotors.com.bd` / `password`
+
+### ⚠️ Important: Customer model does NOT use Spatie
+Customer extends Authenticatable but does NOT have `hasRole()`. In middleware, use:
+```php
+method_exists($user, 'hasRole') && $user->hasRole(...)
+```
+Don't call `hasRole()` blindly on auth users — check guard first with `auth('web')->check()`.
+
+### ⚠️ Password Hashing
+Both `User` and `Customer` models have `protected $casts = ['password' => 'hashed']`. **Do NOT call `Hash::make()` manually** when setting passwords — the cast auto-hashes. Double-hashing = broken login.
+
+## 🐛 Common Gotchas (Learned the Hard Way)
+
+### 1. Inertia form PUT/PATCH
+```tsx
+// ❌ WRONG — method option is ignored
+post(url, { method: 'put' } as any);
+
+// ✅ RIGHT — use dedicated method
+const { put } = useForm({...});
+put(url);
+
+// ✅ RIGHT for file uploads + PUT (Laravel method spoofing)
+transform(d => ({ ...d, _method: 'put' }));
+post(url, { forceFormData: true });
+```
+
+### 2. Guest Middleware Redirect
+Laravel 11's default `guest` middleware redirects authenticated users to `/`. We configured smart routing in `bootstrap/app.php`:
+- Customer logged in → `/customer/dashboard`
+- Staff logged in → `/dashboard`
+- Unauth customer area access → `/customer/login`
+
+### 3. Inline SVG Charts
+Don't use `motion.rect` with animated `height` attribute — it gets stuck. Use plain `<rect>` with CSS `@keyframes` + `transform: scaleY()`.
+
+### 4. Text Inside SVG
+Tailwind font-size classes (`text-[9px]`) don't work in SVG text. Use `fontSize="9"` attribute instead.
+
+### 5. PPTX Files
+Upload uses PhpPresentation (server-side). Max 20MB. Slides are text-only — embedded images in PPTX aren't extracted (future: use LibreOffice headless to render as PNG).
+
+## 🚀 Quick Commands
+
+```bash
+# Setup
+composer install
+npm install                   # (or npm install --legacy-peer-deps if peer conflicts)
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan storage:link
+
+# Dev
+npm run dev                   # Vite dev server
+php artisan serve             # Laravel on :8000
+
+# Build
+npm run build                 # Production build
+php artisan optimize
+
+# Common debug
+php artisan route:list --path=<prefix>
+php artisan tinker
+tail -f storage/logs/laravel.log
+```
+
+## 📋 Important Files to Know
+
+| Purpose | File |
+|---|---|
+| Sidebar nav | `resources/js/lib/navigation.ts` |
+| Inertia shared props | `app/Http/Middleware/HandleInertiaRequests.php` |
+| AI tools + brain | `app/Services/AiAgent/ToolRegistry.php` + `GeminiChatService.php` |
+| Meeting controller | `app/Http/Controllers/MeetingController.php` (900+ lines) |
+| Chat UI | `resources/js/Components/AiChat/ChatPanel.tsx` |
+| Live presenter | `resources/js/Components/AiChat/PresentationViewer.tsx` |
+| Meeting room UI | `resources/js/Pages/Meetings/Room.tsx` |
+| WebRTC | `resources/js/lib/WebRTCManager.ts` |
+| Settings service | `app/Services/SettingService.php` |
+| Chatbot customization | `resources/js/Pages/Admin/ChatbotSettings.tsx` |
+
+## 📦 What's Been Built (Feature Inventory)
+
+- 13 core modules (IED, PCD, Shops, QC, Delivery, Invoicing, Reports, etc.)
+- Full RFQ → Cost Estimate → Quotation → Work Order → Delivery → Invoice pipeline
+- Dynamic multi-level approval chains for quotations + cost estimates
+- Visual Gantt progress tracking on work orders
+- Live NOC dashboard with day/night mood theme
+- PWA installable app
+- Role-based access control with Spatie
+- Customer Portal (separate guard)
+- Multi-center architecture
+- AI chatbot Oli with 20+ tools (English + Bangla)
+- Document scanning (image + PDF via Gemini multimodal)
+- Live Presenter (fullscreen interactive presentations with voice)
+- 4-phase Meeting Room (chat + voice input + WebRTC calls + intelligence)
+- Dynamic slide injection during Q&A
+- Pre-built 10-slide Oli self-introduction (EN + বাংলা)
+- Report generation (Excel, PDF, PPTX, SVG charts)
+- Auto meeting minutes + action item extraction
+- PPTX file upload + shared screen rendering
+
+## 🎯 Feedback Preferences
+
+- User prefers **terse responses** — no trailing summaries, no obvious recaps
+- User values **professional quality** for customer-facing features (this is a government demo system)
+- User likes **bilingual** features when appropriate (English + Bangla)
+- User cares about **visual polish** — use animations, gradients, proper contrast
+- **Don't over-engineer** — build what's asked, no speculative abstractions
+- **Test the build** (`npm run build`) after significant changes
+
+## 📞 Current Working Directory
+
+On Windows: `f:\xampp\htdocs\bitac_pms`
+Uses XAMPP for local dev (MySQL + Apache). `php artisan serve` on port 8000 is typical.

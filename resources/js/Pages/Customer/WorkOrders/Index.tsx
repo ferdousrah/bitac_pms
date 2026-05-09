@@ -1,0 +1,122 @@
+import { Link } from '@inertiajs/react';
+
+const STATUS_BADGE: Record<string, string> = {
+    draft:              'badge-slate',
+    approved:           'badge-blue',
+    in_production:      'badge-amber',
+    qc_hold:            'badge-amber',
+    qc_passed:          'badge-green',
+    ready_for_delivery: 'badge-purple',
+    delivered:          'badge-green',
+    cancelled:          'badge-red',
+};
+
+export default function CustomerWorkOrderIndex({ workOrders }: any) {
+    const list = workOrders?.data ?? [];
+
+    return (
+        <div className="min-h-screen bg-surface-50">
+            {/* Nav */}
+            <nav className="bg-white border-b border-surface-100 shadow-sm sticky top-0 z-30">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center gap-4">
+                    <Link href="/customer/dashboard" className="btn-ghost btn-xs">
+                        <i className="fi fi-rr-arrow-left leading-none text-xs" /> Dashboard
+                    </Link>
+                    <div className="h-5 w-px bg-surface-200" />
+                    <h1 className="font-bold text-surface-900 text-sm sm:text-base">My Work Orders</h1>
+                </div>
+            </nav>
+
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 animate-fade-in">
+                <div className="card">
+                    <div className="card-header flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm shrink-0 bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-md">
+                                <i className="fi fi-rr-clipboard-list leading-none" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-semibold text-surface-800">All Work Orders</h2>
+                                <p className="text-xs text-surface-400 mt-0.5">{list.length} order{list.length === 1 ? '' : 's'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Desktop */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>WO Number</th>
+                                    <th>Product</th>
+                                    <th>Qty</th>
+                                    <th>Status</th>
+                                    <th>Due Date</th>
+                                    <th>Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {list.map((wo: any) => (
+                                    <tr key={wo.id}>
+                                        <td>
+                                            <Link href={`/customer/work-orders/${wo.id}`} className="font-mono font-semibold text-brand-600 hover:text-brand-700 hover:underline">
+                                                {wo.wo_number}
+                                            </Link>
+                                        </td>
+                                        <td className="text-surface-800 font-medium">{wo.product}</td>
+                                        <td className="font-mono text-surface-700">{wo.quantity}</td>
+                                        <td>
+                                            <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>
+                                                {wo.status?.replace(/_/g, ' ')}
+                                            </span>
+                                        </td>
+                                        <td className="text-surface-500">{wo.due_date ?? '—'}</td>
+                                        <td className="text-surface-400 text-xs">{wo.updated_at}</td>
+                                    </tr>
+                                ))}
+                                {list.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6}>
+                                            <div className="empty-state">
+                                                <div className="empty-state-icon"><i className="fi fi-rr-clipboard-list" /></div>
+                                                <p className="empty-state-title">No work orders</p>
+                                                <p className="empty-state-text">You do not have any work orders yet.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile */}
+                    <div className="md:hidden card-body space-y-3">
+                        {list.map((wo: any) => (
+                            <Link
+                                key={wo.id}
+                                href={`/customer/work-orders/${wo.id}`}
+                                className="block rounded-xl border border-surface-100 bg-surface-50/50 hover:bg-white hover:shadow-sm p-3.5 transition-all"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</span>
+                                    <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>{wo.status?.replace(/_/g, ' ')}</span>
+                                </div>
+                                <p className="text-sm font-medium text-surface-800 truncate">{wo.product}</p>
+                                <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-surface-100 text-xs">
+                                    <span className="text-surface-500">Qty <span className="font-mono text-surface-700">{wo.quantity}</span></span>
+                                    <span className="text-surface-500">Due {wo.due_date ?? '—'}</span>
+                                </div>
+                            </Link>
+                        ))}
+                        {list.length === 0 && (
+                            <div className="empty-state">
+                                <div className="empty-state-icon"><i className="fi fi-rr-clipboard-list" /></div>
+                                <p className="empty-state-title">No work orders</p>
+                                <p className="empty-state-text">You do not have any work orders yet.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
