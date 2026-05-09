@@ -26,7 +26,7 @@ if [ -n "${DB_HOST:-}" ]; then
     done
 fi
 
-# Ensure runtime directories exist + are writable
+# Ensure runtime directories exist
 mkdir -p \
     storage/app/public \
     storage/framework/cache/data \
@@ -35,8 +35,6 @@ mkdir -p \
     storage/fonts \
     storage/logs \
     bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache
-chmod -R ug+rwX            storage bootstrap/cache
 
 # Public storage symlink (idempotent)
 if [ ! -L public/storage ]; then
@@ -48,7 +46,8 @@ fi
 echo "==> Running migrations..."
 php artisan migrate --force --no-interaction
 
-# Drop stale caches then rebuild for production performance
+# Drop stale caches then rebuild for production performance.
+# All these run as root (the entrypoint user), which is fine — we re-chown below.
 echo "==> Rebuilding caches..."
 php artisan config:clear
 php artisan route:clear
@@ -57,6 +56,16 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan event:cache 2>/dev/null || true
+
+# Final ownership/permission pass MUST come AFTER artisan commands so the
+# cache files written by root (config.php, routes-v7.php, etc.) and any
+# auto-created cache subdirs are owned by Apache's www-data user.
+echo "==> Fixing ownership for Apache..."
+chown -R www-data:www-data storage bootstrap/cache
+find storage         -type d -exec chmod 775 {} \;
+find storage         -type f -exec chmod 664 {} \;
+find bootstrap/cache -type d -exec chmod 775 {} \;
+find bootstrap/cache -type f -exec chmod 664 {} \;
 
 echo "==> Boot done. Handing off to Apache."
 exec "$@"
