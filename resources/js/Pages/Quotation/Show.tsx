@@ -610,12 +610,20 @@ export default function QuotationShow({
                         {/* Action buttons */}
                         <div className="card">
                             <div className="card-body space-y-2.5">
-                                {/* PDF Download */}
-                                <a href={`/quotations/${quotation.id}/pdf`} target="_blank"
-                                    className="btn-secondary w-full">
+                                {/* PDF preview popup (download button is inside the popup header) */}
+                                <button
+                                    type="button"
+                                    onClick={() => setEstimatePdf({
+                                        open:     true,
+                                        url:      `/quotations/${quotation.id}/pdf?preview=base64`,
+                                        title:    `Quotation Q-${String(quotation.id).padStart(5, '0')} v${quotation.version}`,
+                                        subtitle: typeof quotation.customer === 'string' ? quotation.customer : quotation.customer?.name,
+                                    })}
+                                    className="btn-secondary w-full"
+                                >
                                     <i className="fi fi-rr-file-pdf text-sm leading-none" />
-                                    Download PDF
-                                </a>
+                                    Preview / Download PDF
+                                </button>
 
                                 {/* Send to Customer */}
                                 {canSendToCustomer && (

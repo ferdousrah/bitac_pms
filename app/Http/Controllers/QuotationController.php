@@ -540,14 +540,183 @@ class QuotationController extends Controller
         return back()->with('success', 'Quotation rejected.');
     }
 
-    public function pdf(Quotation $quotation)
+    public function pdf(Request $request, Quotation $quotation)
     {
         $quotation->load(['rfq.items.product', 'rfq.customer', 'customer', 'createdBy', 'items', 'approvals.approver']);
 
-        $pdf = Pdf::loadView('pdf.quotation', ['quotation' => $quotation]);
-        $filename = 'Quotation-Q' . str_pad($quotation->id, 5, '0', STR_PAD_LEFT) . '-v' . $quotation->version . '.pdf';
+        $fmt = fn($v) => number_format((float) ($v ?? 0), 2);
+        $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $date = now()->format('d M Y, H:i');
 
-        return $pdf->download($filename);
+        $customer       = $quotation->customer?->name ?? $quotation->rfq?->customer?->name ?? '—';
+        $customerPO     = $quotation->customer_po_no ?? '—';
+        $createdByName  = $quotation->createdBy?->name ?? '—';
+        $createdAt      = $quotation->created_at->format('d M Y');
+        $statusLabel    = ucfirst(str_replace('_', ' ', (string) $quotation->status));
+        $statusColor    = match ($quotation->status) {
+            'approved', 'customer_accepted'                => '#059669',
+            'sent_to_customer'                             => '#7c3aed',
+            'rejected', 'customer_rejected'                => '#dc2626',
+            'revision_requested', 'pending_approval'       => '#d97706',
+            default                                        => '#64748b',
+        };
+
+        // Line items — uses quotation_items (the new schema). Fallback to RFQ items
+        // if no quotation_items rows exist (legacy quotations).
+        $lineItems = $quotation->items;
+        if ($lineItems->isEmpty() && $quotation->rfq) {
+            $lineItems = $quotation->rfq->items->map(fn($i) => (object) [
+                'description' => $i->job_description ?? $i->product?->name ?? '—',
+                'quantity'    => $i->quantity,
+                'unit_price'  => 0,
+                'amount'      => 0,
+            ]);
+        }
+
+        $itemsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8; margin-bottom: 4pt;">';
+        $itemsHtml .= '<tr style="background: #1e40af; color: white;">';
+        $itemsHtml .=   '<th width="5%"  style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: center; letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">#</th>';
+        $itemsHtml .=   '<th width="55%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: left;   letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">DESCRIPTION</th>';
+        $itemsHtml .=   '<th width="10%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: right;  letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">QTY</th>';
+        $itemsHtml .=   '<th width="15%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: right;  letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">UNIT PRICE</th>';
+        $itemsHtml .=   '<th width="15%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: right;  letter-spacing: 0.3pt;">AMOUNT</th>';
+        $itemsHtml .= '</tr>';
+        if ($lineItems->isEmpty()) {
+            $itemsHtml .= '<tr><td colspan="5" style="padding: 10pt; text-align: center; color: #9ca3af; font-style: italic; font-size: 9pt;">No line items</td></tr>';
+        } else {
+            foreach ($lineItems as $i => $li) {
+                $bg = $i % 2 === 0 ? '#ffffff' : '#fafafa';
+                $itemsHtml .= "<tr style='background: {$bg};'>";
+                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-weight: bold; color: #1e40af; text-align: center; vertical-align: top;">' . ($i + 1) . '</td>';
+                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; color: #111827; vertical-align: top;">' . $esc($li->description) . '</td>';
+                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-family: dejavusansmono; text-align: right; vertical-align: top; white-space: nowrap;">' . $fmt($li->quantity) . '</td>';
+                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-family: dejavusansmono; text-align: right; vertical-align: top; white-space: nowrap;">' . $fmt($li->unit_price) . '</td>';
+                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; vertical-align: top; white-space: nowrap;">' . $fmt($li->amount) . '</td>';
+                $itemsHtml .= '</tr>';
+            }
+        }
+        $itemsHtml .= '</table>';
+
+        // Totals card — sits to the right under the items table
+        $subtotal = (float) $quotation->material_cost; // we repurpose material_cost as pre-VAT subtotal
+        $vatAmt   = (float) $quotation->vat_amount;
+        $total    = (float) $quotation->total_amount;
+        $totalsHtml  = '<table align="right" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8; width: 290pt; margin-top: 6pt;">';
+        $totalsHtml .= '<tr><td style="padding: 5pt 10pt; font-size: 9pt; color: #4b5563; border-bottom: 1pt solid #e5e7eb;">Subtotal</td><td style="padding: 5pt 10pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; border-bottom: 1pt solid #e5e7eb; white-space: nowrap;">' . $fmt($subtotal) . '</td></tr>';
+        $totalsHtml .= '<tr><td style="padding: 5pt 10pt; font-size: 9pt; color: #4b5563; border-bottom: 1pt solid #e5e7eb;">VAT (' . $fmt($quotation->vat_rate) . '%)</td><td style="padding: 5pt 10pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; border-bottom: 1pt solid #e5e7eb; white-space: nowrap;">' . $fmt($vatAmt) . '</td></tr>';
+        $totalsHtml .= '<tr style="background: #0f172a;">';
+        $totalsHtml .=   '<td style="padding: 8pt 10pt; font-size: 10pt; color: white; font-weight: bold;">Grand Total</td>';
+        $totalsHtml .=   '<td style="padding: 8pt 10pt; font-size: 13pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #fbbf24; white-space: nowrap;">BDT ' . $fmt($total) . '</td>';
+        $totalsHtml .= '</tr>';
+        $totalsHtml .= '</table>';
+
+        // Notes / terms block (customer-facing)
+        $notesHtml = $quotation->notes
+            ? '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 14pt; border-collapse: collapse;">'
+                . '<tr>'
+                    . '<td width="4pt" style="background: #1e40af;"></td>'
+                    . '<td style="padding: 8pt 12pt; background: #eff6ff; border: 1pt solid #93c5fd; border-left: 0;">'
+                        . '<div style="font-size: 8pt; color: #1e40af; text-transform: uppercase; letter-spacing: 0.4pt; font-weight: bold;">Terms &amp; Notes</div>'
+                        . '<div style="font-size: 10pt; color: #1e293b; margin-top: 2pt; white-space: pre-line;">' . $esc($quotation->notes) . '</div>'
+                    . '</td>'
+                . '</tr>'
+              . '</table>'
+            : '';
+
+        $quotationNo = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . ' v' . $quotation->version;
+
+        $bodyHtml = <<<HTML
+        <!-- Document title block -->
+        <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 10pt; border-collapse: collapse;">
+            <tr>
+                <td width="4pt" style="background: #1e40af;"></td>
+                <td style="padding: 6pt 10pt;">
+                    <div style="font-size: 14pt; color: #1e40af; font-weight: bold; letter-spacing: 0.4pt;">QUOTATION</div>
+                    <div style="font-size: 9pt; color: #64748b; margin-top: 1pt;">{$quotationNo} &middot; {$customer}</div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Meta grid -->
+        <table width="100%" cellspacing="0" cellpadding="8" style="border: 1pt solid #94a3b8; border-collapse: collapse; margin-bottom: 12pt; background: #f8fafc;">
+            <tr>
+                <td width="22%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
+                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer</div>
+                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customer}</div>
+                </td>
+                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
+                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer PO</div>
+                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customerPO}</div>
+                </td>
+                <td width="18%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
+                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Valid For</div>
+                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$quotation->validity_days} days</div>
+                </td>
+                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
+                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Status</div>
+                    <div style="color: {$statusColor}; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$statusLabel}</div>
+                </td>
+                <td width="20%" style="vertical-align: top;">
+                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Issued</div>
+                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$createdAt}</div>
+                    <div style="font-size: 8pt; color: #6b7280; margin-top: 1pt;">by {$createdByName}</div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Section heading -->
+        <div style="margin-bottom: 4pt;">
+            <span style="display: inline-block; padding: 3pt 8pt; background: #1e40af; color: white; font-size: 9pt; font-weight: bold; letter-spacing: 0.3pt;">LINE ITEMS</span>
+        </div>
+
+        {$itemsHtml}
+
+        <!-- Totals card right-aligned -->
+        <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 4pt; border-collapse: collapse;">
+            <tr><td>{$totalsHtml}<div style="clear: both;"></div></td></tr>
+        </table>
+
+        <div style="clear: both;"></div>
+
+        {$notesHtml}
+
+        <!-- Signature lines -->
+        <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 40pt; border-collapse: collapse;">
+            <tr>
+                <td width="33%" style="padding: 0 8pt;">
+                    <div style="border-top: 1pt solid #1f2937; padding-top: 4pt; text-align: center; font-size: 8pt; color: #4b5563;">Prepared By</div>
+                </td>
+                <td width="34%" style="padding: 0 8pt;">
+                    <div style="border-top: 1pt solid #1f2937; padding-top: 4pt; text-align: center; font-size: 8pt; color: #4b5563;">Approved By</div>
+                </td>
+                <td width="33%" style="padding: 0 8pt;">
+                    <div style="border-top: 1pt solid #1f2937; padding-top: 4pt; text-align: center; font-size: 8pt; color: #4b5563;">Customer Acknowledgement</div>
+                </td>
+            </tr>
+        </table>
+
+        <div style="margin-top: 16pt; padding-top: 6pt; border-top: 0.5pt solid #e5e7eb; text-align: right; font-size: 7pt; color: #9ca3af; font-style: italic;">Generated by BITAC PMS &middot; {$date}</div>
+HTML;
+
+        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Quotation {$quotationNo}");
+        $filename = 'Quotation-Q' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . '-v' . $quotation->version . '.pdf';
+
+        // ?preview=base64 → JSON with base64 bytes (bypasses IDM/FDM).
+        // ?preview=1      → inline PDF stream.
+        // Default         → force download.
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
     }
 
     public function sendToCustomer(Quotation $quotation)

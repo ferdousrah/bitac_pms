@@ -8,6 +8,7 @@ import ApprovalNoteAI from '@/Components/ApprovalNoteAI';
 import { useAiEnabled } from '@/lib/useAiEnabled';
 import RfqAttachmentsPanel from '@/Components/RfqAttachmentsPanel';
 import CommentThread from '@/Components/CommentThread';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const STATUS_BADGE: Record<string, string> = {
     draft:     'badge-slate',
@@ -35,6 +36,11 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
     // "Use as Quotation" modal state
     const [useQuotationOpen, setUseQuotationOpen] = useState(false);
     const [useQuotationNote, setUseQuotationNote] = useState('');
+
+    // PDF popup state
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
+        open: false, url: null, title: '',
+    });
     const [useQuotationSubmitting, setUseQuotationSubmitting] = useState(false);
 
     const confirmUseAsQuotation = () => {
@@ -126,10 +132,17 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                <a href={`/cost-estimates/${estimate.id}/pdf`}
+                                <button
+                                    type="button"
+                                    onClick={() => setPdfPopup({
+                                        open:     true,
+                                        url:      `/cost-estimates/${estimate.id}/pdf?preview=base64`,
+                                        title:    `Cost Estimate ${estimate.estimate_no}`,
+                                        subtitle: `${estimate.job_name} · ${estimate.customer?.name ?? estimate.company_name ?? ''}`,
+                                    })}
                                     className="btn-outline btn-sm text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300">
                                     <i className="fi fi-rr-file-pdf text-xs leading-none" /> PDF
-                                </a>
+                                </button>
                                 {estimate.status !== 'used' && (
                                     <button onClick={() => { setUseQuotationNote(''); setUseQuotationOpen(true); }} className="btn-success btn-sm">
                                         <i className="fi fi-rr-paper-plane text-xs leading-none" /> Use as Quotation
@@ -358,6 +371,15 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                 submitting={useQuotationSubmitting}
                 onClose={() => !useQuotationSubmitting && setUseQuotationOpen(false)}
                 onConfirm={confirmUseAsQuotation}
+            />
+
+            {/* PDF popup viewer (download button is in the popup header) */}
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.url}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup(s => ({ ...s, open: false }))}
             />
         </AppLayout>
     );
