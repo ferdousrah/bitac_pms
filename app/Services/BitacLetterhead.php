@@ -67,9 +67,17 @@ class BitacLetterhead
         $defaultFontConfig = (new \Mpdf\Config\FontVariables())->getDefaults();
         $fontData          = $defaultFontConfig['fontdata'];
 
+        // mPDF's default tempDir (vendor/mpdf/mpdf/tmp) isn't writable by Apache
+        // in the Docker container. Point it at our writable storage location.
+        $tempDir = storage_path('framework/mpdf');
+        if (!is_dir($tempDir)) {
+            @mkdir($tempDir, 0775, true);
+        }
+
         $mpdf = new Mpdf([
             'mode'             => 'utf-8',
             'format'           => 'A4',
+            'tempDir'          => $tempDir,
             'margin_left'      => 18,
             'margin_right'     => 18,
             'margin_top'       => 50,    // enough space for letterhead header

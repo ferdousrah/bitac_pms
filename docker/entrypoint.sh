@@ -32,6 +32,7 @@ mkdir -p \
     storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/views \
+    storage/framework/mpdf \
     storage/fonts \
     storage/logs \
     bootstrap/cache
