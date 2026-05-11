@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const STATUS: Record<string, { badge: string; icon: string; label: string }> = {
     draft:     { badge: 'bg-slate-50 text-slate-700 border-slate-200',     icon: 'fi-rr-pencil',        label: 'Draft' },
@@ -26,6 +27,19 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
     const handleSearch = (e: React.FormEvent) => { e.preventDefault(); applyFilters(); };
     const clearFilters = () => { setSearch(''); router.get('/cost-estimates', {}, { preserveState: true, replace: true }); };
     const hasFilters = search || filters?.status || filters?.pricing_group;
+
+    // PDF popup state
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
+        open: false, url: null, title: '',
+    });
+    const openEstimatePdf = (e: any) => {
+        setPdfPopup({
+            open:     true,
+            url:      `/cost-estimates/${e.id}/pdf?preview=base64`,
+            title:    `Cost Estimate ${e.estimate_no}`,
+            subtitle: e.job_name ?? e.customer?.name ?? undefined,
+        });
+    };
 
     return (
         <AppLayout header="Cost Estimates">
@@ -156,10 +170,14 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors">
                                                             <i className="fi fi-rr-pencil text-sm leading-none" /> Edit
                                                         </Link>
-                                                        <a href={`/cost-estimates/${e.id}/pdf`} title="Download PDF"
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEstimatePdf(e)}
+                                                            title="Preview PDF (download available inside)"
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                                        >
                                                             <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
-                                                        </a>
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -221,6 +239,15 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                     )}
                 </div>
             </div>
+
+            {/* PDF popup viewer — download button is inside the popup header */}
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.url}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup(s => ({ ...s, open: false }))}
+            />
         </AppLayout>
     );
 }
