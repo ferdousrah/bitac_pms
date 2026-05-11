@@ -432,6 +432,17 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:manage users')
             ->name('admin.chatbot-settings.update');
 
+        // Centers — manage each BITAC center + its PDF letterhead config
+        Route::get('centers',                [\App\Http\Controllers\Admin\CenterController::class, 'index'])
+            ->middleware('permission:manage users')
+            ->name('admin.centers.index');
+        Route::get('centers/{center}/edit',  [\App\Http\Controllers\Admin\CenterController::class, 'edit'])
+            ->middleware('permission:manage users')
+            ->name('admin.centers.edit');
+        Route::post('centers/{center}',      [\App\Http\Controllers\Admin\CenterController::class, 'update'])
+            ->middleware('permission:manage users')
+            ->name('admin.centers.update');
+
         // Phase 0 — Foundation: Sections / Operators / Machines master data
         Route::resource('sections', SectionController::class)
             ->middleware('permission:manage sections')

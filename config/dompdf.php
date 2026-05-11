@@ -236,7 +236,9 @@ return [
          *
          * @var bool
          */
-        'enable_php' => false,
+        // Enabled so we can render per-page footers via `<script type="text/php">`
+        // blocks inside our letterhead. Safe because we only template our own server-side HTML.
+        'enable_php' => true,
 
         /**
          * Enable inline JavaScript

@@ -128,6 +128,7 @@ export const adminGroup: NavGroup = {
             icon: 'fi-rr-settings',
             items: [
                 { label: 'Branding',         href: '/admin/branding',          icon: 'fi-rr-palette',  permission: 'manage users' },
+                { label: 'Centers',          href: '/admin/centers',           icon: 'fi-rr-building', permission: 'manage users' },
                 { label: 'Chatbot Settings', href: '/admin/chatbot-settings',  icon: 'fi-rr-robot',    permission: 'manage users' },
                 { label: 'Audit Log',        href: '/admin/audit-log',         icon: 'fi-rr-notebook', permission: 'view audit-log' },
             ],

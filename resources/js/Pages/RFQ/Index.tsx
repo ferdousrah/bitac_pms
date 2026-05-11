@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const statusConfig: Record<string, { badge: string; icon: string; label: string }> = {
     pending:  { badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'fi-rr-clock', label: 'Pending' },
@@ -17,6 +18,19 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
     const handleSearch = (e: React.FormEvent) => { e.preventDefault(); applyFilters(); };
     const clearFilters = () => { setSearch(''); router.get('/rfqs', {}, { preserveState: true, replace: true }); };
     const hasFilters = search || filters?.status || filters?.customer_id;
+
+    // PDF popup state
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
+        open: false, url: null, title: '',
+    });
+    const openRfqPdf = (rfq: any) => {
+        setPdfPopup({
+            open: true,
+            url: `/rfqs/${rfq.id}/pdf?preview=base64`,
+            title: `RFQ #${rfq.id}`,
+            subtitle: rfq.customer_name ?? rfq.customer?.name ?? undefined,
+        });
+    };
 
     // Stats
     const total = rfqs?.total ?? 0;
@@ -175,10 +189,14 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                             <i className="fi fi-rr-eye text-sm leading-none" /> View
                                                         </Link>
-                                                        <a href={`/rfqs/${rfq.id}/pdf`} title="Download PDF"
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openRfqPdf(rfq)}
+                                                            title="Preview PDF (download available inside)"
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                                        >
                                                             <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
-                                                        </a>
+                                                        </button>
                                                         {!rfq.has_quotation && rfq.status === 'pending' && (
                                                             <Link href={`/quotations/create?rfq_id=${rfq.id}`} title="Prepare quotation for this RFQ"
                                                                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
@@ -261,6 +279,15 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                     )}
                 </div>
             </div>
+
+            {/* PDF popup viewer — Download / Open in new tab buttons live inside the modal header */}
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.url}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup(s => ({ ...s, open: false }))}
+            />
         </AppLayout>
     );
 }

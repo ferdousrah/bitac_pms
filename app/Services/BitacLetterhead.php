@@ -1,0 +1,189 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Center;
+use Mpdf\Mpdf;
+use Mpdf\HTMLParserMode;
+
+/**
+ * BITAC Official Letterhead — produces letterhead-styled PDFs via mPDF.
+ *
+ * Every BITAC center can have its own letterhead (Bangla name, ministry tag,
+ * address, contact info, logos). The Center model stores those fields; this
+ * service renders a PDF using whatever the active/passed-in center provides.
+ *
+ * Why mPDF and not DomPDF?
+ *   DomPDF lacks Indic complex-script shaping, so Bangla যুক্তাক্ষর + matra
+ *   placement renders incorrectly. mPDF has native Indic support.
+ *
+ * Bangla font (Siyam Rupali) is loaded from public/fonts/SiyamRupali.ttf.
+ */
+class BitacLetterhead
+{
+    /**
+     * Render a full letterhead PDF and return the binary bytes.
+     *
+     * @param string       $bodyHtml      Inner document content (already styled inline).
+     * @param string       $documentTitle Sets PDF metadata title.
+     * @param Center|null  $center        Center whose letterhead to use. Falls back
+     *                                    to session active center, then Dhaka (id 1).
+     */
+    public function render(string $bodyHtml, string $documentTitle = 'BITAC PMS Document', ?Center $center = null): string
+    {
+        $center = $this->resolveCenter($center);
+        $mpdf   = $this->buildMpdf($documentTitle);
+
+        $mpdf->SetHTMLHeader($this->headerHtml($center));
+        $mpdf->SetHTMLFooter($this->footerHtml($center));
+
+        $mpdf->WriteHTML($this->stylesheetCss(), HTMLParserMode::HEADER_CSS);
+        $mpdf->WriteHTML($bodyHtml, HTMLParserMode::HTML_BODY);
+
+        return $mpdf->Output('', \Mpdf\Output\Destination::STRING_RETURN);
+    }
+
+    /**
+     * Find which center's letterhead to use:
+     *   1. Explicit $center argument wins.
+     *   2. Otherwise, session active_center_id (set by SetActiveCenter middleware).
+     *   3. Otherwise, the first center (Dhaka HQ).
+     */
+    private function resolveCenter(?Center $center): ?Center
+    {
+        if ($center) return $center;
+
+        $activeId = session('active_center_id') ?? auth()->user()?->center_id ?? 1;
+        return Center::find($activeId) ?? Center::first();
+    }
+
+    /**
+     * Configure mPDF with our font dir + register SiyamRupali for Bangla shaping.
+     */
+    private function buildMpdf(string $title): Mpdf
+    {
+        $defaultConfig     = (new \Mpdf\Config\ConfigVariables())->getDefaults();
+        $fontDirs          = $defaultConfig['fontDir'];
+        $defaultFontConfig = (new \Mpdf\Config\FontVariables())->getDefaults();
+        $fontData          = $defaultFontConfig['fontdata'];
+
+        $mpdf = new Mpdf([
+            'mode'             => 'utf-8',
+            'format'           => 'A4',
+            'margin_left'      => 18,
+            'margin_right'     => 18,
+            'margin_top'       => 50,    // enough space for letterhead header
+            'margin_bottom'    => 30,    // enough for footer
+            'margin_header'    => 8,
+            'margin_footer'    => 10,
+            'fontDir'          => array_merge($fontDirs, [
+                public_path('fonts'),
+            ]),
+            'fontdata'         => $fontData + [
+                'siyamrupali' => [
+                    'R' => 'SiyamRupali.ttf',
+                ],
+            ],
+            'default_font'        => 'dejavusans',
+            'autoScriptToLang'    => true,
+            'autoLangToFont'      => true,
+            'useSubstitutions'    => true,
+        ]);
+
+        $mpdf->SetTitle($title);
+        $mpdf->SetCreator('BITAC PMS');
+        $mpdf->SetAuthor('BITAC');
+
+        return $mpdf;
+    }
+
+    /**
+     * Header HTML — repeated on every page via mPDF's SetHTMLHeader().
+     */
+    private function headerHtml(?Center $center): string
+    {
+        $color       = $center?->letterhead_color ?: '#1e40af';
+        $captionEn   = $this->escape($center?->caption_en   ?? 'BITAC – A Center of Excellence');
+        $nameBn      = $this->escape($center?->name_bn      ?? 'বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র (বিটাক)');
+        $ministryBn  = $this->escape($center?->ministry_bn  ?? 'শিল্প মন্ত্রণালয়');
+        $governmentBn= $this->escape($center?->government_bn?? 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার');
+
+        $leftLogo  = $this->logoTag($center?->logoLeftAbsolutePath(),  $center?->code ?? 'BITAC');
+        $rightLogo = $this->logoTag($center?->logoRightAbsolutePath(), 'GOV');
+
+        return <<<HTML
+<table width="100%" cellspacing="0" cellpadding="0" style="border-bottom: 1.5pt solid {$color}; padding-bottom: 4pt;">
+    <tr>
+        <td width="90" align="center" style="vertical-align: middle;">{$leftLogo}</td>
+        <td align="center" style="vertical-align: middle; padding: 0 8pt;">
+            <div style="font-size: 9pt; color: {$color}; font-style: italic;">{$captionEn}</div>
+            <div style="font-family: siyamrupali; font-size: 15pt; color: #064e3b; margin-top: 2pt;">{$nameBn}</div>
+            <div style="font-family: siyamrupali; font-size: 11pt; color: #1f2937; margin-top: 1pt;">{$ministryBn}</div>
+            <div style="font-family: siyamrupali; font-size: 10pt; color: #4b5563; margin-top: 1pt;">{$governmentBn}</div>
+        </td>
+        <td width="90" align="center" style="vertical-align: middle;">{$rightLogo}</td>
+    </tr>
+</table>
+HTML;
+    }
+
+    /**
+     * Footer HTML — repeated on every page. Page numbers via mPDF's {PAGENO}/{nbpg}.
+     */
+    private function footerHtml(?Center $center): string
+    {
+        $color    = $center?->letterhead_color ?: '#1e40af';
+        $addressBn= $this->escape($center?->address_bn ?? '');
+        $phoneBn  = $this->escape($center?->phone_bn   ?? '');
+        $faxBn    = $this->escape($center?->fax_bn     ?? '');
+        $website  = $this->escape($center?->website    ?? '');
+
+        // Build the contact line conditionally so empty fields don't show as ":  |  :"
+        $contactParts = [];
+        if ($phoneBn) $contactParts[] = "ফোন: {$phoneBn}";
+        if ($faxBn)   $contactParts[] = "ফ্যাক্স: {$faxBn}";
+        $contactLine = implode(', ', $contactParts);
+        if ($website) {
+            $contactLine .= ($contactLine ? ' &nbsp;|&nbsp; ' : '') .
+                            'ওয়েবসাইট: <span style="font-family: dejavusans;">' . $website . '</span>';
+        }
+
+        return <<<HTML
+<div style="border-top: 1.5pt solid {$color}; padding-top: 4pt; text-align: center;">
+    <div style="font-family: siyamrupali; font-size: 11pt; color: #1f2937;">{$addressBn}</div>
+    <div style="font-family: siyamrupali; font-size: 9pt; color: #4b5563; margin-top: 1pt;">{$contactLine}</div>
+    <div style="font-size: 8pt; color: #9ca3af; margin-top: 3pt;">Page {PAGENO} of {nbpg}</div>
+</div>
+HTML;
+    }
+
+    /**
+     * Logo <img> if the file exists; otherwise a dashed-circle placeholder.
+     */
+    private function logoTag(?string $absolutePath, string $placeholderLabel): string
+    {
+        if ($absolutePath && is_file($absolutePath)) {
+            return '<img src="' . $absolutePath . '" width="55" height="55" />';
+        }
+        $label = $this->escape($placeholderLabel);
+        return '<div style="width: 55pt; height: 55pt; border: 1pt dashed #c7d2fe; border-radius: 50%; color: #6366f1; font-size: 7pt; text-align: center; line-height: 55pt;">' . $label . '</div>';
+    }
+
+    private function escape(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    /**
+     * Common stylesheet for the inner document body. Pages can override.
+     */
+    private function stylesheetCss(): string
+    {
+        return <<<CSS
+body { font-family: dejavusans; font-size: 10pt; color: #1f2937; }
+.bn { font-family: siyamrupali; }
+h1, h2, h3 { color: #1e40af; }
+table { border-collapse: collapse; }
+CSS;
+    }
+}
