@@ -51,6 +51,7 @@ class PcdInboxController extends Controller
     {
         $workOrder->load([
             'customer', 'quotation', 'rfq.items.product',
+            'files.uploadedBy',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
         ]);
@@ -76,6 +77,17 @@ class PcdInboxController extends Controller
                     'quantity'    => $i->quantity,
                     'unit'        => $i->unit,
                 ]) ?? [],
+                'attachments'         => $workOrder->files->map(fn($f) => [
+                    'id'           => $f->id,
+                    'kind'         => $f->kind,
+                    'url'          => $f->url,
+                    'filename'     => $f->original_name,
+                    'extension'    => $f->extension,
+                    'human_size'   => $f->human_size,
+                    'description'  => $f->description,
+                    'uploaded_by'  => $f->uploadedBy?->name,
+                    'uploaded_at'  => $f->created_at->format('d M Y, H:i'),
+                ])->values(),
                 'material_requisitions' => $workOrder->materialRequisitions->map(fn($mr) => [
                     'id'          => $mr->id,
                     'mrn_number'  => $mr->mrn_number,

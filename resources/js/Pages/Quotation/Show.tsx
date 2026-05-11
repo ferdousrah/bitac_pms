@@ -120,7 +120,13 @@ export default function QuotationShow({
     canRecordResponse, canCreateRevision,
 }: any) {
     const sendForm    = useForm({});
-    const convertForm = useForm({ customer_po_no: quotation.customer_po_no ?? '', priority: 'normal', due_date: '', notes: '' });
+    const convertForm = useForm<any>({
+        customer_po_no:   quotation.customer_po_no ?? '',
+        priority:         'normal',
+        due_date:         '',
+        notes:            '',
+        customer_po_file: null as File | null,
+    });
     const responseForm = useForm<any>({
         response_type: 'accepted',
         customer_po_no: '',
@@ -515,7 +521,7 @@ export default function QuotationShow({
                                     </div>
                                 </div>
                                 <div className="card-body">
-                                    <form onSubmit={e => { e.preventDefault(); convertForm.post(`/quotations/${quotation.id}/convert`); }}
+                                    <form onSubmit={e => { e.preventDefault(); convertForm.post(`/quotations/${quotation.id}/convert`, { forceFormData: true }); }}
                                         className="space-y-4">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="form-group">
@@ -562,6 +568,47 @@ export default function QuotationShow({
                                                     className="form-input"
                                                 />
                                             </div>
+                                        </div>
+
+                                        {/* Customer PO file — audit trail + legal proof */}
+                                        <div className="form-group">
+                                            <label className="form-label flex items-center gap-1.5">
+                                                <i className="fi fi-rr-paperclip text-xs leading-none text-amber-600" />
+                                                Customer PO / Work Order Copy
+                                                <span className="form-label-optional">(strongly recommended)</span>
+                                            </label>
+                                            {convertForm.data.customer_po_file ? (
+                                                <div className="flex items-center gap-3 p-2.5 bg-amber-50 rounded-lg border border-amber-200">
+                                                    <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 text-[10px] font-bold shrink-0">
+                                                        {(convertForm.data.customer_po_file as File).name.split('.').pop()?.toUpperCase() ?? 'FILE'}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs font-semibold text-surface-900 truncate">{(convertForm.data.customer_po_file as File).name}</div>
+                                                        <div className="text-[10px] text-surface-500">{((convertForm.data.customer_po_file as File).size / 1024).toFixed(0)} KB</div>
+                                                    </div>
+                                                    <button type="button"
+                                                        onClick={() => convertForm.setData('customer_po_file', null)}
+                                                        className="text-surface-400 hover:text-red-600 text-xs"
+                                                    >
+                                                        ✕ Remove
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <label className="flex flex-col items-center justify-center gap-1 p-4 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/40 hover:bg-amber-50 cursor-pointer transition-colors">
+                                                    <i className="fi fi-rr-cloud-upload text-amber-500 text-base leading-none" />
+                                                    <span className="text-xs font-semibold text-amber-800">Click to upload customer's PO / WO document</span>
+                                                    <span className="text-[10px] text-amber-600">PDF / image / Word · max 10 MB · attached to the work order as audit trail</span>
+                                                    <input
+                                                        type="file"
+                                                        accept=".pdf,image/*,.doc,.docx"
+                                                        className="hidden"
+                                                        onChange={(e) => convertForm.setData('customer_po_file', e.target.files?.[0] ?? null)}
+                                                    />
+                                                </label>
+                                            )}
+                                            {(convertForm.errors as any).customer_po_file && (
+                                                <p className="form-error">{(convertForm.errors as any).customer_po_file}</p>
+                                            )}
                                         </div>
                                         <button type="submit" disabled={convertForm.processing} className="btn-primary">
                                             <i className="fi fi-rr-briefcase text-xs leading-none" />

@@ -67,6 +67,9 @@ class WorkOrder extends Model
     public function bom()          { return $this->belongsTo(Bom::class); }
     public function createdBy()    { return $this->belongsTo(User::class, 'created_by'); }
 
+    public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }
+    public function customerPoFile()      { return $this->hasOne(WorkOrderFile::class)->where('kind', 'customer_po')->latest('id'); }
+
     public function operationSheets()     { return $this->hasMany(OperationSheet::class); }
     public function jobExecutions()       { return $this->hasMany(JobExecution::class); }
     public function qcInspections()       { return $this->hasMany(QcInspection::class); }
@@ -79,7 +82,11 @@ class WorkOrder extends Model
     // ── PCD progress checks (used by PcdReleaseService) ──────────
     public function getHasMaterialRequisitionAttribute(): bool
     {
-        return $this->materialRequisitions()->whereIn('status', ['approved', 'issued', 'received'])->exists();
+        // MR is "done from PCD's side" once it's pushed to IMS (approval happens in IMS).
+        // Keep `approved/issued/received` for legacy MRs that approved locally.
+        return $this->materialRequisitions()
+            ->whereIn('status', ['sent_to_ims', 'approved', 'partially_issued', 'issued', 'received'])
+            ->exists();
     }
 
     public function getHasSectionAssignmentAttribute(): bool

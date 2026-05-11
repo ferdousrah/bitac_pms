@@ -264,6 +264,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Material Requisitions
         Route::resource('material-requisitions', PcdMaterialRequisitionController::class);
+        Route::post('material-requisitions/{materialRequisition}/submit', [PcdMaterialRequisitionController::class, 'submit'])
+            ->name('material-requisitions.submit');
         Route::post('material-requisitions/{materialRequisition}/approve', [PcdMaterialRequisitionController::class, 'approve'])
             ->name('material-requisitions.approve');
         Route::post('material-requisitions/{materialRequisition}/issue', [PcdMaterialRequisitionController::class, 'issue'])

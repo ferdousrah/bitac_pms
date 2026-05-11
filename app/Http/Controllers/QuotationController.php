@@ -846,17 +846,37 @@ HTML;
         abort_unless(in_array($quotation->status, ['approved', 'sent_to_customer', 'customer_accepted']), 422,
             'Only approved or customer-accepted quotations can be converted.');
 
+        $request->validate([
+            'customer_po_no'    => 'nullable|string|max:100',
+            'priority'          => 'nullable|in:normal,high,urgent',
+            'due_date'          => 'nullable|date',
+            'notes'             => 'nullable|string|max:1000',
+            // Customer's PO / authorisation document — audit trail + legal proof
+            'customer_po_file'  => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,doc,docx|max:10240',
+        ]);
+
         $quotation->load('rfq.items.product');
         $rfq       = $quotation->rfq;
         $firstItem = $rfq?->items->first();
         $woNumber  = $this->workOrderService->generateWoNumber();
         $jobNumber = \App\Services\JobNumberService::next();
 
+        // Product model exposes boms()/firstBom; older code called ->activeBom which doesn't exist
+        // on this codebase. Pick the latest BOM defensively.
+        $bomId = $firstItem?->product?->boms()->latest('id')->first()?->id;
+
         $workOrder = \App\Models\WorkOrder::create([
+            // Inherit center from the source quotation so PCD inbox (which filters
+            // by active center via CenterScope) actually shows this WO. Falls back
+            // to the RFQ's or customer's center, then 1, never NULL.
+            'center_id'       => $quotation->center_id
+                                ?? $rfq?->center_id
+                                ?? $quotation->customer?->center_id
+                                ?? 1,
             'quotation_id'    => $quotation->id,
             'customer_id'     => $quotation->customer_id,
             'product_id'      => $firstItem?->product_id,
-            'bom_id'          => $firstItem?->product?->activeBom?->id,
+            'bom_id'          => $bomId,
             'wo_number'       => $woNumber,
             'job_number'      => $jobNumber,
             'quantity'        => $rfq?->items->sum('quantity') ?? 1,
@@ -870,20 +890,38 @@ HTML;
             'pcd_handoff_by'  => auth()->id(),
         ]);
 
+        // Attach the customer PO / authorisation file (mandatory paper trail)
+        if ($request->hasFile('customer_po_file')) {
+            $file = $request->file('customer_po_file');
+            $stored = $file->store("work-orders/{$workOrder->id}", 'public');
+            $workOrder->files()->create([
+                'uploaded_by'   => auth()->id(),
+                'kind'          => 'customer_po',
+                'stored_path'   => $stored,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type'     => $file->getMimeType(),
+                'size_bytes'    => $file->getSize(),
+                'description'   => 'Customer PO / Work Order copy received with quotation acceptance',
+            ]);
+        }
+
         $quotation->update(['status' => 'converted']);
 
-        // Notify relevant users about new Work Order
+        // Notify PCD officers — they're the next humans in the chain.
         NotifyService::toPermission(
-            'view work-orders',
+            'view pcd-inbox',
             'work_order_created',
-            'New Work Order',
-            "WO {$woNumber} created from Quotation #{$quotation->id}",
-            "/work-orders/{$workOrder->id}",
+            'New Work Order — PCD action required',
+            "WO {$woNumber} from Quotation #{$quotation->id} ({$quotation->customer?->name}) is awaiting PCD setup.",
+            "/pcd/inbox/{$workOrder->id}",
             'fi-rr-tools',
             'brand',
         );
 
-        return redirect()->route('work-orders.show', $workOrder)->with('success', "Work Order {$woNumber} created.");
+        // Land directly on the PCD checklist page so the operator's next click is obvious.
+        return redirect()
+            ->route('pcd.inbox.show', $workOrder)
+            ->with('success', "Work Order {$woNumber} created. Continue with PCD setup below.");
     }
 
     // ─── Export: Excel ────────────────────────────────────────────────

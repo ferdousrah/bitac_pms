@@ -73,6 +73,78 @@ class IMSService
         }
     }
 
+    /**
+     * Push a Material Requisition to IMS for approval + issuance.
+     * Returns ['ok' => bool, 'reference' => string|null, 'error' => string|null].
+     *
+     * The actual approval workflow happens inside IMS; PMS just records the
+     * IMS reference + last-known status for traceability.
+     */
+    public function submitMaterialRequisition(\App\Models\MaterialRequisition $mr): array
+    {
+        if (empty($this->baseUrl)) {
+            return ['ok' => false, 'reference' => null, 'error' => 'IMS base URL not configured (set IMS_BASE_URL in env).'];
+        }
+
+        $mr->loadMissing(['items.material', 'workOrder.customer']);
+
+        $payload = [
+            'source_system'    => 'BITAC_PMS',
+            'pms_mrn_number'   => $mr->mrn_number,
+            'pms_mrn_id'       => $mr->id,
+            'request_date'     => $mr->request_date?->toDateString(),
+            'work_order' => [
+                'wo_number'    => $mr->workOrder?->wo_number,
+                'job_number'   => $mr->workOrder?->job_number,
+                'customer'     => $mr->workOrder?->customer?->name,
+            ],
+            'requested_by_user_id' => $mr->requested_by,
+            'notes' => $mr->notes,
+            'items' => $mr->items->map(fn($it) => [
+                'item_no'        => $it->item_no,
+                'description'    => $it->description,
+                'material_id'    => $it->material_id,
+                'material_code'  => $it->material?->code,
+                'unit'           => $it->unit,
+                'required_qty'   => (float) $it->required_qty,
+            ])->values()->all(),
+        ];
+
+        try {
+            $response = Http::timeout($this->timeout)
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Accept'        => 'application/json',
+                ])
+                ->post($this->baseUrl . '/api/material-requisitions', $payload);
+
+            $data = $response->json();
+            $ok   = $response->successful() && !empty($data['reference']);
+
+            $this->logRequest('mr_submit', $payload, $data ?? ['raw' => $response->body()], $ok ? 'success' : 'failed');
+
+            if (!$ok) {
+                return [
+                    'ok'        => false,
+                    'reference' => null,
+                    'error'     => $data['error'] ?? ('IMS returned HTTP ' . $response->status()),
+                    'response'  => $data,
+                ];
+            }
+
+            return [
+                'ok'        => true,
+                'reference' => (string) $data['reference'],
+                'status'    => $data['status'] ?? 'pending_approval',
+                'response'  => $data,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('IMS MR submit failed: ' . $e->getMessage());
+            $this->logRequest('mr_submit', $payload, ['error' => $e->getMessage()], 'failed');
+            return ['ok' => false, 'reference' => null, 'error' => $e->getMessage()];
+        }
+    }
+
     private function unavailableResponse(string $queryType): array
     {
         return [

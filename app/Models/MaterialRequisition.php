@@ -11,17 +11,23 @@ class MaterialRequisition extends Model
         'requested_by', 'approved_by', 'approved_at',
         'issued_by', 'issued_at', 'received_by', 'received_at',
         'status', 'notes',
+        // IMS push tracking
+        'ims_reference', 'ims_pushed_at', 'ims_pushed_by', 'ims_status', 'ims_last_error', 'ims_response',
     ];
 
     protected function casts(): array
     {
         return [
-            'request_date' => 'date',
-            'approved_at'  => 'datetime',
-            'issued_at'    => 'datetime',
-            'received_at'  => 'datetime',
+            'request_date'  => 'date',
+            'approved_at'   => 'datetime',
+            'issued_at'     => 'datetime',
+            'received_at'   => 'datetime',
+            'ims_pushed_at' => 'datetime',
+            'ims_response'  => 'array',
         ];
     }
+
+    public function imsPushedBy() { return $this->belongsTo(User::class, 'ims_pushed_by'); }
 
     public function workOrder()  { return $this->belongsTo(WorkOrder::class); }
     public function items()      { return $this->hasMany(MaterialRequisitionItem::class)->orderBy('item_no'); }

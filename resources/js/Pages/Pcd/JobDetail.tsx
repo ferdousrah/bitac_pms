@@ -51,6 +51,17 @@ interface Job {
     material_requisitions: MaterialRequisition[];
     sections: SectionEntry[];
     operation_sheet: OperationSheet | null;
+    attachments: Array<{
+        id: number;
+        kind: string;
+        url: string;
+        filename: string;
+        extension: string | null;
+        human_size: string | null;
+        description: string | null;
+        uploaded_by: string | null;
+        uploaded_at: string;
+    }>;
 }
 
 interface ChecklistItem {
@@ -249,6 +260,57 @@ export default function JobDetail({ job, checklist }: Props) {
                         </div>
                     </div>
                 </div>
+
+                {/* Customer PO / authorisation document — audit trail */}
+                {(() => {
+                    const customerPo = job.attachments?.find(a => a.kind === 'customer_po');
+                    if (!customerPo) {
+                        return (
+                            <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-4 flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                    <i className="fi fi-rr-triangle-warning text-amber-600 text-base leading-none" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold text-amber-900">No Customer PO document on file</div>
+                                    <p className="text-xs text-amber-700 mt-0.5">The customer's signed PO / Work Order copy wasn't attached when this job was created. Ask the IED team to upload it — needed as audit proof.</p>
+                                </div>
+                            </div>
+                        );
+                    }
+                    const ext = (customerPo.extension ?? customerPo.filename.split('.').pop() ?? 'FILE').toUpperCase();
+                    return (
+                        <div className="card overflow-hidden">
+                            <div className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <i className="fi fi-rr-receipt text-base leading-none" />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Customer PO / Work Order Copy</span>
+                                </div>
+                                <span className="text-[10px] text-white/80 italic">Audit reference</span>
+                            </div>
+                            <div className="card-body flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-700 text-[11px] font-bold shrink-0">
+                                    {ext}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-semibold text-surface-900 truncate">{customerPo.filename}</div>
+                                    <div className="text-[11px] text-surface-500 mt-0.5">
+                                        {customerPo.human_size && <>{customerPo.human_size} · </>}
+                                        uploaded by {customerPo.uploaded_by ?? '—'} · {customerPo.uploaded_at}
+                                    </div>
+                                    {job.customer_po_no && (
+                                        <div className="text-[11px] text-surface-600 font-mono mt-0.5">PO No.: {job.customer_po_no}</div>
+                                    )}
+                                </div>
+                                <a href={customerPo.url} target="_blank" rel="noreferrer" className="btn-outline btn-sm">
+                                    <i className="fi fi-rr-eye text-xs leading-none" /> Open
+                                </a>
+                                <a href={customerPo.url} download={customerPo.filename} className="btn-primary btn-sm">
+                                    <i className="fi fi-rr-download text-xs leading-none" /> Download
+                                </a>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* PCD Progress Banner */}
                 <div className="card animate-slide-up">

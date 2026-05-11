@@ -89,7 +89,7 @@ class MaterialRequisitionController extends Controller
 
     public function show(MaterialRequisition $materialRequisition)
     {
-        $materialRequisition->load(['workOrder.customer', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy']);
+        $materialRequisition->load(['workOrder.customer', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy', 'imsPushedBy']);
 
         return Inertia::render('Pcd/MaterialRequisition/Show', [
             'requisition' => $this->serializeRequisition($materialRequisition),
@@ -147,19 +147,49 @@ class MaterialRequisitionController extends Controller
     }
 
     /**
-     * Approve a draft requisition (Authorizing Officer signature).
+     * Push the draft requisition to BITAC's IMS for approval + issuance.
+     * Approval workflow happens entirely inside IMS; PMS only tracks the push.
+     */
+    public function submit(MaterialRequisition $materialRequisition)
+    {
+        abort_unless(in_array($materialRequisition->status, ['draft', 'pending_approval']), 422,
+            'Only drafts can be pushed to IMS.');
+
+        $result = app(\App\Services\IMSService::class)->submitMaterialRequisition($materialRequisition);
+
+        if (!$result['ok']) {
+            // Record the failure so the user can see what went wrong + retry later
+            $materialRequisition->update([
+                'ims_last_error' => $result['error'] ?? 'IMS push failed (unknown error).',
+                'ims_response'   => $result['response'] ?? null,
+            ]);
+            return back()->with('error', 'IMS push failed: ' . ($result['error'] ?? 'unknown error') . '. Saved as draft — you can retry.');
+        }
+
+        $materialRequisition->update([
+            'status'         => 'sent_to_ims',
+            'ims_reference'  => $result['reference'],
+            'ims_pushed_at'  => now(),
+            'ims_pushed_by'  => auth()->id(),
+            'ims_status'     => $result['status'] ?? 'pending_approval',
+            'ims_last_error' => null,
+            'ims_response'   => $result['response'] ?? null,
+        ]);
+
+        // `sent_to_ims` counts as MR-done from PCD's perspective, so try to release
+        // the WO if Section Assignment + Operation Sheet are also in place.
+        PcdReleaseService::tryRelease($materialRequisition->workOrder);
+
+        return back()->with('success', "Requisition pushed to IMS. Reference: {$result['reference']}");
+    }
+
+    /**
+     * Approve — kept as an alias for backwards-compatibility with any direct links.
+     * Pushes to IMS just like submit().
      */
     public function approve(MaterialRequisition $materialRequisition)
     {
-        $materialRequisition->update([
-            'status'      => 'approved',
-            'approved_by' => auth()->id(),
-            'approved_at' => now(),
-        ]);
-
-        PcdReleaseService::tryRelease($materialRequisition->workOrder);
-
-        return back()->with('success', 'Requisition approved.');
+        return $this->submit($materialRequisition);
     }
 
     /**
@@ -233,6 +263,12 @@ class MaterialRequisitionController extends Controller
             'issued_at'    => $mr->issued_at?->format('d M Y'),
             'received_by'  => $mr->receivedBy?->name,
             'received_at'  => $mr->received_at?->format('d M Y'),
+            // IMS push tracking
+            'ims_reference'  => $mr->ims_reference,
+            'ims_pushed_at'  => $mr->ims_pushed_at?->format('d M Y, H:i'),
+            'ims_pushed_by'  => $mr->imsPushedBy?->name,
+            'ims_status'     => $mr->ims_status,
+            'ims_last_error' => $mr->ims_last_error,
             'items'        => $mr->items->map(fn($i) => [
                 'id'           => $i->id,
                 'item_no'      => $i->item_no,

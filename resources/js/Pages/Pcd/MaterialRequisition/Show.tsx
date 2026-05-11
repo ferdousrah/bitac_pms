@@ -35,6 +35,12 @@ interface Requisition {
     issued_at?: string | null;
     received_by?: string | null;
     received_at?: string | null;
+    // IMS push tracking
+    ims_reference?: string | null;
+    ims_pushed_at?: string | null;
+    ims_pushed_by?: string | null;
+    ims_status?: string | null;
+    ims_last_error?: string | null;
     items: RequisitionItem[];
 }
 
@@ -45,6 +51,7 @@ interface Props {
 const statusBadge: Record<string, string> = {
     draft: 'badge-slate',
     pending_approval: 'badge-amber',
+    sent_to_ims: 'badge-blue',
     approved: 'badge-blue',
     partially_issued: 'badge-amber',
     issued: 'badge-green',
@@ -96,14 +103,9 @@ function SignatureBox({ role, roleBn, name, date }: SignatureBoxProps) {
 }
 
 export default function MaterialRequisitionShow({ requisition }: Props) {
-    const submitForApproval = () => {
-        if (!confirm('Submit this requisition for approval?')) return;
+    const pushToIms = () => {
+        if (!confirm('Push this requisition to IMS for approval and issuance? Approval happens inside IMS — you will see the IMS reference once it is accepted.')) return;
         router.post(`/pcd/material-requisitions/${requisition.id}/submit`);
-    };
-
-    const approve = () => {
-        if (!confirm('Approve this requisition?')) return;
-        router.post(`/pcd/material-requisitions/${requisition.id}/approve`);
     };
 
     const markIssued = () => {
@@ -178,6 +180,55 @@ export default function MaterialRequisitionShow({ requisition }: Props) {
                         )}
                     </div>
                 </div>
+
+                {/* IMS status banner — appears once pushed (or on error) */}
+                {(requisition.ims_reference || requisition.ims_last_error) && (
+                    <div className={`card border-l-4 ${
+                        requisition.ims_last_error && !requisition.ims_reference
+                            ? 'border-red-500'
+                            : 'border-indigo-500'
+                    }`}>
+                        <div className="card-body flex items-start gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                requisition.ims_last_error && !requisition.ims_reference
+                                    ? 'bg-red-50 text-red-600'
+                                    : 'bg-indigo-50 text-indigo-600'
+                            }`}>
+                                <i className={`fi ${requisition.ims_reference ? 'fi-rr-arrow-up-right-from-square' : 'fi-rr-triangle-warning'} text-base leading-none`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-bold text-surface-900">
+                                        {requisition.ims_reference ? 'Pushed to IMS' : 'IMS Push Failed'}
+                                    </span>
+                                    {requisition.ims_status && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold uppercase tracking-wider">
+                                            IMS: {requisition.ims_status.replace(/_/g, ' ')}
+                                        </span>
+                                    )}
+                                </div>
+                                {requisition.ims_reference && (
+                                    <div className="text-xs text-surface-700 mt-1 font-mono">
+                                        Reference: <span className="font-bold">{requisition.ims_reference}</span>
+                                    </div>
+                                )}
+                                {requisition.ims_pushed_at && (
+                                    <div className="text-[11px] text-surface-500 mt-0.5">
+                                        Pushed by {requisition.ims_pushed_by ?? '—'} · {requisition.ims_pushed_at}
+                                    </div>
+                                )}
+                                {requisition.ims_last_error && (
+                                    <div className="text-xs text-red-700 mt-1 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                                        ⚠ {requisition.ims_last_error}
+                                    </div>
+                                )}
+                                <p className="text-[11px] text-surface-500 italic mt-1">
+                                    Approval &amp; issuance happen inside IMS. Status here will update automatically when IMS reports back.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Items table */}
                 <div className="card">
@@ -315,16 +366,17 @@ export default function MaterialRequisitionShow({ requisition }: Props) {
                                 Edit
                             </Link>
                         )}
-                        {requisition.status === 'draft' && (
-                            <button type="button" onClick={submitForApproval} className="btn-primary btn-sm">
-                                <i className="fi fi-rr-paper-plane text-xs leading-none" />
-                                Submit for Approval
+                        {(requisition.status === 'draft' || requisition.status === 'pending_approval') && (
+                            <button type="button" onClick={pushToIms} className="btn-primary btn-sm">
+                                <i className="fi fi-rr-arrow-up-right-from-square text-xs leading-none" />
+                                Submit to IMS
                             </button>
                         )}
-                        {requisition.status === 'pending_approval' && (
-                            <button type="button" onClick={approve} className="btn-success btn-sm">
-                                <i className="fi fi-rr-check text-xs leading-none" />
-                                Approve
+                        {requisition.status === 'sent_to_ims' && (
+                            <button type="button" onClick={pushToIms} className="btn-outline btn-sm"
+                                title="Resend if IMS lost it">
+                                <i className="fi fi-rr-refresh text-xs leading-none" />
+                                Resend to IMS
                             </button>
                         )}
                         {requisition.status === 'approved' && (
