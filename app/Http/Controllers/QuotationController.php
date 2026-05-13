@@ -76,18 +76,18 @@ class QuotationController extends Controller
         $rfq   = $rfqId ? Rfq::with(['customer', 'items.product', 'items.costEstimates'])->findOrFail($rfqId) : null;
 
         // For each RFQ item, find the latest finalized cost estimate (if any)
-        // and pre-fill the unit price (pre-VAT) so the preparer doesn't start from blank.
+        // and pre-fill the unit price (VAT-INCLUSIVE) so it matches the estimate's per-unit total.
         $items = $rfq ? $rfq->items->map(function ($i) {
             $estimate = $i->costEstimates
                 ->where('status', '!=', 'draft')
                 ->sortByDesc('id')
                 ->first() ?? $i->costEstimates->sortByDesc('id')->first();
 
-            // Pre-VAT unit price = estimate.total / job_quantity
-            $unitPrice = null;
-            if ($estimate && $estimate->job_quantity > 0) {
-                $unitPrice = round(((float) $estimate->total) / (int) $estimate->job_quantity, 2);
-            }
+            // BITAC quotations follow the convention: Unit Price is INCLUDING VAT & TAX
+            // (no separate VAT row — see sample re-quotation 36.06.2692.028.51.028(2).26.92).
+            // The cost estimate stores `total` as the per-unit VAT-inclusive price
+            // (net + overhead + vat, times multiplier). We use that directly.
+            $unitPrice = $estimate ? round((float) $estimate->total, 2) : null;
 
             return [
                 'rfq_item_id'  => $i->id,
@@ -100,6 +100,30 @@ class QuotationController extends Controller
             ];
         })->values() : [];
 
+        // Pre-fill the recipient block from the customer's stored address (the customer
+        // model holds contact_person/address — IED preparer can edit before sending).
+        $defaultRecipient = '';
+        if ($rfq && $rfq->customer) {
+            $c = $rfq->customer;
+            $lines = array_filter([
+                $c->contact_person,
+                $c->name,
+                $c->address,
+            ]);
+            $defaultRecipient = implode("\n", $lines);
+        }
+
+        // Default Terms & Conditions — matches the standard BITAC IED Dhaka template
+        // (translation of দরপত্রের শর্ত সমূহ from the official sample). IED preparer
+        // can edit, add, remove, or reorder per quotation.
+        $defaultTerms = [
+            'এই দরপত্র ইস্যুর তারিখ হতে ০৩ মাস পর্যন্ত কার্যাদেশ প্রদানের জন্য বহাল থাকবে।',
+            'কার্যাদেশ প্রাপ্তির সময় হতে ১৫ দিনের মধ্যে কার্য সম্পন্ন করা হবে।',
+            'বিদ্যুৎ বিভ্রাট, হরতাল, জাতীয় দুর্যোগ ও কাঁচামালের দুষ্প্রাপ্যতার কারণে সরবরাহের তারিখ পরিবর্তন হতে পারে।',
+            'ই.এফ.টি, চেক, ব্যাংক ড্রাফট, পে-অর্ডার ইত্যাদি বিটাক, ঢাকা এর অনুকূলে সোনালী ব্যাংকের অ্যাকাউন্ট (০১২৪১০০০০০৬৬৭), তেজগাঁও শি/এ, ঢাকা বরাবর অথবা ক্যাশে প্রদান করতে হবে।',
+            'কার্যাদেশ প্রদানকারী কর্তৃক মালামাল সরবরাহ নিতে হবে।',
+        ];
+
         return Inertia::render('Quotation/Create', [
             'rfq'       => $rfq ? [
                 'id'          => $rfq->id,
@@ -111,7 +135,175 @@ class QuotationController extends Controller
             'vatRate'      => config('app.vat_rate', 15),
             'kickoffNote'  => $request->query('kickoff_note'),
             'sourceEstimateId' => $request->query('estimate_id'),
+            'defaultRecipient'      => $defaultRecipient,
+            'defaultTerms'          => $defaultTerms,
+            // Pre-fill the customer reference + date from the source RFQ — the IED
+            // preparer can override either field on the quotation form if needed.
+            'defaultCustomerRefNo'   => $rfq?->customer_ref_no ?? '',
+            'defaultCustomerRefDate' => $rfq?->created_at?->format('Y-m-d') ?? '',
         ]);
+    }
+
+    /**
+     * Edit screen for a draft quotation. Pre-fills the form with the
+     * existing quotation's data so the preparer can correct it and resubmit.
+     * Only draft-status quotations are editable (in_progress approvals would
+     * otherwise see inconsistent data mid-stream).
+     */
+    public function edit(Quotation $quotation)
+    {
+        abort_unless(in_array($quotation->status, ['draft']), 422,
+            'Only draft quotations can be edited.');
+
+        $quotation->load(['rfq.customer', 'rfq.items.product', 'items']);
+
+        // Same default terms as create() — used only if the quotation has none yet.
+        $defaultTerms = [
+            'এই দরপত্র ইস্যুর তারিখ হতে ০৩ মাস পর্যন্ত কার্যাদেশ প্রদানের জন্য বহাল থাকবে।',
+            'কার্যাদেশ প্রাপ্তির সময় হতে ১৫ দিনের মধ্যে কার্য সম্পন্ন করা হবে।',
+            'বিদ্যুৎ বিভ্রাট, হরতাল, জাতীয় দুর্যোগ ও কাঁচামালের দুষ্প্রাপ্যতার কারণে সরবরাহের তারিখ পরিবর্তন হতে পারে।',
+            'ই.এফ.টি, চেক, ব্যাংক ড্রাফট, পে-অর্ডার ইত্যাদি বিটাক, ঢাকা এর অনুকূলে সোনালী ব্যাংকের অ্যাকাউন্ট (০১২৪১০০০০০৬৬৭), তেজগাঁও শি/এ, ঢাকা বরাবর অথবা ক্যাশে প্রদান করতে হবে।',
+            'কার্যাদেশ প্রদানকারী কর্তৃক মালামাল সরবরাহ নিতে হবে।',
+        ];
+
+        $rfq = $quotation->rfq;
+
+        return Inertia::render('Quotation/Create', [
+            'rfq' => $rfq ? [
+                'id'          => $rfq->id,
+                'customer_id' => $rfq->customer_id,
+                'customer'    => ['name' => $rfq->customer?->name ?? ''],
+                'items'       => $quotation->items->map(fn($i) => [
+                    'rfq_item_id' => null,
+                    'description' => $i->description,
+                    'quantity'    => (float) $i->quantity,
+                    'unit'        => 'pcs', // quotation_items has no unit column; default
+                    'unit_price'  => (float) $i->unit_price,
+                    'estimate_no' => null,
+                ])->values(),
+            ] : null,
+            // The "existing" prop tells the form to switch to EDIT mode.
+            'existing' => [
+                'id'                => $quotation->id,
+                'version'           => $quotation->version,
+                'vat_rate'          => (float) $quotation->vat_rate,
+                'notes'             => $quotation->notes,
+                'memo_no'           => $quotation->memo_no,
+                'customer_ref_no'   => $quotation->customer_ref_no,
+                'customer_ref_date' => $quotation->customer_ref_date?->format('Y-m-d'),
+                'recipient_block'   => $quotation->recipient_block,
+                'terms'             => $quotation->terms ?? [],
+            ],
+            'customers'             => Customer::where('is_active', true)->get(['id', 'name']),
+            'vatRate'               => (float) $quotation->vat_rate,
+            'defaultRecipient'      => $quotation->recipient_block ?? '',
+            'defaultTerms'          => !empty($quotation->terms) ? $quotation->terms : $defaultTerms,
+            'defaultCustomerRefNo'  => $quotation->customer_ref_no ?? '',
+            'defaultCustomerRefDate'=> $quotation->customer_ref_date?->format('Y-m-d') ?? '',
+        ]);
+    }
+
+    /**
+     * Persist edits to a draft quotation. Same validation rules as store(),
+     * but updates an existing row instead of creating a new one. Line items
+     * are replaced wholesale (simpler than diffing) since drafts are cheap.
+     */
+    public function update(Request $request, Quotation $quotation)
+    {
+        abort_unless($quotation->status === 'draft', 422,
+            'Only draft quotations can be edited.');
+
+        $validated = $request->validate([
+            'vat_rate'                => 'required|numeric|min:0|max:100',
+            'validity_days'           => 'nullable|integer|min:1',
+            'notes'                   => 'nullable|string',
+            'items'                   => 'required|array|min:1',
+            'items.*.description'     => 'required|string|max:255',
+            'items.*.quantity'        => 'required|numeric|min:0',
+            'items.*.unit_price'      => 'required|numeric|min:0',
+            'memo_no'                 => 'nullable|string|max:80',
+            'customer_ref_no'         => 'nullable|string|max:100',
+            'customer_ref_date'       => 'nullable|date',
+            'recipient_block'         => 'nullable|string|max:1000',
+            'terms'                   => 'nullable|array',
+            'terms.*'                 => 'nullable|string|max:500',
+            'attachments'             => 'nullable|array',
+            'attachments.*'           => 'file|max:20480', // 20 MB each
+            'attachment_kinds'        => 'nullable|array',
+            'attachment_kinds.*'      => 'nullable|in:supporting,annexure,spec,other',
+        ]);
+
+        // Recompute totals — gross is what the line items add up to, embedded VAT extracted.
+        $grossTotal = 0.0;
+        foreach ($validated['items'] as $item) {
+            $grossTotal += ((float) $item['quantity']) * ((float) $item['unit_price']);
+        }
+        $vatRate   = (float) $validated['vat_rate'];
+        $vatAmount = $vatRate > 0 ? round($grossTotal * $vatRate / (100 + $vatRate), 2) : 0.0;
+        $total     = round($grossTotal, 2);
+        $subtotal  = round($grossTotal - $vatAmount, 2);
+
+        $cleanTerms = collect($validated['terms'] ?? [])
+            ->map(fn($t) => trim((string) $t))
+            ->filter(fn($t) => $t !== '')
+            ->values()
+            ->all();
+
+        \DB::transaction(function () use ($quotation, $validated, $subtotal, $vatRate, $vatAmount, $total, $cleanTerms) {
+            $quotation->update([
+                'material_cost'     => $subtotal,
+                'vat_rate'          => $vatRate,
+                'vat_amount'        => $vatAmount,
+                'total_amount'      => $total,
+                'validity_days'     => $validated['validity_days'] ?? $quotation->validity_days ?? 90,
+                'notes'             => $validated['notes'] ?? null,
+                'memo_no'           => $validated['memo_no'] ?? null,
+                'customer_ref_no'   => $validated['customer_ref_no'] ?? null,
+                'customer_ref_date' => $validated['customer_ref_date'] ?? null,
+                'recipient_block'   => $validated['recipient_block'] ?? null,
+                'terms'             => !empty($cleanTerms) ? $cleanTerms : null,
+            ]);
+
+            // Replace line items wholesale — drafts are throwaway, and diffing
+            // by index/description is error-prone if the preparer reorders rows.
+            $quotation->items()->delete();
+            foreach ($validated['items'] as $item) {
+                $quotation->items()->create([
+                    'description' => $item['description'],
+                    'quantity'    => $item['quantity'],
+                    'unit_price'  => $item['unit_price'],
+                    'amount'      => round(((float) $item['quantity']) * ((float) $item['unit_price']), 2),
+                ]);
+            }
+        });
+
+        // Newly uploaded attachments — appended to existing files (we don't wipe
+        // previous attachments on edit; preparer can delete individually if needed).
+        $uploadedFiles = $request->file('attachments') ?? [];
+        $kinds = $request->input('attachment_kinds') ?? [];
+        if (!is_array($uploadedFiles)) $uploadedFiles = [$uploadedFiles];
+        $existingCount = $quotation->files()->count();
+        foreach ($uploadedFiles as $idx => $file) {
+            if (!$file) continue;
+            $storedPath = $file->store("quotations/{$quotation->id}", 'public');
+            $quotation->files()->create([
+                'uploaded_by'   => auth()->id(),
+                'stored_path'   => $storedPath,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type'     => $file->getMimeType(),
+                'size_bytes'    => $file->getSize(),
+                'kind'          => $kinds[$idx] ?? 'supporting',
+                'sort_order'    => $existingCount + $idx,
+            ]);
+        }
+
+        app(\App\Services\RevisionTracker::class)->trackQuotation(
+            $quotation->fresh(),
+            'edited'
+        );
+
+        return redirect()->route('quotations.show', $quotation)
+            ->with('success', 'Draft updated. Submit for approval when ready.');
     }
 
     public function store(Request $request)
@@ -119,7 +311,7 @@ class QuotationController extends Controller
         $validated = $request->validate([
             'rfq_id'                  => 'required|exists:rfqs,id',
             'vat_rate'                => 'required|numeric|min:0|max:100',
-            'validity_days'           => 'required|integer|min:1',
+            'validity_days'           => 'nullable|integer|min:1',
             'notes'                   => 'nullable|string',
             'items'                   => 'required|array|min:1',
             'items.*.description'     => 'required|string|max:255',
@@ -129,26 +321,46 @@ class QuotationController extends Controller
             'attachments.*'           => 'file|max:20480', // 20 MB each
             'attachment_kinds'        => 'nullable|array',
             'attachment_kinds.*'      => 'nullable|in:supporting,annexure,spec,other',
+            // BITAC letter header fields
+            'memo_no'                 => 'nullable|string|max:80',
+            'customer_ref_no'         => 'nullable|string|max:100',
+            'customer_ref_date'       => 'nullable|date',
+            'recipient_block'         => 'nullable|string|max:1000',
+            'terms'                   => 'nullable|array',
+            'terms.*'                 => 'nullable|string|max:500',
         ]);
 
         $rfq = Rfq::findOrFail($validated['rfq_id']);
 
-        // Compute subtotal from line items — this is the single source of truth.
-        $subtotal = 0.0;
+        // BITAC quotations: Unit Price is VAT-INCLUSIVE. The line total IS the grand total
+        // (no separate VAT row on the quote). We still record vat_rate + the EMBEDDED VAT
+        // portion for audit/PDF/reporting purposes.
+        $grossTotal = 0.0;
         foreach ($validated['items'] as $item) {
-            $subtotal += ((float) $item['quantity']) * ((float) $item['unit_price']);
+            $grossTotal += ((float) $item['quantity']) * ((float) $item['unit_price']);
         }
         $vatRate   = (float) $validated['vat_rate'];
-        $vatAmount = round($subtotal * ($vatRate / 100), 2);
-        $total     = round($subtotal + $vatAmount, 2);
+        // Embedded VAT extraction: gross × rate / (100 + rate)
+        $vatAmount = $vatRate > 0
+            ? round($grossTotal * $vatRate / (100 + $vatRate), 2)
+            : 0.0;
+        $total     = round($grossTotal, 2);
+        $subtotal  = round($grossTotal - $vatAmount, 2);
 
         $saveAsDraft = $request->boolean('save_as_draft');
+
+        // Strip blank terms but preserve order; if all empty, store null.
+        $cleanTerms = collect($validated['terms'] ?? [])
+            ->map(fn($t) => trim((string) $t))
+            ->filter(fn($t) => $t !== '')
+            ->values()
+            ->all();
 
         $quotation = Quotation::create([
             'rfq_id'        => $validated['rfq_id'],
             'customer_id'   => $rfq->customer_id,
             'version'       => $this->quotationService->getNextVersion($rfq->id),
-            'material_cost' => round($subtotal, 2),  // legacy column — now holds the pre-VAT subtotal
+            'material_cost' => $subtotal,  // legacy column — pre-VAT portion (computed by extracting embedded VAT from gross)
             'labour_cost'   => 0,
             'overhead_cost' => 0,
             'profit_margin' => 0,
@@ -156,10 +368,16 @@ class QuotationController extends Controller
             'vat_rate'      => $vatRate,
             'vat_amount'    => $vatAmount,
             'total_amount'  => $total,
-            'validity_days' => $validated['validity_days'],
+            'validity_days' => $validated['validity_days'] ?? 90,
             'notes'         => $validated['notes'] ?? null,
             'status'        => $saveAsDraft ? 'draft' : 'pending_approval',
             'created_by'    => auth()->id(),
+            // BITAC letter header
+            'memo_no'           => $validated['memo_no'] ?? null,
+            'customer_ref_no'   => $validated['customer_ref_no'] ?? null,
+            'customer_ref_date' => $validated['customer_ref_date'] ?? null,
+            'recipient_block'   => $validated['recipient_block'] ?? null,
+            'terms'             => !empty($cleanTerms) ? $cleanTerms : null,
         ]);
 
         foreach ($validated['items'] as $item) {
@@ -317,6 +535,12 @@ class QuotationController extends Controller
                 'total_amount'    => $quotation->total_amount,
                 'validity_days'   => $quotation->validity_days,
                 'notes'           => $quotation->notes,
+                // BITAC letter header fields
+                'memo_no'           => $quotation->memo_no,
+                'customer_ref_no'   => $quotation->customer_ref_no,
+                'customer_ref_date' => $quotation->customer_ref_date?->format('d/m/Y'),
+                'recipient_block'   => $quotation->recipient_block,
+                'terms'             => $quotation->terms ?? [],
                 'created_by_name' => $quotation->createdBy->name ?? '',
                 'created_at'      => $quotation->created_at->format('d M Y'),
                 'approvals'       => $quotation->approvals->sortBy('level')->map(fn($a) => [
@@ -398,6 +622,7 @@ class QuotationController extends Controller
             'canSubmitForApproval' => $quotation->status === 'draft',
             'canApprove'         => $pendingApproval && $user->can('approve quotations'),
             'canReject'          => $pendingApproval && $user->can('reject quotations'),
+            'canRequestChanges'  => $pendingApproval && $user->can('reject quotations'),
             'canSendToCustomer'  => $quotation->status === 'approved' && $user->can('convert quotations'),
             'canRecordResponse'  => in_array($quotation->status, ['sent_to_customer', 'revision_requested']) && $user->can('convert quotations'),
             'canCreateRevision'  => $quotation->status === 'revision_requested' && $user->can('create quotation-revision'),
@@ -460,6 +685,13 @@ class QuotationController extends Controller
             'approved_at' => now(),
         ]);
 
+        // Persist the inline-drawn signature if one was provided. If not, leave
+        // signature_path null and let the PDF generator fall back to the user's
+        // saved signature_path. The approval row's id is the key, so update is
+        // needed AFTER the first update() (so $approval->id is available).
+        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+
         $allApproved = $this->quotationService->checkApprovalChain($quotation);
         $remark = $request->input('remarks');
 
@@ -499,6 +731,117 @@ class QuotationController extends Controller
         return back()->with('success', 'Quotation approved.');
     }
 
+    /**
+     * Approver requests changes from the preparer.
+     *
+     * Each change request produces a NEW version (v+1) — full audit trail.
+     *   v1 (current) → status='superseded', approval row tagged "[Changes Requested]"
+     *   v2 (new)     → status='draft', all fields + line items copied from v1,
+     *                  parent_quotation_id = v1.id
+     *
+     * Preparer is redirected to the v2 edit screen to make corrections.
+     */
+    public function requestChanges(Request $request, Quotation $quotation)
+    {
+        $request->validate(['remarks' => 'required|string|max:1000']);
+
+        $approval = $quotation->approvals()
+            ->where('approver_id', auth()->id())
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$approval) {
+            return back()->with('error', 'No pending approval found for you on this quotation. It may have already been actioned.');
+        }
+
+        $remark = $request->input('remarks');
+
+        $signatureDataUrl = $request->input('signature');
+
+        $newQuotation = \DB::transaction(function () use ($quotation, $approval, $remark, $signatureDataUrl) {
+            // 1. Stamp the approver's decision on the current (old) approval row.
+            $approval->update([
+                'status'      => 'rejected', // DB-level status; UI re-labels via tag prefix
+                'remarks'     => '[Changes Requested] ' . $remark,
+                'approved_at' => now(),
+            ]);
+
+            // Capture the inline-drawn signature on this approval row (if any).
+            $sigPath = $this->persistApprovalSignature($approval, $signatureDataUrl);
+            if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+
+            // 2. Wipe remaining pending levels on the OLD version — they no longer apply.
+            $quotation->approvals()->where('status', 'pending')->delete();
+
+            // 3. Freeze the old version.
+            $quotation->update(['status' => 'superseded']);
+
+            // 4. Create the next revision as a fresh draft with all fields copied.
+            $new = Quotation::create([
+                'center_id'           => $quotation->center_id,
+                'rfq_id'              => $quotation->rfq_id,
+                'customer_id'         => $quotation->customer_id,
+                'parent_quotation_id' => $quotation->id,
+                'version'             => $this->quotationService->getNextVersion($quotation->rfq_id),
+                'material_cost'       => $quotation->material_cost,
+                'labour_cost'         => $quotation->labour_cost,
+                'overhead_cost'       => $quotation->overhead_cost,
+                'profit_margin'       => $quotation->profit_margin,
+                'discount'            => $quotation->discount,
+                'vat_rate'            => $quotation->vat_rate,
+                'vat_amount'          => $quotation->vat_amount,
+                'total_amount'        => $quotation->total_amount,
+                'validity_days'       => $quotation->validity_days,
+                'notes'               => $quotation->notes,
+                'status'              => 'draft',
+                'created_by'          => $quotation->created_by, // keeps it with the original preparer
+                // BITAC letter header — copied so the preparer doesn't have to retype.
+                'memo_no'             => $quotation->memo_no,
+                'customer_ref_no'     => $quotation->customer_ref_no,
+                'customer_ref_date'   => $quotation->customer_ref_date,
+                'recipient_block'     => $quotation->recipient_block,
+                'terms'               => $quotation->terms,
+            ]);
+
+            // 5. Clone line items.
+            foreach ($quotation->items as $li) {
+                $new->items()->create([
+                    'description' => $li->description,
+                    'quantity'    => $li->quantity,
+                    'unit_price'  => $li->unit_price,
+                    'amount'      => $li->amount,
+                ]);
+            }
+
+            return $new;
+        });
+
+        app(\App\Services\RevisionTracker::class)->trackQuotation(
+            $quotation->fresh(),
+            'changes_requested',
+            $remark
+        );
+        app(\App\Services\RevisionTracker::class)->trackQuotation(
+            $newQuotation->fresh(),
+            'created',
+            'Auto-created from change request on v' . $quotation->version
+        );
+
+        // Notify the preparer that corrections are needed and link them to the NEW version.
+        NotifyService::send(
+            $quotation->created_by,
+            'quotation_changes_requested',
+            'Changes Requested — Revision Created',
+            auth()->user()->name . " requested changes on Quotation #{$quotation->id} v{$quotation->version}.\n\"{$remark}\"\n\nA new revision (v{$newQuotation->version}) was auto-created — edit and resubmit.",
+            "/quotations/{$newQuotation->id}",
+            'fi-rr-edit',
+            'amber'
+        );
+
+        return redirect()->route('quotations.show', $newQuotation)
+            ->with('success', "Changes requested. Revision v{$newQuotation->version} created — review and resubmit for approval.");
+    }
+
     public function reject(Request $request, Quotation $quotation)
     {
         $approval = $quotation->approvals()
@@ -514,6 +857,10 @@ class QuotationController extends Controller
             'status'  => 'rejected',
             'remarks' => $request->input('remarks'),
         ]);
+
+        // Capture an inline-drawn signature on the reject decision, if any.
+        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
         $quotation->update(['status' => 'rejected']);
 
@@ -540,162 +887,306 @@ class QuotationController extends Controller
         return back()->with('success', 'Quotation rejected.');
     }
 
+    /**
+     * Decode an inline signature data URL ("data:image/png;base64,...") and
+     * persist it to the public disk at signatures/approvals/{approval_id}-{ts}.png.
+     * Returns the stored path (relative to the disk) or null on no/invalid input.
+     */
+    private function persistApprovalSignature($approval, ?string $dataUrl): ?string
+    {
+        if (!$dataUrl || !str_starts_with($dataUrl, 'data:image/')) return null;
+
+        // Strip "data:image/png;base64," header
+        $parts = explode(',', $dataUrl, 2);
+        if (count($parts) !== 2) return null;
+        $binary = base64_decode($parts[1], true);
+        if ($binary === false) return null;
+
+        $filename = 'signatures/approvals/' . $approval->id . '-' . time() . '.png';
+        \Storage::disk('public')->put($filename, $binary);
+        return $filename;
+    }
+
+    /**
+     * Convert a BDT amount to words in the Indian/Bangladeshi numbering system
+     * (Lac/Crore). Returns e.g. "Twenty Three Lac Fifty One Thousand Nine Hundred
+     * Eighty Nine Taka and Twenty Paisa Only". Matches BITAC's "মোট টাকাঃ" line.
+     */
+    private function amountInWords(float $amount): string
+    {
+        $ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+                 'Seventeen', 'Eighteen', 'Nineteen'];
+        $tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+        $twoDigit = function (int $n) use ($ones, $tens): string {
+            if ($n < 20) return $ones[$n];
+            $t = intdiv($n, 10);
+            $o = $n % 10;
+            return trim($tens[$t] . ($o ? ' ' . $ones[$o] : ''));
+        };
+
+        $threeDigit = function (int $n) use ($ones, $twoDigit): string {
+            $parts = [];
+            if ($n >= 100) {
+                $parts[] = $ones[intdiv($n, 100)] . ' Hundred';
+                $n %= 100;
+            }
+            if ($n > 0) $parts[] = $twoDigit($n);
+            return implode(' ', $parts);
+        };
+
+        $taka  = (int) floor($amount);
+        $paisa = (int) round(($amount - $taka) * 100);
+
+        if ($taka === 0) {
+            $takaWords = 'Zero';
+        } else {
+            // Indian system: ... crore | lac | thousand | hundred|tens|ones
+            $crore = intdiv($taka, 10000000);   $taka %= 10000000;
+            $lac   = intdiv($taka, 100000);     $taka %= 100000;
+            $thou  = intdiv($taka, 1000);       $taka %= 1000;
+            $rest  = $taka;
+
+            $parts = [];
+            if ($crore) $parts[] = $threeDigit($crore) . ' Crore';
+            if ($lac)   $parts[] = $threeDigit($lac)   . ' Lac';
+            if ($thou)  $parts[] = $threeDigit($thou)  . ' Thousand';
+            if ($rest)  $parts[] = $threeDigit($rest);
+            $takaWords = implode(' ', $parts);
+        }
+
+        $result = $takaWords . ' Taka';
+        if ($paisa > 0) {
+            $result .= ' and ' . $twoDigit($paisa) . ' Paisa';
+        }
+        return $result . ' Only';
+    }
+
     public function pdf(Request $request, Quotation $quotation)
     {
         $quotation->load(['rfq.items.product', 'rfq.customer', 'customer', 'createdBy', 'items', 'approvals.approver']);
 
         $fmt = fn($v) => number_format((float) ($v ?? 0), 2);
         $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $date = now()->format('d M Y, H:i');
-
-        $customer       = $quotation->customer?->name ?? $quotation->rfq?->customer?->name ?? '—';
-        $customerPO     = $quotation->customer_po_no ?? '—';
-        $createdByName  = $quotation->createdBy?->name ?? '—';
-        $createdAt      = $quotation->created_at->format('d M Y');
-        $statusLabel    = ucfirst(str_replace('_', ' ', (string) $quotation->status));
-        $statusColor    = match ($quotation->status) {
-            'approved', 'customer_accepted'                => '#059669',
-            'sent_to_customer'                             => '#7c3aed',
-            'rejected', 'customer_rejected'                => '#dc2626',
-            'revision_requested', 'pending_approval'       => '#d97706',
-            default                                        => '#64748b',
-        };
 
         // Line items — uses quotation_items (the new schema). Fallback to RFQ items
-        // if no quotation_items rows exist (legacy quotations).
+        // if no quotation_items rows exist (legacy quotations). Also pull each item's
+        // unit so we can render the "একক" column properly (defaults to "Nos").
         $lineItems = $quotation->items;
         if ($lineItems->isEmpty() && $quotation->rfq) {
             $lineItems = $quotation->rfq->items->map(fn($i) => (object) [
                 'description' => $i->job_description ?? $i->product?->name ?? '—',
                 'quantity'    => $i->quantity,
+                'unit'        => $i->unit ?? 'Nos',
                 'unit_price'  => 0,
                 'amount'      => 0,
             ]);
         }
+        // For quotation_items, units come from the linked RFQ item. Build a lookup.
+        $unitByLine = [];
+        if ($quotation->rfq) {
+            foreach ($quotation->rfq->items as $i) {
+                $unitByLine[$i->job_description ?? ''] = $i->unit ?? 'Nos';
+            }
+        }
 
-        $itemsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8; margin-bottom: 4pt;">';
-        $itemsHtml .= '<tr style="background: #1e40af; color: white;">';
-        $itemsHtml .=   '<th width="5%"  style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: center; letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">#</th>';
-        $itemsHtml .=   '<th width="55%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: left;   letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">DESCRIPTION</th>';
-        $itemsHtml .=   '<th width="10%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: right;  letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">QTY</th>';
-        $itemsHtml .=   '<th width="15%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: right;  letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">UNIT PRICE</th>';
-        $itemsHtml .=   '<th width="15%" style="padding: 6pt 8pt; font-size: 8pt; font-weight: bold; text-align: right;  letter-spacing: 0.3pt;">AMOUNT</th>';
+        $total       = (float) $quotation->total_amount;
+        $totalWords  = $this->amountInWords($total);
+        $quotationNo = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . ' v' . $quotation->version;
+
+        $memoNo     = $quotation->memo_no ?? '';
+        $custRefNo  = $quotation->customer_ref_no ?? '';
+        $custRefDt  = $quotation->customer_ref_date?->format('d/m/Y') ?? '';
+        $recipient  = $quotation->recipient_block ?? '';
+        $issuedDate = $quotation->created_at->format('d/m/Y');
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Memo block — নং (left) + তারিখঃ (right).
+        // Always rendered so the document always carries a date stamp; the memo
+        // number column stays blank if the preparer didn't enter one.
+        $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
+            . '<tr>'
+            .   '<td style="font-size: 11pt; color: #000;">'
+            .     '<span class="bn" style="font-family: siyamrupali;">নং -</span> '
+            .     '<span style="font-family: dejavusansmono;">' . $esc($memoNo) . '</span>'
+            .   '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;">'
+            .     '<span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issuedDate) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Title — centered পুনঃদরপত্র / (QUOTATION).
+        $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
+            . '<div class="bn" style="font-family: siyamrupali; font-size: 14pt; color: #000;">দরপত্র</div>'
+            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(QUOTATION)</div>'
+            . '</div>';
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Recipient (left) + Customer Ref (right) — plain two-column block.
+        $addressBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt;">'
+            . '<tr>'
+            .   '<td width="55%" style="vertical-align: top; padding-right: 12pt;">'
+            .     '<div style="font-size: 11pt; color: #000; line-height: 1.4;">' . nl2br($esc($recipient), false) . '</div>'
+            .   '</td>'
+            .   '<td width="45%" style="vertical-align: top; font-size: 11pt; color: #000;">';
+        if ($custRefNo !== '') {
+            $addressBlock .= '<div><b>Ref:</b> ' . $esc($custRefNo) . '</div>';
+        }
+        if ($custRefDt !== '') {
+            $addressBlock .= '<div style="margin-top: 1pt;"><b>Date:</b> ' . $esc($custRefDt) . '</div>';
+        }
+        $addressBlock .=   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Items table — exact BITAC layout: Sl.No | Description (bilingual) | Quantity | Unit | Unit Price | Total Price
+        // All cells black-bordered, white background, no zebra striping or accent colors.
+        // Column widths tuned so even 7-digit BDT amounts fit on one line.
+        $itemsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-top: 4pt; table-layout: fixed;">';
+        $itemsHtml .= '<colgroup>'
+            . '<col style="width: 6%;" />'
+            . '<col style="width: 38%;" />'
+            . '<col style="width: 10%;" />'
+            . '<col style="width: 8%;" />'
+            . '<col style="width: 17%;" />'
+            . '<col style="width: 21%;" />'
+            . '</colgroup>';
+        // Header row
+        $itemsHtml .= '<tr>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
+            . '<span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
+            . '<span class="bn" style="font-family: siyamrupali;">কাজের বিবরণ</span><br>(Description of Works)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
+            . '<span class="bn" style="font-family: siyamrupali;">পরিমান</span><br>(Quantity)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
+            . '<span class="bn" style="font-family: siyamrupali;">একক</span><br>(Unit)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
+            . '<span class="bn" style="font-family: siyamrupali;">একক দর</span><br>(Unit Price)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
+            . '<span class="bn" style="font-family: siyamrupali;">মূল্য</span><br>(Total Price)</th>';
         $itemsHtml .= '</tr>';
+
         if ($lineItems->isEmpty()) {
-            $itemsHtml .= '<tr><td colspan="5" style="padding: 10pt; text-align: center; color: #9ca3af; font-style: italic; font-size: 9pt;">No line items</td></tr>';
+            $itemsHtml .= '<tr><td colspan="6" style="border: 0.75pt solid #000; padding: 10pt; text-align: center; font-style: italic; font-size: 10pt;">No line items</td></tr>';
         } else {
             foreach ($lineItems as $i => $li) {
-                $bg = $i % 2 === 0 ? '#ffffff' : '#fafafa';
-                $itemsHtml .= "<tr style='background: {$bg};'>";
-                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-weight: bold; color: #1e40af; text-align: center; vertical-align: top;">' . ($i + 1) . '</td>';
-                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; color: #111827; vertical-align: top;">' . $esc($li->description) . '</td>';
-                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-family: dejavusansmono; text-align: right; vertical-align: top; white-space: nowrap;">' . $fmt($li->quantity) . '</td>';
-                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-family: dejavusansmono; text-align: right; vertical-align: top; white-space: nowrap;">' . $fmt($li->unit_price) . '</td>';
-                $itemsHtml .=   '<td style="padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; vertical-align: top; white-space: nowrap;">' . $fmt($li->amount) . '</td>';
+                $unit = $li->unit ?? ($unitByLine[$li->description] ?? 'Nos');
+                $sl   = str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+                $itemsHtml .= '<tr>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $sl . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; line-height: 1.4;">' . nl2br($esc($li->description)) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $fmt($li->quantity) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $esc($unit) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($li->unit_price) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($li->amount) . '</td>';
                 $itemsHtml .= '</tr>';
             }
         }
+
+        // Bottom row INSIDE the items table: only "Total (Including VAT & TAX)" + amount.
+        // The "মোট টাকাঃ <words>" line is rendered as a separate paragraph below the table.
+        $itemsHtml .= '<tr>';
+        $itemsHtml .=   '<td colspan="5" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; text-align: right; vertical-align: middle; font-weight: bold;">Total (Including VAT &amp; TAX)</td>';
+        $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; font-weight: bold; white-space: nowrap;">' . $fmt($total) . '</td>';
+        $itemsHtml .= '</tr>';
         $itemsHtml .= '</table>';
 
-        // Totals card — sits to the right under the items table
-        $subtotal = (float) $quotation->material_cost; // we repurpose material_cost as pre-VAT subtotal
-        $vatAmt   = (float) $quotation->vat_amount;
-        $total    = (float) $quotation->total_amount;
-        $totalsHtml  = '<table align="right" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8; width: 290pt; margin-top: 6pt;">';
-        $totalsHtml .= '<tr><td style="padding: 5pt 10pt; font-size: 9pt; color: #4b5563; border-bottom: 1pt solid #e5e7eb;">Subtotal</td><td style="padding: 5pt 10pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; border-bottom: 1pt solid #e5e7eb; white-space: nowrap;">' . $fmt($subtotal) . '</td></tr>';
-        $totalsHtml .= '<tr><td style="padding: 5pt 10pt; font-size: 9pt; color: #4b5563; border-bottom: 1pt solid #e5e7eb;">VAT (' . $fmt($quotation->vat_rate) . '%)</td><td style="padding: 5pt 10pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; border-bottom: 1pt solid #e5e7eb; white-space: nowrap;">' . $fmt($vatAmt) . '</td></tr>';
-        $totalsHtml .= '<tr style="background: #0f172a;">';
-        $totalsHtml .=   '<td style="padding: 8pt 10pt; font-size: 10pt; color: white; font-weight: bold;">Grand Total</td>';
-        $totalsHtml .=   '<td style="padding: 8pt 10pt; font-size: 13pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #fbbf24; white-space: nowrap;">BDT ' . $fmt($total) . '</td>';
-        $totalsHtml .= '</tr>';
-        $totalsHtml .= '</table>';
+        // Amount in words — sits just below the items table, left-aligned.
+        $itemsHtml .= '<div style="margin-top: 6pt; font-size: 10pt; color: #000;">'
+            . '<span class="bn" style="font-family: siyamrupali;">মোট টাকাঃ</span> ' . $esc($totalWords)
+            . '</div>';
 
-        // Notes / terms block (customer-facing)
+        // ─────────────────────────────────────────────────────────────────────
+        // Signature block — right-aligned. Uses the FINAL approver's identity
+        // (the highest-level user who approved this quotation). Falls back to
+        // the creator if no one has approved yet. Phone pulls from the user
+        // first, then the center's letterhead phone as a fallback.
+        $finalApproval = $quotation->approvals
+            ->where('status', 'approved')
+            ->sortByDesc('level')
+            ->first();
+        $signer = $finalApproval?->approver ?? $quotation->createdBy;
+
+        $center = \App\Models\Center::find(
+            $quotation->center_id
+            ?? session('active_center_id')
+            ?? auth()->user()?->center_id
+            ?? 1
+        );
+
+        $signerName  = $signer?->name ?? '';
+        $signerEmail = $signer?->email ?? $center?->email ?? '';
+        $signerPhone = $signer?->phone ?: $center?->phone_bn ?: $center?->phone ?: '';
+        // Prefer the signature captured on THIS approval (per-decision audit).
+        // Fall back to the approver's stored profile signature when not present.
+        $sigPath     = $finalApproval?->signatureAbsolutePath()
+                     ?? $signer?->signatureAbsolutePath();
+        $centerNameBn = $center?->name_bn ? 'বিটাক, ঢাকা।' : 'বিটাক, ঢাকা।'; // designation line
+
+        // Signature image — if uploaded for the signer, render it; otherwise leave blank space.
+        $signatureImg = $sigPath
+            ? '<img src="' . $sigPath . '" style="height: 50pt; max-width: 160pt;" alt="signature" />'
+            : '<div style="height: 36pt;"></div>';
+
+        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24pt;">'
+            . '<tr>'
+            .   '<td width="55%"></td>'
+            .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5;">'
+            .     '<div>' . $signatureImg . '</div>'
+            .     '<div>(' . $esc($signerName) . ')</div>'
+            .     '<div class="bn" style="font-family: siyamrupali;">নির্বাহী প্রকৌশলী</div>'
+            .     '<div class="bn" style="font-family: siyamrupali;">' . $esc($centerNameBn) . '</div>';
+        if ($signerEmail) {
+            $signatureBlock .= '<div style="margin-top: 2pt;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> '
+                . '<u>' . $esc($signerEmail) . '</u></div>';
+        }
+        if ($signerPhone) {
+            $signatureBlock .= '<div><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> '
+                . $esc($signerPhone) . '</div>';
+        }
+        $signatureBlock .= '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Numbered Terms & Conditions (দরপত্রের শর্ত সমূহ) — bordered box header on top,
+        // numbered list below. Matches the bottom of the BITAC official sample.
+        $termsHtml = '';
+        $termsList = $quotation->terms ?? [];
+        if (is_array($termsList) && count($termsList) > 0) {
+            $termsHtml  = '<div style="margin-top: 18pt;">';
+            $termsHtml .=   '<div style="text-align: center; margin-bottom: 6pt;">';
+            $termsHtml .=     '<span class="bn" style="display: inline-block; padding: 2pt 14pt; border: 0.75pt solid #000; font-family: siyamrupali; font-size: 11pt; color: #000;">দরপত্রের শর্ত সমূহ</span>';
+            $termsHtml .=   '</div>';
+            $termsHtml .=   '<table cellspacing="0" cellpadding="0" style="width: 100%; margin-top: 4pt;">';
+            foreach ($termsList as $idx => $term) {
+                $termsHtml .= '<tr>';
+                $termsHtml .=   '<td width="24pt" style="padding: 2pt 4pt; vertical-align: top; font-size: 10pt; color: #000;">' . ($idx + 1) . '.</td>';
+                $termsHtml .=   '<td class="bn" style="padding: 2pt 4pt; vertical-align: top; font-family: siyamrupali; font-size: 10.5pt; color: #000; line-height: 1.5;">' . $esc($term) . '</td>';
+                $termsHtml .= '</tr>';
+            }
+            $termsHtml .= '</table>';
+            $termsHtml .= '</div>';
+        }
+
+        // Optional preparer-supplied additional notes — printed below the terms in plain text.
         $notesHtml = $quotation->notes
-            ? '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 14pt; border-collapse: collapse;">'
-                . '<tr>'
-                    . '<td width="4pt" style="background: #1e40af;"></td>'
-                    . '<td style="padding: 8pt 12pt; background: #eff6ff; border: 1pt solid #93c5fd; border-left: 0;">'
-                        . '<div style="font-size: 8pt; color: #1e40af; text-transform: uppercase; letter-spacing: 0.4pt; font-weight: bold;">Terms &amp; Notes</div>'
-                        . '<div style="font-size: 10pt; color: #1e293b; margin-top: 2pt; white-space: pre-line;">' . $esc($quotation->notes) . '</div>'
-                    . '</td>'
-                . '</tr>'
-              . '</table>'
+            ? '<div style="margin-top: 10pt; font-size: 10pt; color: #000; line-height: 1.4;">' . nl2br($esc($quotation->notes), false) . '</div>'
             : '';
 
-        $quotationNo = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . ' v' . $quotation->version;
-
         $bodyHtml = <<<HTML
-        <!-- Document title block -->
-        <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 10pt; border-collapse: collapse;">
-            <tr>
-                <td width="4pt" style="background: #1e40af;"></td>
-                <td style="padding: 6pt 10pt;">
-                    <div style="font-size: 14pt; color: #1e40af; font-weight: bold; letter-spacing: 0.4pt;">QUOTATION</div>
-                    <div style="font-size: 9pt; color: #64748b; margin-top: 1pt;">{$quotationNo} &middot; {$customer}</div>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Meta grid -->
-        <table width="100%" cellspacing="0" cellpadding="8" style="border: 1pt solid #94a3b8; border-collapse: collapse; margin-bottom: 12pt; background: #f8fafc;">
-            <tr>
-                <td width="22%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customer}</div>
-                </td>
-                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer PO</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customerPO}</div>
-                </td>
-                <td width="18%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Valid For</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$quotation->validity_days} days</div>
-                </td>
-                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Status</div>
-                    <div style="color: {$statusColor}; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$statusLabel}</div>
-                </td>
-                <td width="20%" style="vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Issued</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$createdAt}</div>
-                    <div style="font-size: 8pt; color: #6b7280; margin-top: 1pt;">by {$createdByName}</div>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Section heading -->
-        <div style="margin-bottom: 4pt;">
-            <span style="display: inline-block; padding: 3pt 8pt; background: #1e40af; color: white; font-size: 9pt; font-weight: bold; letter-spacing: 0.3pt;">LINE ITEMS</span>
-        </div>
-
+        {$memoBlock}
+        {$titleBlock}
+        {$addressBlock}
         {$itemsHtml}
-
-        <!-- Totals card right-aligned -->
-        <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 4pt; border-collapse: collapse;">
-            <tr><td>{$totalsHtml}<div style="clear: both;"></div></td></tr>
-        </table>
-
-        <div style="clear: both;"></div>
-
+        {$signatureBlock}
+        {$termsHtml}
         {$notesHtml}
-
-        <!-- Signature lines -->
-        <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 40pt; border-collapse: collapse;">
-            <tr>
-                <td width="33%" style="padding: 0 8pt;">
-                    <div style="border-top: 1pt solid #1f2937; padding-top: 4pt; text-align: center; font-size: 8pt; color: #4b5563;">Prepared By</div>
-                </td>
-                <td width="34%" style="padding: 0 8pt;">
-                    <div style="border-top: 1pt solid #1f2937; padding-top: 4pt; text-align: center; font-size: 8pt; color: #4b5563;">Approved By</div>
-                </td>
-                <td width="33%" style="padding: 0 8pt;">
-                    <div style="border-top: 1pt solid #1f2937; padding-top: 4pt; text-align: center; font-size: 8pt; color: #4b5563;">Customer Acknowledgement</div>
-                </td>
-            </tr>
-        </table>
-
-        <div style="margin-top: 16pt; padding-top: 6pt; border-top: 0.5pt solid #e5e7eb; text-align: right; font-size: 7pt; color: #9ca3af; font-style: italic;">Generated by BITAC PMS &middot; {$date}</div>
 HTML;
 
         $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Quotation {$quotationNo}");
@@ -874,6 +1365,7 @@ HTML;
                                 ?? $quotation->customer?->center_id
                                 ?? 1,
             'quotation_id'    => $quotation->id,
+            'rfq_id'          => $quotation->rfq_id, // direct link so PCD inbox can fetch items without going through quotation
             'customer_id'     => $quotation->customer_id,
             'product_id'      => $firstItem?->product_id,
             'bom_id'          => $bomId,

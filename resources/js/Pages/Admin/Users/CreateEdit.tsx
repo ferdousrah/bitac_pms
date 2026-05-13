@@ -1,24 +1,50 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
-import { FormEvent } from 'react';
+import { FormEvent, useState } from 'react';
 
 export default function UserCreateEdit({ user, roles }: any) {
-    const { data, setData, post, put, errors, processing } = useForm({
+    const { data, setData, post, transform, errors, processing } = useForm<any>({
         name: user?.name ?? '',
         email: user?.email ?? '',
+        phone: user?.phone ?? '',
         password: '',
         password_confirmation: '',
         role: user?.roles?.[0] ?? '',
         is_active: user?.is_active ?? true,
         deactivation_reason: user?.deactivation_reason ?? '',
+        signature: null as File | null,
+        remove_signature: false,
     });
+
+    // Local preview state so the user sees the chosen image before submit.
+    const [sigPreview, setSigPreview] = useState<string | null>(user?.signature_url ?? null);
+
+    const onSignaturePicked = (file: File | null) => {
+        setData('signature', file);
+        setData('remove_signature', false);
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = () => setSigPreview(reader.result as string);
+            reader.readAsDataURL(file);
+        } else {
+            setSigPreview(user?.signature_url ?? null);
+        }
+    };
+
+    const clearSignature = () => {
+        setData('signature', null);
+        setData('remove_signature', true);
+        setSigPreview(null);
+    };
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
         if (user) {
-            put(`/admin/users/${user.id}`);
+            // Laravel method spoofing — needed because PUT cannot carry multipart/form-data
+            transform((d: any) => ({ ...d, _method: 'put' }));
+            post(`/admin/users/${user.id}`, { forceFormData: true });
         } else {
-            post('/admin/users');
+            post('/admin/users', { forceFormData: true });
         }
     };
 
@@ -72,6 +98,66 @@ export default function UserCreateEdit({ user, roles }: any) {
                                     required
                                 />
                                 {errors.email && <p className="form-error">{errors.email}</p>}
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">Phone / Mobile</label>
+                                <p className="form-hint">Shown on outgoing quotation letters (e.g. ফোনঃ 01914-894085). Optional.</p>
+                                <input
+                                    type="tel"
+                                    value={data.phone}
+                                    onChange={e => setData('phone', e.target.value)}
+                                    className="form-input"
+                                    placeholder="01914-894085"
+                                />
+                                {errors.phone && <p className="form-error">{errors.phone}</p>}
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">Signature</label>
+                                <p className="form-hint">PNG with transparent background works best. Max 2 MB. Embedded above the name on quotation PDFs the user approves.</p>
+
+                                {sigPreview ? (
+                                    <div className="flex items-start gap-4 p-3 rounded-xl border border-surface-200 bg-surface-50/60">
+                                        <img
+                                            src={sigPreview}
+                                            alt="Signature preview"
+                                            className="h-20 w-auto max-w-[260px] object-contain bg-white border border-surface-100 rounded"
+                                        />
+                                        <div className="flex-1 flex flex-col gap-1.5">
+                                            <label className="btn-outline cursor-pointer text-xs self-start">
+                                                <i className="fi fi-rr-refresh text-[10px] leading-none" />
+                                                Replace
+                                                <input
+                                                    type="file"
+                                                    accept="image/png,image/jpeg"
+                                                    className="hidden"
+                                                    onChange={e => onSignaturePicked(e.target.files?.[0] ?? null)}
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={clearSignature}
+                                                className="text-xs text-red-600 hover:text-red-700 self-start flex items-center gap-1 mt-1"
+                                            >
+                                                <i className="fi fi-rr-trash text-[10px] leading-none" />
+                                                Remove signature
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <label className="flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed border-surface-200 bg-surface-50/40 hover:border-brand-300 hover:bg-brand-50/30 transition-all cursor-pointer">
+                                        <i className="fi fi-rr-signature text-brand-500 text-base leading-none" />
+                                        <span className="text-sm text-surface-600">Click to upload signature image</span>
+                                        <input
+                                            type="file"
+                                            accept="image/png,image/jpeg"
+                                            className="hidden"
+                                            onChange={e => onSignaturePicked(e.target.files?.[0] ?? null)}
+                                        />
+                                    </label>
+                                )}
+                                {errors.signature && <p className="form-error">{errors.signature as any}</p>}
                             </div>
 
                             <div className="form-group">

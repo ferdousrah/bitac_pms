@@ -15,6 +15,8 @@ class Quotation extends Model
         'discount', 'vat_rate', 'vat_amount', 'total_amount',
         'validity_days', 'status', 'notes',
         'sent_to_customer_at', 'customer_responded_at', 'parent_quotation_id', 'customer_po_no',
+        // BITAC official quotation letter fields
+        'memo_no', 'customer_ref_no', 'customer_ref_date', 'recipient_block', 'terms',
     ];
 
     protected function casts(): array
@@ -22,6 +24,8 @@ class Quotation extends Model
         return [
             'sent_to_customer_at'   => 'datetime',
             'customer_responded_at' => 'datetime',
+            'customer_ref_date'     => 'date',
+            'terms'                 => 'array',
         ];
     }
 

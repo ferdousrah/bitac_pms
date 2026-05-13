@@ -290,6 +290,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('quotations/{quotation}/reject', [QuotationController::class, 'reject'])
         ->middleware('permission:reject quotations')
         ->name('quotations.reject');
+    Route::post('quotations/{quotation}/request-changes', [QuotationController::class, 'requestChanges'])
+        ->middleware('permission:reject quotations')
+        ->name('quotations.request-changes');
     Route::get('quotations/{quotation}/pdf', [QuotationController::class, 'pdf'])
         ->name('quotations.pdf');
     Route::post('quotations/{quotation}/send', [QuotationController::class, 'sendToCustomer'])

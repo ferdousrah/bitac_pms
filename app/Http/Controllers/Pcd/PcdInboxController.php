@@ -50,11 +50,15 @@ class PcdInboxController extends Controller
     public function show(WorkOrder $workOrder)
     {
         $workOrder->load([
-            'customer', 'quotation', 'rfq.items.product',
+            'customer', 'quotation.rfq.items.product', 'rfq.items.product',
             'files.uploadedBy',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
         ]);
+
+        // Some legacy WOs were created without rfq_id set on the row itself.
+        // Reach through the quotation as a fallback so Job Items always render.
+        $rfqItems = $workOrder->rfq?->items ?? $workOrder->quotation?->rfq?->items ?? collect();
 
         $checklist = PcdReleaseService::checklistFor($workOrder);
 
@@ -72,11 +76,11 @@ class PcdInboxController extends Controller
                 'notes'               => $workOrder->notes,
                 'pcd_handoff_at'      => $workOrder->pcd_handoff_at?->format('d M Y, h:i A'),
                 'released_at'         => $workOrder->released_to_shops_at?->format('d M Y, h:i A'),
-                'rfq_items'           => $workOrder->rfq?->items->map(fn($i) => [
+                'rfq_items'           => $rfqItems->map(fn($i) => [
                     'description' => $i->job_description ?? $i->product?->name ?? '—',
                     'quantity'    => $i->quantity,
                     'unit'        => $i->unit,
-                ]) ?? [],
+                ])->values(),
                 'attachments'         => $workOrder->files->map(fn($f) => [
                     'id'           => $f->id,
                     'kind'         => $f->kind,

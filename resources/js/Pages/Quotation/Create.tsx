@@ -15,7 +15,18 @@ interface LineItem {
     estimate_no?: string | null;
 }
 
-export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatRate = 15 }: any) {
+export default function QuotationCreate({
+    rfq,
+    kickoffNote,
+    vatRate: defaultVatRate = 15,
+    defaultRecipient = '',
+    defaultTerms = [],
+    defaultCustomerRefNo = '',
+    defaultCustomerRefDate = '',
+    existing = null,
+}: any) {
+    // Edit mode flips the form to PUT-to-update instead of POST-to-create.
+    const isEdit = !!existing;
     const aiEnabled = useAiEnabled();
     // Prepare initial line items from the RFQ (prefilled unit_price when estimate exists)
     const initialItems: LineItem[] = (rfq?.items ?? []).map((i: any) => ({
@@ -27,16 +38,42 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
         estimate_no: i.estimate_no ?? null,
     }));
 
-    const { data, setData, post, errors, processing } = useForm<any>({
+    const { data, setData, post, transform, errors, processing } = useForm<any>({
         rfq_id:            rfq?.id ?? '',
-        vat_rate:          String(defaultVatRate),
-        validity_days:     '30',
-        notes:             '',
+        vat_rate:          String(existing?.vat_rate ?? defaultVatRate),
+        notes:             existing?.notes ?? '',
         items:             initialItems,
         attachments:       [] as File[],
         attachment_kinds:  [] as string[],
         save_as_draft:     false,
+        // BITAC letter header
+        memo_no:            existing?.memo_no ?? '',
+        customer_ref_no:    existing?.customer_ref_no ?? defaultCustomerRefNo ?? '',
+        customer_ref_date:  existing?.customer_ref_date ?? defaultCustomerRefDate ?? '',
+        recipient_block:    existing?.recipient_block ?? defaultRecipient ?? '',
+        terms:              (existing?.terms?.length > 0)
+                                ? existing.terms
+                                : ((defaultTerms as string[]).length > 0 ? defaultTerms : ['']),
     });
+
+    // Terms list helpers
+    const addTerm = () => setData('terms', [...(data.terms as string[]), '']);
+    const updateTerm = (idx: number, value: string) => {
+        const next = [...(data.terms as string[])];
+        next[idx] = value;
+        setData('terms', next);
+    };
+    const removeTerm = (idx: number) => {
+        const next = (data.terms as string[]).filter((_, i) => i !== idx);
+        setData('terms', next.length > 0 ? next : ['']);
+    };
+    const moveTerm = (idx: number, dir: -1 | 1) => {
+        const next = [...(data.terms as string[])];
+        const tgt = idx + dir;
+        if (tgt < 0 || tgt >= next.length) return;
+        [next[idx], next[tgt]] = [next[tgt], next[idx]];
+        setData('terms', next);
+    };
 
     const onFilesPicked = (files: FileList | null) => {
         if (!files) return;
@@ -72,18 +109,19 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
         setData('items', next);
     };
 
-    // Live totals
-    const { subtotal, vatAmount, grandTotal, lineAmounts } = useMemo(() => {
+    // Live totals — unit prices are VAT-INCLUSIVE per BITAC convention,
+    // so the line-item sum IS the grand total. We compute the embedded VAT
+    // portion for display only (so the preparer can see the breakdown).
+    const { grandTotal, embeddedVat, lineAmounts } = useMemo(() => {
         const rate = parseFloat(data.vat_rate) || 0;
         const amounts = (data.items as LineItem[]).map((i) =>
             (parseFloat(String(i.quantity)) || 0) * (parseFloat(String(i.unit_price)) || 0)
         );
-        const sub = amounts.reduce((a, b) => a + b, 0);
-        const vat = sub * (rate / 100);
+        const total = amounts.reduce((a, b) => a + b, 0);
+        const embedded = rate > 0 ? total * rate / (100 + rate) : 0;
         return {
-            subtotal:    sub,
-            vatAmount:   vat,
-            grandTotal:  sub + vat,
+            grandTotal:  total,
+            embeddedVat: embedded,
             lineAmounts: amounts,
         };
     }, [data.items, data.vat_rate]);
@@ -91,11 +129,17 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
     const submit = (e: FormEvent, asDraft = false) => {
         e.preventDefault();
         setData('save_as_draft', asDraft);
-        setTimeout(() => post('/quotations', { forceFormData: true }), 0);
+        if (isEdit) {
+            // Update an existing draft — Laravel method spoofing for multipart PUT.
+            transform((d: any) => ({ ...d, _method: 'put' }));
+            setTimeout(() => post(`/quotations/${existing.id}`, { forceFormData: true }), 0);
+        } else {
+            setTimeout(() => post('/quotations', { forceFormData: true }), 0);
+        }
     };
 
     return (
-        <AppLayout header="New Quotation">
+        <AppLayout header={isEdit ? `Edit Quotation #${existing.id} v${existing.version}` : 'New Quotation'}>
             <div className="max-w-5xl space-y-6 animate-fade-in">
                 {kickoffNote && (
                     <div className="flex items-start gap-3 p-4 rounded-xl bg-indigo-50 border border-indigo-200">
@@ -138,38 +182,88 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <i className="fi fi-rr-document text-xs leading-none mr-1.5" />
+                                        নং (Memo No)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={data.memo_no}
+                                        onChange={e => setData('memo_no', e.target.value)}
+                                        className="form-input font-mono text-xs"
+                                        placeholder="36.06.2692.028.51.028(2).26.92"
+                                    />
+                                    {errors.memo_no && <p className="form-error">{errors.memo_no as any}</p>}
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <i className="fi fi-rr-link text-xs leading-none mr-1.5" />
+                                        Customer Ref
+                                        {defaultCustomerRefNo && <span className="ml-1 text-[9px] font-normal text-emerald-600">(from RFQ)</span>}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={data.customer_ref_no}
+                                        onChange={e => setData('customer_ref_no', e.target.value)}
+                                        className="form-input font-mono text-xs"
+                                        placeholder="27.11.9100.406.01.701.26.86"
+                                    />
+                                    {errors.customer_ref_no && <p className="form-error">{errors.customer_ref_no as any}</p>}
+                                </div>
                                 <div className="form-group">
                                     <label className="form-label">
                                         <i className="fi fi-rr-calendar text-xs leading-none mr-1.5" />
-                                        Validity (days)
+                                        Ref Date
+                                        {defaultCustomerRefDate && <span className="ml-1 text-[9px] font-normal text-emerald-600">(RFQ date)</span>}
                                     </label>
                                     <input
-                                        type="number"
-                                        min="1"
-                                        value={data.validity_days}
-                                        onChange={e => setData('validity_days', e.target.value)}
+                                        type="date"
+                                        value={data.customer_ref_date}
+                                        onChange={e => setData('customer_ref_date', e.target.value)}
                                         className="form-input"
-                                        placeholder="30"
                                     />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        <i className="fi fi-rr-percentage text-xs leading-none mr-1.5" />
-                                        VAT Rate (%)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        step="0.1"
-                                        value={data.vat_rate}
-                                        onChange={e => setData('vat_rate', e.target.value)}
-                                        className="form-input"
-                                        placeholder="15"
-                                    />
+                                    {data.customer_ref_date && (
+                                        <p className="text-[10px] text-surface-500 mt-1 font-mono">
+                                            Prints as: {(() => {
+                                                const [y, m, d] = String(data.customer_ref_date).split('-');
+                                                return `${d}/${m}/${y}`;
+                                            })()}
+                                        </p>
+                                    )}
+                                    {errors.customer_ref_date && <p className="form-error">{errors.customer_ref_date as any}</p>}
                                 </div>
                             </div>
+                            <p className="text-[11px] text-surface-400 flex items-center gap-1.5">
+                                <i className="fi fi-rr-info text-[10px] leading-none" />
+                                Unit prices are VAT-inclusive — total is shown as <span className="font-semibold text-surface-600">Total (Including VAT &amp; TAX)</span>, matching BITAC's official quotation format.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Recipient block — shown at the top of the printed letter */}
+                    <div className="card">
+                        <div className="card-header">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-xl bg-sky-50 flex items-center justify-center">
+                                    <i className="fi fi-rr-marker text-sky-500 text-sm leading-none" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-surface-900">Recipient (To Whom)</h3>
+                                    <p className="text-xs text-surface-400">Appears top-left of the printed letter — e.g. Executive Engineer, Sylhet 225 MW CCPP, BPDB, Kumargaon, Sylhet.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            <textarea
+                                value={data.recipient_block}
+                                onChange={e => setData('recipient_block', e.target.value)}
+                                rows={4}
+                                className="form-textarea text-sm"
+                                placeholder={'Executive Engineer\nSylhet 225 MW CCPP, BPDB,\nKumargaon, Sylhet.'}
+                            />
+                            {errors.recipient_block && <p className="form-error">{errors.recipient_block as any}</p>}
                         </div>
                     </div>
 
@@ -274,16 +368,14 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
                                     <span className="text-xs font-semibold text-surface-300 uppercase tracking-wider">Quotation Totals</span>
                                 </div>
                                 <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between text-surface-300">
-                                        <span>Subtotal ({(data.items as LineItem[]).length} item{(data.items as LineItem[]).length === 1 ? '' : 's'})</span>
-                                        <span className="font-mono tabular-nums">{fmt(subtotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-surface-300">
-                                        <span>VAT ({parseFloat(data.vat_rate) || 0}%)</span>
-                                        <span className="font-mono tabular-nums">{fmt(vatAmount)}</span>
-                                    </div>
-                                    <div className="border-t border-surface-700 pt-3 mt-3 flex justify-between items-center">
-                                        <span className="text-sm font-semibold text-surface-200">Grand Total</span>
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <span className="text-sm font-semibold text-surface-100">Total (Including VAT &amp; TAX)</span>
+                                            <div className="text-[10px] text-surface-400 mt-0.5">
+                                                {(data.items as LineItem[]).length} item{(data.items as LineItem[]).length === 1 ? '' : 's'}
+                                                {embeddedVat > 0 && <> &middot; includes {fmt(embeddedVat)} VAT @ {parseFloat(data.vat_rate) || 0}%</>}
+                                            </div>
+                                        </div>
                                         <span className="text-2xl font-bold text-white font-mono tracking-tight tabular-nums">{fmt(grandTotal)}</span>
                                     </div>
                                 </div>
@@ -375,7 +467,77 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
                         </div>
                     </div>
 
-                    {/* Notes & Terms */}
+                    {/* Terms & Conditions — numbered list printed at the bottom of the letter */}
+                    <div className="card">
+                        <div className="card-header">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center">
+                                        <i className="fi fi-rr-list-check text-rose-500 text-sm leading-none" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-surface-900">দরপত্রের শর্ত সমূহ — Terms &amp; Conditions</h3>
+                                        <p className="text-xs text-surface-400">Numbered list printed at the bottom of the customer letter</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={addTerm}
+                                    className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                                >
+                                    <i className="fi fi-rr-plus text-[10px] leading-none" />
+                                    Add term
+                                </button>
+                            </div>
+                        </div>
+                        <div className="card-body space-y-2">
+                            {(data.terms as string[]).map((term, idx) => (
+                                <div key={idx} className="flex items-start gap-2">
+                                    <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center text-xs font-bold shrink-0 mt-1">
+                                        {idx + 1}
+                                    </div>
+                                    <textarea
+                                        value={term}
+                                        onChange={e => updateTerm(idx, e.target.value)}
+                                        rows={2}
+                                        className="form-textarea text-sm flex-1"
+                                        placeholder="Term…"
+                                    />
+                                    <div className="flex flex-col gap-1 pt-1 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => moveTerm(idx, -1)}
+                                            disabled={idx === 0}
+                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-surface-400 hover:bg-surface-50 hover:text-surface-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            title="Move up"
+                                        >
+                                            <i className="fi fi-rr-angle-up text-[10px] leading-none" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => moveTerm(idx, 1)}
+                                            disabled={idx === (data.terms as string[]).length - 1}
+                                            className="w-7 h-7 rounded-lg flex items-center justify-center text-surface-400 hover:bg-surface-50 hover:text-surface-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            title="Move down"
+                                        >
+                                            <i className="fi fi-rr-angle-down text-[10px] leading-none" />
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeTerm(idx)}
+                                        className="w-7 h-7 mt-1 rounded-lg flex items-center justify-center text-surface-400 hover:bg-red-50 hover:text-red-600 transition-colors shrink-0"
+                                        title="Remove"
+                                    >
+                                        <i className="fi fi-rr-trash text-xs leading-none" />
+                                    </button>
+                                </div>
+                            ))}
+                            {errors.terms && <p className="form-error">{errors.terms as any}</p>}
+                        </div>
+                    </div>
+
+                    {/* Internal Notes — preparer's free-text, NOT printed as numbered terms */}
                     <div className="card">
                         <div className="card-header">
                             <div className="flex items-center gap-2">
@@ -383,8 +545,8 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
                                     <i className="fi fi-rr-comment-alt text-purple-500 text-sm leading-none" />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-bold text-surface-900">Notes & Terms</h3>
-                                    <p className="text-xs text-surface-400">Customer-facing terms or special conditions</p>
+                                    <h3 className="text-sm font-bold text-surface-900">Additional Notes</h3>
+                                    <p className="text-xs text-surface-400">Optional free-text remarks shown below the terms list</p>
                                 </div>
                             </div>
                         </div>
@@ -393,9 +555,9 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
                                 <textarea
                                     value={data.notes}
                                     onChange={e => setData('notes', e.target.value)}
-                                    rows={6}
+                                    rows={4}
                                     className="form-textarea"
-                                    placeholder="Validity, payment terms, delivery schedule, warranty, price escalation, taxes, dispute resolution..."
+                                    placeholder="Special conditions, exceptions, or remarks not covered by the standard terms above…"
                                 />
                                 <div className="text-[10px] text-surface-400 mt-1 text-right">
                                     {data.notes.length > 0 && `${data.notes.length} character${data.notes.length === 1 ? '' : 's'}`}
@@ -416,7 +578,6 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
                                         onApplyText={(text) => setData('notes', text)}
                                         context={{
                                             rfq_id:        data.rfq_id,
-                                            validity_days: data.validity_days,
                                             vat_rate:      data.vat_rate,
                                             items:         data.items,
                                         }}
@@ -428,25 +589,41 @@ export default function QuotationCreate({ rfq, kickoffNote, vatRate: defaultVatR
 
                     {/* Submit */}
                     <div className="flex items-center gap-3">
-                        <button
-                            type="button"
-                            disabled={processing}
-                            onClick={(e) => submit(e as any, true)}
-                            className="btn-outline"
-                        >
-                            <i className="fi fi-rr-pencil text-xs leading-none" />
-                            {processing ? 'Saving...' : 'Save as Draft'}
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={processing}
-                            onClick={() => setData('save_as_draft', false)}
-                            className="btn-primary"
-                        >
-                            <i className="fi fi-rr-paper-plane text-xs leading-none" />
-                            {processing ? 'Saving...' : 'Create & Submit for Approval'}
-                        </button>
-                        <Link href="/quotations" className="btn-ghost">Cancel</Link>
+                        {isEdit ? (
+                            <>
+                                <button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="btn-primary"
+                                >
+                                    <i className="fi fi-rr-disk text-xs leading-none" />
+                                    {processing ? 'Saving...' : 'Save Changes'}
+                                </button>
+                                <Link href={`/quotations/${existing.id}`} className="btn-ghost">Cancel</Link>
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    disabled={processing}
+                                    onClick={(e) => submit(e as any, true)}
+                                    className="btn-outline"
+                                >
+                                    <i className="fi fi-rr-pencil text-xs leading-none" />
+                                    {processing ? 'Saving...' : 'Save as Draft'}
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={processing}
+                                    onClick={() => setData('save_as_draft', false)}
+                                    className="btn-primary"
+                                >
+                                    <i className="fi fi-rr-paper-plane text-xs leading-none" />
+                                    {processing ? 'Saving...' : 'Create & Submit for Approval'}
+                                </button>
+                                <Link href="/quotations" className="btn-ghost">Cancel</Link>
+                            </>
+                        )}
                     </div>
                 </form>
             </div>

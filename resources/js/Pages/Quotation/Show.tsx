@@ -59,44 +59,64 @@ function ApprovalChain({ approvals }: { approvals: any[] }) {
         );
     }
 
-    const getStyle = (decision: string | null) => {
-        if (decision === 'approved') return {
+    // "Changes Requested" is stored at the DB level as decision=rejected with a
+    // "[Changes Requested]" prefix on remarks. Detect that and re-label the badge
+    // so reviewers don't think the quotation was outright rejected.
+    const isChangesRequested = (a: any) =>
+        a.decision === 'rejected' && typeof a.comments === 'string' && a.comments.startsWith('[Changes Requested]');
+
+    const getStyle = (a: any) => {
+        if (a.decision === 'approved') return {
             ring: 'border-emerald-300 bg-emerald-50',
             icon: 'fi fi-sr-check-circle text-emerald-500',
             text: 'text-emerald-700',
             line: 'bg-emerald-300',
+            label: 'approved',
         };
-        if (decision === 'rejected') return {
+        if (isChangesRequested(a)) return {
+            ring: 'border-amber-300 bg-amber-50',
+            icon: 'fi fi-sr-comment-alt-edit text-amber-500',
+            text: 'text-amber-700',
+            line: 'bg-amber-300',
+            label: 'changes requested',
+        };
+        if (a.decision === 'rejected') return {
             ring: 'border-red-300 bg-red-50',
             icon: 'fi fi-sr-cross-circle text-red-500',
             text: 'text-red-700',
             line: 'bg-red-300',
+            label: 'rejected',
         };
         return {
             ring: 'border-amber-300 bg-amber-50',
             icon: 'fi fi-sr-clock text-amber-500',
             text: 'text-amber-700',
             line: 'bg-surface-200',
+            label: 'pending',
         };
     };
 
     return (
         <div className="flex flex-wrap items-start gap-1">
             {approvals.map((a: any, i: number) => {
-                const style = getStyle(a.decision);
+                const style = getStyle(a);
+                // Strip the "[Changes Requested]" prefix so it doesn't show in the comment.
+                const displayComment = isChangesRequested(a)
+                    ? a.comments.replace(/^\[Changes Requested\]\s*/, '')
+                    : a.comments;
                 return (
                     <div key={a.id} className="flex items-center gap-1">
                         <div className={`border-2 rounded-xl px-4 py-3 text-center min-w-[7rem] ${style.ring}`}>
                             <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Level {a.level}</div>
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <i className={`${style.icon} text-sm leading-none`} />
-                                <span className={`text-sm font-bold capitalize ${style.text}`}>{a.decision ?? 'pending'}</span>
+                                <span className={`text-sm font-bold capitalize ${style.text}`}>{style.label}</span>
                             </div>
                             {a.approver?.name && (
                                 <div className="text-xs text-surface-500 font-medium">{a.approver.name}</div>
                             )}
-                            {a.comments && (
-                                <div className="text-xs text-surface-400 italic mt-1.5 border-t border-surface-100 pt-1.5">"{a.comments}"</div>
+                            {displayComment && (
+                                <div className="text-xs text-surface-400 italic mt-1.5 border-t border-surface-100 pt-1.5">"{displayComment}"</div>
                             )}
                         </div>
                         {i < approvals.length - 1 && (
@@ -116,7 +136,7 @@ function ApprovalChain({ approvals }: { approvals: any[] }) {
 export default function QuotationShow({
     quotation, revisions = [], rfqAttachments = [], comments = [], attachments = [],
     sourceEstimates = [],
-    canSubmitForApproval, canApprove, canReject, canSendToCustomer, canConvert,
+    canSubmitForApproval, canApprove, canReject, canRequestChanges, canSendToCustomer, canConvert,
     canRecordResponse, canCreateRevision,
 }: any) {
     const sendForm    = useForm({});
@@ -176,13 +196,18 @@ export default function QuotationShow({
         router.delete(`/quotation-files/${id}`, { preserveScroll: true });
     };
 
-    const handleQuotationApproval = (remarks: string) => {
+    const handleQuotationApproval = (remarks: string, signature?: string | null) => {
         if (!approvalAction) return;
         const url = approvalAction === 'approve'
             ? `/quotations/${quotation.id}/approve`
-            : `/quotations/${quotation.id}/reject`;
+            : approvalAction === 'request_changes'
+                ? `/quotations/${quotation.id}/request-changes`
+                : `/quotations/${quotation.id}/reject`;
         return new Promise<void>((resolve) => {
-            router.post(url, { remarks: remarks || null }, {
+            router.post(url, {
+                remarks: remarks || null,
+                signature: signature || null, // base64 data URL when approver drew a fresh signature
+            }, {
                 onFinish: () => {
                     setApprovalAction(null);
                     resolve();
@@ -264,6 +289,17 @@ export default function QuotationShow({
                                         </span>
                                     </div>
                                     <p className="text-sm text-surface-500 mt-0.5">{quotation.customer}</p>
+                                    {quotation.memo_no && (
+                                        <p className="text-xs text-surface-400 mt-0.5">
+                                            <i className="fi fi-rr-document text-[10px] leading-none" /> নং: <span className="font-mono font-semibold text-surface-700">{quotation.memo_no}</span>
+                                        </p>
+                                    )}
+                                    {quotation.customer_ref_no && (
+                                        <p className="text-xs text-surface-400 mt-0.5">
+                                            <i className="fi fi-rr-link text-[10px] leading-none" /> Ref: <span className="font-mono font-semibold text-surface-700">{quotation.customer_ref_no}</span>
+                                            {quotation.customer_ref_date && <span className="text-surface-400"> &middot; {quotation.customer_ref_date}</span>}
+                                        </p>
+                                    )}
                                     {quotation.customer_po_no && (
                                         <p className="text-xs text-surface-400 mt-0.5">
                                             <i className="fi fi-rr-document text-[10px] leading-none" /> Customer PO: <span className="font-mono font-semibold text-surface-700">{quotation.customer_po_no}</span>
@@ -337,24 +373,55 @@ export default function QuotationShow({
                                 </div>
                             )}
 
-                            {/* Totals footer */}
+                            {/* Totals footer — BITAC convention: single VAT-inclusive total */}
                             <div className="border-t border-surface-100 px-5 py-4 bg-surface-50/30">
-                                <div className="max-w-sm ml-auto space-y-2 text-sm">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-surface-600">Subtotal</span>
-                                        <span className="font-mono font-semibold text-surface-800 tabular-nums">{fmt(quotation.subtotal ?? quotation.material_cost)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-surface-600">VAT ({quotation.vat_rate}%)</span>
-                                        <span className="font-mono font-semibold text-surface-800 tabular-nums">{fmt(quotation.vat_amount)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between pt-2 border-t border-surface-200">
-                                        <span className="text-base font-bold text-surface-900">Grand Total</span>
+                                <div className="max-w-md ml-auto space-y-2 text-sm">
+                                    <div className="flex items-center justify-between pt-1">
+                                        <div>
+                                            <span className="text-base font-bold text-surface-900">Total (Including VAT &amp; TAX)</span>
+                                            {Number(quotation.vat_amount) > 0 && (
+                                                <div className="text-[10px] text-surface-400 mt-0.5">
+                                                    includes {fmt(quotation.vat_amount)} VAT @ {quotation.vat_rate}%
+                                                </div>
+                                            )}
+                                        </div>
                                         <span className="text-xl font-bold font-mono text-surface-900 tabular-nums">{fmt(quotation.total_amount)}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        {/* Letter content — recipient + terms (BITAC official format) */}
+                        {(quotation.recipient_block || (quotation.terms && quotation.terms.length > 0)) && (
+                            <div className="card">
+                                <div className="card-header flex items-center gap-2">
+                                    <i className="fi fi-rr-letter text-sky-500 text-sm leading-none" />
+                                    <h3 className="text-sm font-bold text-surface-900">Letter Content</h3>
+                                </div>
+                                <div className="card-body space-y-5">
+                                    {quotation.recipient_block && (
+                                        <div>
+                                            <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400 mb-1.5">Recipient</div>
+                                            <div className="text-sm text-surface-800 whitespace-pre-line leading-relaxed font-medium">
+                                                {quotation.recipient_block}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {quotation.terms && quotation.terms.length > 0 && (
+                                        <div>
+                                            <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400 mb-2">
+                                                দরপত্রের শর্ত সমূহ — Terms &amp; Conditions
+                                            </div>
+                                            <ol className="space-y-1.5 list-decimal pl-5 text-sm text-surface-700">
+                                                {quotation.terms.map((term: string, idx: number) => (
+                                                    <li key={idx} className="leading-relaxed">{term}</li>
+                                                ))}
+                                            </ol>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Approval Workflow */}
                         <div className="card">
@@ -370,7 +437,7 @@ export default function QuotationShow({
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="text-xs font-bold text-blue-900">Prepared By</div>
-                                        <div className="text-[11px] text-blue-700">{quotation.created_by ?? quotation.prepared_by ?? '—'}</div>
+                                        <div className="text-[11px] text-blue-700">{quotation.created_by_name ?? '—'}</div>
                                     </div>
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-blue-100 text-blue-700 border-blue-200">
                                         ✍️ Drafted
@@ -381,30 +448,47 @@ export default function QuotationShow({
                                 {/* Submit for Approval (draft only) */}
                                 {canSubmitForApproval && (
                                     <div className="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
-                                        <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center justify-between gap-3 flex-wrap">
                                             <div>
                                                 <h4 className="text-sm font-bold text-amber-900">This quotation is in Draft</h4>
-                                                <p className="text-xs text-amber-700 mt-0.5">Submit it for approval to proceed with the workflow.</p>
+                                                <p className="text-xs text-amber-700 mt-0.5">Edit if needed, then submit for approval.</p>
                                             </div>
-                                            <button onClick={() => router.post(`/quotations/${quotation.id}/submit-approval`)}
-                                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-md transition-all hover:-translate-y-0.5">
-                                                <i className="fi fi-rr-paper-plane text-sm leading-none" /> Submit for Approval
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                <Link
+                                                    href={`/quotations/${quotation.id}/edit`}
+                                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-amber-800 bg-white hover:bg-amber-100 border border-amber-300 shadow-sm transition-all"
+                                                >
+                                                    <i className="fi fi-rr-pencil text-sm leading-none" /> Edit
+                                                </Link>
+                                                <button onClick={() => router.post(`/quotations/${quotation.id}/submit-approval`)}
+                                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-md transition-all hover:-translate-y-0.5">
+                                                    <i className="fi fi-rr-paper-plane text-sm leading-none" /> Submit for Approval
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Approve / Reject forms */}
-                                {(canApprove || canReject) && quotation.status === 'pending_approval' && (
+                                {/* Approve / Request Changes / Reject forms */}
+                                {(canApprove || canReject || canRequestChanges) && quotation.status === 'pending_approval' && (
                                     <div className="mt-6 pt-5 border-t border-surface-100">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             {canApprove && (
                                                 <button
                                                     onClick={() => setApprovalAction('approve')}
                                                     className="btn-success w-full"
                                                 >
                                                     <i className="fi fi-rr-check text-xs leading-none" />
-                                                    Approve Quotation
+                                                    Approve
+                                                </button>
+                                            )}
+                                            {canRequestChanges && (
+                                                <button
+                                                    onClick={() => setApprovalAction('request_changes')}
+                                                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-sm font-semibold transition-colors"
+                                                >
+                                                    <i className="fi fi-rr-edit text-xs leading-none" />
+                                                    Request Changes
                                                 </button>
                                             )}
                                             {canReject && (
@@ -413,7 +497,7 @@ export default function QuotationShow({
                                                     className="btn-danger w-full"
                                                 >
                                                     <i className="fi fi-rr-cross text-xs leading-none" />
-                                                    Reject Quotation
+                                                    Reject
                                                 </button>
                                             )}
                                         </div>
@@ -647,7 +731,7 @@ export default function QuotationShow({
                                     <div className="pt-3 border-t border-surface-100">
                                         <dt className="text-xs text-surface-400 font-medium">Line Items</dt>
                                         <dd className="text-sm text-surface-700 mt-0.5">
-                                            {quotation.line_items.length} item{quotation.line_items.length === 1 ? '' : 's'} · {fmt(quotation.subtotal ?? quotation.material_cost)} BDT before VAT
+                                            {quotation.line_items.length} item{quotation.line_items.length === 1 ? '' : 's'} · {fmt(quotation.total_amount)} BDT (incl. VAT &amp; TAX)
                                         </dd>
                                     </div>
                                 )}

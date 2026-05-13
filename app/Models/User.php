@@ -15,6 +15,8 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'phone',
+        'signature_path',
         'password',
         'center_id',
         'is_active',
@@ -40,6 +42,28 @@ class User extends Authenticatable
     public function center()
     {
         return $this->belongsTo(Center::class);
+    }
+
+    /**
+     * Public URL of the user's scanned signature, or null if not uploaded.
+     * Used in the Inertia payload for previews.
+     */
+    public function getSignatureUrlAttribute(): ?string
+    {
+        return $this->signature_path
+            ? \Storage::disk('public')->url($this->signature_path)
+            : null;
+    }
+
+    /**
+     * Absolute filesystem path of the signature image — used by mPDF when
+     * embedding the image into a generated PDF (mPDF needs a local path).
+     */
+    public function signatureAbsolutePath(): ?string
+    {
+        if (!$this->signature_path) return null;
+        $path = \Storage::disk('public')->path($this->signature_path);
+        return is_file($path) ? $path : null;
     }
 
     public function rfqs()

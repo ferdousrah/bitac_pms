@@ -536,16 +536,25 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                         total={totals.material}
                         onAdd={() => addLine('material')}
                     >
-                        <table className="premium-table">
+                        <table className="premium-table w-full" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                                <col style={{ width: '3rem'  }} /> {/* # */}
+                                <col style={{ width: '28%'   }} /> {/* Material — narrower */}
+                                <col style={{ width: '15%'   }} /> {/* Qty */}
+                                <col style={{ width: '11%'   }} /> {/* Unit */}
+                                <col style={{ width: '15%'   }} /> {/* Rate */}
+                                <col style={{ width: '15%'   }} /> {/* Amount */}
+                                <col style={{ width: '2.5rem'}} /> {/* Delete */}
+                            </colgroup>
                             <thead>
                                 <tr>
-                                    <th className="w-12">#</th>
+                                    <th>#</th>
                                     <th>Material</th>
-                                    <th className="w-32">Qty</th>
-                                    <th className="w-20">Unit</th>
-                                    <th className="w-32">Rate (৳)</th>
-                                    <th className="w-32 text-right">Amount (৳)</th>
-                                    <th className="w-12"></th>
+                                    <th>Qty</th>
+                                    <th>Unit</th>
+                                    <th>Rate (৳)</th>
+                                    <th className="text-right">Amount (৳)</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -687,16 +696,25 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                         total={totals.other}
                         onAdd={() => addLine('other')}
                     >
-                        <table className="premium-table">
+                        <table className="premium-table w-full" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                                <col style={{ width: '3rem'  }} /> {/* # */}
+                                <col style={{ width: '28%'   }} /> {/* Description — narrower */}
+                                <col style={{ width: '15%'   }} /> {/* Qty */}
+                                <col style={{ width: '11%'   }} /> {/* Unit */}
+                                <col style={{ width: '15%'   }} /> {/* TK / Pcs */}
+                                <col style={{ width: '15%'   }} /> {/* Amount */}
+                                <col style={{ width: '2.5rem'}} /> {/* Delete */}
+                            </colgroup>
                             <thead>
                                 <tr>
-                                    <th className="w-12">#</th>
+                                    <th>#</th>
                                     <th>Description</th>
-                                    <th className="w-32">Qty</th>
-                                    <th className="w-20">Unit</th>
-                                    <th className="w-32">TK / Pcs</th>
-                                    <th className="w-32 text-right">Amount (৳)</th>
-                                    <th className="w-12"></th>
+                                    <th>Qty</th>
+                                    <th>Unit</th>
+                                    <th>TK / Pcs</th>
+                                    <th className="text-right">Amount (৳)</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -913,16 +931,25 @@ function CostSection({ title, icon, color, total, onAdd, children }: any) {
 
 function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationChange, onRemove, lineAmount }: any) {
     return (
-        <table className="premium-table">
+        <table className="premium-table w-full" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+                <col style={{ width: '3rem'  }} /> {/* # */}
+                <col style={{ width: '28%'   }} /> {/* Operation — narrower */}
+                <col style={{ width: '15%'   }} /> {/* Qty / Hours */}
+                <col style={{ width: '11%'   }} /> {/* Unit */}
+                <col style={{ width: '15%'   }} /> {/* Rate */}
+                <col style={{ width: '15%'   }} /> {/* Sub-Total */}
+                <col style={{ width: '2.5rem'}} /> {/* Delete */}
+            </colgroup>
             <thead>
                 <tr>
-                    <th className="w-12">#</th>
+                    <th>#</th>
                     <th>Operation</th>
-                    <th className="w-32">Qty / Hours</th>
-                    <th className="w-20">Unit</th>
-                    <th className="w-32">Rate (৳)</th>
-                    <th className="w-32 text-right">Sub-Total (৳)</th>
-                    <th className="w-12"></th>
+                    <th>Qty / Hours</th>
+                    <th>Unit</th>
+                    <th>Rate (৳)</th>
+                    <th className="text-right">Sub-Total (৳)</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>

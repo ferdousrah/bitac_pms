@@ -80,10 +80,10 @@ class BitacLetterhead
             'tempDir'          => $tempDir,
             'margin_left'      => 18,
             'margin_right'     => 18,
-            'margin_top'       => 50,    // enough space for letterhead header
-            'margin_bottom'    => 30,    // enough for footer
-            'margin_header'    => 8,
-            'margin_footer'    => 10,
+            'margin_top'       => 36,    // sits just under the letterhead header
+            'margin_bottom'    => 26,    // enough for footer
+            'margin_header'    => 6,
+            'margin_footer'    => 8,
             'fontDir'          => array_merge($fontDirs, [
                 public_path('fonts'),
             ]),

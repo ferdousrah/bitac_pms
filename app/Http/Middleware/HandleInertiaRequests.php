@@ -52,12 +52,15 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $user ? [
-                    'id'          => $user->id,
-                    'name'        => $user->name,
-                    'email'       => $user->email,
-                    'center_id'   => $user->center_id,
-                    'permissions' => $permissions,
+                    'id'             => $user->id,
+                    'name'           => $user->name,
+                    'email'          => $user->email,
+                    'center_id'      => $user->center_id,
+                    'permissions'    => $permissions,
                     'is_super_admin' => $isSuperAdmin,
+                    // Approver's saved signature — shown as the default option in
+                    // the approval modal's "Use my saved signature" toggle.
+                    'signature_url'  => method_exists($user, 'getSignatureUrlAttribute') ? $user->signature_url : null,
                 ] : null,
             ],
             'flash' => [

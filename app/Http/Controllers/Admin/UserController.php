@@ -63,16 +63,25 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
             'email'      => 'required|email|unique:users',
+            'phone'      => 'nullable|string|max:40',
             'password'   => 'required|string|min:8|confirmed',
             'role'       => 'required|exists:roles,name',
             'is_active'  => 'nullable|boolean',
+            'signature'  => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
         ]);
 
+        $signaturePath = null;
+        if ($request->hasFile('signature')) {
+            $signaturePath = $request->file('signature')->store('signatures', 'public');
+        }
+
         $user = User::create([
-            'name'      => $validated['name'],
-            'email'     => $validated['email'],
-            'password'  => $validated['password'], // cast 'hashed' auto-hashes
-            'is_active' => $validated['is_active'] ?? true,
+            'name'           => $validated['name'],
+            'email'          => $validated['email'],
+            'phone'          => $validated['phone'] ?? null,
+            'signature_path' => $signaturePath,
+            'password'       => $validated['password'], // cast 'hashed' auto-hashes
+            'is_active'      => $validated['is_active'] ?? true,
         ]);
         $user->assignRole($validated['role']);
 
@@ -87,6 +96,8 @@ class UserController extends Controller
                 'id'        => $user->id,
                 'name'      => $user->name,
                 'email'     => $user->email,
+                'phone'     => $user->phone,
+                'signature_url' => $user->signature_url,
                 'is_active' => (bool) $user->is_active,
                 'deactivation_reason' => $user->deactivation_reason,
                 'roles'     => $user->roles->pluck('name'),
@@ -100,16 +111,31 @@ class UserController extends Controller
         $validated = $request->validate([
             'name'                => 'required|string|max:255',
             'email'               => 'required|email|unique:users,email,' . $user->id,
+            'phone'               => 'nullable|string|max:40',
             'role'                => 'required|exists:roles,name',
             'is_active'           => 'nullable|boolean',
             'password'            => 'nullable|string|min:8',
             'deactivation_reason' => 'nullable|string|max:500',
+            'signature'           => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
+            'remove_signature'    => 'nullable|boolean',
         ]);
 
         $data = [
             'name'  => $validated['name'],
             'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
         ];
+
+        // Replace or remove signature image
+        if ($request->hasFile('signature')) {
+            if ($user->signature_path) {
+                \Storage::disk('public')->delete($user->signature_path);
+            }
+            $data['signature_path'] = $request->file('signature')->store('signatures', 'public');
+        } elseif ($request->boolean('remove_signature') && $user->signature_path) {
+            \Storage::disk('public')->delete($user->signature_path);
+            $data['signature_path'] = null;
+        }
 
         // Password update (optional)
         if (!empty($validated['password'])) {
