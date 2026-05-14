@@ -14,16 +14,39 @@ class WorkOrderSectionController extends Controller
 {
     public function edit(WorkOrder $workOrder)
     {
-        $workOrder->load(['customer', 'sections.section']);
+        // Load the full audit chain so we can render BITAC's official Work Order
+        // form layout (job items + customer + delivery date + section routing).
+        $workOrder->load([
+            'customer',
+            'sections.section',
+            'rfq.items.product',
+            'quotation.rfq.items.product',
+            'createdBy',
+        ]);
+
+        // Job items come from the RFQ; fall back through the quotation for
+        // legacy work orders that don't have a direct rfq_id.
+        $rfq = $workOrder->rfq ?? $workOrder->quotation?->rfq;
+        $jobItems = ($rfq?->items ?? collect())->values()->map(fn($i, $idx) => [
+            'sequence'    => $idx + 1,
+            'description' => $i->job_description ?? $i->product?->name ?? '—',
+            'quantity'    => (float) $i->quantity,
+            'unit'        => $i->unit ?? 'pcs',
+        ])->values();
 
         return Inertia::render('Pcd/SectionAssign', [
             'work_order' => [
-                'id'         => $workOrder->id,
-                'wo_number'  => $workOrder->wo_number,
-                'job_number' => $workOrder->job_number,
-                'customer'   => $workOrder->customer?->name,
-                'status'     => $workOrder->status,
+                'id'             => $workOrder->id,
+                'wo_number'      => $workOrder->wo_number,
+                'job_number'     => $workOrder->job_number,
+                'customer'       => $workOrder->customer?->name,
+                'customer_po_no' => $workOrder->customer_po_no,
+                'status'         => $workOrder->status,
+                'created_at'     => $workOrder->created_at->format('d/m/Y'),
+                'due_date'       => $workOrder->due_date?->format('d/m/Y'),
+                'prepared_by'    => $workOrder->createdBy?->name ?? auth()->user()?->name ?? '—',
             ],
+            'job_items' => $jobItems,
             'assigned_sections' => $workOrder->sections->map(fn($s) => [
                 'id'         => $s->id,
                 'section_id' => $s->section_id,

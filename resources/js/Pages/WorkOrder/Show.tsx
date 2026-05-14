@@ -34,7 +34,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo }
     };
 
     return (
-        <AppLayout header={`Work Order — ${workOrder.wo_number}`}>
+        <AppLayout header={`Job — ${workOrder.wo_number}`}>
             <div className="space-y-6 max-w-6xl animate-fade-in">
 
                 {/* Header Card */}
@@ -110,6 +110,108 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo }
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Main column */}
                     <div className="lg:col-span-2 space-y-6">
+
+                        {/* Job Progress — always shown, even before operation sheet exists */}
+                        {(() => {
+                            // Map WorkOrder status → user-friendly stage label and color.
+                            // Lets the user see where the job is in the BITAC flow at a glance.
+                            // Static class strings so Tailwind's JIT picks them up at build.
+                            const STAGE: Record<string, { label: string; subtitle: string; iconBg: string; icon: string }> = {
+                                draft:              { label: 'Draft',                subtitle: 'Awaiting approval to begin',     iconBg: 'bg-slate-50 text-slate-600',     icon: 'fi-rr-pencil' },
+                                approved:           { label: 'Approved',             subtitle: 'Operation sheet pending',        iconBg: 'bg-blue-50 text-blue-600',       icon: 'fi-rr-check' },
+                                pcd_pending:        { label: 'Awaiting PCD Setup',   subtitle: 'PCD completing 3-step workflow', iconBg: 'bg-amber-50 text-amber-600',     icon: 'fi-rr-clipboard-list-check' },
+                                released_to_shops:  { label: 'Released to Shops',    subtitle: 'Production shops can pick up',   iconBg: 'bg-indigo-50 text-indigo-600',   icon: 'fi-rr-tools' },
+                                in_production:      { label: 'In Production',        subtitle: 'Active on the shop floor',       iconBg: 'bg-amber-50 text-amber-600',     icon: 'fi-rr-settings' },
+                                qc_hold:            { label: 'On QC Hold',           subtitle: 'Awaiting quality inspection',    iconBg: 'bg-orange-50 text-orange-600',   icon: 'fi-rr-shield-check' },
+                                qc_passed:          { label: 'QC Passed',            subtitle: 'Quality cleared',                iconBg: 'bg-emerald-50 text-emerald-600', icon: 'fi-rr-shield-check' },
+                                ready_for_delivery: { label: 'Ready for Delivery',   subtitle: 'Packed, awaiting dispatch',      iconBg: 'bg-emerald-50 text-emerald-600', icon: 'fi-rr-truck-side' },
+                                delivered:          { label: 'Delivered',            subtitle: 'Handed over to customer',        iconBg: 'bg-green-50 text-green-600',     icon: 'fi-rr-check-double' },
+                                cancelled:          { label: 'Cancelled',            subtitle: 'Job cancelled',                  iconBg: 'bg-red-50 text-red-600',         icon: 'fi-rr-cross-circle' },
+                            };
+                            const stage = STAGE[workOrder.status] ?? { label: workOrder.status_label || workOrder.status, subtitle: '', iconBg: 'bg-slate-50 text-slate-600', icon: 'fi-rr-circle' };
+                            const pct = workOrder.progress?.pct ?? 0;
+                            const current = workOrder.progress?.current_step;
+
+                            const barColor =
+                                pct >= 100 ? 'bg-emerald-500' :
+                                pct >= 50  ? 'bg-brand-500'   :
+                                pct > 0    ? 'bg-amber-500'   :
+                                             'bg-surface-300';
+
+                            return (
+                                <div className="card animate-slide-up">
+                                    <div className="card-body">
+                                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                                            <div className="flex items-start gap-3">
+                                                <div className={`w-11 h-11 rounded-xl ${stage.iconBg} flex items-center justify-center shrink-0`}>
+                                                    <i className={`fi ${stage.icon} text-base leading-none`} />
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Current Stage</div>
+                                                    <div className="text-base font-bold text-surface-900 mt-0.5">{stage.label}</div>
+                                                    <div className="text-xs text-surface-500 mt-0.5">{stage.subtitle}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Progress</div>
+                                                <div className="text-2xl font-bold text-surface-900 font-mono tabular-nums mt-0.5">{pct}<span className="text-base text-surface-400">%</span></div>
+                                                {workOrder.progress && (
+                                                    <div className="text-[10px] text-surface-500 mt-0.5">
+                                                        {workOrder.progress.completed} / {workOrder.progress.total} steps done
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Progress bar */}
+                                        <div className="mt-4">
+                                            <div className="h-2.5 bg-surface-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full ${barColor} transition-all duration-500`}
+                                                    style={{ width: `${Math.max(2, pct)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Current step strip — appears once an op sheet exists */}
+                                        {current && (
+                                            <div className="mt-4 p-3 rounded-xl bg-brand-50/60 border border-brand-100 flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white border border-brand-200 flex items-center justify-center text-brand-600 font-bold text-sm">
+                                                    {current.sequence}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-brand-600">Current Step</div>
+                                                    <div className="text-sm font-semibold text-surface-900 truncate">{current.operation_name}</div>
+                                                    <div className="text-[11px] text-surface-500 mt-0.5">
+                                                        {current.section && <>at <span className="font-medium text-surface-700">{current.section}</span> · </>}
+                                                        <span className="capitalize">{current.status.replace(/_/g, ' ')}</span>
+                                                        {current.weight_pct > 0 && <> · weight {current.weight_pct.toFixed(1)}%</>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Pipeline stats */}
+                                        {workOrder.progress && workOrder.progress.total > 0 && (
+                                            <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                                                <div className="p-2 rounded-lg bg-emerald-50/50">
+                                                    <div className="text-lg font-bold text-emerald-700">{workOrder.progress.completed}</div>
+                                                    <div className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Done</div>
+                                                </div>
+                                                <div className="p-2 rounded-lg bg-amber-50/50">
+                                                    <div className="text-lg font-bold text-amber-700">{workOrder.progress.in_progress}</div>
+                                                    <div className="text-[10px] uppercase tracking-wider text-amber-600 font-semibold">In Progress</div>
+                                                </div>
+                                                <div className="p-2 rounded-lg bg-surface-50">
+                                                    <div className="text-lg font-bold text-surface-700">{workOrder.progress.pending}</div>
+                                                    <div className="text-[10px] uppercase tracking-wider text-surface-500 font-semibold">Pending</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Quotation */}
                         {workOrder.quotation && (

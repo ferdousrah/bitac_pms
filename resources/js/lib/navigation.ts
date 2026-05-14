@@ -46,7 +46,7 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'PCD Inbox',            href: '/pcd/inbox',                 icon: 'fi-rr-inbox',           permission: 'view pcd-inbox', badgeKey: 'pcd_pending' },
             { label: 'Material Requisitions',href: '/pcd/material-requisitions', icon: 'fi-rr-clipboard-list',  permission: 'create material-requisitions' },
-            { label: 'Work Orders',          href: '/work-orders',               icon: 'fi-rr-tools',           permission: 'view work-orders' },
+            { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permission: 'view work-orders' },
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
         ],
@@ -111,6 +111,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Operators',  href: '/admin/operators',  icon: 'fi-rr-user-helmet-safety',   permission: 'manage operators' },
                 { label: 'Materials',  href: '/admin/materials',  icon: 'fi-rr-cube',                 permission: 'manage materials-master' },
                 { label: 'Operations', href: '/admin/operations', icon: 'fi-rr-tools',                permission: 'manage operations-master' },
+                { label: 'Portfolio',  href: '/admin/portfolio',  icon: 'fi-rr-images',               permission: 'manage portfolio' },
             ],
         },
         {

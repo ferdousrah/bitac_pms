@@ -50,7 +50,14 @@ class PcdInboxController extends Controller
     public function show(WorkOrder $workOrder)
     {
         $workOrder->load([
-            'customer', 'quotation.rfq.items.product', 'rfq.items.product',
+            'customer',
+            'quotation.rfq.items.product',
+            'quotation.rfq.items.drawings',
+            'quotation.rfq.items.samplePhotos',
+            'quotation.files.uploadedBy',
+            'rfq.items.product',
+            'rfq.items.drawings',
+            'rfq.items.samplePhotos',
             'files.uploadedBy',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
@@ -58,9 +65,36 @@ class PcdInboxController extends Controller
 
         // Some legacy WOs were created without rfq_id set on the row itself.
         // Reach through the quotation as a fallback so Job Items always render.
-        $rfqItems = $workOrder->rfq?->items ?? $workOrder->quotation?->rfq?->items ?? collect();
+        $rfq      = $workOrder->rfq      ?? $workOrder->quotation?->rfq;
+        $rfqItems = $rfq?->items ?? collect();
 
         $checklist = PcdReleaseService::checklistFor($workOrder);
+
+        // Build a unified attachment list from every upstream document in the
+        // job's audit chain — RFQ drawings + sample photos (per item), Quotation
+        // files (preparer-uploaded annexures), Work Order files (customer PO etc.).
+        // Each entry carries a `source` label so the UI can group/color them.
+        $allAttachments = collect();
+
+        // RFQ item attachments (drawings + sample photos uploaded by sales/IED).
+        foreach ($rfqItems as $item) {
+            foreach ($item->drawings ?? [] as $f) {
+                $allAttachments->push($this->serializeAttachment($f, 'rfq_drawing', $item->job_description));
+            }
+            foreach ($item->samplePhotos ?? [] as $f) {
+                $allAttachments->push($this->serializeAttachment($f, 'rfq_sample', $item->job_description));
+            }
+        }
+
+        // Quotation files (annexures, supporting docs, customer PO uploaded during quote prep).
+        foreach ($workOrder->quotation?->files ?? [] as $f) {
+            $allAttachments->push($this->serializeAttachment($f, 'quotation', null));
+        }
+
+        // Work Order files (customer PO copy uploaded at conversion, in-progress docs).
+        foreach ($workOrder->files as $f) {
+            $allAttachments->push($this->serializeAttachment($f, 'work_order', null));
+        }
 
         return Inertia::render('Pcd/JobDetail', [
             'job' => [
@@ -81,6 +115,24 @@ class PcdInboxController extends Controller
                     'quantity'    => $i->quantity,
                     'unit'        => $i->unit,
                 ])->values(),
+                // Upstream source documents — PCD officer can preview the original
+                // RFQ (IED form) and the approved Quotation letter as PDFs.
+                'rfq_source' => $rfq ? [
+                    'id'           => $rfq->id,
+                    'rfq_no'       => 'RFQ-' . str_pad($rfq->id, 5, '0', STR_PAD_LEFT),
+                    'created_at'   => $rfq->created_at?->format('d M Y'),
+                    'pdf_url'      => "/rfqs/{$rfq->id}/pdf?preview=base64",
+                    'view_url'     => "/rfqs/{$rfq->id}",
+                ] : null,
+                'quotation_source' => $workOrder->quotation ? [
+                    'id'           => $workOrder->quotation->id,
+                    'version'      => $workOrder->quotation->version,
+                    'quotation_no' => 'Q-' . str_pad($workOrder->quotation->id, 5, '0', STR_PAD_LEFT) . ' v' . $workOrder->quotation->version,
+                    'total_amount' => (float) $workOrder->quotation->total_amount,
+                    'status'       => $workOrder->quotation->status,
+                    'pdf_url'      => "/quotations/{$workOrder->quotation->id}/pdf?preview=base64",
+                    'view_url'     => "/quotations/{$workOrder->quotation->id}",
+                ] : null,
                 'attachments'         => $workOrder->files->map(fn($f) => [
                     'id'           => $f->id,
                     'kind'         => $f->kind,
@@ -92,6 +144,10 @@ class PcdInboxController extends Controller
                     'uploaded_by'  => $f->uploadedBy?->name,
                     'uploaded_at'  => $f->created_at->format('d M Y, H:i'),
                 ])->values(),
+                // Aggregated attachments across the full audit chain. PCD officer
+                // can review every document the job inherited without bouncing
+                // between RFQ / Quotation / WO pages.
+                'all_attachments' => $allAttachments->values(),
                 'material_requisitions' => $workOrder->materialRequisitions->map(fn($mr) => [
                     'id'          => $mr->id,
                     'mrn_number'  => $mr->mrn_number,
@@ -114,5 +170,40 @@ class PcdInboxController extends Controller
             ],
             'checklist' => $checklist,
         ]);
+    }
+
+    /**
+     * Normalize a file model from any upstream source (RfqItemFile,
+     * QuotationFile, WorkOrderFile) into a uniform shape the PCD JobDetail
+     * frontend can render. `source` lets the UI badge/group entries.
+     */
+    private function serializeAttachment($f, string $source, ?string $itemDescription): array
+    {
+        // Different file models expose slightly different fields. Build defensively.
+        $ext = $f->extension ?? pathinfo($f->original_name ?? '', PATHINFO_EXTENSION);
+        $humanSize = $f->human_size ?? $this->formatBytes((int) ($f->size_bytes ?? 0));
+
+        return [
+            'id'              => $f->id,
+            'source'          => $source, // rfq_drawing | rfq_sample | quotation | work_order
+            'kind'            => $f->kind ?? $f->type ?? null,
+            'url'             => $f->url,
+            'filename'        => $f->original_name,
+            'extension'       => $ext ? strtoupper($ext) : null,
+            'human_size'      => $humanSize,
+            'mime_type'       => $f->mime_type ?? null,
+            'description'     => $f->description ?? null,
+            'item_description'=> $itemDescription, // only set for RFQ-item-scoped files
+            'uploaded_by'     => $f->uploadedBy?->name ?? null,
+            'uploaded_at'     => $f->created_at?->format('d M Y, H:i'),
+        ];
+    }
+
+    private function formatBytes(int $bytes): ?string
+    {
+        if ($bytes <= 0) return null;
+        if ($bytes < 1024) return $bytes . ' B';
+        if ($bytes < 1024 * 1024) return round($bytes / 1024) . ' KB';
+        return round($bytes / 1024 / 1024, 1) . ' MB';
     }
 }

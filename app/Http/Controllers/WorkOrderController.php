@@ -16,11 +16,21 @@ class WorkOrderController extends Controller
         $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps']);
 
         if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
+            // job_number is an unsigned int — strip prefixes like "Job", "#", spaces
+            // so users can type "Job#37705" or "#37705" and still hit the row.
+            $digits = preg_replace('/\D/', '', $search);
+
+            $query->where(function ($q) use ($search, $digits) {
                 $q->where('wo_number', 'like', "%{$search}%")
                   ->orWhere('customer_po_no', 'like', "%{$search}%")
                   ->orWhereHas('customer', fn($c) => $c->where('name', 'like', "%{$search}%"))
                   ->orWhereHas('product', fn($p) => $p->where('name', 'like', "%{$search}%"));
+
+                // Only search job_number when the input contains digits — empty
+                // digits would otherwise turn into "%%" and match everything.
+                if ($digits !== '') {
+                    $q->orWhere('job_number', 'like', "%{$digits}%");
+                }
             });
         }
         if ($status = $request->input('status')) $query->where('status', $status);
@@ -28,7 +38,7 @@ class WorkOrderController extends Controller
 
         $sort = $request->input('sort', 'id');
         $dir  = $request->input('dir', 'desc');
-        $allowed = ['id', 'wo_number', 'customer_id', 'quantity', 'status', 'priority', 'due_date', 'created_at'];
+        $allowed = ['id', 'wo_number', 'job_number', 'customer_id', 'quantity', 'status', 'priority', 'due_date', 'created_at'];
         if (in_array($sort, $allowed)) {
             $query->orderBy($sort, $dir === 'asc' ? 'asc' : 'desc');
         } else {
@@ -39,6 +49,7 @@ class WorkOrderController extends Controller
             'workOrders' => $query->paginate(15)->withQueryString()->through(fn($wo) => [
                 'id'           => $wo->id,
                 'wo_number'    => $wo->wo_number,
+                'job_number'   => $wo->job_number,
                 'product'      => $wo->product->name ?? '',
                 'customer'     => $wo->customer->name ?? '',
                 'quantity'     => $wo->quantity,
@@ -52,10 +63,22 @@ class WorkOrderController extends Controller
                 'progress_pct' => (function () use ($wo) {
                     $sheet = $wo->operationSheets->first();
                     if (!$sheet) return null;
-                    $total = $sheet->steps->count();
-                    if ($total === 0) return 0;
-                    $done = $sheet->steps->where('status', 'completed')->count();
-                    $wip  = $sheet->steps->where('status', 'in_progress')->count();
+                    $steps = $sheet->steps;
+                    if ($steps->isEmpty()) return 0;
+
+                    // Prefer weighted progress (sum of completed steps' weight_pct,
+                    // + half-credit for in-progress). Falls back to step-count when
+                    // no weights have been assigned yet — old behavior preserved.
+                    $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
+                    if ($weightSum > 0) {
+                        $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
+                        $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
+                        return round(min(100, $done + $wip * 0.5));
+                    }
+                    // Legacy step-count fallback
+                    $total = $steps->count();
+                    $done = $steps->where('status', 'completed')->count();
+                    $wip  = $steps->where('status', 'in_progress')->count();
                     return round((($done + $wip * 0.5) / $total) * 100);
                 })(),
             ]),
@@ -77,6 +100,7 @@ class WorkOrderController extends Controller
             'quotation',
             'operationSheets.steps.machine.workCentre',
             'operationSheets.steps.assignment.operator',
+            'operationSheets.steps.section',
             'materialRequisitions',
             'qcInspections',
             'ncrs',
@@ -133,14 +157,31 @@ class WorkOrderController extends Controller
                     ]),
                 ] : null,
                 'progress' => $sheet ? (function () use ($sheet) {
-                    $steps = $sheet->steps;
+                    $steps = $sheet->steps->sortBy('sequence')->values();
                     $total = $steps->count();
                     if ($total === 0) return ['pct' => 0, 'completed' => 0, 'total' => 0, 'in_progress' => 0];
-                    $completed = $steps->where('status', 'completed')->count();
+
+                    $completed  = $steps->where('status', 'completed')->count();
                     $inProgress = $steps->where('status', 'in_progress')->count();
-                    $pct = round((($completed + $inProgress * 0.5) / $total) * 100);
+
+                    // Prefer weighted progress when weights are configured (sum to >0),
+                    // fall back to step-count. Half-credit for in-progress steps.
+                    $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
+                    if ($weightSum > 0) {
+                        $doneW = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
+                        $wipW  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
+                        $pct   = round(min(100, $doneW + $wipW * 0.5));
+                    } else {
+                        $pct   = round((($completed + $inProgress * 0.5) / $total) * 100);
+                    }
+
+                    // Current step = first in_progress, else first pending after a completed one.
+                    $current = $steps->firstWhere('status', 'in_progress')
+                            ?? $steps->firstWhere('status', 'pending');
+
                     $totalEstimated = $steps->sum(fn($s) => (float) ($s->estimated_hours ?? 0));
-                    $totalActual = $steps->sum(fn($s) => (float) ($s->actual_hours ?? 0));
+                    $totalActual    = $steps->sum(fn($s) => (float) ($s->actual_hours ?? 0));
+
                     return [
                         'pct'              => $pct,
                         'completed'        => $completed,
@@ -150,6 +191,13 @@ class WorkOrderController extends Controller
                         'estimated_hours'  => round($totalEstimated, 1),
                         'actual_hours'     => round($totalActual, 1),
                         'efficiency'       => $totalEstimated > 0 ? round(($totalEstimated / max($totalActual, 0.1)) * 100) : null,
+                        'current_step'     => $current ? [
+                            'sequence'       => $current->sequence,
+                            'operation_name' => $current->operation_name,
+                            'section'        => $current->section?->name,
+                            'status'         => $current->status,
+                            'weight_pct'     => (float) $current->weight_pct,
+                        ] : null,
                     ];
                 })() : null,
                 'mrp_result' => $workOrder->materialRequisitions->map(fn($m) => [

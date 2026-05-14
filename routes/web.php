@@ -17,6 +17,8 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CustomerManagementController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\PortfolioController as AdminPortfolioController;
+use App\Http\Controllers\Portfolio\PortfolioPublicController;
 use App\Http\Controllers\Auth\CustomerLoginController;
 use App\Http\Controllers\Customer\CustomerComplaintController;
 use App\Http\Controllers\Customer\CustomerDashboardController;
@@ -89,6 +91,14 @@ Route::post('customer/logout', [CustomerLoginController::class, 'logout'])
 // ======================================================================
 Route::get('/dashboard/live', [LiveDashboardController::class, 'index'])
     ->name('dashboard.live');
+
+// ======================================================================
+// Public Portfolio — share BITAC's previous work with anyone, no auth needed.
+// Designed to live cleanly under a future portfolio.bitac.gov.bd subdomain
+// by wrapping in Route::domain(...) when DNS is configured.
+// ======================================================================
+Route::get('/portfolio',         [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
+Route::get('/portfolio/{slug}',  [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
 
 // ======================================================================
 // Staff Routes (authenticated)
@@ -418,6 +428,18 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('customers', CustomerManagementController::class)
             ->middleware('permission:manage customers')
             ->names('admin.customers');
+
+        // ─── Portfolio (public-facing content management) ────────────────
+        Route::resource('portfolio', AdminPortfolioController::class)
+            ->middleware('permission:manage portfolio')
+            ->names('admin.portfolio')
+            ->parameters(['portfolio' => 'portfolio']);
+        Route::post('portfolio/{portfolio}/toggle-publish', [AdminPortfolioController::class, 'togglePublish'])
+            ->middleware('permission:manage portfolio')
+            ->name('admin.portfolio.toggle-publish');
+        Route::delete('portfolio-photos/{photo}', [AdminPortfolioController::class, 'deletePhoto'])
+            ->middleware('permission:manage portfolio')
+            ->name('admin.portfolio.delete-photo');
 
         Route::get('audit-log', [AuditLogController::class, 'index'])
             ->middleware('permission:view audit-log')

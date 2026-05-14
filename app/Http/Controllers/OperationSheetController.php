@@ -122,8 +122,18 @@ class OperationSheetController extends Controller
             'steps.*.machine_id'      => 'nullable|exists:machines,id',
             'steps.*.operator_id'     => 'nullable|exists:operators,id',
             'steps.*.estimated_hours' => 'required|numeric|min:0',
+            'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
             'steps.*.tooling_notes'   => 'nullable|string',
         ]);
+
+        // Sanity-warn if step weights don't sum to ~100. We don't hard-fail —
+        // PCD officer may save a partial sheet and balance later.
+        $weightSum = collect($validated['steps'])->sum(fn($s) => (float) ($s['weight_pct'] ?? 0));
+        if ($weightSum > 100.5) {
+            return back()
+                ->withErrors(['steps' => 'Step weights sum to ' . round($weightSum, 2) . '% — total cannot exceed 100%.'])
+                ->withInput();
+        }
 
         $workOrder   = WorkOrder::findOrFail($validated['work_order_id']);
         $sheetNumber = $this->service->generateSheetNumber($workOrder);
@@ -142,6 +152,7 @@ class OperationSheetController extends Controller
                 'machine_id'       => $stepData['machine_id'] ?? null,
                 'operator_id'      => $stepData['operator_id'] ?? null,
                 'estimated_hours'  => $stepData['estimated_hours'],
+                'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
                 'tooling_notes'    => $stepData['tooling_notes'] ?? null,
                 'status'           => 'pending',
             ]);
@@ -180,6 +191,7 @@ class OperationSheetController extends Controller
                     'operation_name'  => $s->operation_name,
                     'machine'         => ['name' => $s->machine?->name ?? ''],
                     'estimated_hours' => $s->estimated_hours,
+                    'weight_pct'      => (float) $s->weight_pct,
                     'status'          => $s->status,
                     'instructions'    => $s->instructions,
                     'assignment'      => $s->assignment ? [

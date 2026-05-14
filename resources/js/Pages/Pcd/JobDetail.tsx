@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 interface RfqItem {
     description: string;
@@ -62,6 +63,36 @@ interface Job {
         uploaded_by: string | null;
         uploaded_at: string;
     }>;
+    all_attachments: Array<{
+        id: number;
+        source: 'rfq_drawing' | 'rfq_sample' | 'quotation' | 'work_order';
+        kind: string | null;
+        url: string;
+        filename: string;
+        extension: string | null;
+        human_size: string | null;
+        mime_type: string | null;
+        description: string | null;
+        item_description: string | null;
+        uploaded_by: string | null;
+        uploaded_at: string | null;
+    }>;
+    rfq_source: {
+        id: number;
+        rfq_no: string;
+        created_at: string | null;
+        pdf_url: string;
+        view_url: string;
+    } | null;
+    quotation_source: {
+        id: number;
+        version: number;
+        quotation_no: string;
+        total_amount: number;
+        status: string;
+        pdf_url: string;
+        view_url: string;
+    } | null;
 }
 
 interface ChecklistItem {
@@ -148,6 +179,18 @@ export default function JobDetail({ job, checklist }: Props) {
         ? `/operation-sheets/${job.operation_sheet.id}`
         : `/operation-sheets/${job.id}/create`;
 
+    // PDF popup state — used by the Source Documents card to preview the
+    // upstream RFQ and approved Quotation without leaving the PCD workflow.
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
+        open: false, url: null, title: '',
+    });
+
+    // Collapsible state for the reference sections — collapsed by default so
+    // the workflow steps remain the focus when the PCD officer opens the page.
+    const [sourceDocsOpen, setSourceDocsOpen] = useState(false);
+    const [jobItemsOpen, setJobItemsOpen] = useState(false);
+    const [docsOpen, setDocsOpen] = useState(false);
+
     const steps = [
         {
             number: 1,
@@ -164,12 +207,12 @@ export default function JobDetail({ job, checklist }: Props) {
             number: 2,
             key: 'section_assign',
             done: checklist.section_assign.done,
-            label: checklist.section_assign.label,
+            label: 'Work Order',
             icon: checklist.section_assign.icon || 'fi-rr-diagram-project',
             href: sectionsHref,
             subtitle: checklist.section_assign.done
-                ? `${checklist.section_assign.count} section${checklist.section_assign.count > 1 ? 's' : ''} assigned`
-                : 'Not assigned',
+                ? `${checklist.section_assign.count} shop${checklist.section_assign.count > 1 ? 's' : ''} routed`
+                : 'Not created',
         },
         {
             number: 3,
@@ -443,9 +486,105 @@ export default function JobDetail({ job, checklist }: Props) {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left column */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Job Items */}
+                        {/* Source Documents — collapsible. RFQ (IED form) + approved Quotation letter */}
+                        {(job.rfq_source || job.quotation_source) && (
+                            <div className="card">
+                                <button
+                                    type="button"
+                                    onClick={() => setSourceDocsOpen(o => !o)}
+                                    className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors text-left"
+                                    aria-expanded={sourceDocsOpen}
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <i className="fi fi-rr-document-signed text-brand-600" />
+                                            <h3 className="text-base font-semibold text-surface-900">
+                                                Source Documents
+                                            </h3>
+                                            <span className="badge badge-slate">
+                                                {(job.rfq_source ? 1 : 0) + (job.quotation_source ? 1 : 0)}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-surface-500 mt-1">
+                                            Preview the upstream IED documents this job inherited from.
+                                        </p>
+                                    </div>
+                                    <i className={`fi fi-rr-angle-${sourceDocsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
+                                </button>
+                                {sourceDocsOpen && (
+                                <div className="card-body">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {job.rfq_source && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPdfPopup({
+                                                    open: true,
+                                                    url: job.rfq_source!.pdf_url,
+                                                    title: job.rfq_source!.rfq_no,
+                                                    subtitle: `Issued ${job.rfq_source!.created_at ?? '—'}`,
+                                                })}
+                                                className="group flex items-start gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-left transition-all"
+                                            >
+                                                <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                                    <i className="fi fi-rr-clipboard-list text-lg leading-none" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-blue-600">RFQ — IED Form</div>
+                                                    <div className="text-sm font-bold text-blue-900 font-mono mt-0.5">{job.rfq_source.rfq_no}</div>
+                                                    {job.rfq_source.created_at && (
+                                                        <div className="text-[11px] text-blue-700 mt-0.5">Issued {job.rfq_source.created_at}</div>
+                                                    )}
+                                                    <div className="text-[10px] text-blue-600 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <i className="fi fi-rr-eye text-[9px] leading-none" />
+                                                        Click to preview PDF
+                                                    </div>
+                                                </div>
+                                                <i className="fi fi-rr-file-pdf text-blue-400 text-base leading-none" />
+                                            </button>
+                                        )}
+
+                                        {job.quotation_source && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPdfPopup({
+                                                    open: true,
+                                                    url: job.quotation_source!.pdf_url,
+                                                    title: job.quotation_source!.quotation_no,
+                                                    subtitle: `${job.customer} · BDT ${job.quotation_source!.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                                                })}
+                                                className="group flex items-start gap-3 p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-left transition-all"
+                                            >
+                                                <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                                    <i className="fi fi-rr-file-invoice-dollar text-lg leading-none" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600">Approved Quotation</div>
+                                                    <div className="text-sm font-bold text-emerald-900 font-mono mt-0.5">{job.quotation_source.quotation_no}</div>
+                                                    <div className="text-[11px] text-emerald-700 mt-0.5 font-mono">
+                                                        BDT {job.quotation_source.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </div>
+                                                    <div className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <i className="fi fi-rr-eye text-[9px] leading-none" />
+                                                        Click to preview PDF
+                                                    </div>
+                                                </div>
+                                                <i className="fi fi-rr-file-pdf text-emerald-400 text-base leading-none" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Job Items — collapsible */}
                         <div className="card">
-                            <div className="card-header">
+                            <button
+                                type="button"
+                                onClick={() => setJobItemsOpen(o => !o)}
+                                className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors"
+                                aria-expanded={jobItemsOpen}
+                            >
                                 <div className="flex items-center gap-2">
                                     <i className="fi fi-rr-boxes text-brand-600" />
                                     <h3 className="text-base font-semibold text-surface-900">
@@ -455,7 +594,9 @@ export default function JobDetail({ job, checklist }: Props) {
                                         {job.rfq_items.length}
                                     </span>
                                 </div>
-                            </div>
+                                <i className={`fi fi-rr-angle-${jobItemsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
+                            </button>
+                            {jobItemsOpen && (
                             <div className="card-body p-0">
                                 {job.rfq_items.length > 0 ? (
                                     <div className="overflow-x-auto">
@@ -500,7 +641,97 @@ export default function JobDetail({ job, checklist }: Props) {
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
+
+                        {/* All Job Documents — collapsible, aggregated from RFQ, Quotation, and Work Order */}
+                        {job.all_attachments && job.all_attachments.length > 0 && (
+                            <div className="card">
+                                <button
+                                    type="button"
+                                    onClick={() => setDocsOpen(o => !o)}
+                                    className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors text-left"
+                                    aria-expanded={docsOpen}
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <i className="fi fi-rr-folder-open text-brand-600" />
+                                            <h3 className="text-base font-semibold text-surface-900">
+                                                All Job Documents
+                                            </h3>
+                                            <span className="badge badge-slate">{job.all_attachments.length}</span>
+                                        </div>
+                                        <p className="text-xs text-surface-500 mt-1">
+                                            Every attachment inherited from the upstream RFQ, Quotation, and Work Order — one view.
+                                        </p>
+                                    </div>
+                                    <i className={`fi fi-rr-angle-${docsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
+                                </button>
+                                {docsOpen && (
+                                <div className="card-body">
+                                    {(() => {
+                                        const SOURCE_META: Record<string, { label: string; color: string; icon: string }> = {
+                                            rfq_drawing:  { label: 'RFQ Drawing',   color: 'bg-blue-50 text-blue-700 border-blue-200',       icon: 'fi-rr-blueprint' },
+                                            rfq_sample:   { label: 'RFQ Sample',    color: 'bg-violet-50 text-violet-700 border-violet-200', icon: 'fi-rr-picture' },
+                                            quotation:    { label: 'Quotation',     color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fi-rr-document' },
+                                            work_order:   { label: 'Work Order',    color: 'bg-amber-50 text-amber-700 border-amber-200',    icon: 'fi-rr-tools' },
+                                        };
+                                        // Group by source for readability — PCD usually reviews drawings first.
+                                        const SOURCE_ORDER = ['rfq_drawing', 'rfq_sample', 'quotation', 'work_order'];
+                                        const grouped = SOURCE_ORDER
+                                            .map(src => ({ src, files: job.all_attachments.filter(a => a.source === src) }))
+                                            .filter(g => g.files.length > 0);
+
+                                        return (
+                                            <div className="space-y-4">
+                                                {grouped.map(group => {
+                                                    const meta = SOURCE_META[group.src];
+                                                    return (
+                                                        <div key={group.src}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <i className={`fi ${meta.icon} text-surface-500 text-sm`} />
+                                                                <span className="text-xs font-bold text-surface-700 uppercase tracking-wider">{meta.label}</span>
+                                                                <span className="text-[10px] text-surface-400">({group.files.length})</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                {group.files.map((f) => (
+                                                                    <a
+                                                                        key={`${group.src}-${f.id}`}
+                                                                        href={f.url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-surface-100 hover:border-brand-200 hover:shadow-sm transition-all"
+                                                                    >
+                                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold border shrink-0 ${meta.color}`}>
+                                                                            {f.extension || 'FILE'}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="text-xs font-semibold text-surface-900 truncate">{f.filename}</div>
+                                                                            <div className="text-[10px] text-surface-400 flex items-center gap-1.5 mt-0.5">
+                                                                                {f.human_size && <span>{f.human_size}</span>}
+                                                                                {f.kind && <><span>·</span><span className="capitalize">{f.kind.replace(/_/g, ' ')}</span></>}
+                                                                                {f.uploaded_by && <><span>·</span><span>by {f.uploaded_by}</span></>}
+                                                                            </div>
+                                                                            {f.item_description && (
+                                                                                <div className="text-[10px] text-surface-500 truncate mt-0.5 italic">
+                                                                                    For: {f.item_description}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <i className="fi fi-rr-arrow-up-right-from-square text-surface-400 text-xs leading-none shrink-0" />
+                                                                    </a>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Material Requisitions */}
                         <div className="card">
@@ -583,17 +814,19 @@ export default function JobDetail({ job, checklist }: Props) {
                             </div>
                         </div>
 
-                        {/* Section Sequence */}
+                        {/* Work Order — PCD's internal routing slip. Defines the ordered
+                            list of production shops the job will pass through. Shops
+                            pick up the job from their inbox in this sequence. */}
                         <div className="card">
                             <div className="card-header">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <i className="fi fi-rr-diagram-project text-brand-600" />
                                         <h3 className="text-base font-semibold text-surface-900">
-                                            Section Sequence
+                                            Work Order
                                         </h3>
                                         <span className="badge badge-slate">
-                                            {job.sections.length}
+                                            {job.sections.length} {job.sections.length === 1 ? 'shop' : 'shops'}
                                         </span>
                                     </div>
                                     {job.sections.length > 0 && (
@@ -606,6 +839,9 @@ export default function JobDetail({ job, checklist }: Props) {
                                         </Link>
                                     )}
                                 </div>
+                                <p className="text-xs text-surface-500 mt-1">
+                                    Routing of production shops — each shop picks up this job in sequence.
+                                </p>
                             </div>
                             <div className="card-body">
                                 {job.sections.length > 0 ? (
@@ -647,14 +883,14 @@ export default function JobDetail({ job, checklist }: Props) {
                                             <i className="fi fi-rr-diagram-project" />
                                         </div>
                                         <div className="empty-state-title">
-                                            No sections assigned
+                                            Work Order not created
                                         </div>
                                         <div className="empty-state-text">
-                                            Assign shop sections to define this job's workflow path.
+                                            Create the work order by listing the production shops this job needs to pass through.
                                         </div>
                                         <Link href={sectionsHref} className="btn-primary btn-sm mt-3">
                                             <i className="fi fi-rr-plus mr-1.5" />
-                                            Assign Sections
+                                            Create Work Order
                                         </Link>
                                     </div>
                                 )}
@@ -860,12 +1096,12 @@ export default function JobDetail({ job, checklist }: Props) {
                                         </div>
                                         <div className="text-left">
                                             <div className="font-semibold text-surface-900 text-sm">
-                                                Section Assignment
+                                                Work Order
                                             </div>
                                             <div className="text-xs text-surface-500">
                                                 {checklist.section_assign.done
-                                                    ? `${checklist.section_assign.count} assigned`
-                                                    : 'Assign sections'}
+                                                    ? `${checklist.section_assign.count} shop${checklist.section_assign.count > 1 ? 's' : ''} routed`
+                                                    : 'Create work order'}
                                             </div>
                                         </div>
                                     </div>
@@ -924,6 +1160,14 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                 </div>
             </div>
+
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.url}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup(s => ({ ...s, open: false }))}
+            />
         </AppLayout>
     );
 }

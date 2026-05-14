@@ -34,16 +34,28 @@ interface AssignedSection {
     notes?: string | null;
 }
 
+interface JobItem {
+    sequence: number;
+    description: string;
+    quantity: number;
+    unit: string;
+}
+
 interface WorkOrder {
     id: number;
     wo_number: string;
     job_number: string | number | null;
     customer: string;
+    customer_po_no: string | null;
     status: string;
+    created_at: string;
+    due_date: string | null;
+    prepared_by: string;
 }
 
 interface Props {
     work_order: WorkOrder;
+    job_items: JobItem[];
     assigned_sections: AssignedSection[];
     available_sections: SectionLite[];
 }
@@ -65,7 +77,12 @@ const STATUS_BADGE: Record<string, string> = {
     blocked: 'badge-red',
 };
 
-function SortableSectionCard({
+/**
+ * One row in the routing table. Bordered cells to mirror BITAC's paper form
+ * (কার্যাদেশ পরিক্রমা / কার্যকাল / গ্রহণ / মন্তব্য). Drag handle on the left;
+ * the operation/notes field is editable inline; remove button on the right.
+ */
+function SortableSectionRow({
     row,
     index,
     onNotesChange,
@@ -90,75 +107,59 @@ function SortableSectionCard({
     const badgeClass = STATUS_BADGE[statusKey] ?? 'badge-slate';
 
     return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            className="card animate-slide-up border border-surface-100 hover:border-brand-200 transition-colors"
-        >
-            <div className="card-body">
-                <div className="flex items-start gap-3">
-                    <button
-                        type="button"
-                        {...attributes}
-                        {...listeners}
-                        className="mt-1 cursor-grab active:cursor-grabbing text-surface-300 hover:text-brand-500 select-none transition-colors"
-                        aria-label="Drag to reorder"
-                    >
-                        <i className="fi fi-rr-grip-dots-vertical text-lg leading-none" />
-                    </button>
-
-                    <div className="shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white font-bold text-sm flex items-center justify-center">
-                        {index + 1}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-surface-900 text-sm truncate">
-                                {row.section.name}
-                            </span>
-                            <span className="font-mono text-[11px] text-surface-400">
-                                {row.section.code}
-                            </span>
-                            <span className={`badge ${badgeClass} capitalize`}>
-                                {statusKey.replace(/_/g, ' ')}
-                            </span>
-                        </div>
-                        {row.section.name_bn && (
-                            <div className="text-xs text-surface-500 mt-0.5">
-                                {row.section.name_bn}
-                            </div>
-                        )}
-
-                        <div className="form-group mt-3 mb-0">
-                            <label className="form-label-optional text-[11px]">
-                                Notes for this section
-                            </label>
-                            <input
-                                type="text"
-                                value={row.notes}
-                                onChange={(e) => onNotesChange(e.target.value)}
-                                className="form-input"
-                                placeholder="Optional instructions or context..."
-                            />
-                        </div>
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={onRemove}
-                        className="btn-icon text-surface-400 hover:text-red-600 hover:bg-red-50"
-                        aria-label="Remove section"
-                    >
-                        <i className="fi fi-rr-trash text-sm leading-none" />
-                    </button>
+        <tr ref={setNodeRef} style={style} className="bg-white align-middle">
+            <td className="border border-surface-300 px-2 py-3 text-center align-middle">
+                <button
+                    type="button"
+                    {...attributes}
+                    {...listeners}
+                    className="cursor-grab active:cursor-grabbing text-surface-300 hover:text-brand-500 select-none transition-colors"
+                    aria-label="Drag to reorder"
+                >
+                    <i className="fi fi-rr-grip-dots-vertical text-base leading-none" />
+                </button>
+            </td>
+            <td className="border border-surface-300 px-3 py-3 text-center font-bold text-surface-800 align-middle w-12">
+                {index + 1}
+            </td>
+            <td className="border border-surface-300 px-3 py-3 align-middle">
+                <div className="font-semibold text-surface-900 text-sm">{row.section.name}</div>
+                <div className="text-[11px] text-surface-400 mt-0.5">
+                    <span className="font-mono">{row.section.code}</span>
+                    {row.section.name_bn && <> · <span>{row.section.name_bn}</span></>}
                 </div>
-            </div>
-        </div>
+            </td>
+            <td className="border border-surface-300 px-3 py-2 align-middle">
+                <input
+                    type="text"
+                    value={row.notes}
+                    onChange={(e) => onNotesChange(e.target.value)}
+                    className="form-input form-input-sm w-full"
+                    placeholder="e.g. Pattern making, Casting, CNC turning…"
+                />
+            </td>
+            <td className="border border-surface-300 px-3 py-3 text-center align-middle w-28">
+                <span className={`badge ${badgeClass} capitalize`}>
+                    {statusKey.replace(/_/g, ' ')}
+                </span>
+            </td>
+            <td className="border border-surface-300 px-2 py-3 text-center align-middle w-12">
+                <button
+                    type="button"
+                    onClick={onRemove}
+                    className="btn-icon text-surface-400 hover:text-red-600 hover:bg-red-50"
+                    aria-label="Remove section"
+                >
+                    <i className="fi fi-rr-trash text-sm leading-none" />
+                </button>
+            </td>
+        </tr>
     );
 }
 
 export default function SectionAssign({
     work_order,
+    job_items,
     assigned_sections,
     available_sections,
 }: Props) {
@@ -196,18 +197,13 @@ export default function SectionAssign({
     };
 
     const removeSection = (sectionId: number) => {
-        setData(
-            'sections',
-            data.sections.filter((s) => s.section_id !== sectionId),
-        );
+        setData('sections', data.sections.filter((s) => s.section_id !== sectionId));
     };
 
     const updateNotes = (sectionId: number, notes: string) => {
         setData(
             'sections',
-            data.sections.map((s) =>
-                s.section_id === sectionId ? { ...s, notes } : s,
-            ),
+            data.sections.map((s) => s.section_id === sectionId ? { ...s, notes } : s),
         );
     };
 
@@ -217,63 +213,105 @@ export default function SectionAssign({
     };
 
     return (
-        <AppLayout header={`Assign Sections — ${work_order.wo_number}`}>
-            <div className="space-y-6 animate-fade-in">
-                {/* Header card */}
+        <AppLayout header={`Work Order — ${work_order.wo_number}`}>
+            <div className="space-y-6 animate-fade-in max-w-6xl">
+                {/* ── BITAC Work Order paper-form layout ─────────────────── */}
                 <div className="card">
-                    <div className="card-body">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                            <div className="flex items-start gap-4">
-                                <div className="w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white font-bold text-xl flex items-center justify-center">
-                                    {work_order.job_number ?? '#'}
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-mono text-xs font-semibold text-surface-700">
-                                            {work_order.wo_number}
-                                        </span>
-                                        <span className="badge badge-blue capitalize">
-                                            {work_order.status?.replace(/_/g, ' ')}
-                                        </span>
-                                    </div>
-                                    <h1 className="text-lg font-bold text-surface-900 mt-1">
-                                        Section Sequence Assignment
-                                    </h1>
-                                    <p className="text-xs text-surface-500 mt-0.5">
-                                        Customer: <span className="font-medium text-surface-700">{work_order.customer}</span>
-                                    </p>
-                                </div>
-                            </div>
+                    {/* Title strip */}
+                    <div className="px-6 py-3 border-b border-surface-200 text-center">
+                        <div className="text-xs text-surface-500 uppercase tracking-wider">কার্যাদেশ</div>
+                        <div className="text-lg font-bold text-surface-900">Work Order</div>
+                    </div>
 
-                            <div className="flex items-center gap-2">
-                                <Link
-                                    href={`/pcd/inbox/${work_order.id}`}
-                                    className="btn-outline"
-                                >
-                                    <i className="fi fi-rr-arrow-left text-xs leading-none" />
-                                    Back
-                                </Link>
-                                <button
-                                    type="button"
-                                    onClick={submit}
-                                    disabled={processing || data.sections.length === 0}
-                                    className="btn-primary"
-                                >
-                                    <i className="fi fi-rr-disk text-xs leading-none" />
-                                    {processing ? 'Saving...' : 'Save Sequence'}
-                                </button>
+                    {/* Top metadata row — mirrors the paper form's job# / date split */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 border-b border-surface-200">
+                        <div className="px-6 py-3 border-r border-surface-200">
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Job Number</div>
+                            <div className="text-xl font-bold font-mono text-surface-900 mt-0.5">
+                                {work_order.job_number ?? '—'}
                             </div>
+                            <div className="text-[11px] text-surface-500 mt-0.5 font-mono">{work_order.wo_number}</div>
                         </div>
+                        <div className="px-6 py-3 text-right">
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Date</div>
+                            <div className="text-xl font-bold text-surface-900 mt-0.5">{work_order.created_at}</div>
+                            {work_order.due_date && (
+                                <div className="text-[11px] text-surface-500 mt-0.5">
+                                    Delivery: <span className="text-surface-700 font-semibold">{work_order.due_date}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Section / Customer / Status row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 border-b border-surface-200">
+                        <div className="px-6 py-3 border-r border-surface-200">
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">কার্যবিন্যাস</div>
+                            <div className="text-sm font-semibold text-surface-900 mt-0.5">
+                                উৎপাদন নিয়ন্ত্রণ বিভাগ
+                            </div>
+                            <div className="text-[11px] text-surface-500">(PCD)</div>
+                        </div>
+                        <div className="px-6 py-3 border-r border-surface-200">
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">ক্রেতা / Customer</div>
+                            <div className="text-sm font-semibold text-surface-900 mt-0.5">{work_order.customer ?? '—'}</div>
+                            {work_order.customer_po_no && (
+                                <div className="text-[11px] text-surface-500 font-mono mt-0.5">PO: {work_order.customer_po_no}</div>
+                            )}
+                        </div>
+                        <div className="px-6 py-3">
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Status</div>
+                            <span className="badge badge-blue capitalize mt-1 inline-flex">
+                                {work_order.status?.replace(/_/g, ' ')}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Job Items table — কার্যের বিশদ বিবরণ */}
+                    <div className="px-6 py-4">
+                        <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold mb-2">
+                            কার্যের বিশদ বিবরণ — Items
+                        </div>
+                        <table className="w-full text-sm border-collapse border border-surface-300">
+                            <thead className="bg-surface-50">
+                                <tr>
+                                    <th className="border border-surface-300 px-3 py-2 text-center w-16 font-semibold text-surface-700 text-xs">Sl. No</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Description</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-center w-24 font-semibold text-surface-700 text-xs">পরিমান (Qty)</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-center w-20 font-semibold text-surface-700 text-xs">Unit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {job_items.length > 0 ? job_items.map((it) => (
+                                    <tr key={it.sequence}>
+                                        <td className="border border-surface-300 px-3 py-2 text-center font-semibold text-surface-700">
+                                            {String(it.sequence).padStart(2, '0')}
+                                        </td>
+                                        <td className="border border-surface-300 px-3 py-2 text-surface-900">{it.description}</td>
+                                        <td className="border border-surface-300 px-3 py-2 text-right font-semibold text-surface-900 font-mono">
+                                            {it.quantity}
+                                        </td>
+                                        <td className="border border-surface-300 px-3 py-2 text-center text-surface-700">{it.unit}</td>
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={4} className="border border-surface-300 px-3 py-4 text-center text-surface-400 italic text-xs">
+                                            No items linked to this job
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                {/* Info alert */}
+                {/* ── Routing instructions ───────────────────────────────── */}
                 <div className="alert alert-info">
                     <i className="fi fi-rr-info text-sm leading-none" />
                     <div>
-                        <div className="font-semibold">How sequencing works</div>
+                        <div className="font-semibold">How routing works</div>
                         <div className="text-xs opacity-80 mt-0.5">
-                            Drag sections to reorder. The job moves through sections in the order shown. After the last section completes, the job is handed off to QC.
+                            Drag rows to reorder. The job moves through these production shops in the sequence shown. After the last shop completes, the job is handed off to QC.
                         </div>
                     </div>
                 </div>
@@ -285,18 +323,18 @@ export default function SectionAssign({
                     </div>
                 )}
 
-                {/* Two-column layout */}
+                {/* ── কার্যাদেশ পরিক্রমা — Routing table + Available palette */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: assigned sections (sortable) */}
-                    <div className="lg:col-span-2 space-y-4">
+                    {/* Routing table */}
+                    <div className="lg:col-span-2">
                         <div className="card">
                             <div className="card-header flex items-center justify-between">
                                 <div>
                                     <h2 className="text-base font-bold text-surface-900">
-                                        Assigned Sections
+                                        কার্যাদেশ পরিক্রমা — Production Shop Routing
                                     </h2>
                                     <p className="text-xs text-surface-400 mt-0.5">
-                                        {data.sections.length} section{data.sections.length === 1 ? '' : 's'} in sequence
+                                        {data.sections.length} shop{data.sections.length === 1 ? '' : 's'} in sequence
                                     </p>
                                 </div>
                                 <span className="badge badge-blue">
@@ -304,17 +342,17 @@ export default function SectionAssign({
                                 </span>
                             </div>
 
-                            <div className="card-body">
+                            <div className="card-body p-0">
                                 {data.sections.length === 0 ? (
                                     <div className="empty-state py-10">
                                         <div className="empty-state-icon">
                                             <i className="fi fi-rr-boxes" />
                                         </div>
                                         <div className="empty-state-title">
-                                            No sections assigned yet
+                                            No shops assigned yet
                                         </div>
                                         <div className="empty-state-text">
-                                            Pick sections from the palette on the right to begin building the routing sequence.
+                                            Pick shops from the palette on the right to begin building the routing sequence.
                                         </div>
                                     </div>
                                 ) : (
@@ -327,37 +365,81 @@ export default function SectionAssign({
                                             items={data.sections.map((s) => s.section_id)}
                                             strategy={verticalListSortingStrategy}
                                         >
-                                            <div className="space-y-3">
-                                                {data.sections.map((row, i) => (
-                                                    <SortableSectionCard
-                                                        key={row.section_id}
-                                                        row={row}
-                                                        index={i}
-                                                        onNotesChange={(value) =>
-                                                            updateNotes(row.section_id, value)
-                                                        }
-                                                        onRemove={() =>
-                                                            removeSection(row.section_id)
-                                                        }
-                                                    />
-                                                ))}
+                                            <div className="overflow-x-auto px-6 py-4">
+                                                <table className="w-full text-sm border-collapse border border-surface-300">
+                                                    <thead className="bg-surface-50">
+                                                        <tr>
+                                                            <th className="border border-surface-300 px-2 py-2 w-10 text-xs font-semibold text-surface-700"></th>
+                                                            <th className="border border-surface-300 px-3 py-2 w-12 text-xs font-semibold text-surface-700">Sl.</th>
+                                                            <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
+                                                                কার্যাদেশ পরিক্রমা<br />
+                                                                <span className="font-normal text-surface-500">(Section)</span>
+                                                            </th>
+                                                            <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
+                                                                কার্যকাল<br />
+                                                                <span className="font-normal text-surface-500">(Operation / Task)</span>
+                                                            </th>
+                                                            <th className="border border-surface-300 px-3 py-2 text-center w-28 text-xs font-semibold text-surface-700">Status</th>
+                                                            <th className="border border-surface-300 px-2 py-2 w-12 text-xs font-semibold text-surface-700"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {data.sections.map((row, i) => (
+                                                            <SortableSectionRow
+                                                                key={row.section_id}
+                                                                row={row}
+                                                                index={i}
+                                                                onNotesChange={(value) =>
+                                                                    updateNotes(row.section_id, value)
+                                                                }
+                                                                onRemove={() =>
+                                                                    removeSection(row.section_id)
+                                                                }
+                                                            />
+                                                        ))}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </SortableContext>
                                     </DndContext>
                                 )}
                             </div>
                         </div>
+
+                        {/* Signature footer — mirrors paper form's three signature blocks */}
+                        <div className="card mt-6">
+                            <div className="card-body">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                                    <div className="text-center">
+                                        <div className="h-12" />
+                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">প্রস্তুতকারী</div>
+                                        <div className="text-[10px] text-surface-500 mt-0.5">(Prepared by)</div>
+                                        <div className="text-[11px] text-surface-700 mt-1 font-medium">{work_order.prepared_by}</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="h-12" />
+                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">যাচাইকারী</div>
+                                        <div className="text-[10px] text-surface-500 mt-0.5">(Verified by)</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="h-12" />
+                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">অনুমোদনকারী</div>
+                                        <div className="text-[10px] text-surface-500 mt-0.5">(Approved by)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Right: palette */}
+                    {/* Palette + actions sidebar */}
                     <div className="space-y-4">
                         <div className="card sticky top-4">
                             <div className="card-header">
                                 <h2 className="text-base font-bold text-surface-900">
-                                    Available Sections
+                                    Available Shops
                                 </h2>
                                 <p className="text-xs text-surface-400 mt-0.5">
-                                    Click to add to the sequence
+                                    Click to add to the routing sequence
                                 </p>
                             </div>
 
@@ -368,7 +450,7 @@ export default function SectionAssign({
                                             <i className="fi fi-rr-check text-surface-400 text-lg" />
                                         </div>
                                         <div className="text-sm font-medium text-surface-700">
-                                            All sections assigned
+                                            All shops assigned
                                         </div>
                                         <div className="text-xs text-surface-400 mt-0.5">
                                             Nothing left in the palette
@@ -407,6 +489,28 @@ export default function SectionAssign({
                                         ))}
                                     </div>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Bottom action bar — sticks at the right column */}
+                        <div className="card">
+                            <div className="card-body flex items-center justify-between gap-2">
+                                <Link
+                                    href={`/pcd/inbox/${work_order.id}`}
+                                    className="btn-outline"
+                                >
+                                    <i className="fi fi-rr-arrow-left text-xs leading-none" />
+                                    Back
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={submit}
+                                    disabled={processing || data.sections.length === 0}
+                                    className="btn-primary"
+                                >
+                                    <i className="fi fi-rr-disk text-xs leading-none" />
+                                    {processing ? 'Saving...' : 'Save Work Order'}
+                                </button>
                             </div>
                         </div>
                     </div>

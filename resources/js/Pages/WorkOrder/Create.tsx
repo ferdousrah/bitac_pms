@@ -19,7 +19,7 @@ export default function WorkOrderCreate({ customers, products, rfq, quotation }:
     };
 
     return (
-        <AppLayout header="New Work Order">
+        <AppLayout header="New Job">
             <div className="max-w-3xl space-y-6 animate-fade-in">
                 <form onSubmit={submit} className="space-y-6">
                     {/* Header */}
@@ -30,7 +30,7 @@ export default function WorkOrderCreate({ customers, products, rfq, quotation }:
                                     <i className="fi fi-rr-box text-brand-500 text-base leading-none" />
                                 </div>
                                 <div>
-                                    <h2 className="text-base font-bold text-surface-900">New Work Order</h2>
+                                    <h2 className="text-base font-bold text-surface-900">New Job</h2>
                                     <p className="text-xs text-surface-400 mt-0.5">Start a new production job</p>
                                 </div>
                             </div>
@@ -136,7 +136,7 @@ export default function WorkOrderCreate({ customers, products, rfq, quotation }:
                         <div className="card-body border-t border-surface-100 flex flex-col sm:flex-row gap-2">
                             <button type="submit" disabled={processing} className="btn-primary btn-sm">
                                 <i className="fi fi-rr-check text-xs leading-none" />
-                                {processing ? 'Creating...' : 'Create Work Order'}
+                                {processing ? 'Creating...' : 'Create Job'}
                             </button>
                             <Link href="/work-orders" className="btn-outline btn-sm">
                                 Cancel

@@ -8,7 +8,7 @@ class OperationStep extends Model
 {
     protected $fillable = [
         'operation_sheet_id', 'sequence', 'operation_name', 'operation_id',
-        'section_id', 'machine_id', 'operator_id', 'estimated_hours',
+        'section_id', 'machine_id', 'operator_id', 'estimated_hours', 'weight_pct',
         'status', 'actual_hours', 'started_at', 'completed_at', 'tooling_notes',
     ];
 
@@ -17,6 +17,7 @@ class OperationStep extends Model
         return [
             'estimated_hours' => 'decimal:2',
             'actual_hours'    => 'decimal:2',
+            'weight_pct'      => 'decimal:2',
             'started_at'      => 'datetime',
             'completed_at'    => 'datetime',
         ];

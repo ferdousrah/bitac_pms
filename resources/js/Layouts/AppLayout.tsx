@@ -829,7 +829,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                                     <div className="px-4 py-8 text-center">
                                         <i className="fi fi-rr-interrogation text-surface-200 text-2xl leading-none" />
                                         <p className="text-xs text-surface-500 mt-2 font-medium">No results for "{searchQuery}"</p>
-                                        <p className="text-[11px] text-surface-400 mt-1">Try a WO number, customer name, or RFQ ID</p>
+                                        <p className="text-[11px] text-surface-400 mt-1">Try a Job number, customer name, or RFQ ID</p>
                                     </div>
                                 ) : (
                                     <>

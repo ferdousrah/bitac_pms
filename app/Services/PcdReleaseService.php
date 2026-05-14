@@ -76,7 +76,7 @@ class PcdReleaseService
             ],
             'section_assign' => [
                 'done'  => $progress['sections'],
-                'label' => 'Section Assignment',
+                'label' => 'Work Order', // PCD's internal routing slip — sequential shop list
                 'icon'  => 'fi-rr-sitemap',
                 'count' => $sectionsCount,
             ],

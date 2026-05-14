@@ -19,22 +19,31 @@ class SearchController extends Controller
 
         $results = [];
 
-        // Work Orders — by wo_number, customer_po_no
+        // Jobs (work_orders) — by wo_number, job_number, customer_po_no.
+        // job_number is an unsigned int so strip non-digit prefixes ("Job#", "#")
+        // before matching against it.
+        $digits = preg_replace('/\D/', '', $q);
         WorkOrder::with('customer')
-            ->where(function ($query) use ($q) {
+            ->where(function ($query) use ($q, $digits) {
                 $query->where('wo_number', 'like', "%{$q}%")
                       ->orWhere('customer_po_no', 'like', "%{$q}%");
+                if ($digits !== '') {
+                    $query->orWhere('job_number', 'like', "%{$digits}%");
+                }
             })
             ->latest()
             ->take(5)
             ->get()
             ->each(function ($wo) use (&$results) {
+                $title = $wo->job_number ? "Job #{$wo->job_number}" : $wo->wo_number;
+                $sub   = ($wo->customer?->name ?? '—');
+                if ($wo->job_number && $wo->wo_number) $sub .= " · {$wo->wo_number}";
                 $results[] = [
-                    'type'  => 'Work Order',
-                    'icon'  => 'fi-rr-tools',
+                    'type'  => 'Job',
+                    'icon'  => 'fi-rr-briefcase',
                     'color' => 'blue',
-                    'title' => $wo->wo_number,
-                    'sub'   => $wo->customer?->name ?? '—',
+                    'title' => $title,
+                    'sub'   => $sub,
                     'badge' => $wo->status,
                     'link'  => "/work-orders/{$wo->id}",
                 ];

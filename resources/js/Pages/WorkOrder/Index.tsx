@@ -28,15 +28,15 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
     const hasFilters = search || filters?.status || filters?.priority;
 
     return (
-        <AppLayout header="Work Orders">
+        <AppLayout header="Jobs">
             <div className="space-y-6 animate-fade-in">
                 <div className="page-header">
                     <div>
-                        <h1 className="page-title">Work Orders</h1>
-                        <p className="page-subtitle">Production jobs across the shop floor · {workOrders?.total ?? 0} records</p>
+                        <h1 className="page-title">Jobs</h1>
+                        <p className="page-subtitle">Customer production jobs across the shop floor · {workOrders?.total ?? 0} records</p>
                     </div>
                     <Link href="/work-orders/create" className="btn-primary">
-                        <i className="fi fi-rr-plus text-xs leading-none" /> New Work Order
+                        <i className="fi fi-rr-plus text-xs leading-none" /> New Job
                     </Link>
                 </div>
 
@@ -47,7 +47,7 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                             <div className="relative flex-1">
                                 <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-xs" />
                                 <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-                                    placeholder="Search WO number, customer, product, PO..."
+                                    placeholder="Search Job number, customer, product, PO..."
                                     className="form-input !pl-9 !py-2 text-sm w-full" />
                             </div>
                             <select value={filters?.status ?? ''} onChange={e => applyFilters({ status: e.target.value })}
@@ -75,7 +75,7 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                             <table className="premium-table">
                                 <thead>
                                     <tr>
-                                        <SortableHeader label="WO Number" column="wo_number" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/work-orders" filters={filters} className="w-32" />
+                                        <SortableHeader label="Job Number" column="job_number" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/work-orders" filters={filters} className="w-32" />
                                         <th>Product / Customer</th>
                                         <SortableHeader label="Qty" column="quantity" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/work-orders" filters={filters} className="w-16 text-right" />
                                         <th className="w-24">Progress</th>
@@ -92,7 +92,7 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                             <tr key={wo.id} className={`group ${wo.is_overdue ? 'bg-red-50/40' : ''}`}>
                                                 <td>
                                                     <Link href={`/work-orders/${wo.id}`}>
-                                                        <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{wo.wo_number}</span>
+                                                        <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{wo.job_number ?? wo.wo_number}</span>
                                                     </Link>
                                                 </td>
                                                 <td>
@@ -163,7 +163,7 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                     className={`block rounded-xl border bg-white p-4 space-y-2.5 hover:border-brand-200 hover:shadow-md transition-all ${wo.is_overdue ? 'border-red-200 bg-red-50/30' : 'border-surface-100'}`}>
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
-                                            <span className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</span>
+                                            <span className="font-mono text-sm font-bold text-brand-600">{wo.job_number ?? wo.wo_number}</span>
                                             <div className="font-semibold text-surface-900 text-sm mt-0.5">{wo.product}</div>
                                             <div className="text-xs text-surface-400">{wo.customer}</div>
                                         </div>
