@@ -156,11 +156,13 @@ class ToolRegistry
             ],
             [
                 'name'        => 'work_order_tracker',
-                'description' => 'Work Order Tracker Agent — Search and filter work orders. Returns WO number, product, customer, status, priority, due date, created date. Limit 20 results.',
+                'description' => 'Work Order / Job Tracker Agent — Search and filter work orders by Job number (e.g. 37700), WO number (e.g. WO-2026-0001), status, customer, etc. ALWAYS use this when the user mentions a Job # or WO number. Returns Job #, WO number, product, customer, status, progress %, priority, due date, current production section, related NCRs and invoices.',
                 'parameters'  => [
                     'type'       => 'OBJECT',
                     'properties' => [
-                        'status'    => ['type' => 'STRING', 'description' => 'Filter by status: draft, approved, in_production, qc_hold, qc_passed, ready_for_delivery, delivered, cancelled'],
+                        'job_number'=> ['type' => 'STRING', 'description' => 'Filter by Job number (exact or partial, e.g. "37700"). The Job # is the customer-facing identifier. Use this when the user says "Job #X" or "job number X".'],
+                        'wo_number' => ['type' => 'STRING', 'description' => 'Filter by Work Order number (partial match, e.g. "WO-2026-0001" or just "0001").'],
+                        'status'    => ['type' => 'STRING', 'description' => 'Filter by status: draft, approved, in_production, qc_hold, qc_passed, ready_for_delivery, delivered, cancelled, released_to_shops, pcd_pending'],
                         'priority'  => ['type' => 'STRING', 'description' => 'Filter by priority: urgent, high, normal, low'],
                         'customer'  => ['type' => 'STRING', 'description' => 'Filter by customer name (partial match)'],
                         'overdue'   => ['type' => 'BOOLEAN', 'description' => 'If true, only return overdue work orders'],
@@ -460,8 +462,28 @@ DESC,
 
     private function queryWorkOrders(array $args): array
     {
-        $query = WorkOrder::with(['product', 'customer']);
+        $query = WorkOrder::with([
+            'product', 'customer',
+            'sections.section', 'operationSheets.steps',
+            'ncrs:id,work_order_id,ncr_number,status',
+            'invoices:id,work_order_id,invoice_number,total_amount,status',
+            'deliveryOrders:id,work_order_id,challan_number,status,delivered_at',
+        ]);
 
+        // Job # / WO # — strip the # prefix or surrounding whitespace so the AI
+        // doesn't have to be too precise. Job # is an integer column, so support
+        // both exact and partial matches; WO # is a string with hyphens.
+        if (!empty($args['job_number'])) {
+            $job = trim((string) $args['job_number'], "# \t\n\r\0\x0B");
+            $query->where(function ($q) use ($job) {
+                $q->where('job_number', $job)
+                  ->orWhere('job_number', 'like', "%{$job}%");
+            });
+        }
+        if (!empty($args['wo_number'])) {
+            $wo = trim((string) $args['wo_number']);
+            $query->where('wo_number', 'like', "%{$wo}%");
+        }
         if (!empty($args['status']))    $query->where('status', $args['status']);
         if (!empty($args['priority']))  $query->where('priority', $args['priority']);
         if (!empty($args['customer']))  $query->whereHas('customer', fn($q) => $q->where('name', 'like', "%{$args['customer']}%"));
@@ -472,16 +494,54 @@ DESC,
 
         $limit = min($args['limit'] ?? 10, 20);
 
-        $results = $query->latest()->limit($limit)->get()->map(fn($wo) => [
-            'wo_number'  => $wo->wo_number,
-            'product'    => $wo->product->name ?? '—',
-            'customer'   => $wo->customer->name ?? '—',
-            'status'     => $wo->status_label,
-            'priority'   => $wo->priority ?? 'normal',
-            'due_date'   => $wo->due_date?->toDateString(),
-            'is_overdue' => $wo->is_overdue,
-            'created_at' => $wo->created_at->toDateString(),
-        ]);
+        $results = $query->latest()->limit($limit)->get()->map(function ($wo) {
+            // Current production section: WOS that's in_progress / rework
+            $current = $wo->sections->firstWhere('status', 'in_progress')
+                    ?? $wo->sections->firstWhere('status', 'rework')
+                    ?? $wo->sections->firstWhere('status', 'ready');
+
+            // Weighted progress %
+            $progressPct = (function () use ($wo) {
+                if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) return 100;
+                if ($wo->status === 'cancelled') return null;
+                $sheet = $wo->operationSheets->first();
+                if (!$sheet) return 0;
+                $steps = $sheet->steps;
+                if ($steps->isEmpty()) return 0;
+                $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
+                if ($weightSum > 0) {
+                    $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
+                    $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
+                    return (int) round(min(100, $done + $wip * 0.5));
+                }
+                $total = $steps->count();
+                $done  = $steps->where('status', 'completed')->count();
+                $wip   = $steps->where('status', 'in_progress')->count();
+                return (int) round((($done + $wip * 0.5) / $total) * 100);
+            })();
+
+            return [
+                'job_number'  => $wo->job_number,
+                'wo_number'   => $wo->wo_number,
+                'product'     => $wo->product->name ?? '—',
+                'customer'    => $wo->customer->name ?? '—',
+                'quantity'    => (float) $wo->quantity,
+                'status'      => $wo->status_label ?? $wo->status,
+                'priority'    => $wo->priority ?? 'normal',
+                'progress_pct'=> $progressPct,
+                'current_section' => $current?->section?->name,
+                'due_date'    => $wo->due_date?->toDateString(),
+                'is_overdue'  => $wo->is_overdue,
+                'created_at'  => $wo->created_at->toDateString(),
+                'open_ncrs'   => $wo->ncrs->whereIn('status', ['open', 'in_rework'])->count(),
+                'invoices'    => $wo->invoices->map(fn($i) => [
+                    'invoice_number' => $i->invoice_number,
+                    'status'         => $i->status,
+                    'total_amount'   => (float) $i->total_amount,
+                ])->values(),
+                'last_challan'=> $wo->deliveryOrders->last()?->challan_number,
+            ];
+        });
 
         return ['count' => $results->count(), 'work_orders' => $results->toArray()];
     }
