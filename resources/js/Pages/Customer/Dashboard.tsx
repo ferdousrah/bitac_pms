@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 
 const STATUS_BADGE: Record<string, string> = {
     draft:              'badge-slate',
@@ -35,9 +35,13 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-surface-700 hidden sm:inline">{customer?.name}</span>
-                        <a href="/customer/logout" className="btn-ghost btn-xs">
+                        <button
+                            type="button"
+                            onClick={() => router.post('/customer/logout')}
+                            className="btn-ghost btn-xs"
+                        >
                             <i className="fi fi-rr-sign-out-alt leading-none text-xs" /> Logout
-                        </a>
+                        </button>
                     </div>
                 </div>
             </nav>

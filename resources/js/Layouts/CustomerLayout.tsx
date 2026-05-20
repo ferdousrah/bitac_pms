@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { ReactNode } from 'react';
 
 interface Props {
@@ -41,9 +41,13 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
 
                     <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-surface-700 hidden md:inline">{customer?.contact_person ?? customer?.name}</span>
-                        <a href="/customer/logout" className="btn-ghost btn-xs">
+                        <button
+                            type="button"
+                            onClick={() => router.post('/customer/logout')}
+                            className="btn-ghost btn-xs"
+                        >
                             <i className="fi fi-rr-sign-out-alt leading-none text-xs" /> Logout
-                        </a>
+                        </button>
                     </div>
                 </div>
 
