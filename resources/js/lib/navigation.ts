@@ -56,12 +56,10 @@ export const mainGroups: NavGroup[] = [
     {
         label: 'Production',
         icon: 'fi-rr-industry-windows',
-        items: [
-            // Per-section submenu items are injected dynamically by flatGroups()
-            // from the productionSections shared prop.
-            { label: 'Shop Floor',    href: '/shop-floor',       icon: 'fi-rr-industry-windows', permission: 'view shop-floor' },
-            { label: 'WIP',           href: '/wip',              icon: 'fi-rr-settings',        permission: 'view wip' },
-        ],
+        // Per-section submenu items are injected dynamically by flatGroups()
+        // from the productionSections shared prop. Each shop section
+        // (Mold & Pattern, CNC, Welding, …) becomes its own submenu link.
+        items: [],
     },
     {
         label: 'Quality',
@@ -190,21 +188,32 @@ export function flatGroups(
     isSuperAdmin: boolean,
     productionSections: Array<{ id: number; name: string; code: string }> = [],
 ): NavGroup[] {
-    const { groups, admin } = filterNav(userPerms, isSuperAdmin);
+    // Build a copy of mainGroups with per-section items injected into Production
+    // BEFORE filtering, so the Production group isn't dropped for being empty.
+    const sectionItems: NavItem[] = productionSections.map(s => ({
+        label: s.name,
+        href: `/production/queue?section=${s.id}`,
+        icon: 'fi-rr-tools',
+        permission: 'view production',
+    }));
 
-    // Inject per-section submenu items into the "Production" group.
-    const withSectionSubmenu = groups.map(g => {
-        if (g.label !== 'Production' || productionSections.length === 0) return g;
-        const sectionItems: NavItem[] = productionSections.map(s => ({
-            label: s.name,
-            href: `/production/queue?section=${s.id}`,
-            icon: 'fi-rr-tools',
-            permission: 'view production',
-        }));
-        return { ...g, items: [...sectionItems, ...g.items] };
-    });
+    const expandedMain = mainGroups.map(g =>
+        g.label === 'Production'
+            ? { ...g, items: [...sectionItems, ...g.items] }
+            : g,
+    );
 
-    const flat = [...withSectionSubmenu];
+    // Inline-filter against userPerms / isSuperAdmin (mirrors filterNav).
+    const filterItems = (items: NavItem[]) =>
+        items.filter(i => hasPermission(userPerms, i, isSuperAdmin));
+    const filteredGroups = expandedMain
+        .map(g => ({ ...g, items: filterItems(g.items) }))
+        .filter(g => g.items.length > 0 || (g.children?.length ?? 0) > 0);
+
+    // Admin tree handled by the original filterNav for two-level groups.
+    const { admin } = filterNav(userPerms, isSuperAdmin);
+
+    const flat = [...filteredGroups];
     if (admin?.children?.length) {
         flat.push(...admin.children);
     } else if (admin && admin.items.length > 0) {
