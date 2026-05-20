@@ -44,7 +44,7 @@ class MaterialController extends Controller
     {
         return Inertia::render('Admin/Materials/CreateEdit', [
             'material' => $material->only([
-                'id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3', 'notes', 'is_active',
+                'id', 'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3', 'notes', 'is_active',
             ]),
         ]);
     }
@@ -67,6 +67,7 @@ class MaterialController extends Controller
         return $request->validate([
             'name'           => 'required|string|max:150|unique:materials,name' . ($id ? ",{$id}" : ''),
             'category'       => 'nullable|string|max:50',
+            'unit'           => 'nullable|string|max:20',
             'rate_per_kg'    => 'required|numeric|min:0',
             'density_kg_m3'  => 'nullable|numeric|min:0',
             'density_kg_in3' => 'nullable|numeric|min:0',

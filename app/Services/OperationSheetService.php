@@ -29,6 +29,7 @@ class OperationSheetService
 
     public function generateQrImage(string $qrCode): string
     {
-        return base64_encode(QrCode::format('png')->size(150)->generate($qrCode));
+        // SVG backend — no imagick required, works on Windows/XAMPP
+        return base64_encode(QrCode::format('svg')->size(150)->margin(1)->generate($qrCode));
     }
 }

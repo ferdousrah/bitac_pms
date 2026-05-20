@@ -138,6 +138,7 @@ export default function RFQCreate({ customers, products, rfq }: any) {
     const { data, setData, post, errors, processing, transform } = useForm({
         customer_id:     rfq?.customer_id ?? '',
         customer_ref_no: rfq?.customer_ref_no ?? '',
+        job_type:        (rfq?.job_type ?? 'regular') as 'regular' | 'rnd',
         required_by:     rfq?.required_by ?? '',
         notes:           rfq?.notes ?? '',
         items:           initialItems,
@@ -154,7 +155,7 @@ export default function RFQCreate({ customers, products, rfq }: any) {
 
     function removeItem(index: number) {
         if (data.items.length === 1) return;
-        setData('items', data.items.filter((_, i) => i !== index));
+        setData('items', data.items.filter((_: any, i: number) => i !== index));
     }
 
     // Transform form data: split AttachedFile[] into drawings[] (files) + drawing_file_ids[] (integers)
@@ -243,21 +244,56 @@ export default function RFQCreate({ customers, products, rfq }: any) {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="form-group">
                                     <label className="form-label">
+                                        Job Type <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="inline-flex rounded-xl bg-surface-100 p-1 w-full max-w-xs">
+                                        <button
+                                            type="button"
+                                            onClick={() => setData('job_type', 'regular')}
+                                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                                data.job_type === 'regular'
+                                                    ? 'bg-white text-brand-700 shadow-sm'
+                                                    : 'text-surface-500 hover:text-surface-700'
+                                            }`}
+                                        >
+                                            Regular
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setData('job_type', 'rnd')}
+                                            className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                                data.job_type === 'rnd'
+                                                    ? 'bg-white text-purple-700 shadow-sm'
+                                                    : 'text-surface-500 hover:text-surface-700'
+                                            }`}
+                                        >
+                                            <i className="fi fi-rr-lab text-[10px] leading-none mr-1" />
+                                            R&amp;D
+                                        </button>
+                                    </div>
+                                    <p className="form-hint">
+                                        {data.job_type === 'rnd'
+                                            ? 'Research / prototype work — may follow different costing & approval rules.'
+                                            : 'Routine production job.'}
+                                    </p>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">
                                         Required By <span className="form-label-optional">(optional)</span>
                                     </label>
                                     <input type="date" value={data.required_by}
                                         onChange={e => setData('required_by', e.target.value)}
                                         className="form-input" />
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        Internal Notes <span className="form-label-optional">(optional)</span>
-                                    </label>
-                                    <input type="text" value={data.notes}
-                                        onChange={e => setData('notes', e.target.value)}
-                                        placeholder="Special requirements, urgency..."
-                                        className="form-input" />
-                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">
+                                    Internal Notes <span className="form-label-optional">(optional)</span>
+                                </label>
+                                <input type="text" value={data.notes}
+                                    onChange={e => setData('notes', e.target.value)}
+                                    placeholder="Special requirements, urgency..."
+                                    className="form-input" />
                             </div>
                         </div>
                     </div>
@@ -279,7 +315,7 @@ export default function RFQCreate({ customers, products, rfq }: any) {
                             </button>
                         </div>
                         <div className="card-body space-y-5">
-                            {data.items.map((item, index) => {
+                            {data.items.map((item: any, index: number) => {
                                 const hasDrawing = item.reference_type === 'drawing' || item.reference_type === 'both';
                                 const hasSample  = item.reference_type === 'physical_sample' || item.reference_type === 'both';
                                 return (
@@ -296,10 +332,11 @@ export default function RFQCreate({ customers, products, rfq }: any) {
 
                                         <div className="form-group">
                                             <label className="form-label text-xs">Part / Job Description *</label>
-                                            <input type="text" value={item.job_description}
+                                            <textarea value={item.job_description}
                                                 onChange={e => setItemField(index, 'job_description', e.target.value)}
-                                                placeholder="e.g. Brass bush 2-inch, Pump shaft, Custom flange..."
-                                                className="form-input" />
+                                                placeholder="e.g. Re-Metaling of Journal Bearing (Casting Deposition).&#10;Size: Ø320 × 350 mm, Materials: White Metal (Tin Base) with DP Test."
+                                                rows={3}
+                                                className="form-textarea text-sm" />
                                             {(errors as any)[`items.${index}.job_description`] && (
                                                 <p className="form-error">{(errors as any)[`items.${index}.job_description`]}</p>
                                             )}
@@ -416,7 +453,7 @@ export default function RFQCreate({ customers, products, rfq }: any) {
                                                     {/* Attached files list */}
                                                     {item.drawings.length > 0 && (
                                                         <div className="space-y-1.5">
-                                                            {item.drawings.map((att, attIdx) => {
+                                                            {item.drawings.map((att: any, attIdx: number) => {
                                                                 const name = att.kind === 'upload' ? att.file.name : att.filename;
                                                                 const previewUrl = att.kind === 'upload' ? att.previewUrl : att.url;
                                                                 const isImage = att.kind === 'upload'
@@ -508,7 +545,7 @@ export default function RFQCreate({ customers, products, rfq }: any) {
 
                                                         {item.sample_photos.length > 0 && (
                                                             <div className="space-y-1.5 mb-2">
-                                                                {item.sample_photos.map((att, attIdx) => {
+                                                                {item.sample_photos.map((att: any, attIdx: number) => {
                                                                     const name = att.kind === 'upload' ? att.file.name : att.filename;
                                                                     const previewUrl = att.kind === 'upload' ? att.previewUrl : att.url;
                                                                     return (

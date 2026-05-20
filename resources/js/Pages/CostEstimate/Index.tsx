@@ -3,6 +3,7 @@ import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 
 const STATUS: Record<string, { badge: string; icon: string; label: string }> = {
     draft:     { badge: 'bg-slate-50 text-slate-700 border-slate-200',     icon: 'fi-rr-pencil',        label: 'Draft' },
@@ -122,7 +123,10 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                             <tr key={e.id} className="group">
                                                 <td>
                                                     <Link href={`/cost-estimates/${e.id}`} className="block">
-                                                        <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{e.estimate_no}</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{e.estimate_no}</span>
+                                                            <JobTypeBadge type={e.job_type} size="xs" onlyRnd />
+                                                        </div>
                                                     </Link>
                                                 </td>
                                                 <td>

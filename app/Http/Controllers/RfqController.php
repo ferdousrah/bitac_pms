@@ -55,6 +55,7 @@ class RfqController extends Controller
                 'id'              => $r->id,
                 'customer'        => $r->customer?->name ?? '—',
                 'customer_ref_no' => $r->customer_ref_no,
+                'job_type'        => $r->job_type ?? 'regular',
                 'items_summary'   => $r->items->map(fn($i) => [
                     'description' => $i->job_description ?? $i->product?->name ?? '—',
                     'quantity'    => $i->quantity,
@@ -91,6 +92,7 @@ class RfqController extends Controller
         $validated = $request->validate([
             'customer_id'        => 'required|exists:customers,id',
             'customer_ref_no'    => 'nullable|string|max:100',
+            'job_type'           => 'nullable|in:regular,rnd',
             'required_by'        => 'nullable|date',
             'notes'              => 'nullable|string|max:1000',
             'items'              => 'required|array|min:1',
@@ -126,6 +128,7 @@ class RfqController extends Controller
             $rfq = Rfq::create([
                 'customer_id'        => $validated['customer_id'],
                 'customer_ref_no'    => $validated['customer_ref_no'] ?? null,
+                'job_type'           => $validated['job_type'] ?? 'regular',
                 'required_by'        => $validated['required_by'] ?? null,
                 'notes'              => $validated['notes'] ?? null,
                 'created_by'         => auth()->id(),
@@ -193,7 +196,7 @@ class RfqController extends Controller
 
     public function show(Rfq $rfq)
     {
-        $rfq->load(['customer', 'items.product', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations']);
+        $rfq->load(['customer', 'items.product', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
 
         return Inertia::render('RFQ/Show', [
             'rfq' => [
@@ -203,6 +206,15 @@ class RfqController extends Controller
                 'created_by'         => $rfq->createdBy?->name,
                 'customer'           => ['name' => $rfq->customer?->name ?? ''],
                 'customer_ref_no'    => $rfq->customer_ref_no,
+                'job_type'           => $rfq->job_type ?? 'regular',
+                'gate_passes'        => $rfq->gatePasses->map(fn($gp) => [
+                    'id'         => $gp->id,
+                    'pass_no'    => $gp->pass_no,
+                    'direction'  => $gp->direction,
+                    'pass_date'  => $gp->pass_date?->format('d/m/Y'),
+                    'status'     => $gp->status,
+                    'item_count' => $gp->items->count(),
+                ])->values(),
                 'items'              => $rfq->items->map(fn($i) => [
                     'id'                 => $i->id,
                     'product'            => $i->product ? ['name' => $i->product->name, 'code' => $i->product->code, 'unit' => $i->product->unit] : null,
@@ -259,6 +271,7 @@ class RfqController extends Controller
                 'id'                 => $rfq->id,
                 'customer_id'        => $rfq->customer_id,
                 'customer_ref_no'    => $rfq->customer_ref_no,
+                'job_type'           => $rfq->job_type ?? 'regular',
                 'required_by'        => $rfq->required_by?->format('Y-m-d'),
                 'notes'              => $rfq->notes,
                 'items'              => $rfq->items->map(fn($i) => [
@@ -294,6 +307,7 @@ class RfqController extends Controller
         $validated = $request->validate([
             'customer_id'        => 'required|exists:customers,id',
             'customer_ref_no'    => 'nullable|string|max:100',
+            'job_type'           => 'nullable|in:regular,rnd',
             'required_by'        => 'nullable|date',
             'notes'              => 'nullable|string|max:1000',
             'items'              => 'required|array|min:1',
@@ -322,6 +336,7 @@ class RfqController extends Controller
             $rfq->update([
                 'customer_id'        => $validated['customer_id'],
                 'customer_ref_no'    => $validated['customer_ref_no'] ?? null,
+                'job_type'           => $validated['job_type'] ?? 'regular',
                 'required_by'        => $validated['required_by'] ?? null,
                 'notes'              => $validated['notes'] ?? null,
             ]);
@@ -391,171 +406,142 @@ class RfqController extends Controller
     public function exportPdf(Request $request, Rfq $rfq)
     {
         $rfq->load(['customer', 'items.product', 'createdBy', 'quotations']);
-        $fmt = fn($v) => number_format((float) ($v ?? 0), 2);
-        $date = now()->format('d M Y, H:i');
-        $customer = $rfq->customer?->name ?? '—';
+        $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        // Items table — strong borders, alternating rows, text badges (mPDF doesn't render emoji reliably).
-        $itemsHtml = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8;">';
-        $itemsHtml .= '<thead><tr>';
-        $headers = [
-            ['label' => '#',                  'align' => 'center', 'width' => '4%'],
-            ['label' => 'Part / Job Desc.',   'align' => 'left',   'width' => '22%'],
-            ['label' => 'Product',            'align' => 'left',   'width' => '23%'],
-            ['label' => 'Qty',                'align' => 'right',  'width' => '8%'],
-            ['label' => 'Unit',               'align' => 'center', 'width' => '8%'],
-            ['label' => 'Reference',          'align' => 'left',   'width' => '21%'],
-            ['label' => 'Notes',              'align' => 'left',   'width' => '14%'],
-        ];
-        foreach ($headers as $h) {
-            $itemsHtml .= "<th width='{$h['width']}' style='padding: 7pt 8pt; background: #1e40af; color: white; text-align: {$h['align']}; font-size: 8pt; font-weight: bold; letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;'>" . strtoupper($h['label']) . '</th>';
-        }
-        $itemsHtml .= '</tr></thead><tbody>';
-        foreach ($rfq->items as $i => $item) {
-            $bg = $i % 2 === 0 ? '#ffffff' : '#f8fafc';
-            $desc = $item->job_description ?: '—';
-            $product = $item->product
-                ? '<span style="font-weight: bold;">' . $item->product->name . '</span> <span style="color:#64748b; font-family: dejavusansmono; font-size: 8pt;">(' . $item->product->code . ')</span>'
-                : '<span style="color: #94a3b8; font-style: italic;">Custom / New</span>';
+        $customer      = $esc($rfq->customer?->name ?? '—');
+        $customerRef   = $rfq->customer_ref_no ? $esc($rfq->customer_ref_no) : '—';
+        $requiredBy    = $rfq->required_by ? $rfq->required_by->format('d/m/Y') : 'No deadline';
+        $createdByName = $esc($rfq->createdBy?->name ?? '—');
+        $createdAt     = $rfq->created_at->format('d/m/Y');
+        $statusLabel   = ucfirst((string) $rfq->status);
+        $jobTypeLabel  = ($rfq->job_type ?? 'regular') === 'rnd' ? 'R&amp;D' : 'Regular';
 
-            // Per-item reference badges — plain text with colored backgrounds (no emoji)
-            $refBadges = [];
-            $refType = $item->reference_type ?? 'none';
-            // White-space:nowrap keeps "SAMPLE PENDING" / "SAMPLE ✓" together as one chip.
-            $badgeBase = 'display: inline-block; padding: 1pt 5pt; font-size: 7pt; font-weight: bold; white-space: nowrap; margin-bottom: 1pt;';
-            if (in_array($refType, ['drawing', 'both'])) {
-                $refBadges[] = '<span style="' . $badgeBase . ' background: #dbeafe; color: #1e40af;">DRAWING</span>';
-            }
-            if (in_array($refType, ['physical_sample', 'both'])) {
-                if ($item->sample_received) {
-                    $refBadges[] = '<span style="' . $badgeBase . ' background: #d1fae5; color: #065f46;">SAMPLE &#10003;</span>';
-                } else {
-                    $refBadges[] = '<span style="' . $badgeBase . ' background: #fef3c7; color: #92400e;">SAMPLE PENDING</span>';
+        // ─── Memo block — top-left RFQ no, top-right date (BITAC letter convention) ───
+        $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
+            . '<tr>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> RFQ-' . str_pad((string) $rfq->id, 5, '0', STR_PAD_LEFT) . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($createdAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─── Centered title ─────────────────────────────────────────────
+        $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
+            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">দরপত্রের অনুরোধপত্র</div>'
+            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(REQUEST FOR QUOTATION)</div>'
+            . '</div>';
+
+        // ─── Customer + Ref two-column block ───────────────────────────
+        $headerBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt;">'
+            . '<tr>'
+            .   '<td width="55%" style="vertical-align: top; padding-right: 12pt;">'
+            .     '<div style="font-size: 11pt; color: #000;"><b>Customer:</b> ' . $customer . '</div>'
+            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;"><b>Job Type:</b> ' . $jobTypeLabel . '</div>'
+            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;"><b>Status:</b> ' . $esc($statusLabel) . '</div>'
+            .   '</td>'
+            .   '<td width="45%" style="vertical-align: top; font-size: 10pt; color: #000;">'
+            .     '<div><b>Customer Ref:</b> ' . $customerRef . '</div>'
+            .     '<div style="margin-top: 2pt;"><b>Required By:</b> ' . $esc($requiredBy) . '</div>'
+            .     '<div style="margin-top: 2pt;"><b>Prepared By:</b> ' . $createdByName . '</div>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─── Items table — plain bordered, no zebra, no color ──────────
+        $itemsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-top: 4pt; table-layout: fixed;">';
+        $itemsHtml .= '<colgroup>'
+            . '<col style="width: 6%;" />'
+            . '<col style="width: 44%;" />'
+            . '<col style="width: 20%;" />'
+            . '<col style="width: 10%;" />'
+            . '<col style="width: 8%;" />'
+            . '<col style="width: 12%;" />'
+            . '</colgroup>';
+        $itemsHtml .= '<tr>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">'
+            . '<span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">'
+            . '<span class="bn" style="font-family: siyamrupali;">কাজের বিবরণ</span><br>(Description)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Product</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">'
+            . '<span class="bn" style="font-family: siyamrupali;">পরিমান</span><br>(Qty)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">'
+            . '<span class="bn" style="font-family: siyamrupali;">একক</span><br>(Unit)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Reference</th>';
+        $itemsHtml .= '</tr>';
+
+        if ($rfq->items->isEmpty()) {
+            $itemsHtml .= '<tr><td colspan="6" style="border: 0.75pt solid #000; padding: 10pt; text-align: center; font-style: italic; font-size: 10pt;">No items on this RFQ</td></tr>';
+        } else {
+            foreach ($rfq->items as $i => $item) {
+                $sl      = str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+                $desc    = $item->job_description ?: '—';
+                $product = $item->product
+                    ? $esc($item->product->name) . ' <span style="font-size: 8.5pt;">(' . $esc($item->product->code) . ')</span>'
+                    : '<span style="font-style: italic;">Custom / New</span>';
+
+                // Reference cell — plain text, no badges
+                $refType = $item->reference_type ?? 'none';
+                $refParts = [];
+                if (in_array($refType, ['drawing', 'both']))         $refParts[] = 'Drawing';
+                if (in_array($refType, ['physical_sample', 'both'])) {
+                    $refParts[] = $item->sample_received ? 'Sample (received)' : 'Sample (pending)';
                 }
-            }
-            $refCell = empty($refBadges)
-                ? '<span style="color: #cbd5e1;">—</span>'
-                : implode(' ', $refBadges);
-            if ($item->sample_description) {
-                $refCell .= '<div style="color: #64748b; font-size: 8pt; margin-top: 2pt;">' . e($item->sample_description) . '</div>';
-            }
+                $refCell = empty($refParts) ? '—' : implode(', ', $refParts);
+                if ($item->sample_description) {
+                    $refCell .= '<div style="font-size: 8.5pt; margin-top: 2pt;">' . $esc($item->sample_description) . '</div>';
+                }
 
-            $itemsHtml .= "<tr style='background: {$bg};'>";
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; text-align: center; font-weight: bold; font-size: 9pt; color: #1e40af; vertical-align: top;'>" . ($i + 1) . '</td>';
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-weight: bold; font-size: 9pt; color: #111827; vertical-align: top;'>" . e($desc) . '</td>';
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; color: #1f2937; vertical-align: top;'>{$product}</td>";
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; text-align: right; font-weight: bold; font-size: 9pt; font-family: dejavusansmono; color: #111827; vertical-align: top; white-space: nowrap;'>" . number_format((float) $item->quantity, 2) . '</td>';
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; color: #1f2937; vertical-align: top;'>" . e($item->unit ?? '') . '</td>';
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; vertical-align: top;'>{$refCell}</td>";
-            $itemsHtml .= "<td style='padding: 6pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; color: #4b5563; vertical-align: top;'>" . e($item->notes ?? '—') . '</td>';
-            $itemsHtml .= '</tr>';
+                $itemsHtml .= '<tr>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $sl . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; line-height: 1.4;">' . nl2br($esc($desc), false) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 10pt; vertical-align: top;">' . $product . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . number_format((float) $item->quantity, 2) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $esc($item->unit ?? '') . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 10pt; vertical-align: top;">' . $refCell . '</td>';
+                $itemsHtml .= '</tr>';
+            }
         }
-        $itemsHtml .= '</tbody></table>';
+        $itemsHtml .= '</table>';
 
-        $refHtml = ''; // no separate reference section anymore (embedded in items table)
-
-        // Quotations
+        // ─── Linked quotations — minimal table ─────────────────────────
         $quotHtml = '';
         if ($rfq->quotations->count() > 0) {
             $quotHtml  = '<div style="margin-top: 14pt;">';
-            $quotHtml .= '<div style="color: #1e40af; font-weight: bold; font-size: 10pt; margin-bottom: 4pt;">Linked Quotations</div>';
-            $quotHtml .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8;">';
-            $quotHtml .= '<thead><tr>';
-            $quotHeaders = [
-                ['label' => 'ID',      'align' => 'left',  'width' => '15%'],
-                ['label' => 'Amount',  'align' => 'right', 'width' => '35%'],
-                ['label' => 'Version', 'align' => 'left',  'width' => '20%'],
-                ['label' => 'Status',  'align' => 'left',  'width' => '30%'],
-            ];
-            foreach ($quotHeaders as $h) {
-                $quotHtml .= "<th width='{$h['width']}' style='padding: 6pt 8pt; background: #1e40af; color: white; text-align: {$h['align']}; font-size: 8pt; font-weight: bold; letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;'>" . strtoupper($h['label']) . '</th>';
+            $quotHtml .=   '<div style="font-size: 10pt; font-weight: bold; color: #000; margin-bottom: 4pt;">Linked Quotations</div>';
+            $quotHtml .=   '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000;">';
+            $quotHtml .=     '<tr>';
+            $quotHtml .=       '<th style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 9pt; font-weight: normal; text-align: left;">Quotation #</th>';
+            $quotHtml .=       '<th style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 9pt; font-weight: normal; text-align: right;">Amount (BDT)</th>';
+            $quotHtml .=       '<th style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 9pt; font-weight: normal; text-align: center;">Version</th>';
+            $quotHtml .=       '<th style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 9pt; font-weight: normal; text-align: left;">Status</th>';
+            $quotHtml .=     '</tr>';
+            foreach ($rfq->quotations as $q) {
+                $quotHtml .= '<tr>';
+                $quotHtml .=   '<td style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt;">Q-' . str_pad((string) $q->id, 5, '0', STR_PAD_LEFT) . '</td>';
+                $quotHtml .=   '<td style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt; text-align: right; white-space: nowrap;">' . number_format((float) $q->total_amount, 2) . '</td>';
+                $quotHtml .=   '<td style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt; text-align: center;">v' . $q->version . '</td>';
+                $quotHtml .=   '<td style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt;">' . $esc(ucfirst(str_replace('_', ' ', $q->status))) . '</td>';
+                $quotHtml .= '</tr>';
             }
-            $quotHtml .= '</tr></thead><tbody>';
-            foreach ($rfq->quotations as $i => $q) {
-                $bg = $i % 2 === 0 ? '#ffffff' : '#f8fafc';
-                $quotHtml .= "<tr style='background: {$bg};'>";
-                $quotHtml .= "<td style='padding: 5pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; font-weight: bold; color: #1e40af;'>Q-{$q->id}</td>";
-                $quotHtml .= "<td style='padding: 5pt 8pt; border-top: 1pt solid #cbd5e1; text-align: right; font-family: dejavusansmono; font-weight: bold; font-size: 9pt;'>" . number_format((float) $q->total_amount, 2) . '</td>';
-                $quotHtml .= "<td style='padding: 5pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt;'>v{$q->version}</td>";
-                $quotHtml .= "<td style='padding: 5pt 8pt; border-top: 1pt solid #cbd5e1; font-size: 9pt;'>" . e(ucfirst(str_replace('_', ' ', $q->status))) . '</td></tr>';
-            }
-            $quotHtml .= '</tbody></table></div>';
+            $quotHtml .=   '</table>';
+            $quotHtml .= '</div>';
         }
 
-        $statusLabel  = ucfirst($rfq->status);
-        $statusColor  = match ($rfq->status) { 'pending' => '#f59e0b', 'quoted' => '#3b82f6', 'rejected' => '#ef4444', default => '#64748b' };
-        $customerRef  = $rfq->customer_ref_no ?? '—';
-        $requiredBy   = $rfq->required_by ? $rfq->required_by->format('d M Y') : 'No deadline';
-        $createdByName = $rfq->createdBy?->name ?? '—';
+        // ─── Notes (free-text) ─────────────────────────────────────────
         $notesHtml = $rfq->notes
-            ? '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 14pt; border-collapse: collapse;">'
-                . '<tr>'
-                    . '<td width="4pt" style="background: #f59e0b;"></td>'
-                    . '<td style="padding: 8pt 12pt; background: #fffbeb; border: 1pt solid #fcd34d; border-left: 0;">'
-                        . '<div style="font-size: 8pt; color: #92400e; text-transform: uppercase; letter-spacing: 0.4pt; font-weight: bold;">Notes</div>'
-                        . '<div style="font-size: 10pt; color: #78350f; margin-top: 2pt;">' . e($rfq->notes) . '</div>'
-                    . '</td>'
-                . '</tr>'
-              . '</table>'
+            ? '<div style="margin-top: 12pt; font-size: 10pt; color: #000; line-height: 1.4;">'
+                . '<div style="font-weight: bold; margin-bottom: 2pt;">Notes</div>'
+                . nl2br($esc($rfq->notes), false)
+            . '</div>'
             : '';
 
-        // Build the inner document body. mPDF doesn't parse <style> inside body HTML
-        // well, so we inline-style each element. mPDF also prefers real <table>
-        // markup over CSS display:table.
-        $createdAt = $rfq->created_at->format('d M Y');
-        $itemCount = $rfq->items->count();
         $bodyHtml = <<<HTML
-        <!-- Document title block -->
-        <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 10pt; border-collapse: collapse;">
-            <tr>
-                <td width="4pt" style="background: #1e40af;"></td>
-                <td style="padding: 6pt 10pt;">
-                    <div style="font-size: 14pt; color: #1e40af; font-weight: bold; letter-spacing: 0.4pt;">REQUEST FOR QUOTATION</div>
-                    <div style="font-size: 9pt; color: #64748b; margin-top: 1pt;">RFQ #{$rfq->id} &middot; {$customer} &middot; {$itemCount} item(s)</div>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Meta grid: bordered, equal-width 5-column row -->
-        <table width="100%" cellspacing="0" cellpadding="8" style="border: 1pt solid #94a3b8; border-collapse: collapse; margin-bottom: 12pt; background: #f8fafc;">
-            <tr>
-                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customer}</div>
-                </td>
-                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer Ref</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customerRef}</div>
-                </td>
-                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Required By</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$requiredBy}</div>
-                </td>
-                <td width="20%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Status</div>
-                    <div style="color: {$statusColor}; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$statusLabel}</div>
-                </td>
-                <td width="20%" style="vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Created</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$createdAt}</div>
-                    <div style="font-size: 8pt; color: #6b7280; margin-top: 1pt;">by {$createdByName}</div>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Section heading + items table -->
-        <div style="margin-bottom: 4pt;">
-            <span style="display: inline-block; padding: 3pt 8pt; background: #1e40af; color: white; font-size: 9pt; font-weight: bold; letter-spacing: 0.3pt;">JOB ITEMS</span>
-        </div>
+        {$memoBlock}
+        {$titleBlock}
+        {$headerBlock}
         {$itemsHtml}
-
-        {$refHtml}
-
         {$quotHtml}
-
         {$notesHtml}
-
-        <div style="margin-top: 16pt; padding-top: 6pt; border-top: 0.5pt solid #e5e7eb; text-align: right; font-size: 7pt; color: #9ca3af; font-style: italic;">Generated by BITAC PMS &middot; {$date}</div>
 HTML;
 
         // Render via mPDF (handles Bangla complex-script shaping correctly,

@@ -18,6 +18,8 @@ use App\Http\Controllers\Admin\CustomerManagementController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\PortfolioController as AdminPortfolioController;
+use App\Http\Controllers\Admin\SystemResetController;
+use App\Http\Controllers\Ied\GatePassController;
 use App\Http\Controllers\Portfolio\PortfolioPublicController;
 use App\Http\Controllers\Auth\CustomerLoginController;
 use App\Http\Controllers\Customer\CustomerComplaintController;
@@ -31,6 +33,7 @@ use App\Http\Controllers\LiveDashboardController;
 use App\Http\Controllers\MRPController;
 use App\Http\Controllers\NcrController;
 use App\Http\Controllers\OperationSheetController;
+use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\QuotationController;
@@ -216,6 +219,16 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:view rfqs')
         ->name('rfqs.pdf');
 
+    // ─── IED Gate Passes (Gate-In / Gate-Out for customer reference samples) ───
+    Route::prefix('ied/gate-passes')->middleware('permission:manage gate-passes')->name('ied.gate-passes.')->group(function () {
+        Route::get('/',                [GatePassController::class, 'index'])->name('index');
+        Route::get('/create',          [GatePassController::class, 'create'])->name('create');
+        Route::post('/',               [GatePassController::class, 'store'])->name('store');
+        Route::get('/{gatePass}',      [GatePassController::class, 'show'])->name('show');
+        Route::get('/{gatePass}/pdf',  [GatePassController::class, 'pdf'])->name('pdf');
+        Route::post('/{gatePass}/cancel', [GatePassController::class, 'cancel'])->name('cancel');
+    });
+
     // Pending Approvals
     Route::get('/approvals', [\App\Http\Controllers\PendingApprovalsController::class, 'index'])
         ->middleware('permission:approve quotations')
@@ -271,6 +284,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('pcd')->middleware('permission:view pcd-inbox')->name('pcd.')->group(function () {
         Route::get('/inbox', [PcdInboxController::class, 'index'])->name('inbox.index');
         Route::get('/inbox/{workOrder}', [PcdInboxController::class, 'show'])->name('inbox.show');
+        Route::post('/inbox/{workOrder}/cancel', [PcdInboxController::class, 'cancel'])->name('inbox.cancel');
 
         // Material Requisitions
         Route::resource('material-requisitions', PcdMaterialRequisitionController::class);
@@ -280,6 +294,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('material-requisitions.approve');
         Route::post('material-requisitions/{materialRequisition}/issue', [PcdMaterialRequisitionController::class, 'issue'])
             ->name('material-requisitions.issue');
+        Route::get('material-requisitions/{materialRequisition}/pdf', [PcdMaterialRequisitionController::class, 'pdf'])
+            ->name('material-requisitions.pdf');
 
         // Section assignment
         Route::get('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'edit'])->name('sections.edit');
@@ -343,9 +359,20 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [OperationSheetController::class, 'index'])->name('operation-sheets.index');
         Route::get('{workOrder}/create', [OperationSheetController::class, 'create'])->name('operation-sheets.create');
         Route::post('{workOrder}', [OperationSheetController::class, 'store'])->name('operation-sheets.store');
+        Route::get('{sheet}/edit', [OperationSheetController::class, 'edit'])->name('operation-sheets.edit');
+        Route::put('{sheet}', [OperationSheetController::class, 'update'])->name('operation-sheets.update');
         Route::get('{sheet}', [OperationSheetController::class, 'show'])->name('operation-sheets.show');
         Route::get('{sheet}/pdf', [OperationSheetController::class, 'pdf'])->name('operation-sheets.pdf');
         Route::get('{sheet}/qr', [OperationSheetController::class, 'qr'])->name('operation-sheets.qr');
+    });
+
+    // Production (per-section supervisor queue + section handoff routing)
+    Route::prefix('production')->middleware('permission:view production')->name('production.')->group(function () {
+        Route::get('/queue', [ProductionController::class, 'queue'])->name('queue');
+        Route::get('/wos/{workOrderSection}', [ProductionController::class, 'show'])->name('show');
+        Route::post('/wos/{workOrderSection}/complete', [ProductionController::class, 'complete'])->name('complete');
+        Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
+        Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
     });
 
     // Schedule (Gantt)
@@ -371,14 +398,16 @@ Route::middleware(['auth'])->group(function () {
     // QC
     Route::prefix('qc')->middleware('permission:view qc')->group(function () {
         Route::get('/', [QcController::class, 'index'])->name('qc.index');
-        Route::get('{workOrder}/create', [QcController::class, 'create'])->name('qc.create');
-        Route::post('{workOrder}', [QcController::class, 'store'])->name('qc.store');
+        Route::get('/create', [QcController::class, 'create'])->name('qc.create');
+        Route::post('/', [QcController::class, 'store'])->name('qc.store');
         Route::get('inspection/{inspection}', [QcController::class, 'show'])->name('qc.show');
+        Route::get('inspection/{inspection}/pdf', [QcController::class, 'pdf'])->name('qc.pdf');
     });
 
     // NCR
     Route::prefix('ncrs')->middleware('permission:view qc')->group(function () {
         Route::get('/', [NcrController::class, 'index'])->name('ncrs.index');
+        Route::post('/', [NcrController::class, 'store'])->name('ncrs.store');
         Route::get('{ncr}', [NcrController::class, 'show'])->name('ncrs.show');
         Route::post('{ncr}/rework', [NcrController::class, 'createRework'])->name('ncrs.rework');
     });
@@ -388,6 +417,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [DeliveryController::class, 'index'])->name('delivery.index');
         Route::get('create', [DeliveryController::class, 'create'])->name('delivery.create');
         Route::post('/', [DeliveryController::class, 'store'])->name('delivery.store');
+        Route::get('{delivery}', [DeliveryController::class, 'show'])->name('delivery.show');
         Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->name('delivery.complete');
     });
 
@@ -397,6 +427,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::get('{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::post('{invoice}/acknowledge', [InvoiceController::class, 'acknowledge'])->name('invoices.acknowledge');
+        Route::post('{invoice}/mark-paid', [InvoiceController::class, 'markPaid'])->name('invoices.mark-paid');
     });
 
     // Reports
@@ -440,6 +471,12 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('portfolio-photos/{photo}', [AdminPortfolioController::class, 'deletePhoto'])
             ->middleware('permission:manage portfolio')
             ->name('admin.portfolio.delete-photo');
+
+        // ─── System Reset (super-admin only — guarded inside controller) ───
+        Route::get('system/reset',  [SystemResetController::class, 'index'])
+            ->name('admin.system.reset.index');
+        Route::post('system/reset', [SystemResetController::class, 'wipe'])
+            ->name('admin.system.reset.wipe');
 
         Route::get('audit-log', [AuditLogController::class, 'index'])
             ->middleware('permission:view audit-log')
@@ -521,7 +558,18 @@ Route::middleware(['auth:customer'])->prefix('customer')->name('customer.')->gro
     Route::get('/work-orders', [CustomerWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('/work-orders/{workOrder}', [CustomerWorkOrderController::class, 'show'])->name('work-orders.show');
 
-    Route::get('/invoices/{invoice}/download', [CustomerInvoiceController::class, 'download'])->name('invoices.download');
+    Route::get('/invoices',                     [CustomerInvoiceController::class, 'index'])->name('invoices.index');
+    Route::get('/invoices/{invoice}',           [CustomerInvoiceController::class, 'show'])->name('invoices.show');
+    Route::get('/invoices/{invoice}/pdf',       [CustomerInvoiceController::class, 'pdf'])->name('invoices.pdf');
+    Route::get('/invoices/{invoice}/download',  [CustomerInvoiceController::class, 'download'])->name('invoices.download');
 
-    Route::post('/complaints', [CustomerComplaintController::class, 'store'])->name('complaints.store');
+    Route::get('/complaints',         [\App\Http\Controllers\Customer\CustomerComplaintController::class, 'index'])->name('complaints.index');
+    Route::get('/complaints/create',  [\App\Http\Controllers\Customer\CustomerComplaintController::class, 'create'])->name('complaints.create');
+    Route::get('/complaints/{complaint}', [\App\Http\Controllers\Customer\CustomerComplaintController::class, 'show'])->name('complaints.show');
+    Route::post('/complaints',        [\App\Http\Controllers\Customer\CustomerComplaintController::class, 'store'])->name('complaints.store');
+
+    Route::get('/documents', [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'index'])->name('documents.index');
+    Route::get('/documents/quotation/{quotation}',     [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'quotation'])->name('documents.quotation');
+    Route::get('/documents/challan/{delivery}',        [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'challan'])->name('documents.challan');
+    Route::get('/documents/inspection/{inspection}',   [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'inspectionCert'])->name('documents.inspection');
 });

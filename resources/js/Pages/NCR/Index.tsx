@@ -106,7 +106,7 @@ export default function NCRIndex({ ncrs, filters }: any) {
                                     {rows.map((ncr: any) => (
                                         <tr key={ncr.id} className="group">
                                             <td>
-                                                <Link href={`/ncr/${ncr.id}`} className="font-mono font-semibold text-rose-600 group-hover:underline">
+                                                <Link href={`/ncrs/${ncr.id}`} className="font-mono font-semibold text-rose-600 group-hover:underline">
                                                     {ncr.ncr_number}
                                                 </Link>
                                             </td>
@@ -139,7 +139,7 @@ export default function NCRIndex({ ncrs, filters }: any) {
                                             <td className="text-xs text-surface-500">{ncr.created_at}</td>
                                             <td>
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    <Link href={`/ncr/${ncr.id}`} title="View NCR details"
+                                                    <Link href={`/ncrs/${ncr.id}`} title="View NCR details"
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                         <i className="fi fi-rr-eye text-sm leading-none" /> View
                                                     </Link>
@@ -161,7 +161,7 @@ export default function NCRIndex({ ncrs, filters }: any) {
                     {/* Mobile cards */}
                     <div className="lg:hidden px-4 pb-4 space-y-3 pt-3">
                         {rows.length > 0 ? rows.map((ncr: any) => (
-                            <Link key={ncr.id} href={`/ncr/${ncr.id}`}
+                            <Link key={ncr.id} href={`/ncrs/${ncr.id}`}
                                 className="block rounded-xl border border-surface-100 bg-white p-4 space-y-3 hover:border-brand-200 hover:shadow-md transition-all">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-2.5 min-w-0">

@@ -13,7 +13,7 @@ class WorkOrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps']);
+        $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps', 'rfq:id,job_type']);
 
         if ($search = $request->input('search')) {
             // job_number is an unsigned int — strip prefixes like "Job", "#", spaces
@@ -50,6 +50,7 @@ class WorkOrderController extends Controller
                 'id'           => $wo->id,
                 'wo_number'    => $wo->wo_number,
                 'job_number'   => $wo->job_number,
+                'job_type'     => $wo->rfq?->job_type ?? 'regular',
                 'product'      => $wo->product->name ?? '',
                 'customer'     => $wo->customer->name ?? '',
                 'quantity'     => $wo->quantity,
@@ -61,6 +62,15 @@ class WorkOrderController extends Controller
                 'is_overdue'   => $wo->is_overdue,
                 'created_at'   => $wo->created_at->format('d/m/Y'),
                 'progress_pct' => (function () use ($wo) {
+                    // Terminal states: the WO has cleared production and onwards.
+                    // Force 100% so the list reads cleanly even if some op-steps
+                    // were never closed (e.g. an op-step in a section that wasn't
+                    // actually routed through).
+                    if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) {
+                        return 100;
+                    }
+                    if ($wo->status === 'cancelled') return null;
+
                     $sheet = $wo->operationSheets->first();
                     if (!$sheet) return null;
                     $steps = $sheet->steps;
@@ -98,13 +108,14 @@ class WorkOrderController extends Controller
         $workOrder->load([
             'product', 'customer',
             'quotation',
+            'rfq:id,job_type',
             'operationSheets.steps.machine.workCentre',
-            'operationSheets.steps.assignment.operator',
+            'operationSheets.steps.operator',
             'operationSheets.steps.section',
             'materialRequisitions',
             'qcInspections',
             'ncrs',
-            'deliveryOrders.proofOfDelivery',
+            'deliveryOrders.pod',
             'invoices',
         ]);
 
@@ -125,6 +136,8 @@ class WorkOrderController extends Controller
             'workOrder' => [
                 'id'           => $workOrder->id,
                 'wo_number'    => $workOrder->wo_number,
+                'job_number'   => $workOrder->job_number,
+                'job_type'     => $workOrder->rfq?->job_type ?? 'regular',
                 'product'      => $workOrder->product->name ?? '',
                 'customer'     => $workOrder->customer->name ?? '',
                 'quantity'     => $workOrder->quantity,
@@ -148,7 +161,7 @@ class WorkOrderController extends Controller
                         'sequence'        => $s->sequence,
                         'operation_name'  => $s->operation_name,
                         'machine'         => ['name' => $s->machine?->name ?? '—'],
-                        'operator'        => $s->assignment?->operator?->name ?? null,
+                        'operator'        => $s->operator?->name ?? null,
                         'estimated_hours' => (float) ($s->estimated_hours ?? 0),
                         'actual_hours'    => (float) ($s->actual_hours ?? 0),
                         'status'          => $s->status,
@@ -156,13 +169,16 @@ class WorkOrderController extends Controller
                         'completed_at'    => $s->completed_at?->toIso8601String(),
                     ]),
                 ] : null,
-                'progress' => $sheet ? (function () use ($sheet) {
+                'progress' => $sheet ? (function () use ($sheet, $workOrder) {
                     $steps = $sheet->steps->sortBy('sequence')->values();
                     $total = $steps->count();
                     if ($total === 0) return ['pct' => 0, 'completed' => 0, 'total' => 0, 'in_progress' => 0];
 
                     $completed  = $steps->where('status', 'completed')->count();
                     $inProgress = $steps->where('status', 'in_progress')->count();
+
+                    // Cap to 100 once the WO has moved past production.
+                    $isTerminal = in_array($workOrder->status, ['qc_passed', 'ready_for_delivery', 'delivered']);
 
                     // Prefer weighted progress when weights are configured (sum to >0),
                     // fall back to step-count. Half-credit for in-progress steps.
@@ -174,6 +190,7 @@ class WorkOrderController extends Controller
                     } else {
                         $pct   = round((($completed + $inProgress * 0.5) / $total) * 100);
                     }
+                    if ($isTerminal) $pct = 100;
 
                     // Current step = first in_progress, else first pending after a completed one.
                     $current = $steps->firstWhere('status', 'in_progress')

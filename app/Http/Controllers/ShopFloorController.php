@@ -18,8 +18,10 @@ class ShopFloorController extends Controller
     {
         $user = auth()->user();
 
-        // Operator sees only their assigned steps
+        // Operator sees only their assigned steps — exclude steps belonging
+        // to cancelled work orders so closed jobs disappear from production shops.
         $assignedSteps = OperationStep::whereHas('operatorAssignments', fn($q) => $q->where('user_id', $user->id))
+            ->whereHas('operationSheet.workOrder', fn($q) => $q->where('status', '!=', 'cancelled'))
             ->with([
                 'operationSheet.workOrder.product',
                 'machine',
@@ -44,6 +46,11 @@ class ShopFloorController extends Controller
         ]);
 
         $step = OperationStep::findOrFail($validated['operation_step_id']);
+
+        // Refuse if the parent work order has been cancelled by PCD
+        if (optional($step->operationSheet?->workOrder)->status === 'cancelled') {
+            return back()->withErrors(['operation_step_id' => 'This job has been closed by PCD and can no longer be worked on.']);
+        }
 
         $execution = JobExecution::create([
             'operation_step_id' => $step->id,

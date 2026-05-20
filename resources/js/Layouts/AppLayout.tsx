@@ -81,10 +81,10 @@ function NavLink({ item, isActive, collapsed }: { item: NavItem; isActive: boole
 }
 
 export default function AppLayout({ header, children }: PropsWithChildren<{ header?: ReactNode }>) {
-    const { auth, currentCenter, isSuperAdmin, availableCenters, unreadNotifications, appSettings } = usePage().props as any;
+    const { auth, currentCenter, isSuperAdmin, availableCenters, unreadNotifications, appSettings, productionSections } = usePage().props as any;
     const theme = (appSettings ?? {}) as Partial<AppSettings>;
     const userPermissions: string[] = auth?.user?.permissions ?? [];
-    const navGroups = flatGroups(userPermissions, isSuperAdmin ?? false);
+    const navGroups = flatGroups(userPermissions, isSuperAdmin ?? false, productionSections ?? []);
 
     // Initialize openGroup synchronously during first render to avoid the
     // closed→open flicker after every navigation. We compute the active group
@@ -93,7 +93,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
     //       otherwise (e.g. Dashboard), no group is open.
     const [openGroup, setOpenGroup] = useState<string>(() => {
         if (typeof window === 'undefined') return '';
-        const path = window.location.pathname;
+        const path = window.location.pathname + window.location.search;
         const activeGroup = navGroups.find(g => g.items.some(i => path.startsWith(i.href)));
         return activeGroup ? activeGroup.label : '';
     });
@@ -119,7 +119,9 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
     const centerRef = useRef<HTMLDivElement>(null);
     const userRef = useRef<HTMLDivElement>(null);
     const notifRef = useRef<HTMLDivElement>(null);
-    const currentUrl = typeof window !== 'undefined' ? window.location.pathname : '';
+    const currentUrl = typeof window !== 'undefined'
+        ? window.location.pathname + window.location.search
+        : '';
 
     // ── Sidebar accordion: keep openGroup in sync if layout persists across navigations ──
     // (Skip on initial mount since useState initializer already handled it.)

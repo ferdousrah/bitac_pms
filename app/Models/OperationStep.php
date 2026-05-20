@@ -9,7 +9,7 @@ class OperationStep extends Model
     protected $fillable = [
         'operation_sheet_id', 'sequence', 'operation_name', 'operation_id',
         'section_id', 'machine_id', 'operator_id', 'estimated_hours', 'weight_pct',
-        'status', 'actual_hours', 'started_at', 'completed_at', 'tooling_notes',
+        'status', 'actual_hours', 'started_at', 'completed_at', 'tooling_notes', 'qc_notes',
     ];
 
     protected function casts(): array

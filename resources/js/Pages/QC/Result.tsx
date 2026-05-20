@@ -109,7 +109,7 @@ export default function QCResult({ inspection }: any) {
                             <div className="card-body space-y-2">
                                 {inspection.result === 'fail' && !inspection.has_ncr && (
                                     <button
-                                        onClick={() => ncrForm.post('/ncr')}
+                                        onClick={() => ncrForm.post('/ncrs')}
                                         disabled={ncrForm.processing}
                                         className="btn-danger btn-sm w-full justify-center"
                                     >
@@ -117,6 +117,15 @@ export default function QCResult({ inspection }: any) {
                                         {ncrForm.processing ? 'Raising...' : 'Raise NCR'}
                                     </button>
                                 )}
+                                <a
+                                    href={`/qc/inspection/${inspection.id}/pdf`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn-danger btn-sm w-full justify-center"
+                                >
+                                    <i className="fi fi-rr-file-pdf text-xs leading-none" />
+                                    Inspection Certificate
+                                </a>
                                 <Link
                                     href={`/work-orders/${inspection.work_order_id}`}
                                     className="btn-outline btn-sm w-full justify-center"

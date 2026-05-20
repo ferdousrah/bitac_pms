@@ -54,6 +54,7 @@ class WorkOrderSectionController extends Controller
                 'sequence'   => $s->sequence,
                 'status'     => $s->status,
                 'notes'      => $s->notes,
+                'qc_notes'   => $s->qc_notes,
             ]),
             'available_sections' => Section::active()->shops()->orderBy('display_order')
                 ->get(['id', 'name', 'code', 'name_bn']),
@@ -66,6 +67,7 @@ class WorkOrderSectionController extends Controller
             'sections'              => 'required|array|min:1',
             'sections.*.section_id' => 'required|exists:sections,id',
             'sections.*.notes'      => 'nullable|string|max:255',
+            'sections.*.qc_notes'   => 'nullable|string|max:500',
         ]);
 
         DB::transaction(function () use ($workOrder, $validated) {
@@ -77,7 +79,16 @@ class WorkOrderSectionController extends Controller
                     'sequence'   => $idx + 1,
                     'status'     => 'pending',
                     'notes'      => $row['notes'] ?? null,
+                    'qc_notes'   => $row['qc_notes'] ?? null,
                 ]);
+            }
+
+            // If the WO was already released to shops, re-activate the first
+            // section so it appears in the production queue (the wipe-and-recreate
+            // above would otherwise leave every section in `pending`).
+            if ($workOrder->released_to_shops_at) {
+                $first = $workOrder->sections()->orderBy('sequence')->first();
+                $first?->update(['status' => 'ready']);
             }
         });
 

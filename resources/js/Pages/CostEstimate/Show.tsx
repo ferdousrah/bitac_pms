@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import RevisionTimeline from '@/Components/RevisionTimeline';
 import ApprovalActionModal, { ApprovalAction } from '@/Components/ApprovalActionModal';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 import ApprovalNoteAI from '@/Components/ApprovalNoteAI';
 import { useAiEnabled } from '@/lib/useAiEnabled';
 import RfqAttachmentsPanel from '@/Components/RfqAttachmentsPanel';
@@ -57,7 +58,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
         );
     };
 
-    const handleApprovalConfirm = (remarks: string) => {
+    const handleApprovalConfirm = (remarks: string, signature?: string | null) => {
         if (!approvalAction) return;
         const url = approvalAction === 'approve'
             ? `/cost-estimates/${estimate.id}/approve`
@@ -65,7 +66,10 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
             ? `/cost-estimates/${estimate.id}/reject`
             : `/cost-estimates/${estimate.id}/request-changes`;
         return new Promise<void>((resolve) => {
-            router.post(url, { remarks: remarks || null }, {
+            router.post(url, {
+                remarks: remarks || null,
+                signature: signature || null, // base64 data URL when approver drew a fresh signature
+            }, {
                 onFinish: () => {
                     setApprovalAction(null);
                     resolve();
@@ -91,6 +95,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                     <span className={`badge ${STATUS_BADGE[estimate.status] ?? 'badge-slate'} capitalize`}>
                                         {estimate.status}
                                     </span>
+                                    <JobTypeBadge type={estimate.job_type} />
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-100 text-surface-700 text-[10px] font-bold">
                                         Pricing {estimate.pricing_group}
                                     </span>
@@ -162,12 +167,24 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                 {/* ── Main Grid ──────────────────────────────────── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-                    {/* Left: Sections */}
+                    {/* Left: Sections — empty sections (0 lines) are hidden to reduce noise */}
                     <div className="lg:col-span-2 space-y-4">
-                        <SectionCard letter="A" title="Material Cost"          icon="fi-rr-cube"     color="blue"    total={estimate.material_cost}  lines={sectionLines('material')} />
-                        <SectionCard letter="B" title="Machining Cost"         icon="fi-rr-settings" color="amber"   total={estimate.machining_cost} lines={sectionLines('machining')} />
-                        <SectionCard letter="C" title="Surface Treatment"      icon="fi-rr-shine"    color="purple"  total={estimate.surface_cost}   lines={sectionLines('surface')} />
-                        <SectionCard letter="D" title="Other Parts"            icon="fi-rr-box-alt"  color="emerald" total={estimate.other_cost}     lines={sectionLines('other')} />
+                        {[
+                            { letter: 'A', title: 'Material Cost',     total: estimate.material_cost,  lines: sectionLines('material') },
+                            { letter: 'B', title: 'Machining Cost',    total: estimate.machining_cost, lines: sectionLines('machining') },
+                            { letter: 'C', title: 'Surface Treatment', total: estimate.surface_cost,   lines: sectionLines('surface') },
+                            { letter: 'D', title: 'Other Parts',       total: estimate.other_cost,     lines: sectionLines('other') },
+                        ]
+                            .filter(s => s.lines.length > 0)
+                            .map(s => (
+                                <SectionCard
+                                    key={s.letter}
+                                    letter={s.letter}
+                                    title={s.title}
+                                    total={s.total}
+                                    lines={s.lines}
+                                />
+                            ))}
                     </div>
 
                     {/* Right: Sticky Sidebar */}
@@ -178,12 +195,18 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                 <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Cost Summary</h3>
                             </div>
 
-                            {/* Section subtotals */}
+                            {/* Section subtotals — only show sections that contribute */}
                             <div className="px-5 py-3 space-y-2 text-sm">
-                                <SummaryLine label="Material"          value={estimate.material_cost}  letter="A" color="blue" />
-                                <SummaryLine label="Machining"         value={estimate.machining_cost} letter="B" color="amber" />
-                                <SummaryLine label="Surface Treatment" value={estimate.surface_cost}   letter="C" color="purple" />
-                                <SummaryLine label="Other Parts"       value={estimate.other_cost}     letter="D" color="emerald" />
+                                {[
+                                    { label: 'Material',          value: estimate.material_cost,  letter: 'A', linesKey: 'material'  },
+                                    { label: 'Machining',         value: estimate.machining_cost, letter: 'B', linesKey: 'machining' },
+                                    { label: 'Surface Treatment', value: estimate.surface_cost,   letter: 'C', linesKey: 'surface'   },
+                                    { label: 'Other Parts',       value: estimate.other_cost,     letter: 'D', linesKey: 'other'     },
+                                ]
+                                    .filter(s => sectionLines(s.linesKey).length > 0)
+                                    .map(s => (
+                                        <SummaryLine key={s.letter} label={s.label} value={s.value} letter={s.letter} />
+                                    ))}
                             </div>
 
                             {/* Net Cost */}
@@ -553,71 +576,62 @@ const SECTION_COLORS: Record<string, { accent: string; tint: string; text: strin
     emerald: { accent: 'bg-emerald-500', tint: 'bg-emerald-50/40', text: 'text-emerald-700', letterBg: 'bg-emerald-50 text-emerald-700' },
 };
 
-function SectionCard({ letter, title, icon, color, total, lines }: any) {
-    const c = SECTION_COLORS[color] || SECTION_COLORS.blue;
-    const hasLines = lines.length > 0;
+function SectionCard({ letter, title, total, lines }: any) {
+    // Empty sections are filtered out by the parent, but keep this guard so
+    // the component is safe to use elsewhere.
+    if (!lines || lines.length === 0) return null;
 
     return (
-        <div className={`card overflow-hidden ${!hasLines ? 'opacity-75' : ''}`}>
-            <div className="relative">
-                <div className={`absolute inset-y-0 left-0 w-0.5 ${c.accent}`} />
-                <div className="flex items-center justify-between pl-5 pr-5 py-3">
-                    <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg ${c.letterBg} flex items-center justify-center font-bold text-sm`}>
-                            {letter}
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-surface-900">{title}</h3>
-                            <div className="text-[10px] text-surface-400 font-medium">{lines.length} {lines.length === 1 ? 'item' : 'items'}</div>
-                        </div>
-                    </div>
-                    <div className="font-mono text-base font-bold text-surface-900 tabular-nums">{fmt(total)}</div>
+        <div className="card overflow-hidden">
+            {/* Compact header — uniform neutral styling, no per-section accent color */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-surface-100 bg-surface-50/40">
+                <div className="flex items-center gap-2.5">
+                    <span className="inline-flex w-6 h-6 rounded-md bg-surface-200 text-surface-700 items-center justify-center font-bold text-[11px]">
+                        {letter}
+                    </span>
+                    <h3 className="text-sm font-bold text-surface-900">{title}</h3>
+                    <span className="text-[11px] text-surface-400 font-medium">· {lines.length} {lines.length === 1 ? 'item' : 'items'}</span>
                 </div>
+                <div className="font-mono text-sm font-bold text-surface-900 tabular-nums">{fmt(total)}</div>
             </div>
 
-            {hasLines ? (
-                <div className="border-t border-surface-100 overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="bg-surface-50/50">
-                                <th className="w-10 px-4 py-2 text-left text-[10px] font-bold text-surface-400 uppercase tracking-wider">#</th>
-                                <th className="px-4 py-2 text-left text-[10px] font-bold text-surface-400 uppercase tracking-wider">Description</th>
-                                <th className="px-4 py-2 text-right text-[10px] font-bold text-surface-400 uppercase tracking-wider">Qty</th>
-                                <th className="px-4 py-2 text-left text-[10px] font-bold text-surface-400 uppercase tracking-wider">Unit</th>
-                                <th className="px-4 py-2 text-right text-[10px] font-bold text-surface-400 uppercase tracking-wider">Rate</th>
-                                <th className="px-4 py-2 text-right text-[10px] font-bold text-surface-400 uppercase tracking-wider">Amount</th>
+            {/* Lines table */}
+            <div className="overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr>
+                            <th className="w-10 px-4 py-2 text-left text-[10px] font-semibold text-surface-400 uppercase tracking-wider">#</th>
+                            <th className="px-4 py-2 text-left text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Description</th>
+                            <th className="px-4 py-2 text-right text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Qty</th>
+                            <th className="px-4 py-2 text-left text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Unit</th>
+                            <th className="px-4 py-2 text-right text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Rate</th>
+                            <th className="px-4 py-2 text-right text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-50">
+                        {lines.map((l: any, i: number) => (
+                            <tr key={l.id} className="hover:bg-surface-50/40 transition-colors">
+                                <td className="px-4 py-2.5 text-surface-400 font-mono text-xs align-middle">{i + 1}</td>
+                                <td className="px-4 py-2.5 text-sm text-surface-900 align-middle">{l.description}</td>
+                                <td className="px-4 py-2.5 text-right font-mono text-sm text-surface-700 tabular-nums align-middle">{fmtInt(l.quantity)}</td>
+                                <td className="px-4 py-2.5 text-surface-500 text-xs align-middle">{l.unit}</td>
+                                <td className="px-4 py-2.5 text-right font-mono text-sm text-surface-700 tabular-nums align-middle">{fmt(l.rate)}</td>
+                                <td className="px-4 py-2.5 text-right font-mono text-sm font-bold text-surface-900 tabular-nums align-middle">{fmt(l.amount)}</td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-surface-50">
-                            {lines.map((l: any, i: number) => (
-                                <tr key={l.id} className="hover:bg-surface-50/40 transition-colors">
-                                    <td className="px-4 py-2.5 text-surface-300 font-mono text-xs align-middle">{i + 1}</td>
-                                    <td className="px-4 py-2.5 text-sm text-surface-900 align-middle">{l.description}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-sm text-surface-700 tabular-nums align-middle">{fmtInt(l.quantity)}</td>
-                                    <td className="px-4 py-2.5 text-surface-500 text-xs align-middle">{l.unit}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-sm text-surface-700 tabular-nums align-middle">{fmt(l.rate)}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-sm font-bold text-surface-900 tabular-nums align-middle">{fmt(l.amount)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            ) : (
-                <div className="border-t border-surface-100 py-6 text-center">
-                    <div className="text-xs text-surface-300">No items</div>
-                </div>
-            )}
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
 
 /* ─── Summary Line ──────────────────────────────────────────── */
-function SummaryLine({ label, value, letter, color }: { label: string; value: number; letter: string; color: string }) {
-    const c = SECTION_COLORS[color] || SECTION_COLORS.blue;
+function SummaryLine({ label, value, letter }: { label: string; value: number; letter: string }) {
     return (
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-surface-700">
-                <span className={`inline-flex w-5 h-5 rounded ${c.letterBg} items-center justify-center text-[10px] font-bold`}>
+                <span className="inline-flex w-5 h-5 rounded bg-surface-100 text-surface-600 items-center justify-center text-[10px] font-bold">
                     {letter}
                 </span>
                 <span>{label}</span>

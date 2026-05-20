@@ -55,19 +55,24 @@ class UserController extends Controller
 
     public function create()
     {
-        return Inertia::render('Admin/Users/CreateEdit', ['roles' => Role::pluck('name')]);
+        return Inertia::render('Admin/Users/CreateEdit', [
+            'roles'    => Role::pluck('name'),
+            'sections' => \App\Models\Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+        ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'       => 'required|string|max:255',
-            'email'      => 'required|email|unique:users',
-            'phone'      => 'nullable|string|max:40',
-            'password'   => 'required|string|min:8|confirmed',
-            'role'       => 'required|exists:roles,name',
-            'is_active'  => 'nullable|boolean',
-            'signature'  => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
+            'name'        => 'required|string|max:255',
+            'email'       => 'required|email|unique:users',
+            'phone'       => 'nullable|string|max:40',
+            'designation' => 'nullable|string|max:120',
+            'password'    => 'required|string|min:8|confirmed',
+            'role'        => 'required|exists:roles,name',
+            'section_id'  => 'nullable|exists:sections,id',
+            'is_active'   => 'nullable|boolean',
+            'signature'   => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
         ]);
 
         $signaturePath = null;
@@ -79,9 +84,11 @@ class UserController extends Controller
             'name'           => $validated['name'],
             'email'          => $validated['email'],
             'phone'          => $validated['phone'] ?? null,
+            'designation'    => $validated['designation'] ?? null,
             'signature_path' => $signaturePath,
             'password'       => $validated['password'], // cast 'hashed' auto-hashes
             'is_active'      => $validated['is_active'] ?? true,
+            'section_id'     => $validated['section_id'] ?? null,
         ]);
         $user->assignRole($validated['role']);
 
@@ -97,12 +104,15 @@ class UserController extends Controller
                 'name'      => $user->name,
                 'email'     => $user->email,
                 'phone'     => $user->phone,
+                'designation' => $user->designation,
                 'signature_url' => $user->signature_url,
                 'is_active' => (bool) $user->is_active,
                 'deactivation_reason' => $user->deactivation_reason,
                 'roles'     => $user->roles->pluck('name'),
+                'section_id'=> $user->section_id,
             ],
-            'roles' => Role::pluck('name'),
+            'roles'    => Role::pluck('name'),
+            'sections' => \App\Models\Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
         ]);
     }
 
@@ -112,7 +122,9 @@ class UserController extends Controller
             'name'                => 'required|string|max:255',
             'email'               => 'required|email|unique:users,email,' . $user->id,
             'phone'               => 'nullable|string|max:40',
+            'designation'         => 'nullable|string|max:120',
             'role'                => 'required|exists:roles,name',
+            'section_id'          => 'nullable|exists:sections,id',
             'is_active'           => 'nullable|boolean',
             'password'            => 'nullable|string|min:8',
             'deactivation_reason' => 'nullable|string|max:500',
@@ -121,9 +133,11 @@ class UserController extends Controller
         ]);
 
         $data = [
-            'name'  => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'] ?? null,
+            'name'        => $validated['name'],
+            'email'       => $validated['email'],
+            'phone'       => $validated['phone'] ?? null,
+            'designation' => $validated['designation'] ?? null,
+            'section_id'  => $validated['section_id'] ?? null,
         ];
 
         // Replace or remove signature image

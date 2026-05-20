@@ -70,10 +70,10 @@ class OperationSheetController extends Controller
     {
         $workOrder->load(['product', 'customer', 'sections.section']);
 
-        // If sheet already exists, redirect to edit
+        // If sheet already exists, send the user to its edit screen
         $existing = $workOrder->operationSheets()->first();
         if ($existing) {
-            return redirect()->route('operation-sheets.show', $existing);
+            return redirect()->route('operation-sheets.edit', $existing);
         }
 
         return Inertia::render('OperationSheet/Builder', [
@@ -124,6 +124,7 @@ class OperationSheetController extends Controller
             'steps.*.estimated_hours' => 'required|numeric|min:0',
             'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
             'steps.*.tooling_notes'   => 'nullable|string',
+            'steps.*.qc_notes'        => 'nullable|string|max:500',
         ]);
 
         // Sanity-warn if step weights don't sum to ~100. We don't hard-fail —
@@ -154,6 +155,7 @@ class OperationSheetController extends Controller
                 'estimated_hours'  => $stepData['estimated_hours'],
                 'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
                 'tooling_notes'    => $stepData['tooling_notes'] ?? null,
+                'qc_notes'         => $stepData['qc_notes'] ?? null,
                 'status'           => 'pending',
             ]);
         }
@@ -164,9 +166,120 @@ class OperationSheetController extends Controller
         return redirect()->route('operation-sheets.show', $sheet)->with('success', 'Operation sheet created.');
     }
 
+    public function edit(OperationSheet $sheet)
+    {
+        $sheet->load(['workOrder.product', 'workOrder.customer', 'workOrder.sections.section', 'steps']);
+
+        // Block editing once any step has started — production data is tied to step IDs.
+        $hasStarted = $sheet->steps->contains(fn($s) => in_array($s->status, ['in_progress', 'completed']));
+        if ($hasStarted) {
+            return redirect()->route('operation-sheets.show', $sheet)
+                ->with('error', 'Cannot edit: one or more steps have already started.');
+        }
+
+        $workOrder = $sheet->workOrder;
+
+        return Inertia::render('OperationSheet/Builder', [
+            'sheet' => [
+                'id'           => $sheet->id,
+                'sheet_number' => $sheet->sheet_number,
+                'steps'        => $sheet->steps->sortBy('sequence')->values()->map(fn($s) => [
+                    'id'              => $s->id,
+                    'operation_id'    => $s->operation_id,
+                    'operation_name'  => $s->operation_name,
+                    'section_id'      => $s->section_id,
+                    'machine_id'      => $s->machine_id,
+                    'operator_id'     => $s->operator_id,
+                    'estimated_hours' => (string) $s->estimated_hours,
+                    'weight_pct'      => (string) $s->weight_pct,
+                    'tooling_notes'   => $s->tooling_notes ?? '',
+                ]),
+            ],
+            'workOrder' => [
+                'id'         => $workOrder->id,
+                'wo_number'  => $workOrder->wo_number,
+                'job_number' => $workOrder->job_number,
+                'product'    => $workOrder->product->name ?? '',
+                'customer'   => $workOrder->customer?->name,
+                'quantity'   => $workOrder->quantity,
+                'assigned_sections' => $workOrder->sections->map(fn($s) => [
+                    'id'         => $s->section_id,
+                    'name'       => $s->section->name,
+                    'code'       => $s->section->code,
+                    'sequence'   => $s->sequence,
+                ]),
+            ],
+            'sections'   => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'machines'   => Machine::with('section')->get()
+                ->map(fn($m) => [
+                    'id'         => $m->id,
+                    'name'       => $m->name,
+                    'code'       => $m->machine_code,
+                    'section_id' => $m->section_id,
+                ]),
+            'operators'  => Operator::with('section')->where('is_active', true)->get()
+                ->map(fn($o) => [
+                    'id'         => $o->id,
+                    'name'       => $o->name,
+                    'employee_id'=> $o->employee_id,
+                    'section_id' => $o->section_id,
+                ]),
+            'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
+                ->get(['id', 'name', 'category', 'default_unit']),
+        ]);
+    }
+
+    public function update(Request $request, OperationSheet $sheet)
+    {
+        // Re-check guard server-side
+        $hasStarted = $sheet->steps()->whereIn('status', ['in_progress', 'completed'])->exists();
+        if ($hasStarted) {
+            return back()->withErrors(['steps' => 'Cannot edit: one or more steps have already started.']);
+        }
+
+        $validated = $request->validate([
+            'steps'                   => 'required|array|min:1',
+            'steps.*.operation_name'  => 'required|string',
+            'steps.*.operation_id'    => 'nullable|exists:machining_operations,id',
+            'steps.*.section_id'      => 'nullable|exists:sections,id',
+            'steps.*.machine_id'      => 'nullable|exists:machines,id',
+            'steps.*.operator_id'     => 'nullable|exists:operators,id',
+            'steps.*.estimated_hours' => 'required|numeric|min:0',
+            'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
+            'steps.*.tooling_notes'   => 'nullable|string',
+        ]);
+
+        $weightSum = collect($validated['steps'])->sum(fn($s) => (float) ($s['weight_pct'] ?? 0));
+        if ($weightSum > 100.5) {
+            return back()
+                ->withErrors(['steps' => 'Step weights sum to ' . round($weightSum, 2) . '% — total cannot exceed 100%.'])
+                ->withInput();
+        }
+
+        // Wipe and recreate steps (safe because no step has started)
+        $sheet->steps()->delete();
+        foreach ($validated['steps'] as $index => $stepData) {
+            $sheet->steps()->create([
+                'sequence'         => $index + 1,
+                'operation_name'   => $stepData['operation_name'],
+                'operation_id'     => $stepData['operation_id'] ?? null,
+                'section_id'       => $stepData['section_id'] ?? null,
+                'machine_id'       => $stepData['machine_id'] ?? null,
+                'operator_id'      => $stepData['operator_id'] ?? null,
+                'estimated_hours'  => $stepData['estimated_hours'],
+                'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
+                'tooling_notes'    => $stepData['tooling_notes'] ?? null,
+                'status'           => 'pending',
+            ]);
+        }
+
+        return redirect()->route('operation-sheets.show', $sheet)
+            ->with('success', 'Operation sheet updated.');
+    }
+
     public function show(OperationSheet $sheet)
     {
-        $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre', 'steps.assignment.operator']);
+        $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre', 'steps.operator']);
         $qrCode = $this->service->generateQrImage($sheet->qr_code);
 
         return Inertia::render('OperationSheet/Show', [
@@ -194,8 +307,10 @@ class OperationSheetController extends Controller
                     'weight_pct'      => (float) $s->weight_pct,
                     'status'          => $s->status,
                     'instructions'    => $s->instructions,
-                    'assignment'      => $s->assignment ? [
-                        'operator' => ['name' => $s->assignment->operator?->name ?? ''],
+                    'tooling_notes'   => $s->tooling_notes,
+                    'qc_notes'        => $s->qc_notes,
+                    'assignment'      => $s->operator ? [
+                        'operator' => ['name' => $s->operator->name ?? ''],
                     ] : null,
                 ]),
             ],

@@ -3,6 +3,7 @@ import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 
 const STATUS: Record<string, { badge: string; icon: string; label: string }> = {
     draft:              { badge: 'bg-slate-50 text-slate-700 border-slate-200',       icon: 'fi-rr-pencil',         label: 'Draft' },
@@ -117,8 +118,11 @@ export default function QuotationIndex({ quotations, filters, customers }: any) 
                                         return (
                                             <tr key={q.id} className="group">
                                                 <td>
-                                                    <Link href={`/quotations/${q.id}`}>
-                                                        <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{q.id}</span>
+                                                    <Link href={`/quotations/${q.id}`} className="block">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{q.id}</span>
+                                                            <JobTypeBadge type={q.job_type} size="xs" onlyRnd />
+                                                        </div>
                                                     </Link>
                                                 </td>
                                                 <td>

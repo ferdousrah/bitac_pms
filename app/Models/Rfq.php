@@ -11,7 +11,7 @@ class Rfq extends Model
 
     protected $fillable = [
         'center_id', 'customer_id', 'required_by', 'notes',
-        'customer_ref_no',
+        'customer_ref_no', 'job_type',
         'status', 'created_by', 'reference_type', 'drawing_path', 'sample_received', 'sample_description',
     ];
 
@@ -25,4 +25,5 @@ class Rfq extends Model
     public function items()           { return $this->hasMany(RfqItem::class); }
     public function quotations()      { return $this->hasMany(Quotation::class); }
     public function latestQuotation() { return $this->hasOne(Quotation::class)->latest(); }
+    public function gatePasses()      { return $this->hasMany(GatePass::class)->latest('pass_date'); }
 }

@@ -44,6 +44,13 @@ export default function OperationSheetShow({ sheet }: any) {
                                 </p>
                             </div>
                             <div className="flex flex-wrap gap-2">
+                                <Link
+                                    href={`/operation-sheets/${sheet.id}/edit`}
+                                    className="btn-primary btn-sm"
+                                >
+                                    <i className="fi fi-rr-edit text-xs leading-none" />
+                                    Edit
+                                </Link>
                                 <a
                                     href={`/operation-sheets/${sheet.id}/pdf`}
                                     target="_blank"
@@ -55,8 +62,8 @@ export default function OperationSheetShow({ sheet }: any) {
                                 </a>
                                 {sheet.qr_code && (
                                     <a
-                                        href={`data:image/png;base64,${sheet.qr_code}`}
-                                        download={`${sheet.sheet_number}-qr.png`}
+                                        href={`data:image/svg+xml;base64,${sheet.qr_code}`}
+                                        download={`${sheet.sheet_number}-qr.svg`}
                                         className="btn-outline btn-sm"
                                     >
                                         <i className="fi fi-rr-qrcode text-xs leading-none" />
@@ -77,7 +84,7 @@ export default function OperationSheetShow({ sheet }: any) {
                         {sheet.qr_code && (
                             <div className="mt-6 flex items-center gap-4 p-4 bg-surface-50 rounded-xl border border-surface-100">
                                 <img
-                                    src={`data:image/png;base64,${sheet.qr_code}`}
+                                    src={`data:image/svg+xml;base64,${sheet.qr_code}`}
                                     alt="QR Code"
                                     className="w-24 h-24 rounded-lg bg-white p-1 border border-surface-200"
                                 />

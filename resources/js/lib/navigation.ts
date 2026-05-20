@@ -11,6 +11,7 @@ export interface NavItem {
     icon: string;
     permission?: string;          // single permission required
     permissionAny?: string[];      // any of these permissions
+    requireSuperAdmin?: boolean;   // hide unless user is super-admin (overrides permission)
     badgeKey?: string;              // key to look up dynamic badge count
 }
 
@@ -34,10 +35,11 @@ export const mainGroups: NavGroup[] = [
         label: 'IED',
         icon: 'fi-rr-pencil-ruler',
         items: [
-            { label: 'RFQs',           href: '/rfqs',           icon: 'fi-rr-file-invoice', permission: 'view rfqs' },
-            { label: 'Cost Estimates', href: '/cost-estimates', icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
-            { label: 'Quotations',     href: '/quotations',     icon: 'fi-rr-coins',        permission: 'view quotations' },
-            { label: 'Approvals',      href: '/approvals',      icon: 'fi-rr-stamp',        permission: 'approve quotations' },
+            { label: 'RFQs',           href: '/rfqs',              icon: 'fi-rr-file-invoice', permission: 'view rfqs' },
+            { label: 'Gate Passes',    href: '/ied/gate-passes',   icon: 'fi-rr-shield-check', permission: 'manage gate-passes' },
+            { label: 'Cost Estimates', href: '/cost-estimates',    icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
+            { label: 'Quotations',     href: '/quotations',        icon: 'fi-rr-coins',        permission: 'view quotations' },
+            { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
         ],
     },
     {
@@ -55,8 +57,10 @@ export const mainGroups: NavGroup[] = [
         label: 'Production',
         icon: 'fi-rr-industry-windows',
         items: [
-            { label: 'Shop Floor', href: '/shop-floor', icon: 'fi-rr-industry-windows', permission: 'view shop-floor' },
-            { label: 'WIP',        href: '/wip',        icon: 'fi-rr-settings',         permission: 'view wip' },
+            // Per-section submenu items are injected dynamically by flatGroups()
+            // from the productionSections shared prop.
+            { label: 'Shop Floor',    href: '/shop-floor',       icon: 'fi-rr-industry-windows', permission: 'view shop-floor' },
+            { label: 'WIP',           href: '/wip',              icon: 'fi-rr-settings',        permission: 'view wip' },
         ],
     },
     {
@@ -132,6 +136,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Centers',          href: '/admin/centers',           icon: 'fi-rr-building', permission: 'manage users' },
                 { label: 'Chatbot Settings', href: '/admin/chatbot-settings',  icon: 'fi-rr-robot',    permission: 'manage users' },
                 { label: 'Audit Log',        href: '/admin/audit-log',         icon: 'fi-rr-notebook', permission: 'view audit-log' },
+                { label: 'Reset / Wipe Data', href: '/admin/system/reset',     icon: 'fi-rr-trash-restore', requireSuperAdmin: true },
             ],
         },
     ],
@@ -140,13 +145,17 @@ export const adminGroup: NavGroup = {
 /* ─── Permission helpers ────────────────────────────────────────────── */
 
 export function hasPermission(userPerms: string[], item: NavItem | NavGroup, isSuperAdmin: boolean): boolean {
-    if (isSuperAdmin) return true;
+    // Group: visible if any nested item is visible (super-admin still gates by
+    // children so super-admin-only items don't auto-show empty groups for others).
     if ('items' in item) {
-        // Group: visible if any nested item is visible
         const directVisible = item.items.some(i => hasPermission(userPerms, i, isSuperAdmin));
         const childVisible  = item.children?.some(g => hasPermission(userPerms, g, isSuperAdmin)) ?? false;
         return directVisible || childVisible;
     }
+    // Hard gate: super-admin-only items are hidden from everyone else, even if
+    // they happen to have wildcard permissions.
+    if (item.requireSuperAdmin && !isSuperAdmin) return false;
+    if (isSuperAdmin) return true;
     if (item.permission) return userPerms.includes(item.permission);
     if (item.permissionAny) return item.permissionAny.some(p => userPerms.includes(p));
     return true; // no permission required
@@ -171,10 +180,31 @@ export function filterNav(userPerms: string[], isSuperAdmin: boolean) {
  * Flatten nav into a single list of top-level accordion groups.
  * Admin's children (Master Data / Users & Access / System) become independent groups
  * so each can be toggled in the accordion.
+ *
+ * `productionSections` is injected by HandleInertiaRequests — each entry becomes
+ * a submenu under "Production". A supervisor sees only their own section, a
+ * super-admin sees all production-shop sections.
  */
-export function flatGroups(userPerms: string[], isSuperAdmin: boolean): NavGroup[] {
+export function flatGroups(
+    userPerms: string[],
+    isSuperAdmin: boolean,
+    productionSections: Array<{ id: number; name: string; code: string }> = [],
+): NavGroup[] {
     const { groups, admin } = filterNav(userPerms, isSuperAdmin);
-    const flat = [...groups];
+
+    // Inject per-section submenu items into the "Production" group.
+    const withSectionSubmenu = groups.map(g => {
+        if (g.label !== 'Production' || productionSections.length === 0) return g;
+        const sectionItems: NavItem[] = productionSections.map(s => ({
+            label: s.name,
+            href: `/production/queue?section=${s.id}`,
+            icon: 'fi-rr-tools',
+            permission: 'view production',
+        }));
+        return { ...g, items: [...sectionItems, ...g.items] };
+    });
+
+    const flat = [...withSectionSubmenu];
     if (admin?.children?.length) {
         flat.push(...admin.children);
     } else if (admin && admin.items.length > 0) {

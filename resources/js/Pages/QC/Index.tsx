@@ -93,7 +93,7 @@ export default function QCIndex({ inspections, filters }: any) {
                                 <thead>
                                     <tr>
                                         <SortableHeader label="ID" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-20" />
-                                        <th>Work Order</th>
+                                        <th>Job #</th>
                                         <th>Product</th>
                                         <th>Type</th>
                                         <th>Inspector</th>
@@ -108,14 +108,15 @@ export default function QCIndex({ inspections, filters }: any) {
                                     {rows.map((qc: any) => (
                                         <tr key={qc.id} className="group">
                                             <td>
-                                                <Link href={`/qc/${qc.id}`} className="font-mono text-sm font-bold text-brand-600 group-hover:underline">
+                                                <Link href={`/qc/inspection/${qc.id}`} className="font-mono text-sm font-bold text-brand-600 group-hover:underline">
                                                     #{qc.id}
                                                 </Link>
                                             </td>
                                             <td>
-                                                <span className="font-mono font-semibold text-brand-600">
-                                                    {qc.wo_number}
-                                                </span>
+                                                <div className="font-bold text-surface-900">{qc.job_number ?? '—'}</div>
+                                                {qc.wo_number && (
+                                                    <div className="text-[11px] text-surface-400 font-mono mt-0.5">{qc.wo_number}</div>
+                                                )}
                                             </td>
                                             <td className="text-surface-700">{qc.product}</td>
                                             <td>
@@ -134,7 +135,7 @@ export default function QCIndex({ inspections, filters }: any) {
                                             <td className="text-xs text-surface-500">{qc.inspected_at}</td>
                                             <td>
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    <Link href={`/qc/${qc.id}`} title="View inspection details"
+                                                    <Link href={`/qc/inspection/${qc.id}`} title="View inspection details"
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                         <i className="fi fi-rr-eye text-sm leading-none" /> View
                                                     </Link>
@@ -156,7 +157,7 @@ export default function QCIndex({ inspections, filters }: any) {
                     {/* Mobile cards */}
                     <div className="lg:hidden px-4 pb-4 space-y-3 pt-3">
                         {rows.length > 0 ? rows.map((qc: any) => (
-                            <Link key={qc.id} href={`/qc/${qc.id}`}
+                            <Link key={qc.id} href={`/qc/inspection/${qc.id}`}
                                 className="block rounded-xl border border-surface-100 bg-white p-4 space-y-3 hover:border-brand-200 hover:shadow-md transition-all">
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
@@ -165,7 +166,10 @@ export default function QCIndex({ inspections, filters }: any) {
                                                 #{qc.id}
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="font-mono font-semibold text-brand-600 text-sm">{qc.wo_number}</div>
+                                                <div className="font-bold text-surface-900 text-sm">Job #{qc.job_number ?? '—'}</div>
+                                                {qc.wo_number && (
+                                                    <div className="text-[11px] text-surface-400 font-mono">{qc.wo_number}</div>
+                                                )}
                                                 <div className="text-sm text-surface-700 mt-0.5 truncate">{qc.product}</div>
                                             </div>
                                         </div>

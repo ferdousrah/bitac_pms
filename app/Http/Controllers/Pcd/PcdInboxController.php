@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Pcd;
 
 use App\Http\Controllers\Controller;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderFile;
 use App\Services\PcdReleaseService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class PcdInboxController extends Controller
 {
     public function index()
     {
-        $jobs = WorkOrder::with(['customer', 'quotation', 'rfq.items'])
-            ->whereIn('status', ['pcd_pending', 'released_to_shops'])
+        // Cancelled jobs stay visible in PCD inbox (marked as closed) but are
+        // hidden from production shops. PCD keeps the audit record on-screen.
+        $jobs = WorkOrder::with(['customer', 'quotation', 'rfq.items', 'cancelledBy'])
+            ->whereIn('status', ['pcd_pending', 'released_to_shops', 'cancelled'])
             ->latest('pcd_handoff_at')
             ->get()
             ->map(function ($wo) {
@@ -31,6 +36,10 @@ class PcdInboxController extends Controller
                     'released_at'     => $wo->released_to_shops_at?->diffForHumans(),
                     'checklist'       => $checklist,
                     'item_count'      => $wo->rfq?->items->count() ?? 0,
+                    'job_type'        => $wo->rfq?->job_type ?? $wo->quotation?->rfq?->job_type ?? 'regular',
+                    'cancelled_at'    => $wo->cancelled_at?->format('d M Y'),
+                    'cancelled_by'    => $wo->cancelledBy?->name,
+                    'cancellation_reason' => $wo->cancellation_reason,
                 ];
             });
 
@@ -38,7 +47,8 @@ class PcdInboxController extends Controller
             'total'      => $jobs->count(),
             'pending'    => $jobs->where('status', 'pcd_pending')->count(),
             'released'   => $jobs->where('status', 'released_to_shops')->count(),
-            'mr_pending' => $jobs->filter(fn($j) => !$j['checklist']['material_requisition']['done'])->count(),
+            'cancelled'  => $jobs->where('status', 'cancelled')->count(),
+            'mr_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['material_requisition']['done'])->count(),
         ];
 
         return Inertia::render('Pcd/Inbox', [
@@ -61,6 +71,7 @@ class PcdInboxController extends Controller
             'files.uploadedBy',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
+            'cancelledBy',
         ]);
 
         // Some legacy WOs were created without rfq_id set on the row itself.
@@ -101,6 +112,7 @@ class PcdInboxController extends Controller
                 'id'                  => $workOrder->id,
                 'job_number'          => $workOrder->job_number,
                 'wo_number'           => $workOrder->wo_number,
+                'job_type'            => $rfq?->job_type ?? 'regular',
                 'customer'            => $workOrder->customer?->name ?? '—',
                 'customer_po_no'      => $workOrder->customer_po_no,
                 'quantity'            => $workOrder->quantity,
@@ -167,9 +179,64 @@ class PcdInboxController extends Controller
                     'sheet_number' => $workOrder->operationSheets->first()->sheet_number,
                     'step_count'   => $workOrder->operationSheets->first()->steps->count(),
                 ] : null,
+                'cancellation' => $workOrder->status === 'cancelled' ? [
+                    'cancelled_at'   => $workOrder->cancelled_at?->format('d M Y, h:i A'),
+                    'cancelled_by'   => $workOrder->cancelledBy?->name,
+                    'reason'         => $workOrder->cancellation_reason,
+                    'attachments'    => $workOrder->files->where('kind', 'cancellation')->map(fn($f) => [
+                        'id'         => $f->id,
+                        'url'        => $f->url,
+                        'filename'   => $f->original_name,
+                        'extension'  => $f->extension,
+                        'human_size' => $f->human_size,
+                    ])->values(),
+                ] : null,
             ],
             'checklist' => $checklist,
         ]);
+    }
+
+    /**
+     * Close (cancel) a PCD job mid-flow. Common path: an R&D job whose
+     * outcome turns out uncertain and the PCD officer decides to drop it
+     * before more resources are consumed. Reason is mandatory for audit.
+     */
+    public function cancel(Request $request, WorkOrder $workOrder)
+    {
+        if (in_array($workOrder->status, ['delivered', 'cancelled'])) {
+            return back()->with('error', 'This job is already ' . $workOrder->status . ' and cannot be closed again.');
+        }
+
+        $validated = $request->validate([
+            'reason'         => 'required|string|min:3|max:1000',
+            'attachments'    => 'nullable|array|max:10',
+            'attachments.*'  => 'file|max:20480|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+        ]);
+
+        $workOrder->update([
+            'status'              => 'cancelled',
+            'cancelled_at'        => now(),
+            'cancelled_by'        => auth()->id(),
+            'cancellation_reason' => $validated['reason'],
+        ]);
+
+        // Attach supporting documents (office order, customer letter, etc.)
+        foreach ($request->file('attachments', []) as $upload) {
+            $path = $upload->store('work-order-files/cancellation', 'public');
+            WorkOrderFile::create([
+                'work_order_id' => $workOrder->id,
+                'uploaded_by'   => auth()->id(),
+                'kind'          => 'cancellation',
+                'stored_path'   => $path,
+                'original_name' => $upload->getClientOriginalName(),
+                'mime_type'     => $upload->getMimeType(),
+                'size_bytes'    => $upload->getSize(),
+                'description'   => 'Job cancellation supporting document',
+            ]);
+        }
+
+        return redirect()->route('pcd.inbox.index')
+            ->with('success', "Job #{$workOrder->job_number} closed.");
     }
 
     /**

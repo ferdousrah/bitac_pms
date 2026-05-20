@@ -61,11 +61,19 @@ export default function PdfPopupModal({ open, pdfUrl, title = 'Document', subtit
                 credentials: 'same-origin',
                 headers: { Accept: 'application/pdf' },
             }).then(async (res) => {
-                if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+                if (!res.ok) {
+                    // Read a snippet of the body for diagnostics (HTML error pages, etc.)
+                    let detail = '';
+                    try { detail = (await res.text()).slice(0, 200); } catch {}
+                    throw new Error(`HTTP ${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+                }
                 const ct = res.headers.get('content-type') ?? '';
                 const buf = await res.arrayBuffer();
                 if (!ct.includes('pdf')) {
-                    throw new Error(`Server returned ${ct || 'unknown'} (${buf.byteLength} bytes) instead of PDF.`);
+                    // Try to surface what was returned (helps diagnose redirects / HTML pages).
+                    let preview = '';
+                    try { preview = new TextDecoder().decode(buf.slice(0, 200)); } catch {}
+                    throw new Error(`Server returned ${ct || 'unknown'} (${buf.byteLength} bytes) — ${preview.replace(/\s+/g, ' ')}`);
                 }
                 return new Uint8Array(buf);
             });

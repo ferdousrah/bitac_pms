@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
 import RevisionTimeline from '@/Components/RevisionTimeline';
 import ApprovalActionModal, { ApprovalAction } from '@/Components/ApprovalActionModal';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 import RfqAttachmentsPanel from '@/Components/RfqAttachmentsPanel';
 import CommentThread from '@/Components/CommentThread';
 import FilePreviewModal, { PreviewableFile } from '@/Components/FilePicker/FilePreviewModal';
@@ -284,6 +285,7 @@ export default function QuotationShow({
                                                 rev {currentRevisionNo}
                                             </span>
                                         )}
+                                        <JobTypeBadge type={quotation.job_type} />
                                         <span className={`badge ${statusBadge[quotation.status] ?? 'badge-slate'}`}>
                                             {statusLabel[quotation.status] ?? quotation.status?.replace(/_/g, ' ')}
                                         </span>

@@ -65,37 +65,85 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy']);
 
         return Inertia::render('Invoice/Show', [
             'invoice' => [
-                'id'               => $invoice->id,
-                'invoice_number'   => $invoice->invoice_number,
-                'wo_number'        => $invoice->workOrder->wo_number ?? '',
-                'work_order_id'    => $invoice->work_order_id,
-                'customer'         => $invoice->workOrder->customer->name ?? '',
-                'customer_address' => $invoice->workOrder->customer->address ?? '',
-                'subtotal'         => $invoice->subtotal,
-                'discount'         => $invoice->discount ?? 0,
-                'vat_rate'         => $invoice->vat_rate,
-                'vat_amount'       => $invoice->vat_amount,
-                'total_amount'     => $invoice->total_amount,
-                'status'           => $invoice->status,
-                'issued_date'      => $invoice->issued_date ? \Carbon\Carbon::parse($invoice->issued_date)->format('d M Y') : null,
-                'due_date'         => $invoice->due_date ? \Carbon\Carbon::parse($invoice->due_date)->format('d M Y') : null,
-                'payment_terms'    => $invoice->payment_terms,
+                'id'                => $invoice->id,
+                'invoice_number'    => $invoice->invoice_number,
+                'wo_number'         => $invoice->workOrder->wo_number ?? '',
+                'job_number'        => $invoice->workOrder->job_number ?? null,
+                'work_order_id'     => $invoice->work_order_id,
+                'customer'          => $invoice->workOrder->customer->name ?? '',
+                'customer_address'  => $invoice->workOrder->customer->address ?? '',
+                'subtotal'          => $invoice->subtotal,
+                'discount'          => $invoice->discount ?? 0,
+                'vat_rate'          => $invoice->vat_rate,
+                'vat_amount'        => $invoice->vat_amount,
+                'total_amount'      => $invoice->total_amount,
+                'status'            => $invoice->status,
+                'issued_date'       => $invoice->issued_at?->format('d M Y'),
+                'due_date'          => $invoice->due_date ? \Carbon\Carbon::parse($invoice->due_date)->format('d M Y') : null,
+                'payment_terms'     => $invoice->payment_terms,
+                'paid_at'           => $invoice->paid_at?->format('d M Y'),
+                'paid_amount'       => $invoice->paid_amount,
+                'payment_method'    => $invoice->payment_method,
+                'payment_reference' => $invoice->payment_reference,
+                'payment_notes'     => $invoice->payment_notes,
+                'marked_paid_by'    => $invoice->markedPaidBy?->name,
             ],
         ]);
     }
 
-    public function downloadPdf(Invoice $invoice)
+    /**
+     * Stream the BITAC-style invoice PDF inline (browser preview).
+     * `?download=1` forces a download instead.
+     */
+    public function downloadPdf(Request $request, Invoice $invoice)
     {
-        return $this->service->generatePdf($invoice)->download("invoice-{$invoice->invoice_number}.pdf");
+        $bytes = $this->service->generatePdf($invoice);
+        $disp  = $request->boolean('download') ? 'attachment' : 'inline';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disp . '; filename="' . $invoice->invoice_number . '.pdf"',
+        ]);
     }
 
     public function acknowledge(Invoice $invoice)
     {
         $invoice->update(['status' => 'acknowledged']);
         return back()->with('success', 'Invoice acknowledged.');
+    }
+
+    /**
+     * Record customer payment against this invoice and mark it paid.
+     * Captures amount, method, reference (cheque no / TX id), payment date,
+     * and an optional note. Sets status='paid' and stamps marked_paid_by.
+     */
+    public function markPaid(Request $request, Invoice $invoice)
+    {
+        if ($invoice->status === 'paid') {
+            return back()->with('error', 'Invoice is already marked as paid.');
+        }
+
+        $validated = $request->validate([
+            'paid_amount'       => 'required|numeric|min:0.01',
+            'payment_method'    => 'required|in:cash,cheque,bank_transfer,online,other',
+            'payment_reference' => 'nullable|string|max:100',
+            'paid_at'           => 'required|date',
+            'payment_notes'     => 'nullable|string|max:500',
+        ]);
+
+        $invoice->update([
+            'status'            => 'paid',
+            'paid_at'           => $validated['paid_at'],
+            'paid_amount'       => $validated['paid_amount'],
+            'payment_method'    => $validated['payment_method'],
+            'payment_reference' => $validated['payment_reference'] ?? null,
+            'payment_notes'     => $validated['payment_notes'] ?? null,
+            'marked_paid_by'    => auth()->id(),
+        ]);
+
+        return back()->with('success', "Invoice {$invoice->invoice_number} marked as paid.");
     }
 }

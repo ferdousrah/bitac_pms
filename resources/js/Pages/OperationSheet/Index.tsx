@@ -66,7 +66,7 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                 <thead>
                                     <tr>
                                         <SortableHeader label="Sheet #" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/operation-sheets" filters={filters} className="w-28" />
-                                        <th>Job / WO</th>
+                                        <th>Job #</th>
                                         <th>Customer</th>
                                         <th>Product</th>
                                         <th>Steps</th>
@@ -86,9 +86,9 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                             <td>
                                                 {s.work_order ? (
                                                     <div>
-                                                        <div className="font-mono font-semibold text-surface-700 text-xs">{s.work_order.wo_number}</div>
-                                                        {s.work_order.job_number && (
-                                                            <div className="text-xs text-surface-400">Job #{s.work_order.job_number}</div>
+                                                        <div className="font-bold text-surface-900 text-sm">{s.work_order.job_number ?? '—'}</div>
+                                                        {s.work_order.wo_number && (
+                                                            <div className="text-[11px] text-surface-400 font-mono mt-0.5">{s.work_order.wo_number}</div>
                                                         )}
                                                     </div>
                                                 ) : (
@@ -113,6 +113,10 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                                     <Link href={`/operation-sheets/${s.id}`} title="View operation sheet"
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                         <i className="fi fi-rr-eye text-sm leading-none" /> View
+                                                    </Link>
+                                                    <Link href={`/operation-sheets/${s.id}/edit`} title="Edit operation sheet"
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-600 hover:bg-brand-50 transition-colors">
+                                                        <i className="fi fi-rr-edit text-sm leading-none" /> Edit
                                                     </Link>
                                                 </div>
                                             </td>
@@ -143,7 +147,8 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                             <span className="font-mono font-semibold text-brand-600 text-sm">{s.sheet_number}</span>
                                             {s.work_order && (
                                                 <div className="text-xs text-surface-600 mt-0.5">
-                                                    {s.work_order.wo_number}{s.work_order.job_number && ` · Job #${s.work_order.job_number}`}
+                                                    Job #<span className="font-bold text-surface-800">{s.work_order.job_number ?? '—'}</span>
+                                                    {s.work_order.wo_number && <span className="text-surface-400 ml-1.5 font-mono text-[10px]">{s.work_order.wo_number}</span>}
                                                 </div>
                                             )}
                                         </div>

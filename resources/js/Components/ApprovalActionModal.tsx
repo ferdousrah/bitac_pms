@@ -84,8 +84,9 @@ export default function ApprovalActionModal({
     const aiEnabled = useAiEnabled();
     const { props: pageProps } = usePage<any>();
     const savedSignatureUrl: string | null = pageProps?.auth?.user?.signature_url ?? null;
-    // Signature capture only applies to quotations for now.
-    const signatureEnabled = entityType === 'quotation';
+    // Signature capture applies to both quotations and cost estimates —
+    // both have a per-approval signature_path column for audit.
+    const signatureEnabled = entityType === 'quotation' || entityType === 'cost_estimate';
 
     const [note, setNote] = useState('');
     const [submitting, setSubmitting] = useState(false);

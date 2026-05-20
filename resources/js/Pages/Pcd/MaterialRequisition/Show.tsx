@@ -1,5 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 interface WorkOrderRef {
     id: number;
@@ -11,6 +13,8 @@ interface WorkOrderRef {
 interface RequisitionItem {
     item_no: number;
     description: string;
+    material_id?: number | null;
+    material_name?: string | null;
     unit: string;
     required_qty: number | string;
     stock_qty: number | string | null;
@@ -103,6 +107,8 @@ function SignatureBox({ role, roleBn, name, date }: SignatureBoxProps) {
 }
 
 export default function MaterialRequisitionShow({ requisition }: Props) {
+    const [pdfOpen, setPdfOpen] = useState(false);
+
     const pushToIms = () => {
         if (!confirm('Push this requisition to IMS for approval and issuance? Approval happens inside IMS — you will see the IMS reference once it is accepted.')) return;
         router.post(`/pcd/material-requisitions/${requisition.id}/submit`);
@@ -244,7 +250,8 @@ export default function MaterialRequisitionShow({ requisition }: Props) {
                                 <thead>
                                     <tr>
                                         <th className="w-10">#</th>
-                                        <th>Description</th>
+                                        <th className="min-w-[180px]">Material</th>
+                                        <th className="min-w-[200px]">Description</th>
                                         <th className="w-20">Unit</th>
                                         <th className="w-24 text-right">Required</th>
                                         <th className="w-24 text-right">Stock</th>
@@ -261,11 +268,12 @@ export default function MaterialRequisitionShow({ requisition }: Props) {
                                         const pending =
                                             it.pending_qty != null ? Number(it.pending_qty) : Math.max(req - iss, 0);
                                         return (
-                                            <tr key={i}>
-                                                <td className="text-center font-semibold text-surface-600">
+                                            <tr key={i} className="align-top">
+                                                <td className="text-center font-semibold text-surface-600 pt-3">
                                                     {it.item_no}
                                                 </td>
-                                                <td className="font-medium text-surface-900">{it.description}</td>
+                                                <td className="font-semibold text-surface-900">{it.material_name ?? '—'}</td>
+                                                <td className="font-medium text-surface-900 whitespace-pre-line">{it.description}</td>
                                                 <td className="text-surface-600">{it.unit}</td>
                                                 <td className="text-right font-mono text-surface-800">
                                                     {req || '--'}
@@ -357,6 +365,14 @@ export default function MaterialRequisitionShow({ requisition }: Props) {
                         Back to list
                     </Link>
                     <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setPdfOpen(true)}
+                            className="btn-outline btn-sm"
+                        >
+                            <i className="fi fi-rr-file-pdf text-xs leading-none" />
+                            Preview / Download PDF
+                        </button>
                         {['draft', 'pending_approval'].includes(requisition.status) && (
                             <Link
                                 href={`/pcd/material-requisitions/${requisition.id}/edit`}
@@ -388,6 +404,14 @@ export default function MaterialRequisitionShow({ requisition }: Props) {
                     </div>
                 </div>
             </div>
+
+            <PdfPopupModal
+                open={pdfOpen}
+                pdfUrl={pdfOpen ? `/pcd/material-requisitions/${requisition.id}/pdf?preview=base64` : null}
+                title={`MRN ${requisition.mrn_number}`}
+                subtitle={requisition.work_order ? `WO ${requisition.work_order.wo_number}` : undefined}
+                onClose={() => setPdfOpen(false)}
+            />
         </AppLayout>
     );
 }

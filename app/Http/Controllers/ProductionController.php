@@ -1,0 +1,385 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\OperationStep;
+use App\Models\Section;
+use App\Models\SectionHandoff;
+use App\Models\WorkOrderSection;
+use App\Services\ProductionRoutingService;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+
+class ProductionController extends Controller
+{
+    public function __construct(private ProductionRoutingService $routing) {}
+
+    /**
+     * The section supervisor's queue — every WO currently parked at their
+     * section (active, awaiting handoff, or flagged for rework).
+     *
+     * Super-admin (no section_id) can switch sections via ?section= query.
+     */
+    public function queue(Request $request)
+    {
+        $user = auth()->user();
+
+        // Resolve which section to show: query override > user's section
+        $sectionId = (int) ($request->input('section') ?? $user->section_id ?? 0);
+        $section   = $sectionId ? Section::find($sectionId) : null;
+
+        $availableSections = Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code', 'name_bn']);
+
+        // Non-admins can only see their own section
+        $canSwitch = $user->hasAnyRole(['super_admin', 'admin']) || $user->can('manage users');
+        if (!$canSwitch && $user->section_id) {
+            $sectionId = (int) $user->section_id;
+            $section   = Section::find($sectionId);
+        }
+
+        $jobs = $section
+            ? WorkOrderSection::activeForSection($section->id)
+                ->with([
+                    'workOrder.customer',
+                    'workOrder.product',
+                    'workOrder.rfq:id,job_type',
+                    'section',
+                ])
+                ->get()
+                ->map(fn($wos) => $this->serializeWosForQueue($wos))
+                ->values()
+            : collect();
+
+        return Inertia::render('Production/Queue', [
+            'section' => $section ? [
+                'id'      => $section->id,
+                'name'    => $section->name,
+                'code'    => $section->code,
+                'name_bn' => $section->name_bn,
+            ] : null,
+            'jobs'              => $jobs,
+            'available_sections'=> $availableSections,
+            'can_switch'        => $canSwitch,
+        ]);
+    }
+
+    public function complete(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        if (!in_array($workOrderSection->status, ['ready', 'in_progress', 'rework'])) {
+            return back()->with('error', 'This section is not in a completable state.');
+        }
+
+        // Block forwarding if any operation step in this section is still
+        // open. Operators close their step from the operation list before
+        // the supervisor can hand the whole section off.
+        $sheet = $workOrderSection->workOrder->operationSheets()->first();
+        if ($sheet) {
+            $unfinished = $sheet->steps()
+                ->where('section_id', $workOrderSection->section_id)
+                ->whereNotIn('status', ['completed', 'skipped'])
+                ->count();
+            if ($unfinished > 0) {
+                return back()->with('error', "Cannot forward: {$unfinished} operation step(s) in this section are still open. Mark each step complete first.");
+            }
+        }
+
+        $validated = $request->validate([
+            'note'           => 'nullable|string|max:1000',
+            'attachments'    => 'nullable|array|max:10',
+            'attachments.*'  => 'file|max:20480|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+        ]);
+
+        $this->routing->complete(
+            $workOrderSection,
+            $validated['note'] ?? null,
+            $request->file('attachments', []),
+            auth()->id(),
+        );
+
+        return back()->with('success', 'Section completed. Job handed off.');
+    }
+
+    public function sendBack(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        if (!in_array($workOrderSection->status, ['ready', 'in_progress'])) {
+            return back()->with('error', 'You can only send back from an active section.');
+        }
+
+        $validated = $request->validate([
+            'target_wos_id'  => 'required|exists:work_order_sections,id',
+            'reason'         => 'required|string|min:5|max:1000',
+            'attachments'    => 'nullable|array|max:10',
+            'attachments.*'  => 'file|max:20480|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx',
+        ]);
+
+        $target = WorkOrderSection::findOrFail($validated['target_wos_id']);
+        if ($target->work_order_id !== $workOrderSection->work_order_id) {
+            return back()->with('error', 'Target section must belong to the same work order.');
+        }
+        if ($target->sequence >= $workOrderSection->sequence) {
+            return back()->with('error', 'Target section must be earlier in the routing.');
+        }
+
+        $this->routing->sendBack(
+            $workOrderSection,
+            $target,
+            $validated['reason'],
+            $request->file('attachments', []),
+            auth()->id(),
+        );
+
+        return back()->with('success', 'Sent back to ' . $target->section->name . ' for rework.');
+    }
+
+    /**
+     * Per-operation-step action: start | complete | reopen.
+     *
+     * Operators close their steps one by one. The WO progress bar on the
+     * Work Order detail page is derived from these step statuses + weight_pct,
+     * so each click immediately ticks the progress forward.
+     */
+    public function markStep(Request $request, OperationStep $step)
+    {
+        $sheet = $step->operationSheet;
+        $wo    = $sheet->workOrder;
+
+        // The matching WOS for this step's section — used both for the access
+        // check and to flip the WOS into 'in_progress' on first start.
+        $wos = WorkOrderSection::where('work_order_id', $wo->id)
+            ->where('section_id', $step->section_id)
+            ->first();
+        if (!$wos) {
+            return back()->with('error', 'No section assignment matches this operation step.');
+        }
+        $this->authorizeAccess($wos);
+
+        $validated = $request->validate([
+            'action'       => 'required|in:start,complete,reopen',
+            'actual_hours' => 'nullable|numeric|min:0',
+        ]);
+
+        $now = now();
+
+        switch ($validated['action']) {
+            case 'start':
+                if ($step->status === 'completed') {
+                    return back()->with('error', 'This step is already completed.');
+                }
+                $step->update([
+                    'status'     => 'in_progress',
+                    'started_at' => $step->started_at ?? $now,
+                ]);
+                // First step started in this section moves WOS to in_progress.
+                if (in_array($wos->status, ['ready'])) {
+                    $wos->update(['status' => 'in_progress', 'started_at' => $wos->started_at ?? $now]);
+                }
+                break;
+
+            case 'complete':
+                $startedAt = $step->started_at ?? $now;
+                // Auto-calculate actual hours from started_at → now if the
+                // operator didn't supply a manual override.
+                $actual = $validated['actual_hours']
+                    ?? round($startedAt->diffInSeconds($now) / 3600, 2);
+                $step->update([
+                    'status'       => 'completed',
+                    'started_at'   => $startedAt,
+                    'completed_at' => $now,
+                    'actual_hours' => $actual,
+                ]);
+                if (in_array($wos->status, ['ready'])) {
+                    $wos->update(['status' => 'in_progress', 'started_at' => $wos->started_at ?? $now]);
+                }
+                break;
+
+            case 'reopen':
+                if ($wos->status === 'completed') {
+                    return back()->with('error', 'Section already forwarded — cannot reopen a step.');
+                }
+                $step->update([
+                    'status'       => 'in_progress',
+                    'completed_at' => null,
+                ]);
+                break;
+        }
+
+        return back()->with('success', 'Operation step updated.');
+    }
+
+    /** Drawer/details view for a single WOS — sibling routing + handoff history. */
+    public function show(WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        $workOrderSection->load([
+            'workOrder.customer',
+            'workOrder.product',
+            'workOrder.rfq:id,job_type',
+            'workOrder.sections.section',
+            'workOrder.operationSheets.steps' => fn($q) => $q->orderBy('sequence'),
+            'workOrder.operationSheets.steps.machine',
+            'workOrder.operationSheets.steps.operator',
+            'workOrder.operationSheets.steps.section',
+            'section',
+        ]);
+
+        $handoffs = SectionHandoff::with(['fromSection', 'toSection', 'transferredBy', 'files'])
+            ->where('work_order_id', $workOrderSection->work_order_id)
+            ->orderBy('transferred_at', 'desc')
+            ->get()
+            ->map(fn($h) => [
+                'id'              => $h->id,
+                'direction'       => $h->direction,
+                'note'            => $h->note,
+                'from_section'    => $h->fromSection ? ['name' => $h->fromSection->name, 'code' => $h->fromSection->code] : null,
+                'to_section'      => ['name' => $h->toSection->name, 'code' => $h->toSection->code],
+                'transferred_by'  => $h->transferredBy?->name,
+                'transferred_at'  => $h->transferred_at?->format('d M Y, h:i A'),
+                'files'           => $h->files->map(fn($f) => [
+                    'id'         => $f->id,
+                    'url'        => $f->url,
+                    'filename'   => $f->original_name,
+                    'extension'  => $f->extension,
+                    'human_size' => $f->human_size,
+                ])->values(),
+            ])->values();
+
+        // The active rework banner (if this WOS is in 'rework' state).
+        $reworkContext = null;
+        if ($workOrderSection->status === 'rework') {
+            $back = SectionHandoff::with(['fromSection', 'files', 'transferredBy'])
+                ->where('work_order_id', $workOrderSection->work_order_id)
+                ->where('direction', 'backward')
+                ->where('to_section_id', $workOrderSection->section_id)
+                ->latest('id')
+                ->first();
+            $reworkContext = $back ? [
+                'from_section'   => $back->fromSection?->name,
+                'transferred_by' => $back->transferredBy?->name,
+                'transferred_at' => $back->transferred_at?->format('d M Y, h:i A'),
+                'note'           => $back->note,
+                'files'          => $back->files->map(fn($f) => [
+                    'id'         => $f->id,
+                    'url'        => $f->url,
+                    'filename'   => $f->original_name,
+                    'extension'  => $f->extension,
+                    'human_size' => $f->human_size,
+                ])->values(),
+            ] : null;
+        }
+
+        return Inertia::render('Production/Show', [
+            'wos' => [
+                'id'         => $workOrderSection->id,
+                'sequence'   => $workOrderSection->sequence,
+                'status'     => $workOrderSection->status,
+                'notes'      => $workOrderSection->notes,
+                'started_at' => $workOrderSection->started_at?->format('d M Y, h:i A'),
+                'completed_at' => $workOrderSection->completed_at?->format('d M Y, h:i A'),
+                'section'    => [
+                    'id'      => $workOrderSection->section->id,
+                    'name'    => $workOrderSection->section->name,
+                    'code'    => $workOrderSection->section->code,
+                    'name_bn' => $workOrderSection->section->name_bn,
+                ],
+                'work_order' => [
+                    'id'         => $workOrderSection->workOrder->id,
+                    'wo_number'  => $workOrderSection->workOrder->wo_number,
+                    'job_number' => $workOrderSection->workOrder->job_number,
+                    'customer'   => $workOrderSection->workOrder->customer?->name,
+                    'product'    => $workOrderSection->workOrder->product?->name,
+                    'quantity'   => $workOrderSection->workOrder->quantity,
+                    'job_type'   => $workOrderSection->workOrder->rfq?->job_type ?? 'regular',
+                    'due_date'   => $workOrderSection->workOrder->due_date?->format('d M Y'),
+                ],
+            ],
+            'routing'   => $workOrderSection->workOrder->sections->map(fn($s) => [
+                'id'       => $s->id,
+                'sequence' => $s->sequence,
+                'status'   => $s->status,
+                'section'  => ['name' => $s->section->name, 'code' => $s->section->code],
+            ])->values(),
+            'op_steps' => optional($workOrderSection->workOrder->operationSheets->first())->steps
+                ?->where('section_id', $workOrderSection->section_id)
+                ->map(fn($s) => [
+                    'id'                => $s->id,
+                    'sequence'          => $s->sequence,
+                    'operation_name'    => $s->operation_name,
+                    'machine'           => $s->machine?->name,
+                    'operator'          => $s->operator?->name,
+                    'estimated_hours'   => (float) $s->estimated_hours,
+                    'actual_hours'      => (float) ($s->actual_hours ?? 0),
+                    'weight_pct'        => (float) ($s->weight_pct ?? 0),
+                    'status'            => $s->status,
+                    'started_at'        => $s->started_at?->format('d M Y, h:i A'),
+                    'started_at_iso'    => $s->started_at?->toIso8601String(),
+                    'completed_at'      => $s->completed_at?->format('d M Y, h:i A'),
+                    'completed_at_iso'  => $s->completed_at?->toIso8601String(),
+                    'tooling_notes'     => $s->tooling_notes,
+                    'qc_notes'          => $s->qc_notes,
+                ])->values() ?? [],
+            'handoffs'         => $handoffs,
+            'rework_context'   => $reworkContext,
+            'earlier_sections' => $this->routing->earlierSectionsFor($workOrderSection)->map(fn($s) => [
+                'wos_id'   => $s->id,
+                'sequence' => $s->sequence,
+                'section'  => ['name' => $s->section->name, 'code' => $s->section->code],
+                'status'   => $s->status,
+            ])->values(),
+        ]);
+    }
+
+    private function authorizeAccess(WorkOrderSection $wos): void
+    {
+        $user = auth()->user();
+        $canAll = $user->hasAnyRole(['super_admin', 'admin']) || $user->can('manage users');
+        if ($canAll) return;
+        abort_unless($user->section_id && $user->section_id === $wos->section_id, 403,
+            'You are not the supervisor of this section.');
+    }
+
+    private function serializeWosForQueue(WorkOrderSection $wos): array
+    {
+        $wo = $wos->workOrder;
+
+        // Last rework reason (if this WOS is in 'rework')
+        $reworkBanner = null;
+        if ($wos->status === 'rework') {
+            $back = SectionHandoff::with(['fromSection', 'transferredBy'])
+                ->where('work_order_id', $wos->work_order_id)
+                ->where('direction', 'backward')
+                ->where('to_section_id', $wos->section_id)
+                ->latest('id')
+                ->first();
+            $reworkBanner = $back ? [
+                'from_section'   => $back->fromSection?->name,
+                'transferred_by' => $back->transferredBy?->name,
+                'note'           => $back->note,
+                'transferred_at' => $back->transferred_at?->diffForHumans(),
+            ] : null;
+        }
+
+        return [
+            'id'         => $wos->id,
+            'sequence'   => $wos->sequence,
+            'status'     => $wos->status,
+            'started_at' => $wos->started_at?->diffForHumans(),
+            'work_order' => [
+                'id'         => $wo->id,
+                'wo_number'  => $wo->wo_number,
+                'job_number' => $wo->job_number,
+                'customer'   => $wo->customer?->name ?? '—',
+                'product'    => $wo->product?->name,
+                'quantity'   => $wo->quantity,
+                'job_type'   => $wo->rfq?->job_type ?? 'regular',
+                'due_date'   => $wo->due_date?->format('d M Y'),
+                'priority'   => $wo->priority,
+            ],
+            'rework'     => $reworkBanner,
+        ];
+    }
+}

@@ -75,12 +75,19 @@ interface Step {
     tooling_notes: string;
 }
 
+interface ExistingSheet {
+    id: number;
+    sheet_number: string;
+    steps: Array<Omit<Step, '_uid'> & { id?: number }>;
+}
+
 interface Props {
     workOrder: WorkOrder;
     sections: Section[];
     machines: Machine[];
     operators: Operator[];
     operations: Operation[];
+    sheet?: ExistingSheet;
 }
 
 function makeEmptyStep(): Step {
@@ -357,13 +364,33 @@ export default function OperationSheetBuilder({
     machines,
     operators,
     operations,
+    sheet,
 }: Props) {
-    const { data, setData, post, processing, errors } = useForm<{
+    const isEdit = !!sheet;
+
+    const initialSteps: Step[] = sheet && sheet.steps.length > 0
+        ? sheet.steps.map((s) => ({
+            _uid:
+                typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                    ? crypto.randomUUID()
+                    : `s_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+            operation_id: s.operation_id ?? null,
+            operation_name: s.operation_name ?? '',
+            section_id: s.section_id ?? '',
+            machine_id: s.machine_id ?? '',
+            operator_id: s.operator_id ?? '',
+            estimated_hours: String(s.estimated_hours ?? ''),
+            weight_pct: String(s.weight_pct ?? ''),
+            tooling_notes: s.tooling_notes ?? '',
+        }))
+        : [makeEmptyStep()];
+
+    const { data, setData, post, put, processing, errors } = useForm<{
         work_order_id: number;
         steps: Step[];
     }>({
         work_order_id: workOrder.id,
-        steps: [makeEmptyStep()],
+        steps: initialSteps,
     });
 
     const sensors = useSensors(
@@ -476,11 +503,15 @@ export default function OperationSheetBuilder({
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/operation-sheets');
+        if (isEdit && sheet) {
+            put(`/operation-sheets/${sheet.id}`);
+        } else {
+            post(`/operation-sheets/${workOrder.id}`);
+        }
     };
 
     return (
-        <AppLayout header={`Operation Sheet — ${workOrder.wo_number}`}>
+        <AppLayout header={`${isEdit ? 'Edit' : 'New'} Operation Sheet — ${workOrder.wo_number}`}>
             <div className="space-y-6 animate-fade-in">
                 {/* Header card */}
                 <div className="card">
@@ -526,7 +557,7 @@ export default function OperationSheetBuilder({
                                     className="btn-primary"
                                 >
                                     <i className="fi fi-rr-disk text-xs leading-none" />
-                                    {processing ? 'Saving...' : 'Save Operation Sheet'}
+                                    {processing ? 'Saving...' : (isEdit ? 'Update Operation Sheet' : 'Save Operation Sheet')}
                                 </button>
                             </div>
                         </div>
@@ -691,7 +722,7 @@ export default function OperationSheetBuilder({
                             className="btn-primary"
                         >
                             <i className="fi fi-rr-disk text-xs leading-none" />
-                            {processing ? 'Saving...' : 'Save Operation Sheet'}
+                            {processing ? 'Saving...' : (isEdit ? 'Update Operation Sheet' : 'Save Operation Sheet')}
                         </button>
                     </div>
                 </form>

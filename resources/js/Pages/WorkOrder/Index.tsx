@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 
 const STATUS: Record<string, { badge: string; icon: string }> = {
     draft:              { badge: 'bg-slate-50 text-slate-700 border-slate-200',       icon: 'fi-rr-pencil' },
@@ -92,7 +93,10 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                             <tr key={wo.id} className={`group ${wo.is_overdue ? 'bg-red-50/40' : ''}`}>
                                                 <td>
                                                     <Link href={`/work-orders/${wo.id}`}>
-                                                        <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{wo.job_number ?? wo.wo_number}</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{wo.job_number ?? wo.wo_number}</span>
+                                                            <JobTypeBadge type={wo.job_type} size="xs" onlyRnd />
+                                                        </div>
                                                     </Link>
                                                 </td>
                                                 <td>
@@ -163,7 +167,10 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                     className={`block rounded-xl border bg-white p-4 space-y-2.5 hover:border-brand-200 hover:shadow-md transition-all ${wo.is_overdue ? 'border-red-200 bg-red-50/30' : 'border-surface-100'}`}>
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
-                                            <span className="font-mono text-sm font-bold text-brand-600">{wo.job_number ?? wo.wo_number}</span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-mono text-sm font-bold text-brand-600">{wo.job_number ?? wo.wo_number}</span>
+                                                <JobTypeBadge type={wo.job_type} size="xs" onlyRnd />
+                                            </div>
                                             <div className="font-semibold text-surface-900 text-sm mt-0.5">{wo.product}</div>
                                             <div className="text-xs text-surface-400">{wo.customer}</div>
                                         </div>

@@ -135,7 +135,14 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                             <tr key={rfq.id} className="group">
                                                 <td>
                                                     <Link href={`/rfqs/${rfq.id}`} className="block">
-                                                        <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">#{rfq.id}</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">#{rfq.id}</span>
+                                                            {rfq.job_type === 'rnd' && (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold uppercase tracking-wider">
+                                                                    R&amp;D
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         {rfq.customer_ref_no && (
                                                             <div className="text-[10px] text-surface-400 mt-0.5 font-mono">{rfq.customer_ref_no}</div>
                                                         )}

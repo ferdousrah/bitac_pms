@@ -13,6 +13,7 @@ class WorkOrder extends Model
         'center_id', 'wo_number', 'job_number', 'rfq_id', 'quotation_id', 'customer_id', 'product_id',
         'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'customer_po_no', 'created_by',
         'pcd_handoff_at', 'pcd_handoff_by', 'released_to_shops_at', 'released_by',
+        'cancelled_at', 'cancelled_by', 'cancellation_reason',
     ];
 
     protected function casts(): array
@@ -21,6 +22,7 @@ class WorkOrder extends Model
             'due_date'             => 'date',
             'pcd_handoff_at'       => 'datetime',
             'released_to_shops_at' => 'datetime',
+            'cancelled_at'         => 'datetime',
         ];
     }
 
@@ -66,6 +68,7 @@ class WorkOrder extends Model
     public function quotation()    { return $this->belongsTo(Quotation::class); }
     public function bom()          { return $this->belongsTo(Bom::class); }
     public function createdBy()    { return $this->belongsTo(User::class, 'created_by'); }
+    public function cancelledBy()  { return $this->belongsTo(User::class, 'cancelled_by'); }
 
     public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }
     public function customerPoFile()      { return $this->hasOne(WorkOrderFile::class)->where('kind', 'customer_po')->latest('id'); }

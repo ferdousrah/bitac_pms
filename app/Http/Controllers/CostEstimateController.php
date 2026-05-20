@@ -14,6 +14,24 @@ use Inertia\Inertia;
 
 class CostEstimateController extends Controller
 {
+    /**
+     * Decode an inline signature data URL ("data:image/png;base64,...") and
+     * persist it to signatures/estimate-approvals/{id}-{ts}.png. Returns the
+     * stored path or null on no/invalid input. Mirrors QuotationController.
+     */
+    private function persistApprovalSignature($approval, ?string $dataUrl): ?string
+    {
+        if (!$dataUrl || !str_starts_with($dataUrl, 'data:image/')) return null;
+        $parts = explode(',', $dataUrl, 2);
+        if (count($parts) !== 2) return null;
+        $binary = base64_decode($parts[1], true);
+        if ($binary === false) return null;
+
+        $filename = 'signatures/estimate-approvals/' . $approval->id . '-' . time() . '.png';
+        \Storage::disk('public')->put($filename, $binary);
+        return $filename;
+    }
+
     public function index(Request $request)
     {
         $query = CostEstimate::with('customer', 'createdBy', 'rfqItem', 'rfq');
@@ -53,6 +71,7 @@ class CostEstimateController extends Controller
                 'rfq_id'        => $e->rfq_id,
                 'rfq_item_id'   => $e->rfq_item_id,
                 'rfq_item_desc' => $e->rfqItem?->job_description,
+                'job_type'      => $e->rfq?->job_type ?? 'regular',
             ]);
 
         return Inertia::render('CostEstimate/Index', [
@@ -357,6 +376,11 @@ class CostEstimateController extends Controller
             'acted_at'=> now(),
         ]);
 
+        // Capture the inline-drawn signature if one was provided. Falls back
+        // to user.signature_path at PDF-render time.
+        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+
         // Check if all levels approved
         $allApproved = $costEstimate->approvals()->where('status', '!=', 'approved')->doesntExist();
         if ($allApproved) {
@@ -409,6 +433,8 @@ class CostEstimateController extends Controller
             'remarks' => $request->input('remarks'),
             'acted_at'=> now(),
         ]);
+        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
         $costEstimate->update(['approval_status' => 'rejected']);
 
@@ -458,6 +484,8 @@ class CostEstimateController extends Controller
             'remarks' => '[Changes Requested] ' . $request->input('remarks'),
             'acted_at'=> now(),
         ]);
+        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
         // Send back to draft so preparer can edit and resubmit
         $costEstimate->update([
@@ -604,6 +632,7 @@ class CostEstimateController extends Controller
             'estimate_no'      => $e->estimate_no,
             'rfq_id'           => $e->rfq_id,
             'rfq_item_id'      => $e->rfq_item_id,
+            'job_type'         => $e->rfq?->job_type ?? 'regular',
             'rfq_item'         => $e->rfqItem ? [
                 'id'              => $e->rfqItem->id,
                 'job_description' => $e->rfqItem->job_description ?? $e->rfqItem->product?->name,
@@ -769,13 +798,52 @@ class CostEstimateController extends Controller
     // ─── Export: Single Estimate PDF ─────────────────────────────────
     public function exportSinglePdf(Request $request, CostEstimate $costEstimate)
     {
-        $e   = $costEstimate->load('lines.material', 'lines.operation', 'customer', 'createdBy');
+        $e   = $costEstimate->load('lines.material', 'lines.operation', 'customer', 'createdBy.center', 'rfq', 'approvals.approver.center');
         $fmt = fn($v) => number_format((float) ($v ?? 0), 2);
         $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $date     = now()->format('d M Y, H:i');
-        $customer = $e->customer?->name ?? $e->company_name ?? '—';
 
-        // Group lines by section
+        $customer    = $esc($e->customer?->name ?? $e->company_name ?? '—');
+        $estimateNo  = $esc($e->estimate_no);
+        $jobName     = $esc($e->job_name);
+        $createdAt   = $e->created_at?->format('d/m/Y') ?? '—';
+        $statusLabel = ucfirst((string) $e->status);
+        $createdBy   = $esc($e->createdBy?->name ?? '—');
+        $partNo      = $esc($e->part_no ?? '—');
+        $actualSize  = $esc($e->actual_size ?? '—');
+        $jobType     = ($e->rfq?->job_type ?? 'regular') === 'rnd' ? 'R&amp;D' : 'Regular';
+
+        // ─── Memo block — top-left estimate no, top-right date (BITAC letter style)
+        $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
+            . '<tr>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $estimateNo . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($createdAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─── Centered title ────────────────────────────────────────────
+        $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
+            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">খরচ নির্ধারণ</div>'
+            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(COST ESTIMATE)</div>'
+            . '</div>';
+
+        // ─── Customer / Job info two-column block ──────────────────────
+        $headerBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt;">'
+            . '<tr>'
+            .   '<td width="55%" style="vertical-align: top; padding-right: 12pt; font-size: 10pt; color: #000; line-height: 1.5;">'
+            .     '<div><b>Customer:</b> ' . $customer . '</div>'
+            .     '<div><b>Job Name:</b> ' . $jobName . '</div>'
+            .     '<div><b>Part No:</b> ' . $partNo . '</div>'
+            .     '<div><b>Actual Size:</b> ' . $actualSize . '</div>'
+            .   '</td>'
+            .   '<td width="45%" style="vertical-align: top; font-size: 10pt; color: #000; line-height: 1.5;">'
+            .     '<div><b>Pricing Group:</b> ' . $esc((string) $e->pricing_group) . '</div>'
+            .     '<div><b>Job Type:</b> ' . $jobType . '</div>'
+            .     '<div><b>Status:</b> ' . $esc($statusLabel) . '</div>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // ─── Group lines by section ────────────────────────────────────
         $sections = [
             'material'  => ['label' => 'A. Material Cost',          'lines' => []],
             'machining' => ['label' => 'B. Machining Cost',         'lines' => []],
@@ -786,129 +854,157 @@ class CostEstimateController extends Controller
             $sections[$line->section]['lines'][] = $line;
         }
 
-        // Build section tables — same polished style as RFQ items table
+        // ─── Section tables — plain bordered, no zebra, no color ───────
         $sectionsHtml = '';
         foreach ($sections as $sec) {
             $sectionTotal = collect($sec['lines'])->sum(fn($l) => (float) $l->amount);
+            if (count($sec['lines']) === 0) continue; // skip empty sections — keeps PDF tight
 
-            $sectionsHtml .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8; margin-bottom: 10pt;">';
-            // Section header row
+            $sectionsHtml .= '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-bottom: 8pt; table-layout: fixed;">';
+            $sectionsHtml .= '<colgroup>'
+                . '<col style="width: 6%;" /><col style="width: 46%;" />'
+                . '<col style="width: 10%;" /><col style="width: 8%;" />'
+                . '<col style="width: 14%;" /><col style="width: 16%;" />'
+                . '</colgroup>';
+
+            // Section header row (bold, no color)
             $sectionsHtml .= '<tr>';
-            $sectionsHtml .=   '<td colspan="5" style="padding: 6pt 10pt; background: #1e40af; color: white; font-size: 10pt; font-weight: bold; letter-spacing: 0.3pt; border-right: 1pt solid #1e3a8a;">' . $esc($sec['label']) . '</td>';
-            $sectionsHtml .=   '<td style="padding: 6pt 10pt; background: #1e40af; color: white; font-size: 10pt; font-weight: bold; text-align: right; white-space: nowrap;">BDT ' . $fmt($sectionTotal) . '</td>';
+            $sectionsHtml .=   '<td colspan="5" style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt; font-weight: bold; color: #000;">' . $esc($sec['label']) . '</td>';
+            $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; font-weight: bold; color: #000; text-align: right; white-space: nowrap;">' . $fmt($sectionTotal) . '</td>';
             $sectionsHtml .= '</tr>';
 
-            if (count($sec['lines']) > 0) {
-                // Column-headers row
-                $sectionsHtml .= '<tr style="background: #f1f5f9;">';
-                $sectionsHtml .=   '<th width="5%"  style="padding: 4pt 8pt; font-size: 7.5pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 0.3pt; text-align: center; border-bottom: 1pt solid #cbd5e1;">#</th>';
-                $sectionsHtml .=   '<th width="45%" style="padding: 4pt 8pt; font-size: 7.5pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 0.3pt; text-align: left;   border-bottom: 1pt solid #cbd5e1;">Description</th>';
-                $sectionsHtml .=   '<th width="10%" style="padding: 4pt 8pt; font-size: 7.5pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 0.3pt; text-align: right;  border-bottom: 1pt solid #cbd5e1;">Qty</th>';
-                $sectionsHtml .=   '<th width="10%" style="padding: 4pt 8pt; font-size: 7.5pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 0.3pt; text-align: center; border-bottom: 1pt solid #cbd5e1;">Unit</th>';
-                $sectionsHtml .=   '<th width="15%" style="padding: 4pt 8pt; font-size: 7.5pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 0.3pt; text-align: right;  border-bottom: 1pt solid #cbd5e1;">Rate</th>';
-                $sectionsHtml .=   '<th width="15%" style="padding: 4pt 8pt; font-size: 7.5pt; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 0.3pt; text-align: right;  border-bottom: 1pt solid #cbd5e1;">Amount</th>';
-                $sectionsHtml .= '</tr>';
+            // Column-headers row
+            $sectionsHtml .= '<tr>';
+            $sectionsHtml .=   '<th style="border: 0.75pt solid #000; padding: 3pt 2pt; font-size: 8.5pt; font-weight: normal; color: #000; text-align: center;">#</th>';
+            $sectionsHtml .=   '<th style="border: 0.75pt solid #000; padding: 3pt 6pt; font-size: 8.5pt; font-weight: normal; color: #000; text-align: left;">Description</th>';
+            $sectionsHtml .=   '<th style="border: 0.75pt solid #000; padding: 3pt 2pt; font-size: 8.5pt; font-weight: normal; color: #000; text-align: center;">Qty</th>';
+            $sectionsHtml .=   '<th style="border: 0.75pt solid #000; padding: 3pt 2pt; font-size: 8.5pt; font-weight: normal; color: #000; text-align: center;">Unit</th>';
+            $sectionsHtml .=   '<th style="border: 0.75pt solid #000; padding: 3pt 4pt; font-size: 8.5pt; font-weight: normal; color: #000; text-align: right;">Rate</th>';
+            $sectionsHtml .=   '<th style="border: 0.75pt solid #000; padding: 3pt 6pt; font-size: 8.5pt; font-weight: normal; color: #000; text-align: right;">Amount</th>';
+            $sectionsHtml .= '</tr>';
 
-                foreach ($sec['lines'] as $i => $line) {
-                    $desc = $esc($line->description ?? $line->material?->name ?? $line->operation?->name ?? '—');
-                    $bg   = $i % 2 === 0 ? '#ffffff' : '#fafafa';
-                    $sectionsHtml .= "<tr style='background: {$bg};'>";
-                    $sectionsHtml .=   '<td style="padding: 5pt 8pt; font-size: 9pt; font-weight: bold; color: #1e40af; text-align: center; vertical-align: top;">' . ($i + 1) . '</td>';
-                    $sectionsHtml .=   '<td style="padding: 5pt 8pt; font-size: 9pt; color: #111827; vertical-align: top;">' . $desc . '</td>';
-                    $sectionsHtml .=   '<td style="padding: 5pt 8pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; vertical-align: top; white-space: nowrap;">' . $fmt($line->quantity) . '</td>';
-                    $sectionsHtml .=   '<td style="padding: 5pt 8pt; font-size: 9pt; color: #4b5563; text-align: center; vertical-align: top;">' . $esc($line->unit) . '</td>';
-                    $sectionsHtml .=   '<td style="padding: 5pt 8pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; vertical-align: top; white-space: nowrap;">' . $fmt($line->rate) . '</td>';
-                    $sectionsHtml .=   '<td style="padding: 5pt 8pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; vertical-align: top; white-space: nowrap;">' . $fmt($line->amount) . '</td>';
-                    $sectionsHtml .= '</tr>';
-                }
-            } else {
-                $sectionsHtml .= '<tr><td colspan="6" style="padding: 8pt; text-align: center; color: #9ca3af; font-style: italic; font-size: 9pt;">No items</td></tr>';
+            foreach ($sec['lines'] as $i => $line) {
+                $desc = $esc($line->description ?? $line->material?->name ?? $line->operation?->name ?? '—');
+                $sectionsHtml .= '<tr>';
+                $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . ($i + 1) . '</td>';
+                $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; vertical-align: top; line-height: 1.4;">' . $desc . '</td>';
+                $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 2pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($line->quantity) . '</td>';
+                $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $esc($line->unit) . '</td>';
+                $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($line->rate) . '</td>';
+                $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap; font-weight: bold;">' . $fmt($line->amount) . '</td>';
+                $sectionsHtml .= '</tr>';
             }
             $sectionsHtml .= '</table>';
         }
 
-        // Cost summary — right-aligned compact totals card
-        $summaryRows = [
-            ['Net Cost',                                    $e->net_cost],
-            ["Overhead ({$e->overhead_pct}%)",              $e->overhead_amount],
-            ["VAT ({$e->vat_pct}%)",                        $e->vat_amount],
-            ['Total (per unit)',                            $e->total],
+        // ─── Summary card right-aligned (plain, no color, like Quotation) ───
+        $summary  = '<table align="right" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; width: 320pt; margin-top: 6pt;">';
+        $rows = [
+            ['Net Cost',                                    $e->net_cost,        false],
+            ["Overhead ({$e->overhead_pct}%)",              $e->overhead_amount, false],
+            ["VAT ({$e->vat_pct}%)",                        $e->vat_amount,      false],
+            ['Total (per unit, incl. VAT)',                 $e->total,           true],
+            ['Times Multiplier',                            $e->times_multiplier,false],
+            ['Job Quantity',                                $e->job_quantity,    false],
         ];
-        $summary  = '<table align="right" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1pt solid #94a3b8; width: 290pt; margin-top: 6pt;">';
-        foreach ($summaryRows as [$label, $val]) {
+        foreach ($rows as [$label, $val, $bold]) {
+            $weight = $bold ? 'font-weight: bold;' : '';
             $summary .= '<tr>';
-            $summary .=   '<td style="padding: 5pt 10pt; font-size: 9pt; color: #4b5563; border-bottom: 1pt solid #e5e7eb;">' . $esc($label) . '</td>';
-            $summary .=   '<td style="padding: 5pt 10pt; font-size: 9pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #111827; border-bottom: 1pt solid #e5e7eb; white-space: nowrap;">' . $fmt($val) . '</td>';
+            $summary .=   '<td style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt; color: #000; ' . $weight . '">' . $esc($label) . '</td>';
+            $summary .=   '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; color: #000; text-align: right; white-space: nowrap; ' . $weight . '">' . $fmt($val) . '</td>';
             $summary .= '</tr>';
         }
-        $summary .= '<tr style="background: #0f172a;">';
-        $summary .=   '<td style="padding: 8pt 10pt; font-size: 10pt; color: white; font-weight: bold;">Grand Total <span style="color: #94a3b8; font-weight: normal; font-size: 8pt;">(Qty: ' . $esc((string) $e->job_quantity) . ')</span></td>';
-        $summary .=   '<td style="padding: 8pt 10pt; font-size: 13pt; font-family: dejavusansmono; text-align: right; font-weight: bold; color: #fbbf24; white-space: nowrap;">BDT ' . $fmt($e->grand_total) . '</td>';
+        $summary .= '<tr>';
+        $summary .=   '<td style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 11pt; color: #000; font-weight: bold;">Grand Total (Including VAT &amp; TAX)</td>';
+        $summary .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 11pt; color: #000; text-align: right; white-space: nowrap; font-weight: bold;">' . $fmt($e->grand_total) . '</td>';
         $summary .= '</tr>';
         $summary .= '</table>';
 
-        $estimateNo = $esc($e->estimate_no);
-        $jobName    = $esc($e->job_name);
-        $createdAt  = $e->created_at?->format('d M Y') ?? '—';
-        $statusLabel = ucfirst((string) $e->status);
-        $statusColor = match ($e->status) {
-            'finalized' => '#059669',
-            'used'      => '#1e40af',
-            'rejected'  => '#dc2626',
-            default     => '#64748b',
-        };
+        // ─── Signature blocks ──────────────────────────────────────────
+        // Prepared By is always rendered with the preparer's saved signature
+        // (if any). Approved By only renders an image once the estimate is
+        // approved AND the final approver has either drawn a signature on
+        // that approval row OR has a saved signature on their profile.
+        $preparer = $e->createdBy;
+        $preparerSig = $preparer?->signatureAbsolutePath();
+        $preparedByName   = $esc($preparer?->name ?? '—');
+        $preparedByTitle  = $esc($preparer?->designation ?? '');
+        $preparedByCenter = $esc($preparer?->center?->name ?? '');
+
+        // Final approval = latest 'approved' row (highest level wins for multi-step chains)
+        $finalApproval = $e->approvals
+            ->where('status', 'approved')
+            ->sortByDesc('level')
+            ->first();
+        $isApproved = $finalApproval !== null;
+        $approver        = $finalApproval?->approver;
+        $approverName    = $esc($approver?->name ?? '');
+        $approverTitle   = $esc($approver?->designation ?? '');
+        $approverCenter  = $esc($approver?->center?->name ?? '');
+        $approvedDate    = $finalApproval?->acted_at?->format('d/m/Y') ?? '';
+        $approverSig     = $finalApproval?->signatureAbsolutePath() ?? $approver?->signatureAbsolutePath();
+
+        $sigImg = fn($absPath) => $absPath
+            ? '<img src="' . $absPath . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
+            : '<div style="height: 40pt;"></div>'; // empty space for hand signature
+
+        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt; border-collapse: collapse;">'
+            . '<tr>'
+            // Prepared By — anchored to the left edge (BITAC paper convention)
+            .   '<td width="35%" style="vertical-align: bottom; text-align: left;">'
+            .     '<div style="margin-bottom: 4pt;">' . $sigImg($preparerSig) . '</div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Prepared By</div>'
+            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparedByName . '</div>'
+            .     ($preparedByTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparedByTitle . '</div>' : '')
+            .     ($preparedByCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparedByCenter . '</div>' : '')
+            .   '</td>'
+            // Spacer column
+            .   '<td width="30%"></td>'
+            // Approved By — anchored to the right edge
+            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
+            .     '<div style="margin-bottom: 4pt;">';
+
+        if ($isApproved) {
+            $signatureBlock .= $sigImg($approverSig);
+        } else {
+            // Awaiting approval — empty space + italic "Pending approval" note
+            $signatureBlock .= '<div style="height: 40pt; display: flex; align-items: center; justify-content: center;">'
+                . '<span style="font-size: 8pt; font-style: italic; color: #94a3b8;">(Awaiting approval)</span>'
+                . '</div>';
+        }
+
+        $signatureBlock .=     '</div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Approved By</div>';
+        if ($isApproved) {
+            $signatureBlock .= '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $approverName . '</div>';
+            if ($approverTitle !== '') {
+                $signatureBlock .= '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $approverTitle . '</div>';
+            }
+            if ($approverCenter !== '') {
+                $signatureBlock .= '<div style="font-size: 9pt; color: #4b5563;">' . $approverCenter . '</div>';
+            }
+            if ($approvedDate !== '') {
+                $signatureBlock .= '<div style="font-size: 8pt; color: #4b5563; margin-top: 1pt;">' . $esc($approvedDate) . '</div>';
+            }
+        } else {
+            $signatureBlock .= '<div style="font-size: 8pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Not yet approved</div>';
+        }
+        $signatureBlock .=   '</td>'
+            . '</tr>'
+            . '</table>';
 
         $bodyHtml = <<<HTML
-        <!-- Document title block -->
-        <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 10pt; border-collapse: collapse;">
-            <tr>
-                <td width="4pt" style="background: #1e40af;"></td>
-                <td style="padding: 6pt 10pt;">
-                    <div style="font-size: 14pt; color: #1e40af; font-weight: bold; letter-spacing: 0.4pt;">COST ESTIMATE</div>
-                    <div style="font-size: 9pt; color: #64748b; margin-top: 1pt;">{$estimateNo} &middot; {$jobName} &middot; {$customer}</div>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Meta grid -->
-        <table width="100%" cellspacing="0" cellpadding="8" style="border: 1pt solid #94a3b8; border-collapse: collapse; margin-bottom: 12pt; background: #f8fafc;">
-            <tr>
-                <td width="25%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Customer</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$customer}</div>
-                </td>
-                <td width="25%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Job Name</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$jobName}</div>
-                </td>
-                <td width="16%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Pricing</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">Group {$e->pricing_group}</div>
-                </td>
-                <td width="17%" style="border-right: 1pt solid #cbd5e1; vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Status</div>
-                    <div style="color: {$statusColor}; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$statusLabel}</div>
-                </td>
-                <td width="17%" style="vertical-align: top;">
-                    <div style="color: #6b7280; text-transform: uppercase; font-size: 7pt; letter-spacing: 0.5pt; font-weight: bold;">Created</div>
-                    <div style="color: #0f172a; font-weight: bold; font-size: 10pt; margin-top: 2pt;">{$createdAt}</div>
-                </td>
-            </tr>
-        </table>
-
-        <!-- Section heading -->
-        <div style="margin-bottom: 4pt;">
-            <span style="display: inline-block; padding: 3pt 8pt; background: #1e40af; color: white; font-size: 9pt; font-weight: bold; letter-spacing: 0.3pt;">COST BREAKDOWN</span>
-        </div>
-
+        {$memoBlock}
+        {$titleBlock}
+        {$headerBlock}
         {$sectionsHtml}
 
-        <!-- Summary card right-aligned, with grand total -->
         <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 4pt; border-collapse: collapse;">
             <tr><td>{$summary}<div style="clear: both;"></div></td></tr>
         </table>
+        <div style="clear: both;"></div>
 
-        <div style="clear: both; margin-top: 16pt; padding-top: 6pt; border-top: 0.5pt solid #e5e7eb; text-align: right; font-size: 7pt; color: #9ca3af; font-style: italic;">Generated by BITAC PMS &middot; {$date}</div>
+        {$signatureBlock}
 HTML;
 
         $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Cost Estimate {$e->estimate_no}");

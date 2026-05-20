@@ -57,7 +57,7 @@ class MaterialRequisitionController extends Controller
                     'job_number' => $w->job_number,
                     'customer'   => $w->customer?->name,
                 ]),
-            'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'rate_per_kg']),
+            'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'unit', 'rate_per_kg']),
         ]);
     }
 
@@ -113,7 +113,7 @@ class MaterialRequisitionController extends Controller
                     'job_number' => $w->job_number,
                     'customer'   => $w->customer?->name,
                 ]),
-            'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'rate_per_kg']),
+            'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'unit', 'rate_per_kg']),
         ]);
     }
 
@@ -270,19 +270,174 @@ class MaterialRequisitionController extends Controller
             'ims_status'     => $mr->ims_status,
             'ims_last_error' => $mr->ims_last_error,
             'items'        => $mr->items->map(fn($i) => [
-                'id'           => $i->id,
-                'item_no'      => $i->item_no,
-                'description'  => $i->description,
-                'material_id'  => $i->material_id,
-                'unit'         => $i->unit,
-                'required_qty' => $i->required_qty,
-                'stock_qty'    => $i->stock_qty,
-                'issue_qty'    => $i->issue_qty,
-                'pending_qty'  => $i->pending_qty,
-                'issue_date'   => $i->issue_date?->format('Y-m-d'),
-                'remarks'      => $i->remarks,
+                'id'             => $i->id,
+                'item_no'        => $i->item_no,
+                'description'    => $i->description,
+                'material_id'    => $i->material_id,
+                'material_name'  => $i->material?->name,
+                'unit'           => $i->unit,
+                'required_qty'   => $i->required_qty,
+                'stock_qty'      => $i->stock_qty,
+                'issue_qty'      => $i->issue_qty,
+                'pending_qty'    => $i->pending_qty,
+                'issue_date'     => $i->issue_date?->format('Y-m-d'),
+                'remarks'        => $i->remarks,
             ]),
         ];
+    }
+
+    /**
+     * Generate a printable PDF of the Material Requisition Note (MRN).
+     * Plain BITAC paper-form style — black-bordered items table + preparer
+     * signature block at bottom (signature image + name + designation +
+     * center + phone + email).
+     */
+    public function pdf(Request $request, MaterialRequisition $materialRequisition)
+    {
+        $mr = $materialRequisition->load([
+            'workOrder.customer', 'workOrder.rfq',
+            'items.material',
+            'requestedBy.center',
+        ]);
+
+        $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $fmt = fn($v) => $v === null || $v === '' ? '—' : number_format((float) $v, 2);
+
+        $woNumber  = $esc($mr->workOrder?->wo_number ?? '—');
+        $jobNumber = $esc($mr->workOrder?->job_number ?? '—');
+        $customer  = $esc($mr->workOrder?->customer?->name ?? '—');
+        $reqDate   = $mr->request_date?->format('d/m/Y') ?? '';
+
+        // Memo block — pass no on top-left, date on top-right
+        $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
+            . '<tr>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $esc($mr->mrn_number) . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($reqDate) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            . '</tr>'
+            . '</table>';
+
+        // Centered title — Material Requisition Note
+        $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
+            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">মালামাল চাহিদাপত্র</div>'
+            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(MATERIAL REQUISITION NOTE)</div>'
+            . '</div>';
+
+        // Job / customer header block
+        $headerBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt; border-collapse: collapse; border: 0.75pt solid #000;">'
+            . '<tr>'
+            .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
+            .     '<div><b>Job No:</b> ' . $jobNumber . '</div>'
+            .     '<div><b>WO No:</b> ' . $woNumber . '</div>'
+            .   '</td>'
+            .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
+            .     '<div><b>Customer:</b> ' . $customer . '</div>'
+            .     '<div><b>Status:</b> ' . $esc(ucfirst(str_replace('_', ' ', $mr->status))) . '</div>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // Items table — Material first, Description (multi-line) second
+        $itemsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-top: 4pt; table-layout: fixed;">';
+        $itemsHtml .= '<colgroup>'
+            . '<col style="width: 6%;" />'
+            . '<col style="width: 24%;" />'
+            . '<col style="width: 30%;" />'
+            . '<col style="width: 8%;" />'
+            . '<col style="width: 11%;" />'
+            . '<col style="width: 11%;" />'
+            . '<col style="width: 10%;" />'
+            . '</colgroup>';
+        $itemsHtml .= '<tr>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Material</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Description<br><span style="font-size: 8pt; color: #4b5563;">(size / spec)</span></th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Unit</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Required</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Issued</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Remarks</th>';
+        $itemsHtml .= '</tr>';
+
+        if ($mr->items->isEmpty()) {
+            $itemsHtml .= '<tr><td colspan="7" style="border: 0.75pt solid #000; padding: 10pt; text-align: center; font-style: italic; font-size: 10pt;">No items on this MRN</td></tr>';
+        } else {
+            foreach ($mr->items as $i => $item) {
+                $sl = str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+                $itemsHtml .= '<tr>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $sl . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 10pt; font-weight: bold; vertical-align: top;">' . $esc($item->material?->name ?? '—') . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 9.5pt; vertical-align: top; line-height: 1.4;">' . nl2br($esc($item->description ?? ''), false) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $esc($item->unit) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($item->required_qty) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($item->issue_qty) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 9pt; vertical-align: top;">' . $esc($item->remarks ?? '') . '</td>';
+                $itemsHtml .= '</tr>';
+            }
+        }
+        $itemsHtml .= '</table>';
+
+        // Optional notes
+        $notesHtml = $mr->notes
+            ? '<div style="margin-top: 12pt; font-size: 10pt; color: #000; line-height: 1.4;"><b>Notes:</b> ' . nl2br($esc($mr->notes), false) . '</div>'
+            : '';
+
+        // ─── Preparer signature block (full info, BITAC letter convention) ───
+        $preparer       = $mr->requestedBy;
+        $preparerSig    = $preparer?->signatureAbsolutePath();
+        $preparerName   = $esc($preparer?->name ?? '—');
+        $preparerTitle  = $esc($preparer?->designation ?? '');
+        $preparerCenter = $esc($preparer?->center?->name ?? '');
+        $preparerPhone  = $esc($preparer?->phone ?? '');
+        $preparerEmail  = $esc($preparer?->email ?? '');
+
+        $sigImg = $preparerSig
+            ? '<img src="' . $preparerSig . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
+            : '<div style="height: 40pt;"></div>';
+
+        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
+            . '<tr>'
+            .   '<td width="55%" style="vertical-align: bottom; text-align: left;">'
+            .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Prepared By</div>'
+            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
+            .     ($preparerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>' : '')
+            .     ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
+            .     ($preparerPhone !== ''  ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
+            .     ($preparerEmail !== ''  ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>' : '')
+            .   '</td>'
+            .   '<td width="10%"></td>'
+            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
+            .     '<div style="height: 40pt;"></div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Issued By (Stores)</div>'
+            .     '<div style="font-size: 9pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Signature &amp; date</div>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        $bodyHtml = <<<HTML
+        {$memoBlock}
+        {$titleBlock}
+        {$headerBlock}
+        {$itemsHtml}
+        {$notesHtml}
+        {$signatureBlock}
+HTML;
+
+        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "MRN {$mr->mrn_number}");
+        $filename = "MRN-{$mr->mrn_number}.pdf";
+
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
     }
 
     private function validateRequisition(Request $request): array
@@ -293,14 +448,16 @@ class MaterialRequisitionController extends Controller
             'status'           => 'nullable|in:draft,pending_approval,approved,partially_issued,issued,received,cancelled',
             'notes'            => 'nullable|string|max:1000',
             'items'            => 'required|array|min:1',
-            'items.*.description'  => 'required|string|max:255',
-            'items.*.material_id'  => 'nullable|exists:materials,id',
+            // Material is the primary identifier of a requisition line — must be picked from the master.
+            'items.*.material_id'  => 'required|exists:materials,id',
+            // Description carries the spec (size / thickness / grade). Multiline accepted, kept generous.
+            'items.*.description'  => 'nullable|string|max:1000',
             'items.*.unit'         => 'nullable|string|max:20',
             'items.*.required_qty' => 'required|numeric|min:0',
             'items.*.stock_qty'    => 'nullable|numeric|min:0',
             'items.*.issue_qty'    => 'nullable|numeric|min:0',
             'items.*.issue_date'   => 'nullable|date',
-            'items.*.remarks'      => 'nullable|string|max:255',
+            'items.*.remarks'      => 'nullable|string|max:500',
         ]);
     }
 }

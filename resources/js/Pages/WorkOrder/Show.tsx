@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import ProgressGantt from '@/Components/WorkOrder/ProgressGantt';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 
 const statusBadge: Record<string, string> = {
     draft: 'badge-slate',
@@ -47,6 +48,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo }
                             <div>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <h2 className="text-lg font-bold font-mono text-surface-900">{workOrder.wo_number}</h2>
+                                    <JobTypeBadge type={workOrder.job_type} />
                                     <span className={`badge ${statusBadge[workOrder.status] ?? 'badge-slate'}`}>
                                         {workOrder.status_label}
                                     </span>

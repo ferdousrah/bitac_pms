@@ -2,14 +2,16 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
 
-export default function UserCreateEdit({ user, roles }: any) {
+export default function UserCreateEdit({ user, roles, sections = [] }: any) {
     const { data, setData, post, transform, errors, processing } = useForm<any>({
         name: user?.name ?? '',
         email: user?.email ?? '',
         phone: user?.phone ?? '',
+        designation: user?.designation ?? '',
         password: '',
         password_confirmation: '',
         role: user?.roles?.[0] ?? '',
+        section_id: user?.section_id ?? '',
         is_active: user?.is_active ?? true,
         deactivation_reason: user?.deactivation_reason ?? '',
         signature: null as File | null,
@@ -114,6 +116,19 @@ export default function UserCreateEdit({ user, roles }: any) {
                             </div>
 
                             <div className="form-group">
+                                <label className="form-label">Designation</label>
+                                <p className="form-hint">Job title — shown under the name on every signature block (Cost Estimate, Quotation PDFs). e.g. "Executive Engineer" / "নির্বাহী প্রকৌশলী".</p>
+                                <input
+                                    type="text"
+                                    value={data.designation}
+                                    onChange={e => setData('designation', e.target.value)}
+                                    className="form-input"
+                                    placeholder="Executive Engineer"
+                                />
+                                {errors.designation && <p className="form-error">{errors.designation}</p>}
+                            </div>
+
+                            <div className="form-group">
                                 <label className="form-label">Signature</label>
                                 <p className="form-hint">PNG with transparent background works best. Max 2 MB. Embedded above the name on quotation PDFs the user approves.</p>
 
@@ -209,6 +224,25 @@ export default function UserCreateEdit({ user, roles }: any) {
                                     ))}
                                 </select>
                                 {errors.role && <p className="form-error">{errors.role}</p>}
+                            </div>
+
+                            {/* Section assignment — supervisors of this section see only its production queue */}
+                            <div className="form-group">
+                                <label className="form-label">
+                                    Production Section <span className="form-label-optional">optional</span>
+                                </label>
+                                <select
+                                    value={data.section_id ?? ''}
+                                    onChange={e => setData('section_id', e.target.value ? Number(e.target.value) : '')}
+                                    className="form-select"
+                                >
+                                    <option value="">— Not assigned to a section —</option>
+                                    {sections?.map((s: any) => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                    ))}
+                                </select>
+                                <p className="form-hint">Required for section supervisors. Their Production queue filters by this section.</p>
+                                {errors.section_id && <p className="form-error">{errors.section_id}</p>}
                             </div>
 
                             {/* ── Account Status toggle ───────────────────── */}

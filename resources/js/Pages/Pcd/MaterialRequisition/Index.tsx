@@ -102,7 +102,7 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                                 <thead>
                                     <tr>
                                         <SortableHeader label="MRN #" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl={baseUrl} filters={filters} className="w-28" />
-                                        <th>Work Order</th>
+                                        <th>Job #</th>
                                         <th>Customer</th>
                                         <th className="text-center">Items</th>
                                         <th>Requested By</th>
@@ -123,16 +123,16 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                                                 {r.work_order ? (
                                                     <Link
                                                         href={`/work-orders/${r.work_order.id}`}
-                                                        className="font-mono text-surface-700 hover:text-brand-600"
+                                                        className="font-bold text-surface-900 hover:text-brand-600"
                                                     >
-                                                        {r.work_order.wo_number}
+                                                        {r.work_order.job_number ?? '—'}
                                                     </Link>
                                                 ) : (
                                                     <span className="text-surface-300">--</span>
                                                 )}
-                                                {r.work_order?.job_number && (
-                                                    <div className="text-[11px] text-surface-400 mt-0.5">
-                                                        Job: {r.work_order.job_number}
+                                                {r.work_order?.wo_number && (
+                                                    <div className="text-[11px] text-surface-400 mt-0.5 font-mono">
+                                                        {r.work_order.wo_number}
                                                     </div>
                                                 )}
                                             </td>
@@ -196,7 +196,7 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                                         <div className="min-w-0 flex-1">
                                             <div className="font-mono font-semibold text-brand-600 text-sm">{r.mrn_number}</div>
                                             <div className="text-xs text-surface-500 mt-1">
-                                                WO: <span className="font-mono text-surface-700">{r.work_order?.wo_number ?? '--'}</span>
+                                                Job #<span className="font-bold text-surface-800">{r.work_order?.job_number ?? '--'}</span>
                                             </div>
                                             <div className="text-xs text-surface-500 mt-0.5 truncate">{r.work_order?.customer ?? '--'}</div>
                                         </div>

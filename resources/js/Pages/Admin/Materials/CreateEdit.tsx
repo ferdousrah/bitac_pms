@@ -12,6 +12,7 @@ export default function MaterialCreateEdit({ material }: any) {
     const { data, setData, post, put, processing, errors } = useForm({
         name:           material?.name ?? '',
         category:       material?.category ?? '',
+        unit:           material?.unit ?? 'kg',
         rate_per_kg:    material?.rate_per_kg ?? '',
         density_kg_m3:  material?.density_kg_m3 ?? '',
         density_kg_in3: material?.density_kg_in3 ?? '',
@@ -61,7 +62,29 @@ export default function MaterialCreateEdit({ material }: any) {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">Unit</label>
+                                    <input type="text" value={data.unit}
+                                        onChange={e => setData('unit', e.target.value)}
+                                        className="form-input"
+                                        placeholder="kg" list="material-units" />
+                                    <datalist id="material-units">
+                                        <option value="kg" />
+                                        <option value="g" />
+                                        <option value="ton" />
+                                        <option value="L" />
+                                        <option value="mL" />
+                                        <option value="pcs" />
+                                        <option value="set" />
+                                        <option value="m" />
+                                        <option value="m²" />
+                                        <option value="m³" />
+                                        <option value="sheet" />
+                                    </datalist>
+                                    <p className="form-hint">Default unit for requisitions. Most materials use <strong>kg</strong>.</p>
+                                    {errors.unit && <p className="form-error">{errors.unit}</p>}
+                                </div>
                                 <div className="form-group">
                                     <label className="form-label">Rate * <span className="form-label-optional">৳/Kg</span></label>
                                     <input type="number" min="0" step="0.01" value={data.rate_per_kg}

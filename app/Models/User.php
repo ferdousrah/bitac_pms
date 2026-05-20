@@ -16,9 +16,11 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'designation',
         'signature_path',
         'password',
         'center_id',
+        'section_id',
         'is_active',
         'deactivated_at',
         'deactivation_reason',
@@ -42,6 +44,11 @@ class User extends Authenticatable
     public function center()
     {
         return $this->belongsTo(Center::class);
+    }
+
+    public function section()
+    {
+        return $this->belongsTo(Section::class);
     }
 
     /**

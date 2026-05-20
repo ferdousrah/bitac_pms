@@ -172,8 +172,8 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <Link href="/rfqs/create" className="btn-primary btn-sm">
-                            <i className="fi fi-rr-plus leading-none text-xs" /> Request Quote
+                        <Link href="/customer/documents" className="btn-primary btn-sm">
+                            <i className="fi fi-rr-folder-open leading-none text-xs" /> All Documents
                         </Link>
                         <Link href="/customer/complaints/create" className="btn-outline btn-sm">
                             <i className="fi fi-rr-comment-alt leading-none text-xs" /> Submit Complaint

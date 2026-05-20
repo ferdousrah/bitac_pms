@@ -186,11 +186,20 @@ export default function RFQShow({ rfq }: any) {
                                 <i className="fi fi-rr-document text-brand-500 text-base leading-none" />
                             </div>
                             <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <h2 className="text-base font-bold text-surface-900">RFQ #{rfq.id}</h2>
                                     <span className={`badge ${statusBadge[rfq.status] ?? 'badge-slate'}`}>
                                         {rfq.status}
                                     </span>
+                                    {rfq.job_type === 'rnd' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold uppercase tracking-wider">
+                                            <i className="fi fi-rr-lab text-[9px] leading-none" /> R&amp;D
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
+                                            <i className="fi fi-rr-tools text-[9px] leading-none" /> Regular
+                                        </span>
+                                    )}
                                 </div>
                                 <p className="text-xs text-surface-400 mt-0.5">
                                     Received {rfq.created_at} &nbsp;·&nbsp; by {rfq.created_by}
@@ -249,7 +258,7 @@ export default function RFQShow({ rfq }: any) {
                                             {rfq.items?.map((item: any, i: number) => (
                                                 <tr key={item.id}>
                                                     <td className="text-surface-400 font-mono align-top">{i + 1}</td>
-                                                    <td className="font-semibold text-surface-900 align-top">
+                                                    <td className="font-semibold text-surface-900 align-top whitespace-pre-line">
                                                         {item.job_description || '--'}
                                                     </td>
                                                     <td className="text-surface-500 align-top">
@@ -287,7 +296,7 @@ export default function RFQShow({ rfq }: any) {
                                                     {item.quantity} <span className="text-surface-400 font-normal">{item.unit}</span>
                                                 </span>
                                             </div>
-                                            <div className="text-sm font-semibold text-surface-900">{item.job_description || '--'}</div>
+                                            <div className="text-sm font-semibold text-surface-900 whitespace-pre-line">{item.job_description || '--'}</div>
                                             {item.product && (
                                                 <div className="text-xs text-surface-500">
                                                     {item.product.name} <span className="text-surface-400">({item.product.code})</span>
@@ -321,6 +330,71 @@ export default function RFQShow({ rfq }: any) {
                                 </div>
                             </div>
                         )}
+
+                        {/* Gate Passes — sample/reference item entry-exit tracking */}
+                        <div className="card animate-slide-up">
+                            <div className="card-header flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-sm font-bold text-surface-900">Gate Passes</h3>
+                                    <p className="text-xs text-surface-400 mt-0.5">
+                                        Reference samples entering / leaving BITAC · {(rfq.gate_passes ?? []).length} pass{(rfq.gate_passes ?? []).length === 1 ? '' : 'es'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Link href={`/ied/gate-passes/create?rfq_id=${rfq.id}&direction=in`} className="btn-outline btn-sm">
+                                        <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> Gate-In
+                                    </Link>
+                                    <Link href={`/ied/gate-passes/create?rfq_id=${rfq.id}&direction=out`} className="btn-primary btn-sm">
+                                        <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> Gate-Out
+                                    </Link>
+                                </div>
+                            </div>
+                            <div className="card-body">
+                                {(rfq.gate_passes ?? []).length === 0 ? (
+                                    <p className="text-xs text-surface-400 italic text-center py-4">
+                                        No gate passes issued yet. Issue one when the customer brings or collects a physical sample.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {(rfq.gate_passes ?? []).map((gp: any) => {
+                                            const isIn = gp.direction === 'in';
+                                            const dirBadge = isIn
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200';
+                                            const statusBadge = gp.status === 'issued'
+                                                ? 'badge-green'
+                                                : gp.status === 'cancelled' ? 'badge-red' : 'badge-slate';
+                                            return (
+                                                <Link
+                                                    key={gp.id}
+                                                    href={`/ied/gate-passes/${gp.id}`}
+                                                    className="flex items-center justify-between p-3 rounded-xl border border-surface-100 hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isIn ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                            <i className={`fi ${isIn ? 'fi-rr-sign-in-alt' : 'fi-rr-sign-out-alt'} text-sm leading-none`} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-mono text-sm font-bold text-surface-900">{gp.pass_no}</span>
+                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider ${dirBadge}`}>
+                                                                    {isIn ? 'IN' : 'OUT'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-[11px] text-surface-500 mt-0.5">{gp.item_count} items · {gp.pass_date}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`badge ${statusBadge} capitalize`}>{gp.status}</span>
+                                                        <i className="fi fi-rr-arrow-right text-xs leading-none text-surface-400" />
+                                                    </div>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
                         {/* Linked Quotations */}
                         {rfq.quotations?.length > 0 && (

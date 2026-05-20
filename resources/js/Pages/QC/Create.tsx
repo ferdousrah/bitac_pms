@@ -52,17 +52,17 @@ export default function QCCreate({ workOrders, workOrder }: any) {
                         <div className="card-body space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="form-group">
-                                    <label className="form-label">Work Order *</label>
+                                    <label className="form-label">Job # *</label>
                                     <select
                                         value={data.work_order_id}
                                         onChange={e => setData('work_order_id', e.target.value)}
                                         className="form-select"
                                         required
                                     >
-                                        <option value="">Select work order...</option>
+                                        <option value="">Select job...</option>
                                         {workOrders?.map((wo: any) => (
                                             <option key={wo.id} value={wo.id}>
-                                                {wo.wo_number} — {wo.product}
+                                                Job #{wo.job_number ?? '—'}{wo.product ? ` — ${wo.product}` : ''}
                                             </option>
                                         ))}
                                     </select>

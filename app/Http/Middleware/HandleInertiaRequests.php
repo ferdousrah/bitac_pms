@@ -75,6 +75,17 @@ class HandleInertiaRequests extends Middleware
             'unreadNotifications' => ($user && $hasSpatieRoles)
                 ? Notification::forUser($user->id)->unread()->count()
                 : 0,
+            // Production sections to show as submenu items under "Production".
+            // Super-admin sees every active shop section; a supervisor sees only their own.
+            'productionSections' => function () use ($user, $hasSpatieRoles, $isSuperAdmin) {
+                if (!$user || !$hasSpatieRoles) return [];
+                if (!$user->can('view production')) return [];
+                $q = \App\Models\Section::active()->shops()->orderBy('display_order');
+                if (!$isSuperAdmin && $user->section_id) {
+                    $q->where('id', $user->section_id);
+                }
+                return $q->get(['id', 'name', 'code'])->toArray();
+            },
             'appSettings' => function () {
                 $s = app(SettingService::class);
                 $branding = $s->branding();

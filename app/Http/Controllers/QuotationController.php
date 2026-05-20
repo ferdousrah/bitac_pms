@@ -53,6 +53,7 @@ class QuotationController extends Controller
                                     ?? $q->rfq?->items->first()?->product?->name
                                     ?? '—',
                 'rfq_id'       => $q->rfq_id,
+                'job_type'     => $q->rfq?->job_type ?? 'regular',
                 'version'      => $q->version,
                 'total_amount' => $q->total_amount,
                 'status'       => $q->status,
@@ -505,6 +506,7 @@ class QuotationController extends Controller
                 'version'         => $quotation->version,
                 'status'          => $quotation->status,
                 'rfq_id'          => $quotation->rfq_id,
+                'job_type'        => $quotation->rfq?->job_type ?? 'regular',
                 'customer'        => $quotation->customer?->name ?? $quotation->rfq?->customer?->name ?? '',
                 'customer_po_no'  => $quotation->customer_po_no,
                 'parent_quotation_id' => $quotation->parent_quotation_id,
@@ -1119,14 +1121,21 @@ class QuotationController extends Controller
             ?? 1
         );
 
-        $signerName  = $signer?->name ?? '';
-        $signerEmail = $signer?->email ?? $center?->email ?? '';
-        $signerPhone = $signer?->phone ?: $center?->phone_bn ?: $center?->phone ?: '';
+        // Eager-load center on the signer so we can show their actual posting,
+        // not the document's center (super-admin may sign for a different center).
+        if ($signer && !$signer->relationLoaded('center')) {
+            $signer->load('center');
+        }
+
+        $signerName       = $signer?->name ?? '';
+        $signerDesignation = $signer?->designation ?: 'নির্বাহী প্রকৌশলী'; // fallback for legacy users
+        $signerCenter     = $signer?->center?->name ?: 'বিটাক, ঢাকা।';     // English center name with fallback
+        $signerEmail      = $signer?->email ?? $center?->email ?? '';
+        $signerPhone      = $signer?->phone ?: $center?->phone_bn ?: $center?->phone ?: '';
         // Prefer the signature captured on THIS approval (per-decision audit).
         // Fall back to the approver's stored profile signature when not present.
         $sigPath     = $finalApproval?->signatureAbsolutePath()
                      ?? $signer?->signatureAbsolutePath();
-        $centerNameBn = $center?->name_bn ? 'বিটাক, ঢাকা।' : 'বিটাক, ঢাকা।'; // designation line
 
         // Signature image — if uploaded for the signer, render it; otherwise leave blank space.
         $signatureImg = $sigPath
@@ -1139,8 +1148,8 @@ class QuotationController extends Controller
             .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5;">'
             .     '<div>' . $signatureImg . '</div>'
             .     '<div>(' . $esc($signerName) . ')</div>'
-            .     '<div class="bn" style="font-family: siyamrupali;">নির্বাহী প্রকৌশলী</div>'
-            .     '<div class="bn" style="font-family: siyamrupali;">' . $esc($centerNameBn) . '</div>';
+            .     '<div class="bn" style="font-family: siyamrupali;">' . $esc($signerDesignation) . '</div>'
+            .     '<div class="bn" style="font-family: siyamrupali;">' . $esc($signerCenter) . '</div>';
         if ($signerEmail) {
             $signatureBlock .= '<div style="margin-top: 2pt;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> '
                 . '<u>' . $esc($signerEmail) . '</u></div>';
@@ -1410,10 +1419,23 @@ HTML;
             'brand',
         );
 
-        // Land directly on the PCD checklist page so the operator's next click is obvious.
+        // Redirect destination depends on who's doing the conversion:
+        //   - If they have PCD inbox access → land on the PCD checklist directly.
+        //   - Otherwise (IED officer) → stay on the quotation, since they don't
+        //     have permission to view the PCD inbox. They get a clear success
+        //     message instead so they know the WO was handed off to PCD.
+        $user = auth()->user();
+        $canSeePcd = $user && method_exists($user, 'can') && $user->can('view pcd-inbox');
+
+        if ($canSeePcd) {
+            return redirect()
+                ->route('pcd.inbox.show', $workOrder)
+                ->with('success', "Work Order {$woNumber} created. Continue with PCD setup below.");
+        }
+
         return redirect()
-            ->route('pcd.inbox.show', $workOrder)
-            ->with('success', "Work Order {$woNumber} created. Continue with PCD setup below.");
+            ->route('quotations.show', $quotation)
+            ->with('success', "Work Order {$woNumber} (Job #{$jobNumber}) created and handed off to PCD. The PCD team will set up Material Requisition, Work Order routing, and Operation Sheet from their inbox.");
     }
 
     // ─── Export: Excel ────────────────────────────────────────────────

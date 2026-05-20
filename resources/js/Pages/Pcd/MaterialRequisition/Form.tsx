@@ -26,6 +26,7 @@ interface WorkOrderOption {
 interface MaterialOption {
     id: number;
     name: string;
+    unit?: string | null;
     rate_per_kg?: number;
 }
 
@@ -113,8 +114,18 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
         items[index] = { ...items[index], material_id: id };
         if (id) {
             const mat = materials.find((m) => m.id === id);
-            if (mat && !items[index].description) {
-                items[index].description = mat.name;
+            if (mat) {
+                // Pre-fill description with the material name if the preparer
+                // hasn't typed anything yet — keeps the spec column tidy.
+                if (!items[index].description) {
+                    items[index].description = mat.name;
+                }
+                // Always pull the unit from the material master so the row
+                // matches how that material is purchased (kg / L / pcs / set …).
+                // Master is the source of truth here; preparer can still override.
+                if (mat.unit) {
+                    items[index].unit = mat.unit;
+                }
             }
         }
         setData('items', items);
@@ -295,37 +306,62 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                             <thead>
                                 <tr>
                                     <th className="w-10">#</th>
-                                    <th className="min-w-[200px]">Description</th>
-                                    <th className="min-w-[160px]">
-                                        Material
-                                        <span className="form-label-optional ml-1">optional</span>
+                                    <th className="min-w-[200px]">
+                                        Material <span className="text-red-500">*</span>
                                     </th>
-                                    <th className="w-20">Unit</th>
-                                    <th className="w-24">Required</th>
-                                    <th className="w-24">
+                                    <th className="min-w-[280px]">
+                                        Description
+                                        <div className="text-[10px] font-normal text-surface-400">Size / thickness / spec</div>
+                                    </th>
+                                    <th className="w-28">Unit</th>
+                                    <th className="w-32">Required</th>
+                                    <th className="w-32">
                                         Stock
                                         <div className="text-[10px] font-normal text-surface-400">from IMS</div>
                                     </th>
-                                    <th className="w-24">Issue Qty</th>
-                                    <th className="w-20">Pending</th>
-                                    <th className="w-36">Issue Date</th>
-                                    <th className="min-w-[140px]">Remarks</th>
+                                    <th className="w-32">Issue Qty</th>
+                                    <th className="w-24">Pending</th>
+                                    <th className="w-40">Issue Date</th>
+                                    <th className="min-w-[160px]">Remarks</th>
                                     <th className="w-10"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.items.map((it, index) => (
-                                    <tr key={index}>
-                                        <td className="text-center font-semibold text-surface-600">
+                                    <tr key={index} className="align-top">
+                                        <td className="text-center font-semibold text-surface-600 pt-3">
                                             {it.item_no}
                                         </td>
                                         <td>
-                                            <input
-                                                type="text"
+                                            <select
+                                                value={it.material_id ?? ''}
+                                                onChange={(e) => onMaterialChange(index, e.target.value)}
+                                                className="form-select"
+                                                required
+                                            >
+                                                <option value="">Select material…</option>
+                                                {materials.map((m) => (
+                                                    <option key={m.id} value={m.id}>
+                                                        {m.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {errors[`items.${index}.material_id` as keyof typeof errors] && (
+                                                <div className="form-error">
+                                                    {errors[`items.${index}.material_id` as keyof typeof errors] as string}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <textarea
                                                 value={it.description}
                                                 onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                                className="form-input"
-                                                placeholder="e.g. MS Plate 10mm"
+                                                rows={2}
+                                                className="form-textarea text-sm min-h-[60px]"
+                                                // Override the form-textarea utility's `resize: none` so the
+                                                // preparer can drag-resize each row's description as needed.
+                                                style={{ resize: 'vertical' }}
+                                                placeholder={"e.g. MS Plate 10mm thick\nØ50 × 200mm round bar"}
                                             />
                                             {errors[`items.${index}.description` as keyof typeof errors] && (
                                                 <div className="form-error">
@@ -333,65 +369,55 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                                 </div>
                                             )}
                                         </td>
-                                        <td>
-                                            <select
-                                                value={it.material_id ?? ''}
-                                                onChange={(e) => onMaterialChange(index, e.target.value)}
-                                                className="form-select"
-                                            >
-                                                <option value="">--</option>
-                                                {materials.map((m) => (
-                                                    <option key={m.id} value={m.id}>
-                                                        {m.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td>
+                                        <td className="!px-2">
                                             <input
                                                 type="text"
                                                 value={it.unit}
                                                 onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                                className="form-input"
+                                                className="form-input !px-2 !py-2 text-center text-sm"
+                                                placeholder="pcs"
                                             />
                                         </td>
-                                        <td>
+                                        <td className="!px-2">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 value={it.required_qty}
                                                 onChange={(e) => updateItem(index, 'required_qty', e.target.value)}
-                                                className="form-input"
+                                                className="form-input !px-2 !py-2 text-right font-mono text-sm"
+                                                placeholder="0"
                                                 required
                                             />
                                         </td>
-                                        <td>
+                                        <td className="!px-2">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 value={it.stock_qty}
                                                 onChange={(e) => updateItem(index, 'stock_qty', e.target.value)}
-                                                className="form-input"
+                                                className="form-input !px-2 !py-2 text-right font-mono text-sm"
+                                                placeholder="0"
                                             />
                                         </td>
-                                        <td>
+                                        <td className="!px-2">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 value={it.issue_qty}
                                                 onChange={(e) => updateItem(index, 'issue_qty', e.target.value)}
-                                                className="form-input"
+                                                className="form-input !px-2 !py-2 text-right font-mono text-sm"
+                                                placeholder="0"
                                             />
                                         </td>
-                                        <td className="text-center font-semibold text-surface-700">
+                                        <td className="text-center font-semibold text-surface-700 pt-3">
                                             {computePending(it)}
                                         </td>
-                                        <td>
+                                        <td className="!px-2">
                                             <input
                                                 type="date"
                                                 value={it.issue_date}
                                                 onChange={(e) => updateItem(index, 'issue_date', e.target.value)}
-                                                className="form-input"
+                                                className="form-input !px-2 !py-2 text-sm"
                                             />
                                         </td>
                                         <td>
@@ -399,7 +425,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                                 type="text"
                                                 value={it.remarks}
                                                 onChange={(e) => updateItem(index, 'remarks', e.target.value)}
-                                                className="form-input"
+                                                className="form-input !px-3 !py-2 text-sm"
                                             />
                                         </td>
                                         <td className="text-center">

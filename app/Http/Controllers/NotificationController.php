@@ -4,14 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Notification;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    /**
+     * Dual-mode endpoint:
+     *   - Inertia visits (Link clicks) → render the full Notifications page.
+     *   - AJAX/axios (no X-Inertia header) → return JSON for the bell dropdown.
+     */
     public function index(Request $request)
     {
         $notifications = Notification::forUser(auth()->id())
             ->latest()
-            ->take(30)
+            ->take(50)
             ->get()
             ->map(fn($n) => [
                 'id'         => $n->id,
@@ -24,6 +30,12 @@ class NotificationController extends Controller
                 'read'       => $n->read_at !== null,
                 'created_at' => $n->created_at->diffForHumans(),
             ]);
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::render('Notifications/Index', [
+                'notifications' => $notifications,
+            ]);
+        }
 
         return response()->json($notifications);
     }

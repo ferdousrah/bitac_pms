@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import JobTypeBadge from '@/Components/JobTypeBadge';
 
 interface RfqItem {
     description: string;
@@ -39,6 +40,7 @@ interface Job {
     id: number;
     job_number: number;
     wo_number: string;
+    job_type?: string;
     customer: string;
     customer_po_no: string | null;
     quantity: number;
@@ -92,6 +94,18 @@ interface Job {
         status: string;
         pdf_url: string;
         view_url: string;
+    } | null;
+    cancellation?: {
+        cancelled_at: string | null;
+        cancelled_by: string | null;
+        reason: string | null;
+        attachments: Array<{
+            id: number;
+            url: string;
+            filename: string;
+            extension: string | null;
+            human_size: string | null;
+        }>;
     } | null;
 }
 
@@ -261,6 +275,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                         <h2 className="text-2xl font-bold text-surface-900">
                                             Job #{job.job_number}
                                         </h2>
+                                        <JobTypeBadge type={job.job_type} />
                                         <span className={statusBadgeClass(job.status)}>
                                             {job.status}
                                         </span>
@@ -303,6 +318,56 @@ export default function JobDetail({ job, checklist }: Props) {
                         </div>
                     </div>
                 </div>
+
+                {/* Cancellation banner — visible only when the job is closed */}
+                {job.cancellation && (
+                    <div className="card border-rose-300 overflow-hidden">
+                        <div className="px-5 py-3 bg-gradient-to-r from-rose-500 to-rose-700 text-white flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <i className="fi fi-rr-cross-circle text-base leading-none" />
+                                <span className="text-sm font-bold uppercase tracking-wider">Job Closed</span>
+                            </div>
+                            <span className="text-[11px] text-white/80">{job.cancellation.cancelled_at}</span>
+                        </div>
+                        <div className="card-body space-y-3">
+                            <div className="text-sm">
+                                <span className="text-surface-500">Closed by:</span>{' '}
+                                <span className="font-semibold text-surface-900">{job.cancellation.cancelled_by ?? '—'}</span>
+                            </div>
+                            <div>
+                                <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Reason</div>
+                                <div className="text-sm text-surface-800 whitespace-pre-line bg-rose-50/60 border border-rose-100 rounded-xl px-3 py-2.5">
+                                    {job.cancellation.reason}
+                                </div>
+                            </div>
+                            {job.cancellation.attachments?.length > 0 && (
+                                <div>
+                                    <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">Office Order / Supporting Documents</div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {job.cancellation.attachments.map((f: any) => (
+                                            <a
+                                                key={f.id}
+                                                href={f.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-surface-100 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+                                            >
+                                                <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                                    {(f.extension ?? 'FILE').toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-semibold text-surface-800 truncate">{f.filename}</div>
+                                                    <div className="text-[10px] text-surface-400">{f.human_size}</div>
+                                                </div>
+                                                <i className="fi fi-rr-download text-surface-400 text-sm" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Customer PO / authorisation document — audit trail */}
                 {(() => {
