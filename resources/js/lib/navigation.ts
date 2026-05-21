@@ -40,6 +40,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Cost Estimates', href: '/cost-estimates',    icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
             { label: 'Quotations',     href: '/quotations',        icon: 'fi-rr-coins',        permission: 'view quotations' },
             { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
+            { label: 'Complaints',     href: '/ied/complaints',    icon: 'fi-rr-comment-alt',  permission: 'manage complaints', badgeKey: 'open_complaints' },
         ],
     },
     {

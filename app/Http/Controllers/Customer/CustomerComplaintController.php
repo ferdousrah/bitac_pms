@@ -89,6 +89,17 @@ class CustomerComplaintController extends Controller
             'status'           => 'open',
         ]);
 
+        // Notify everyone with manage complaints permission (IED, super admin, etc.)
+        \App\Services\NotifyService::toPermission(
+            'manage complaints',
+            'complaint_filed',
+            "New complaint from {$customer->name}",
+            "{$ref}: " . substr($complaint->subject, 0, 80),
+            "/ied/complaints/{$complaint->id}",
+            'fi-rr-comment-alt',
+            'red',
+        );
+
         return redirect()->route('customer.complaints.show', $complaint)
             ->with('success', "Complaint {$ref} submitted. We will get back to you shortly.");
     }

@@ -219,6 +219,14 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('permission:view rfqs')
         ->name('rfqs.pdf');
 
+    // ─── IED Customer Complaint Inbox ─────────────────────────────────
+    Route::prefix('ied/complaints')->middleware('permission:manage complaints')->name('ied.complaints.')->group(function () {
+        Route::get('/',                       [\App\Http\Controllers\Ied\ComplaintController::class, 'index'])->name('index');
+        Route::get('/{complaint}',            [\App\Http\Controllers\Ied\ComplaintController::class, 'show'])->name('show');
+        Route::post('/{complaint}/respond',   [\App\Http\Controllers\Ied\ComplaintController::class, 'respond'])->name('respond');
+        Route::post('/{complaint}/status',    [\App\Http\Controllers\Ied\ComplaintController::class, 'updateStatus'])->name('status');
+    });
+
     // ─── IED Gate Passes (Gate-In / Gate-Out for customer reference samples) ───
     Route::prefix('ied/gate-passes')->middleware('permission:manage gate-passes')->name('ied.gate-passes.')->group(function () {
         Route::get('/',                [GatePassController::class, 'index'])->name('index');
