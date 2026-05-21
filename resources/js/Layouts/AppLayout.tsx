@@ -320,7 +320,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                 <div className={`h-16 flex items-center border-b border-white/5 shrink-0 ${sidebarCollapsed ? 'justify-center px-0' : 'px-5'}`}>
                     <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
                         {theme.logo_url ? (
-                            <img src={theme.logo_url} className="w-9 h-9 rounded-xl object-cover shrink-0" alt="" />
+                            <img src={theme.logo_url} className="w-11 h-11 object-contain shrink-0" alt="" />
                         ) : (
                             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-glow shrink-0">
                                 <i className="fi fi-sr-industry-windows text-white text-sm leading-none" />
