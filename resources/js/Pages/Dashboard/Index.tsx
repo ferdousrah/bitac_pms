@@ -96,13 +96,32 @@ const PIPELINE_COLORS: Record<string, string> = {
 
 const STATUS_BADGE_MAP: Record<string, string> = {
     draft: 'badge-slate', approved: 'badge-blue', in_production: 'badge-amber',
+    released_to_shops: 'badge-blue',
     qc_hold: 'badge-amber', qc_passed: 'badge-green',
     ready_for_delivery: 'badge-purple', delivered: 'badge-green', cancelled: 'badge-red',
+    in_rework: 'badge-red',
 };
 
 const PRIORITY_BADGE_MAP: Record<string, string> = {
     urgent: 'badge-red', high: 'badge-amber', normal: 'badge-blue', low: 'badge-slate',
 };
+
+/** Slim weighted-progress bar + numeric pct, used in the Recent Work Orders table. */
+function ProgressCell({ pct }: { pct: number | null | undefined }) {
+    if (pct === null || pct === undefined) {
+        return <span className="text-xs text-surface-300">—</span>;
+    }
+    const v = Math.max(0, Math.min(100, pct));
+    const barColor = v === 100 ? 'bg-emerald-500' : v >= 50 ? 'bg-brand-500' : 'bg-amber-500';
+    return (
+        <div className="flex items-center gap-2 min-w-[100px]">
+            <div className="flex-1 h-1.5 rounded-full bg-surface-100 overflow-hidden">
+                <div className={`h-full ${barColor} transition-all`} style={{ width: `${v}%` }} />
+            </div>
+            <span className="text-[11px] font-semibold tabular-nums text-surface-700 w-9 text-right">{v}%</span>
+        </div>
+    );
+}
 
 /* ─── Pro tooltip ───────────────────────────────────────────────── */
 function ChartTooltip({ active, payload, label }: any) {
@@ -423,7 +442,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                     <StatCard label="Pending QC"       value={stats.pending_qc}           color="amber"  icon="fi-rr-shield-check"     href="/qc"           alert={stats.pending_qc > 3} />
                     <StatCard label="Overdue Jobs"     value={stats.overdue_work_orders}  color="red"    icon="fi-rr-clock"            href="/work-orders"  alert={stats.overdue_work_orders > 0} />
                     <StatCard label="Open NCRs"        value={stats.open_ncrs}            color="orange" icon="fi-rr-triangle-warning" href="/ncrs"         alert={stats.open_ncrs > 2} />
-                    <StatCard label="Draft Invoices"   value={stats.draft_invoices}       color="teal"   icon="fi-rr-receipt"          href="/invoices" />
+                    <StatCard label="Outstanding Invoices" value={stats.draft_invoices}   color="teal"   icon="fi-rr-receipt"          href="/invoices" />
                 </div>
 
                 {/* ── Charts Row 1 ── */}
@@ -741,7 +760,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                 <i className="fi fi-rr-clipboard-list leading-none" />
                             </div>
                             <div>
-                                <h2 className="text-sm font-semibold text-surface-800">Recent Work Orders</h2>
+                                <h2 className="text-sm font-semibold text-surface-800">Recent Jobs</h2>
                                 <p className="text-xs text-surface-400 mt-0.5">Latest production jobs across all centers</p>
                             </div>
                         </div>
@@ -755,7 +774,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                         <table className="premium-table">
                             <thead>
                                 <tr>
-                                    {['WO Number', 'Product', 'Customer', 'Status', 'Priority', 'Due Date'].map(h => (
+                                    {['Job Number', 'Product', 'Customer', 'Status', 'Progress', 'Priority', 'Due Date'].map(h => (
                                         <th key={h}>{h}</th>
                                     ))}
                                 </tr>
@@ -764,8 +783,11 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                 {recentWorkOrders.map((wo: any) => (
                                     <tr key={wo.id} className={wo.is_overdue ? '!bg-red-50/40' : ''}>
                                         <td>
-                                            <Link href={`/work-orders/${wo.id}`} className="text-brand-600 hover:text-brand-700 hover:underline font-mono text-sm font-semibold">
-                                                {wo.wo_number}
+                                            <Link href={`/work-orders/${wo.id}`} className="block hover:text-brand-700 group">
+                                                <div className="font-bold text-surface-900 text-sm group-hover:text-brand-600">
+                                                    Job #{wo.job_number ?? '—'}
+                                                </div>
+                                                <div className="text-[11px] text-surface-400 font-mono mt-0.5">{wo.wo_number}</div>
                                             </Link>
                                         </td>
                                         <td className="text-surface-800 font-medium">{wo.product}</td>
@@ -774,6 +796,9 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                             <span className={`badge ${STATUS_BADGE_MAP[wo.status] ?? 'badge-slate'}`}>
                                                 {wo.status_label}
                                             </span>
+                                        </td>
+                                        <td className="w-36">
+                                            <ProgressCell pct={wo.progress_pct} />
                                         </td>
                                         <td>
                                             <span className={`badge ${PRIORITY_BADGE_MAP[wo.priority] ?? 'badge-blue'}`}>
@@ -791,7 +816,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                 ))}
                                 {recentWorkOrders.length === 0 && (
                                     <tr>
-                                        <td colSpan={6}>
+                                        <td colSpan={7}>
                                             <div className="empty-state">
                                                 <div className="empty-state-icon"><i className="fi fi-rr-clipboard-list" /></div>
                                                 <p className="empty-state-title">No work orders yet</p>
@@ -813,14 +838,20 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                 className={`block rounded-xl border p-3.5 transition-all hover:shadow-md ${wo.is_overdue ? 'border-red-200 bg-red-50/40' : 'border-surface-100 bg-surface-50/50 hover:bg-white'}`}
                             >
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</span>
+                                    <div>
+                                        <div className="font-bold text-surface-900 text-sm">Job #{wo.job_number ?? '—'}</div>
+                                        <div className="text-[10px] text-surface-400 font-mono">{wo.wo_number}</div>
+                                    </div>
                                     <span className={`badge ${STATUS_BADGE_MAP[wo.status] ?? 'badge-slate'}`}>
                                         {wo.status_label}
                                     </span>
                                 </div>
                                 <p className="text-sm font-medium text-surface-800 truncate">{wo.product}</p>
                                 <p className="text-xs text-surface-500 mt-0.5">{wo.customer}</p>
-                                <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-surface-100">
+                                <div className="mt-2.5">
+                                    <ProgressCell pct={wo.progress_pct} />
+                                </div>
+                                <div className="flex items-center justify-between mt-2 pt-2 border-t border-surface-100">
                                     <span className={`badge ${PRIORITY_BADGE_MAP[wo.priority] ?? 'badge-blue'}`}>
                                         {wo.priority}
                                     </span>

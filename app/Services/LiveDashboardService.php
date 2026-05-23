@@ -3,17 +3,18 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\DeliveryOrder;
 use App\Models\DowntimeEvent;
 use App\Models\Invoice;
-use App\Models\JobExecution;
 use App\Models\Machine;
 use App\Models\Ncr;
+use App\Models\OperationStep;
 use App\Models\Quotation;
 use App\Models\WorkCentre;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderSection;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class LiveDashboardService
 {
@@ -29,16 +30,23 @@ class LiveDashboardService
         $monthStart = Carbon::now()->startOfMonth();
 
         // ─── Production KPIs ──────────────────────────────────────────
-        $activeJobsCount     = WorkOrder::whereIn('status', ['in_production', 'qc_hold'])->count();
-        $completedTodayCount = WorkOrder::where('status', 'delivered')
-                                        ->whereDate('updated_at', $today)->count();
+        // "Active" = anything moving through production / QC / pre-delivery.
+        // released_to_shops is the most common in-flight state in the new
+        // Production module, so it must be included.
+        $activeStatuses = ['released_to_shops', 'in_production', 'qc_hold', 'qc_passed', 'ready_for_delivery'];
+
+        $activeJobsCount     = WorkOrder::whereIn('status', $activeStatuses)->count();
+        // Delivered today = POD-stamped delivery orders (real signal, not WO.updated_at).
+        $completedTodayCount = DeliveryOrder::whereDate('delivered_at', $today)->count();
         $pendingQcCount      = WorkOrder::where('status', 'qc_hold')->count();
         $overdueCount        = WorkOrder::whereNotIn('status', ['delivered', 'cancelled'])
                                         ->whereNotNull('due_date')
                                         ->where('due_date', '<', $today)->count();
-        $machinesRunning     = JobExecution::where('status', 'started')
-                                           ->whereDate('started_at', $today)
-                                           ->distinct('machine_id')->count('machine_id');
+        // Machines running = distinct machines with at least one operation_step in_progress.
+        $machinesRunning     = OperationStep::where('status', 'in_progress')
+                                            ->whereNotNull('machine_id')
+                                            ->distinct('machine_id')
+                                            ->count('machine_id');
         $openNcrs            = Ncr::whereIn('status', ['open', 'in_rework'])->count();
 
         $kpiCards = [
@@ -53,7 +61,7 @@ class LiveDashboardService
         // ─── Financial Overview ───────────────────────────────────────
         $invoicedToday   = (float) Invoice::whereDate('created_at', $today)->sum('total_amount');
         $invoicedMonth   = (float) Invoice::where('created_at', '>=', $monthStart)->sum('total_amount');
-        $outstandingAmt  = (float) Invoice::where('status', 'issued')->sum('total_amount');
+        $outstandingAmt  = (float) Invoice::whereIn('status', ['issued', 'acknowledged'])->sum('total_amount');
         $quotedMonth     = (float) Quotation::where('created_at', '>=', $monthStart)->sum('total_amount');
         $convertedMonth  = (float) Quotation::where('status', 'converted')
                                             ->where('updated_at', '>=', $monthStart)->sum('total_amount');
@@ -161,61 +169,122 @@ class LiveDashboardService
         ];
 
         // ─── Active Jobs ──────────────────────────────────────────────
-        $activeJobs = WorkOrder::with([
+        // Show every WO in an active state. For each, infer the "current step":
+        //   - If a section is in_progress or rework → that section's first active op step
+        //   - Else if WO is qc_hold → "Awaiting QC inspection"
+        //   - Else if WO is qc_passed / ready_for_delivery → "Ready for dispatch"
+        // This keeps WOs visible even when they're parked between sections.
+        $activeJobsList = WorkOrder::with([
             'product', 'customer',
-            'jobExecutions' => fn($q) => $q->where('status', 'started')->latest()->limit(1),
-            'jobExecutions.operator',
-            'jobExecutions.machine.workCentre',
-            'operationSheets.steps',
-        ])->whereIn('status', ['in_production', 'qc_hold'])
-          ->orderByRaw("FIELD(status, 'in_production', 'qc_hold')")
-          ->get()
-          ->map(function ($wo) {
-              $currentExecution = $wo->jobExecutions->first();
-              $currentSheet = $wo->operationSheets->first();
-              $currentStep = $currentSheet?->steps->first();
-              return [
-                  'id'               => $wo->id,
-                  'wo_number'        => $wo->wo_number,
-                  'product'          => $wo->product->name ?? '',
-                  'customer'         => $wo->customer->name ?? '',
-                  'current_step'     => $currentStep->operation_name ?? '',
-                  'work_centre'      => $currentExecution?->machine?->workCentre?->name ?? '',
-                  'operator'         => $currentExecution?->operator?->name ?? '',
-                  'started_at'       => $currentExecution?->started_at?->toIso8601String(),
-                  'estimated_hours'  => $currentStep->estimated_hours ?? 0,
-                  'status'           => $wo->status,
-                  'status_label'     => $wo->status_label,
-                  'due_date'         => $wo->due_date?->toDateString(),
-                  'is_overdue'       => $wo->is_overdue,
-              ];
-          });
+            'sections.section',
+            'operationSheets.steps.machine.workCentre',
+            'operationSheets.steps.operator',
+            'ncrs' => fn($q) => $q->whereIn('status', ['open', 'in_rework']),
+        ])
+            ->whereIn('status', $activeStatuses)
+            ->orderByRaw("FIELD(status, 'in_production', 'released_to_shops', 'qc_hold', 'qc_passed', 'ready_for_delivery')")
+            ->get();
 
-        // ─── Work Centres ─────────────────────────────────────────────
-        $workCentreStatus = WorkCentre::with([
-            'machines',
-            'machines.jobExecutions' => fn($q) => $q->where('status', 'started')->with(['workOrder.product', 'operator']),
-        ])->where('is_active', true)->get()->map(function ($wc) {
-            $totalMachines  = $wc->machines->count();
-            $activeMachines = $wc->machines->filter(fn($m) => $m->jobExecutions->isNotEmpty())->count();
-            $hasBreakdown   = $wc->machines->where('current_state', 'breakdown')->isNotEmpty();
+        $activeJobs = $activeJobsList->map(function ($wo) {
+            $sections = $wo->sections;
+            $activeSection = $sections->firstWhere('status', 'in_progress')
+                          ?? $sections->firstWhere('status', 'rework')
+                          ?? $sections->firstWhere('status', 'ready');
+            $isRework  = $sections->contains('status', 'rework') || $wo->ncrs->isNotEmpty();
 
-            $activeJobsList = $wc->machines->flatMap(fn($m) => $m->jobExecutions)
-                ->map(fn($je) => [
-                    'wo_number' => $je->workOrder->wo_number ?? '',
-                    'product'   => $je->workOrder->product->name ?? '',
-                    'operator'  => $je->operator->name ?? '',
-                ]);
+            // Pick most relevant op step within the active section
+            $step = null;
+            if ($activeSection) {
+                $steps = $wo->operationSheets->flatMap->steps
+                    ->where('section_id', $activeSection->section_id);
+                $step = $steps->firstWhere('status', 'in_progress')
+                     ?? $steps->firstWhere('status', 'pending')
+                     ?? $steps->first();
+            }
+
+            // Friendly "current step" label, even when nothing is actively running
+            $currentStepLabel = match (true) {
+                $step !== null                  => $step->operation_name,
+                $activeSection !== null         => $activeSection->section->name ?? '',
+                $wo->status === 'qc_hold'       => 'Awaiting QC inspection',
+                $wo->status === 'qc_passed'     => 'Ready for dispatch',
+                $wo->status === 'ready_for_delivery' => 'Ready for dispatch',
+                default                         => '—',
+            };
 
             return [
-                'id'              => $wc->id,
-                'name'            => $wc->name,
-                'total_machines'  => $totalMachines,
-                'active_machines' => $activeMachines,
-                'active_jobs'     => $activeJobsList->values(),
-                'status_color'    => $hasBreakdown ? 'red' : ($activeMachines > 0 ? 'green' : 'gray'),
+                'id'              => $wo->id,
+                'wo_number'       => $wo->wo_number,
+                'job_number'      => $wo->job_number,
+                'product'         => $wo->product->name ?? '',
+                'customer'        => $wo->customer->name ?? '',
+                'current_step'    => $currentStepLabel,
+                'work_centre'     => $step?->machine?->workCentre?->name
+                                     ?: ($activeSection?->section?->name ?? ''),
+                'operator'        => $step?->operator?->name ?? '',
+                'started_at'      => $step?->started_at?->toIso8601String()
+                                     ?? $activeSection?->started_at?->toIso8601String(),
+                'estimated_hours' => (float) ($step?->estimated_hours ?? 0),
+                'status'          => $isRework ? 'in_rework' : $wo->status,
+                'status_label'    => $isRework ? 'In Rework' : $wo->status_label,
+                'due_date'        => $wo->due_date?->toDateString(),
+                'is_overdue'      => $wo->is_overdue,
             ];
-        });
+        })->values();
+
+        // ─── Work Centres ─────────────────────────────────────────────
+        // Each WC's active jobs come from in-progress operation_steps whose
+        // machine sits in that WC. We pre-aggregate so each WC card shows the
+        // jobs currently being worked on its floor.
+        $inProgressSteps = OperationStep::with([
+            'machine.workCentre',
+            'operator',
+            'operationSheet.workOrder.product',
+        ])->where('status', 'in_progress')->get();
+
+        $stepsByWc = $inProgressSteps->groupBy(fn($s) => $s->machine?->work_centre_id);
+
+        $workCentreStatus = WorkCentre::with('machines')
+            ->where('is_active', true)->get()->map(function ($wc) use ($stepsByWc) {
+                $totalMachines = $wc->machines->count();
+                $hasBreakdown  = $wc->machines->where('current_state', 'breakdown')->isNotEmpty();
+
+                // Machine-state breakdown from machines.current_state — gives a
+                // real signal even when no operation_steps are running.
+                $stateMix = [
+                    'running'     => $wc->machines->where('current_state', 'running')->count(),
+                    'setup'       => $wc->machines->where('current_state', 'setup')->count(),
+                    'idle'        => $wc->machines->where('current_state', 'idle')->count(),
+                    'maintenance' => $wc->machines->where('current_state', 'maintenance')->count(),
+                    'breakdown'   => $wc->machines->where('current_state', 'breakdown')->count(),
+                    'offline'     => $wc->machines->where('current_state', 'offline')->count(),
+                ];
+
+                $wcSteps = $stepsByWc->get($wc->id, collect());
+                $activeMachineIds = $wcSteps->pluck('machine_id')->unique()->filter()->values();
+                $activeJobs       = $activeMachineIds->count();
+
+                $activeJobsList = $wcSteps->map(fn($s) => [
+                    'wo_number'  => $s->operationSheet?->workOrder?->wo_number ?? '',
+                    'job_number' => $s->operationSheet?->workOrder?->job_number,
+                    'product'    => $s->operationSheet?->workOrder?->product?->name ?? '',
+                    'operator'   => $s->operator?->name ?? '',
+                ])->values();
+
+                return [
+                    'id'              => $wc->id,
+                    'name'            => $wc->name,
+                    'total_machines'  => $totalMachines,
+                    // Frontend "X/Y running" reads from running (machine.current_state),
+                    // not from operation_steps — gives a real signal regardless of
+                    // whether an op_step happens to be in_progress right now.
+                    'active_machines' => $stateMix['running'],
+                    'active_jobs_count' => $activeJobs,
+                    'state_mix'       => $stateMix,
+                    'active_jobs'     => $activeJobsList,
+                    'status_color'    => $hasBreakdown ? 'red' : ($stateMix['running'] > 0 ? 'green' : 'gray'),
+                ];
+            });
 
         // ─── Recent Alerts ────────────────────────────────────────────
         $recentAlerts = AuditLog::with('user')

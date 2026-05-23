@@ -7,7 +7,7 @@ import { SunMoon, CloudDownload, Sparkles } from '@/Components/AnimatedIcons';
 interface KPICard { key: string; value: number; label: string; color: string; alert: boolean }
 
 interface ActiveJob {
-    id: number; wo_number: string; product: string; customer: string;
+    id: number; wo_number: string; job_number: number | null; product: string; customer: string;
     current_step: string; work_centre: string; operator: string;
     started_at: string | null; estimated_hours: number;
     status: string; status_label: string; due_date: string | null; is_overdue: boolean;
@@ -810,7 +810,7 @@ export default function LiveDashboard({
                     <SectionHeader t={t}
                         icon="fi-rr-settings"
                         color={mood === 'night' ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-700'}
-                        title="Active Jobs — In Production & QC Hold"
+                        title="Active Jobs — In Production / QC / Ready"
                         subtitle="Sorted by overdue / at-risk first"
                         action={<span className={`text-sm font-medium tabular-nums ${t.label}`}>{active_jobs.length} jobs</span>}
                     />
@@ -819,7 +819,7 @@ export default function LiveDashboard({
                         <table className="min-w-full">
                             <thead className={`sticky top-0 ${t.tableHead}`}>
                                 <tr className="text-[11px] font-semibold uppercase tracking-wide">
-                                    <th className="px-4 py-3 text-left">WO Number</th>
+                                    <th className="px-4 py-3 text-left">Job Number</th>
                                     <th className="px-4 py-3 text-left">Product</th>
                                     <th className="px-4 py-3 text-left">Customer</th>
                                     <th className="px-4 py-3 text-left">Current Step</th>
@@ -832,7 +832,10 @@ export default function LiveDashboard({
                             <tbody className={t.tableDivider}>
                                 {sortedJobs.map((job) => (
                                     <tr key={job.id} className={`${getJobRowColor(job, job.estimated_hours, job.started_at, mood)} text-sm`}>
-                                        <td className={`px-4 py-3 font-mono font-bold ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.wo_number}</td>
+                                        <td className="px-4 py-3">
+                                            <div className={`font-bold ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.job_number ?? '—'}</div>
+                                            <div className={`text-[10px] font-mono ${t.labelMuted}`}>{job.wo_number}</div>
+                                        </td>
                                         <td className={`px-4 py-3 font-medium ${t.textStrong}`}>{job.product}</td>
                                         <td className={`px-4 py-3 ${t.textMuted}`}>{job.customer}</td>
                                         <td className={`px-4 py-3 ${t.text}`}>{job.current_step}</td>
@@ -860,7 +863,10 @@ export default function LiveDashboard({
                         {sortedJobs.map((job) => (
                             <div key={job.id} className={`rounded-xl p-3 ${getJobRowColor(job, job.estimated_hours, job.started_at, mood)}`}>
                                 <div className="flex items-start justify-between gap-2 mb-1.5">
-                                    <span className={`font-mono font-bold text-sm ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.wo_number}</span>
+                                    <div>
+                                        <div className={`font-bold text-sm ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.job_number ?? '—'}</div>
+                                        <div className={`text-[10px] font-mono ${t.labelMuted}`}>{job.wo_number}</div>
+                                    </div>
                                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide shrink-0 ${
                                         job.status === 'qc_hold' ? t.chipBlue : t.chipAmber
                                     }`}>{job.status_label}</span>
@@ -932,11 +938,27 @@ export default function LiveDashboard({
                                                 : wc.status_color === 'red' ? 'bg-gradient-to-r from-red-500 to-red-400'
                                                 : 'bg-slate-400'}`} style={{ width: `${pct}%` }} />
                                         </div>
+                                        {(wc as any).state_mix && (
+                                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                                {([
+                                                    { k: 'running',     l: 'Running',     color: mood === 'night' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                                                    { k: 'setup',       l: 'Setup',       color: mood === 'night' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'    : 'bg-amber-100 text-amber-800 border-amber-200' },
+                                                    { k: 'idle',        l: 'Idle',        color: mood === 'night' ? 'bg-surface-700/40 text-surface-300 border-surface-600/40' : 'bg-slate-100 text-slate-700 border-slate-200' },
+                                                    { k: 'maintenance', l: 'Maintenance', color: mood === 'night' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'      : 'bg-blue-100 text-blue-800 border-blue-200' },
+                                                    { k: 'breakdown',   l: 'Breakdown',   color: mood === 'night' ? 'bg-red-500/20 text-red-300 border-red-500/30'         : 'bg-red-100 text-red-800 border-red-200' },
+                                                    { k: 'offline',     l: 'Offline',     color: mood === 'night' ? 'bg-surface-800/60 text-surface-400 border-surface-700' : 'bg-slate-200 text-slate-600 border-slate-300' },
+                                                ] as const).filter(s => ((wc as any).state_mix[s.k] ?? 0) > 0).map(s => (
+                                                    <span key={s.k} className={`text-[10px] px-1.5 py-0.5 rounded-md border font-semibold ${s.color}`}>
+                                                        {(wc as any).state_mix[s.k]} {s.l}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                         {wc.active_jobs.length > 0 && (
                                             <div className={`space-y-1.5 pt-2 border-t ${t.sectionDivider}`}>
-                                                {wc.active_jobs.slice(0, 3).map((job, i) => (
+                                                {wc.active_jobs.slice(0, 3).map((job: any, i) => (
                                                     <div key={i} className={`text-xs flex items-center gap-2 ${t.textMuted}`}>
-                                                        <span className={`font-mono font-bold ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.wo_number}</span>
+                                                        <span className={`font-bold ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.job_number ?? '—'}</span>
                                                         <span className={t.labelMuted}>·</span>
                                                         <span className="truncate">{job.product}</span>
                                                         <span className={`ml-auto ${t.labelMuted}`}>({job.operator})</span>

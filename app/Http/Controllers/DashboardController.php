@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DeliveryOrder;
 use App\Models\Invoice;
 use App\Models\Ncr;
 use App\Models\QcInspection;
@@ -18,44 +19,65 @@ class DashboardController extends Controller
         $today = Carbon::today();
 
         // ── KPI Stats ────────────────────────────────────────────────
+        // Active = anything currently moving through production / QC / pre-delivery.
+        // Includes `released_to_shops` because that's the main in-flight state
+        // in the new Production module.
+        $activeStatuses = ['released_to_shops', 'in_production', 'qc_hold', 'qc_passed', 'ready_for_delivery'];
+
         $stats = [
-            'active_work_orders'  => WorkOrder::whereIn('status', ['in_production', 'qc_hold'])->count(),
+            'active_work_orders'  => WorkOrder::whereIn('status', $activeStatuses)->count(),
             'overdue_work_orders' => WorkOrder::whereNotIn('status', ['delivered', 'cancelled'])
                                               ->whereNotNull('due_date')
                                               ->where('due_date', '<', $today)->count(),
             'pending_qc'          => WorkOrder::where('status', 'qc_hold')->count(),
             'open_ncrs'           => Ncr::whereIn('status', ['open', 'in_rework'])->count(),
-            'draft_invoices'      => Invoice::where('status', 'draft')->count(),
-            'delivered_today'     => WorkOrder::where('status', 'delivered')
-                                              ->whereDate('updated_at', $today)->count(),
+            // "Outstanding" invoices = anything not yet paid. More useful than 'draft'.
+            'draft_invoices'      => Invoice::whereIn('status', ['issued', 'acknowledged'])->count(),
+            // Delivered today derived from the real delivery signal — POD-stamped
+            // delivery_orders, not WO.updated_at (which churns on any edit).
+            'delivered_today'     => DeliveryOrder::whereDate('delivered_at', $today)->count(),
         ];
 
         // ── Recent Work Orders ────────────────────────────────────────
-        $recentWorkOrders = WorkOrder::with(['product', 'customer'])
+        $recentWorkOrders = WorkOrder::with([
+            'product', 'customer', 'operationSheets.steps',
+            'ncrs' => fn($q) => $q->whereIn('status', ['open', 'in_rework']),
+        ])
             ->latest()->limit(8)->get()
-            ->map(fn($wo) => [
-                'id'           => $wo->id,
-                'wo_number'    => $wo->wo_number,
-                'product'      => $wo->product->name ?? '',
-                'customer'     => $wo->customer->name ?? '',
-                'status'       => $wo->status,
-                'status_label' => $wo->status_label,
-                'status_color' => $wo->status_color,
-                'priority'     => $wo->priority,
-                'due_date'     => $wo->due_date?->format('d/m/Y'),
-                'is_overdue'   => $wo->is_overdue,
-            ]);
+            ->map(function ($wo) {
+                $inRework = $wo->ncrs->isNotEmpty();
+                return [
+                    'id'           => $wo->id,
+                    'wo_number'    => $wo->wo_number,
+                    'job_number'   => $wo->job_number,
+                    'product'      => $wo->product->name ?? '',
+                    'customer'     => $wo->customer->name ?? '',
+                    // If the WO has an open NCR, show "In Rework" instead of the
+                    // raw status — clearer than "Released to shops" when the job
+                    // is actually doing a rework loop.
+                    'status'       => $inRework ? 'in_rework' : $wo->status,
+                    'status_label' => $inRework ? 'In Rework' : $wo->status_label,
+                    'status_color' => $inRework ? 'rose' : $wo->status_color,
+                    'priority'     => $wo->priority,
+                    'due_date'     => $wo->due_date?->format('d/m/Y'),
+                    'is_overdue'   => $wo->is_overdue,
+                    'progress_pct' => $this->progressFor($wo),
+                    'in_rework'    => $inRework,
+                ];
+            });
 
         // ── Chart 1: Monthly Production Volume (last 6 months) ───────
+        // "delivered" comes from delivery_orders.delivered_at — the real signal,
+        // not WO.updated_at.
         $monthlyVolume = collect(range(5, 0))->map(function ($i) {
             $month = Carbon::today()->startOfMonth()->subMonths($i);
             return [
                 'month'     => $month->format('M y'),
                 'created'   => WorkOrder::whereYear('created_at', $month->year)
                                         ->whereMonth('created_at', $month->month)->count(),
-                'delivered' => WorkOrder::where('status', 'delivered')
-                                        ->whereYear('updated_at', $month->year)
-                                        ->whereMonth('updated_at', $month->month)->count(),
+                'delivered' => DeliveryOrder::whereNotNull('delivered_at')
+                                            ->whereYear('delivered_at', $month->year)
+                                            ->whereMonth('delivered_at', $month->month)->count(),
             ];
         })->values();
 
@@ -96,18 +118,24 @@ class DashboardController extends Controller
         })->values();
 
         // ── Chart 4: On-Time Delivery Rate (last 6 months) ───────────
+        // Uses delivery_orders.delivered_at and joins back to work_orders to
+        // compare against the WO's due_date — this is the actual on-time signal.
         $deliveryPerf = collect(range(5, 0))->map(function ($i) {
             $month = Carbon::today()->startOfMonth()->subMonths($i);
-            $delivered = WorkOrder::where('status', 'delivered')
-                ->whereYear('updated_at', $month->year)
-                ->whereMonth('updated_at', $month->month);
-            $total   = (clone $delivered)->count();
-            $onTime  = (clone $delivered)->whereColumn('updated_at', '<=', 'due_date')->count();
+            $base = DeliveryOrder::whereNotNull('delivered_at')
+                ->whereYear('delivered_at', $month->year)
+                ->whereMonth('delivered_at', $month->month)
+                ->join('work_orders', 'work_orders.id', '=', 'delivery_orders.work_order_id');
+            $total  = (clone $base)->count();
+            $onTime = (clone $base)
+                ->whereNotNull('work_orders.due_date')
+                ->whereColumn('delivery_orders.delivered_at', '<=', 'work_orders.due_date')
+                ->count();
             return [
-                'month'      => $month->format('M y'),
-                'on_time'    => $onTime,
-                'late'       => $total - $onTime,
-                'rate'       => $total > 0 ? round(($onTime / $total) * 100, 1) : null,
+                'month'   => $month->format('M y'),
+                'on_time' => $onTime,
+                'late'    => $total - $onTime,
+                'rate'    => $total > 0 ? round(($onTime / $total) * 100, 1) : null,
             ];
         })->values();
 
@@ -133,5 +161,31 @@ class DashboardController extends Controller
                 'ncrTrend'      => $ncrTrend,
             ],
         ]);
+    }
+
+    /**
+     * Compute weighted production progress %. Mirrors WorkOrderController so
+     * the dashboard and the WO list show the same number.
+     */
+    private function progressFor(WorkOrder $wo): ?int
+    {
+        if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) return 100;
+        if ($wo->status === 'cancelled') return null;
+
+        $sheet = $wo->operationSheets->first();
+        if (!$sheet) return 0;
+        $steps = $sheet->steps;
+        if ($steps->isEmpty()) return 0;
+
+        $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
+        if ($weightSum > 0) {
+            $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
+            $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
+            return (int) round(min(100, $done + $wip * 0.5));
+        }
+        $total = $steps->count();
+        $done  = $steps->where('status', 'completed')->count();
+        $wip   = $steps->where('status', 'in_progress')->count();
+        return (int) round((($done + $wip * 0.5) / $total) * 100);
     }
 }
