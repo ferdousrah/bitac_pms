@@ -48,6 +48,7 @@ class CustomerComplaintController extends Controller
                 'id'         => $w->id,
                 'wo_number'  => $w->wo_number,
                 'job_number' => $w->job_number,
+                'quantity'   => (int) $w->quantity,
             ]);
 
         return Inertia::render('Customer/Complaints/Create', [
@@ -65,14 +66,23 @@ class CustomerComplaintController extends Controller
             'subject'       => 'required|string|max:200',
             'category'      => 'nullable|in:general,quality,delivery,billing,other',
             'message'       => 'required|string|max:2000',
+            'affected_qty'  => 'nullable|integer|min:1',
         ]);
 
+        $wo = null;
         // Guard: only allow customer to file against their own WOs
         if (!empty($validated['work_order_id'])) {
             $wo = WorkOrder::find($validated['work_order_id']);
             if ($wo && $wo->customer_id !== $customer->id) {
                 return back()->with('error', "That work order doesn't belong to you.");
             }
+        }
+
+        // Snapshot total qty + cap affected qty to total
+        $totalQty    = $wo ? (int) $wo->quantity : null;
+        $affectedQty = $validated['affected_qty'] ?? null;
+        if ($affectedQty !== null && $totalQty !== null && $affectedQty > $totalQty) {
+            return back()->with('error', "Affected quantity ({$affectedQty}) exceeds total delivered quantity ({$totalQty}).");
         }
 
         $year  = now()->year;
@@ -86,6 +96,8 @@ class CustomerComplaintController extends Controller
             'subject'          => $validated['subject'],
             'category'         => $validated['category'] ?? 'general',
             'message'          => $validated['message'],
+            'affected_qty'     => $affectedQty,
+            'total_qty'        => $totalQty,
             'status'           => 'open',
         ]);
 
@@ -109,7 +121,11 @@ class CustomerComplaintController extends Controller
         $customer = auth('customer')->user();
         abort_unless($complaint->customer_id === $customer->id, 403);
 
-        $complaint->load(['workOrder', 'respondedBy']);
+        $complaint->load([
+            'workOrder', 'respondedBy',
+            'ncr.reworkOrders.targetSection',
+            'gatePass',
+        ]);
 
         return Inertia::render('Customer/Complaints/Show', [
             'complaint' => [
@@ -118,6 +134,8 @@ class CustomerComplaintController extends Controller
                 'subject'          => $complaint->subject,
                 'category'         => $complaint->category,
                 'message'          => $complaint->message,
+                'affected_qty'     => $complaint->affected_qty,
+                'total_qty'        => $complaint->total_qty,
                 'status'           => $complaint->status,
                 'work_order'       => $complaint->workOrder ? [
                     'id'         => $complaint->workOrder->id,
@@ -128,6 +146,22 @@ class CustomerComplaintController extends Controller
                 'responded_by'     => $complaint->respondedBy?->name,
                 'responded_at'     => $complaint->responded_at?->format('d M Y, h:i A'),
                 'created_at'       => $complaint->created_at->format('d M Y, h:i A'),
+                'accepted_at'      => $complaint->accepted_at?->format('d M Y, h:i A'),
+                'ncr'              => $complaint->ncr ? [
+                    'ncr_number' => $complaint->ncr->ncr_number,
+                    'status'     => $complaint->ncr->status,
+                    'reworks'    => $complaint->ncr->reworkOrders->map(fn($r) => [
+                        'rework_number' => $r->rework_wo_number,
+                        'status'        => $r->status,
+                        'section'       => $r->targetSection?->name,
+                    ])->values(),
+                ] : null,
+                'gate_pass'        => $complaint->gatePass ? [
+                    'id'        => $complaint->gatePass->id,
+                    'pass_no'   => $complaint->gatePass->pass_no,
+                    'direction' => $complaint->gatePass->direction,
+                    'status'    => $complaint->gatePass->status,
+                ] : null,
             ],
         ]);
     }

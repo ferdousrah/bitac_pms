@@ -149,6 +149,59 @@ class QcController extends Controller
                 $this->audit->log('ncr_closed', 'Ncr', $ncr->id, [], [
                     'message' => "NCR {$ncr->ncr_number} closed automatically — QC re-inspection passed.",
                 ]);
+
+                // Customer complaints linked to this NCR auto-resolve too.
+                $linkedComplaints = \App\Models\CustomerComplaint::where('linked_ncr_id', $ncr->id)
+                    ->whereNotIn('status', ['resolved', 'closed'])
+                    ->get();
+                foreach ($linkedComplaints as $cc) {
+                    $cc->update([
+                        'status'   => 'resolved',
+                        'response' => ($cc->response ? $cc->response . "\n\n" : '')
+                                      . 'Rework completed and QC verified on ' . now()->format('d M Y') . '. Re-dispatch will follow.',
+                        'responded_at' => now(),
+                        'responded_by' => auth()->id(),
+                    ]);
+                    try {
+                        if ($cc->customer && method_exists($cc->customer, 'notifications')) {
+                            $cc->customer->notifications()->create([
+                                'type'  => 'complaint_resolved',
+                                'title' => 'Your complaint has been resolved',
+                                'body'  => "Complaint {$cc->reference_number}: rework finished and QC passed. Re-dispatch will follow.",
+                                'link'  => "/customer/complaints/{$cc->id}",
+                                'icon'  => 'fi-rr-comment-check',
+                                'color' => 'green',
+                            ]);
+                        }
+                    } catch (\Throwable $e) { /* skip */ }
+                }
+            }
+
+            // If any NCR on this WO was complaint-driven, also pre-create a
+            // draft Delivery Order so staff just need to confirm + dispatch.
+            // Use the complaint's affected_qty (partial) instead of full WO qty.
+            $latestComplaint = \App\Models\CustomerComplaint::where('work_order_id', $workOrder->id)
+                ->whereNotNull('linked_ncr_id')
+                ->latest('accepted_at')
+                ->first();
+            $hasOpenDelivery = $workOrder->deliveryOrders()
+                ->whereIn('status', ['scheduled', 'draft'])->exists();
+            if ($latestComplaint && !$hasOpenDelivery) {
+                $year    = now()->year;
+                $count   = \App\Models\DeliveryOrder::whereYear('created_at', $year)->count();
+                $dispatchQty = $latestComplaint->affected_qty ?? (int) $workOrder->quantity;
+                \App\Models\DeliveryOrder::create([
+                    'work_order_id'      => $workOrder->id,
+                    'customer_id'        => $workOrder->customer_id,
+                    'quantity_delivered' => $dispatchQty,
+                    'scheduled_date'     => now()->addDays(2),
+                    'delivery_address'   => $workOrder->customer?->address,
+                    'notes'              => "Auto-drafted after complaint-driven rework ({$latestComplaint->reference_number}). "
+                                            . "Dispatching {$dispatchQty} reworked unit(s). Confirm vehicle + driver before dispatch.",
+                    'challan_number'     => 'CH-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT),
+                    'status'             => 'scheduled',
+                ]);
+                $workOrder->update(['status' => 'ready_for_delivery']);
             }
         } elseif ($validated['result'] === 'fail') {
             $workOrder->update(['status' => 'qc_hold']);

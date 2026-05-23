@@ -223,8 +223,9 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('ied/complaints')->middleware('permission:manage complaints')->name('ied.complaints.')->group(function () {
         Route::get('/',                       [\App\Http\Controllers\Ied\ComplaintController::class, 'index'])->name('index');
         Route::get('/{complaint}',            [\App\Http\Controllers\Ied\ComplaintController::class, 'show'])->name('show');
-        Route::post('/{complaint}/respond',   [\App\Http\Controllers\Ied\ComplaintController::class, 'respond'])->name('respond');
-        Route::post('/{complaint}/status',    [\App\Http\Controllers\Ied\ComplaintController::class, 'updateStatus'])->name('status');
+        Route::post('/{complaint}/respond',           [\App\Http\Controllers\Ied\ComplaintController::class, 'respond'])->name('respond');
+        Route::post('/{complaint}/approve-rework',    [\App\Http\Controllers\Ied\ComplaintController::class, 'approveRework'])->name('approve-rework');
+        Route::post('/{complaint}/status',            [\App\Http\Controllers\Ied\ComplaintController::class, 'updateStatus'])->name('status');
     });
 
     // ─── IED Gate Passes (Gate-In / Gate-Out for customer reference samples) ───
@@ -580,4 +581,5 @@ Route::middleware(['auth:customer'])->prefix('customer')->name('customer.')->gro
     Route::get('/documents/quotation/{quotation}',     [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'quotation'])->name('documents.quotation');
     Route::get('/documents/challan/{delivery}',        [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'challan'])->name('documents.challan');
     Route::get('/documents/inspection/{inspection}',   [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'inspectionCert'])->name('documents.inspection');
+    Route::get('/documents/gate-pass/{gatePass}',      [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'gatePass'])->name('documents.gate-pass');
 });

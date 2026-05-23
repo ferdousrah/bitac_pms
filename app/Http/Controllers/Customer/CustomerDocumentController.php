@@ -114,6 +114,36 @@ class CustomerDocumentController extends Controller
         return app(\App\Http\Controllers\QcController::class)->pdf($inspection);
     }
 
+    /**
+     * Customer-scoped Gate Pass PDF.
+     * Used when IED auto-issues a Gate-In Pass against a customer complaint —
+     * the customer needs to print/show it at BITAC's gate to bring the
+     * defective part back. Ownership: the related complaint must belong to
+     * this customer.
+     */
+    public function gatePass(\Illuminate\Http\Request $request, \App\Models\GatePass $gatePass)
+    {
+        $customer = auth('customer')->user();
+        if (!$customer) abort(401, 'Not authenticated.');
+
+        $owned = \App\Models\CustomerComplaint::where('linked_gate_pass_id', $gatePass->id)
+            ->where('customer_id', $customer->id)
+            ->exists();
+        abort_unless($owned, 403, 'This gate pass does not belong to your account.');
+
+        // Forward through to the staff PDF generator with preview=1 OR
+        // preview=base64 (JSON, used by the PdfPopupModal to bypass download
+        // manager extensions like IDM/FDM that hijack application/pdf responses).
+        $previewMode = $request->query('preview') === 'base64' ? 'base64' : 1;
+
+        $fakeRequest = \Illuminate\Http\Request::create(
+            '/ied/gate-passes/' . $gatePass->id . '/pdf',
+            'GET',
+            ['preview' => $previewMode],
+        );
+        return app(\App\Http\Controllers\Ied\GatePassController::class)->pdf($fakeRequest, $gatePass);
+    }
+
     public function invoicePdf(Invoice $invoice)
     {
         $customer = auth('customer')->user();

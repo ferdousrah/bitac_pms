@@ -15,12 +15,16 @@ export default function CustomerComplaintCreate({ workOrders, preselectedWo }: a
         subject: '',
         category: 'general',
         message: '',
+        affected_qty: '' as string | number,
     });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         form.post('/customer/complaints');
     };
+
+    const selectedWo = workOrders.find((w: any) => Number(w.id) === Number(form.data.work_order_id));
+    const totalQty   = selectedWo?.quantity;
 
     return (
         <CustomerLayout backHref="/customer/complaints" backLabel="All Complaints" title="New Complaint / Feedback" width="narrow">
@@ -50,12 +54,36 @@ export default function CustomerComplaintCreate({ workOrders, preselectedWo }: a
                                 <option value="">— Not related to a specific job —</option>
                                 {workOrders.map((w: any) => (
                                     <option key={w.id} value={w.id}>
-                                        Job #{w.job_number ?? '—'} ({w.wo_number})
+                                        Job #{w.job_number ?? '—'} ({w.wo_number}) · qty {w.quantity}
                                     </option>
                                 ))}
                             </select>
                         </div>
                     </div>
+
+                    {selectedWo && (
+                        <div className="form-group">
+                            <label className="form-label">
+                                How many units are defective? <span className="form-label-optional">leave blank if all</span>
+                            </label>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max={totalQty}
+                                    value={form.data.affected_qty as any}
+                                    onChange={(e) => form.setData('affected_qty', e.target.value)}
+                                    className="form-input font-mono w-32"
+                                    placeholder="e.g. 2"
+                                />
+                                <span className="text-sm text-surface-500">out of <span className="font-bold text-surface-800">{totalQty}</span> delivered</span>
+                            </div>
+                            <p className="form-hint">
+                                Tells us how many parts to rework. If all are affected, leave blank.
+                            </p>
+                            {form.errors.affected_qty && <p className="form-error">{form.errors.affected_qty}</p>}
+                        </div>
+                    )}
 
                     <div className="form-group">
                         <label className="form-label">Subject <span className="text-red-500">*</span></label>

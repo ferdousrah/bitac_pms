@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Ncr;
 use App\Models\QcInspection;
 use App\Models\ReworkOrder;
-use App\Models\SectionHandoff;
 use App\Models\WorkOrderSection;
+use App\Services\ReworkOrderService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class NcrController extends Controller
@@ -186,7 +185,7 @@ class NcrController extends Controller
      * the routing can replay through them once all reworks are done.
      * Finally the WO leaves `qc_hold` and re-enters `released_to_shops`.
      */
-    public function createRework(Request $request, Ncr $ncr)
+    public function createRework(Request $request, Ncr $ncr, ReworkOrderService $reworkService)
     {
         $validated = $request->validate([
             'target_section_ids'   => 'required|array|min:1',
@@ -198,95 +197,21 @@ class NcrController extends Controller
 
         $notesBySection = $validated['notes'] ?? [];
 
-        $targetWosRows = WorkOrderSection::with('section')
-            ->where('work_order_id', $ncr->work_order_id)
-            ->whereIn('section_id', $validated['target_section_ids'])
-            ->orderBy('sequence')
-            ->get();
-
-        if ($targetWosRows->count() !== count($validated['target_section_ids'])) {
-            return back()->with('error', "Some chosen sections aren't part of this work order's routing.");
+        try {
+            $result = $reworkService->createForNcr(
+                $ncr,
+                $validated['target_section_ids'],
+                $notesBySection,
+                auth()->id(),
+            );
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
         }
 
-        $year       = now()->year;
-        $startCount = ReworkOrder::whereYear('created_at', $year)->count();
-        $createdNumbers = [];
-
-        DB::transaction(function () use ($ncr, $targetWosRows, $notesBySection, $year, $startCount, &$createdNumbers) {
-            $wo = $ncr->workOrder;
-            $sheet = $wo?->operationSheets()->first();
-
-            $earliestSeq = $targetWosRows->min('sequence');
-            $idx = 0;
-
-            foreach ($targetWosRows as $targetWos) {
-                $idx++;
-                $reworkWoNumber = 'RWK-' . $year . '-' . str_pad($startCount + $idx, 4, '0', STR_PAD_LEFT);
-                $createdNumbers[] = $reworkWoNumber;
-
-                $sectionNote = $notesBySection[$targetWos->section_id] ?? null;
-                $sectionNote = is_string($sectionNote) ? trim($sectionNote) : null;
-                $sectionNote = $sectionNote === '' ? null : $sectionNote;
-
-                ReworkOrder::create([
-                    'ncr_id'                 => $ncr->id,
-                    'original_work_order_id' => $ncr->work_order_id,
-                    'target_section_id'      => $targetWos->section_id,
-                    'target_wos_id'          => $targetWos->id,
-                    'rework_wo_number'       => $reworkWoNumber,
-                    'status'                 => 'open',
-                    'notes'                  => $sectionNote,
-                    'created_by'             => auth()->id(),
-                ]);
-
-                $targetWos->update([
-                    'status'       => 'rework',
-                    'completed_at' => null,
-                    'completed_by' => null,
-                ]);
-
-                if ($sheet) {
-                    $sheet->steps()
-                        ->where('section_id', $targetWos->section_id)
-                        ->update([
-                            'status'       => 'pending',
-                            'started_at'   => null,
-                            'completed_at' => null,
-                            'actual_hours' => null,
-                        ]);
-                }
-
-                SectionHandoff::create([
-                    'work_order_id'   => $ncr->work_order_id,
-                    'from_section_id' => null,
-                    'to_section_id'   => $targetWos->section_id,
-                    'direction'       => 'backward',
-                    'note'            => 'Rework Order ' . $reworkWoNumber
-                                         . ($sectionNote ? ' — ' . $sectionNote : ''),
-                    'transferred_by'  => auth()->id(),
-                    'transferred_at'  => now(),
-                ]);
-            }
-
-            // Reset every section after the earliest chosen one so the routing
-            // can replay them once reworks complete.
-            WorkOrderSection::where('work_order_id', $ncr->work_order_id)
-                ->where('sequence', '>', $earliestSeq)
-                ->whereNotIn('section_id', $targetWosRows->pluck('section_id'))
-                ->update([
-                    'status'       => 'pending',
-                    'completed_at' => null,
-                    'completed_by' => null,
-                ]);
-
-            $wo?->update(['status' => 'released_to_shops']);
-            $ncr->update(['status' => 'in_rework']);
-        });
-
-        $sectionNames = $targetWosRows->pluck('section.name')->join(', ');
-        $count = count($createdNumbers);
+        $sectionNames = $result['target_sections']->pluck('section.name')->join(', ');
+        $count        = count($result['rework_orders']);
         $msg = $count === 1
-            ? "Rework Order {$createdNumbers[0]} created. Job returned to {$sectionNames} for rework."
+            ? "Rework Order {$result['rework_orders'][0]} created. Job returned to {$sectionNames} for rework."
             : "{$count} rework orders created. Job returned to {$sectionNames} for rework.";
 
         return redirect()->route('ncrs.show', $ncr)->with('success', $msg);

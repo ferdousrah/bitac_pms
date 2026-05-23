@@ -12,7 +12,7 @@ class Ncr extends Model
 
     protected $fillable = [
         'center_id', 'qc_inspection_id', 'work_order_id', 'ncr_number', 'defect_type',
-        'root_cause', 'corrective_action', 'responsible_user_id', 'status',
+        'affected_qty', 'root_cause', 'corrective_action', 'responsible_user_id', 'status',
     ];
 
     protected static function boot(): void
