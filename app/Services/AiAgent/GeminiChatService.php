@@ -104,11 +104,14 @@ class GeminiChatService
                 ],
             ];
 
+            $startMs = microtime(true);
             $response = Http::timeout(60)
                 ->post("{$this->baseUrl}/models/{$this->model}:generateContent?key={$this->apiKey}", $payload);
+            $latencyMs = (int) round((microtime(true) - $startMs) * 1000);
 
             if (!$response->successful()) {
                 Log::error('Gemini API error', ['status' => $response->status(), 'body' => $response->body()]);
+                $this->logUsage([], $latencyMs, count($toolCalls), 'error', "HTTP {$response->status()}: " . substr($response->body(), 0, 500));
                 return [
                     'response'   => 'Sorry, I encountered an error connecting to the AI service. Please try again.',
                     'history'    => $history,
@@ -117,6 +120,8 @@ class GeminiChatService
             }
 
             $data = $response->json();
+            // Persist token + cost usage from Gemini's reported usageMetadata
+            $this->logUsage($data['usageMetadata'] ?? [], $latencyMs, count($toolCalls), 'ok');
             $candidate = $data['candidates'][0] ?? null;
 
             if (!$candidate) {
@@ -655,5 +660,47 @@ If you cannot answer a question, don't have enough information, or the topic is 
 - Be concise for chat. Be thorough for reports/presentations.
 - After delivering a file, suggest follow-up: "Would you like me to also create a chart of this data?" or "I can export this as Excel too."
 PROMPT;
+    }
+
+    /**
+     * Persist a per-request usage row. Stores token counts straight from
+     * Gemini's `usageMetadata` plus our internal cost calculation. Center +
+     * customer attribution comes from the currently authenticated user/tenant.
+     *
+     * Failures here are swallowed silently — logging shouldn't break a chat.
+     */
+    private function logUsage(array $usageMetadata, int $latencyMs, int $toolCalls, string $status, ?string $errorMessage = null): void
+    {
+        try {
+            $inputTokens  = (int) ($usageMetadata['promptTokenCount']     ?? 0);
+            $outputTokens = (int) ($usageMetadata['candidatesTokenCount'] ?? 0);
+            $totalTokens  = (int) ($usageMetadata['totalTokenCount']      ?? ($inputTokens + $outputTokens));
+            $costUsd      = \App\Models\AiUsageLog::calcCostUsd($inputTokens, $outputTokens);
+
+            // Resolve which guard fired the request — staff (User) or customer.
+            $actor = auth('web')->user() ?? auth('customer')->user();
+            $actorType = $actor ? get_class($actor) : null;
+            $actorId   = $actor?->id;
+
+            \App\Models\AiUsageLog::create([
+                'center_id'      => auth('web')->user()?->center_id
+                                    ?? auth('customer')->user()?->center_id,
+                'customer_id'    => auth('customer')->user()?->id,
+                'actor_type'     => $actorType,
+                'actor_id'       => $actorId,
+                'model'          => $this->model,
+                'input_tokens'   => $inputTokens,
+                'output_tokens'  => $outputTokens,
+                'total_tokens'   => $totalTokens,
+                'cost_usd'       => $costUsd,
+                'billed_credits' => 0, // TODO: apply markup once pricing tiers are wired
+                'request_ms'     => $latencyMs,
+                'tool_calls'     => $toolCalls,
+                'status'         => $status,
+                'error_message'  => $errorMessage,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('AI usage log failed: ' . $e->getMessage());
+        }
     }
 }

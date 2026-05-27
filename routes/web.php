@@ -491,6 +491,10 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:view audit-log')
             ->name('admin.audit-log');
 
+        Route::get('ai-usage', [\App\Http\Controllers\Admin\AiUsageController::class, 'index'])
+            ->middleware('permission:view ai-usage')
+            ->name('admin.ai-usage');
+
         Route::get('branding', [BrandingController::class, 'index'])
             ->middleware('permission:manage users')
             ->name('admin.branding');

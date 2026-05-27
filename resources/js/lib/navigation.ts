@@ -135,6 +135,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Centers',          href: '/admin/centers',           icon: 'fi-rr-building', permission: 'manage users' },
                 { label: 'Chatbot Settings', href: '/admin/chatbot-settings',  icon: 'fi-rr-robot',    permission: 'manage users' },
                 { label: 'Audit Log',        href: '/admin/audit-log',         icon: 'fi-rr-notebook', permission: 'view audit-log' },
+                { label: 'AI Usage & Cost',  href: '/admin/ai-usage',          icon: 'fi-rr-robot',    permission: 'view ai-usage' },
                 { label: 'Reset / Wipe Data', href: '/admin/system/reset',     icon: 'fi-rr-trash-restore', requireSuperAdmin: true },
             ],
         },
