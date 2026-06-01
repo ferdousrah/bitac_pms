@@ -75,6 +75,7 @@ class WorkOrder extends Model
     public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }
     public function customerPoFile()      { return $this->hasOne(WorkOrderFile::class)->where('kind', 'customer_po')->latest('id'); }
 
+    public function items()               { return $this->hasMany(WorkOrderItem::class)->orderBy('display_order')->orderBy('id'); }
     public function operationSheets()     { return $this->hasMany(OperationSheet::class); }
     public function jobExecutions()       { return $this->hasMany(JobExecution::class); }
     public function qcInspections()       { return $this->hasMany(QcInspection::class); }

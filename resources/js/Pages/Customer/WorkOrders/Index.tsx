@@ -70,7 +70,15 @@ export default function CustomerWorkOrderIndex({ workOrders }: any) {
                                                     {wo.wo_number}
                                                 </Link>
                                             </td>
-                                            <td className="text-surface-800 font-medium">{wo.product}</td>
+                                            <td>
+                                                <div className="text-surface-800 font-medium truncate max-w-[220px]">{wo.product}</div>
+                                                {wo.item_count > 1 && (
+                                                    <div className="text-[10px] text-indigo-700 mt-0.5 font-semibold inline-flex items-center gap-1">
+                                                        <i className="fi fi-rr-boxes text-[9px] leading-none" />
+                                                        +{wo.item_count - 1} more item{wo.item_count > 2 ? 's' : ''}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="font-mono text-surface-700">{wo.quantity}</td>
                                             <td className="min-w-[140px]">
                                                 {wo.status === 'cancelled' ? (
@@ -129,6 +137,12 @@ export default function CustomerWorkOrderIndex({ workOrders }: any) {
                                         <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>{wo.status?.replace(/_/g, ' ')}</span>
                                     </div>
                                     <p className="text-sm font-medium text-surface-800 truncate">{wo.product}</p>
+                                    {wo.item_count > 1 && (
+                                        <p className="text-[10px] text-indigo-700 mt-0.5 font-semibold inline-flex items-center gap-1">
+                                            <i className="fi fi-rr-boxes text-[9px] leading-none" />
+                                            +{wo.item_count - 1} more item{wo.item_count > 2 ? 's' : ''}
+                                        </p>
+                                    )}
                                     {wo.status !== 'cancelled' && (
                                         <div className="mt-2.5 flex items-center gap-2">
                                             <div className="flex-1 h-1.5 rounded-full bg-surface-200 overflow-hidden">

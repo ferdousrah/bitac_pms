@@ -105,7 +105,7 @@ class CustomerComplaintController extends Controller
         \App\Services\NotifyService::toPermission(
             'manage complaints',
             'complaint_filed',
-            "New complaint from {$customer->name}",
+            "New feedback/compliment from {$customer->name}",
             "{$ref}: " . substr($complaint->subject, 0, 80),
             "/ied/complaints/{$complaint->id}",
             'fi-rr-comment-alt',
@@ -113,7 +113,7 @@ class CustomerComplaintController extends Controller
         );
 
         return redirect()->route('customer.complaints.show', $complaint)
-            ->with('success', "Complaint {$ref} submitted. We will get back to you shortly.");
+            ->with('success', "Submission {$ref} received. We will get back to you shortly.");
     }
 
     public function show(CustomerComplaint $complaint)

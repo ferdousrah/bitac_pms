@@ -227,6 +227,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{complaint}/respond',           [\App\Http\Controllers\Ied\ComplaintController::class, 'respond'])->name('respond');
         Route::post('/{complaint}/approve-rework',    [\App\Http\Controllers\Ied\ComplaintController::class, 'approveRework'])->name('approve-rework');
         Route::post('/{complaint}/status',            [\App\Http\Controllers\Ied\ComplaintController::class, 'updateStatus'])->name('status');
+        // Deliberation panel — decision makers, discussion, AI draft
+        Route::post('/{complaint}/decision-makers',                          [\App\Http\Controllers\Ied\ComplaintController::class, 'addDecisionMaker'])->name('add-decision-maker');
+        Route::delete('/{complaint}/decision-makers/{decisionMaker}',        [\App\Http\Controllers\Ied\ComplaintController::class, 'removeDecisionMaker'])->name('remove-decision-maker');
+        Route::post('/{complaint}/messages',                                 [\App\Http\Controllers\Ied\ComplaintController::class, 'postMessage'])->name('post-message');
+        Route::get('/{complaint}/messages/poll',                             [\App\Http\Controllers\Ied\ComplaintController::class, 'pollMessages'])->name('poll-messages');
+        Route::get('/{complaint}/draft',                                     [\App\Http\Controllers\Ied\ComplaintController::class, 'generateDraft'])->name('draft');
+    });
+
+    // ─── IED Emergency Production Requests ───────────────────────────
+    // Reviewers — same permission gate as RFQ management.
+    Route::prefix('ied/emergency-requests')->middleware('permission:manage rfqs')->name('ied.emergency-requests.')->group(function () {
+        Route::get('/',                              [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'index'])->name('index');
+        Route::get('/{emergencyRequest}',            [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'show'])->name('show');
+        Route::post('/{emergencyRequest}/approve',   [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'approve'])->name('approve');
+        Route::post('/{emergencyRequest}/reject',    [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'reject'])->name('reject');
     });
 
     // ─── IED Gate Passes (Gate-In / Gate-Out for customer reference samples) ───
@@ -236,6 +251,16 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/',               [GatePassController::class, 'store'])->name('store');
         Route::get('/{gatePass}',      [GatePassController::class, 'show'])->name('show');
         Route::get('/{gatePass}/pdf',  [GatePassController::class, 'pdf'])->name('pdf');
+        Route::post('/{gatePass}/cancel', [GatePassController::class, 'cancel'])->name('cancel');
+    });
+
+    // ─── PCD Gate-Out (production team issues these for sample / finished items leaving the floor) ───
+    Route::prefix('pcd/gate-passes')->middleware('permission:view pcd')->name('pcd.gate-passes.')->group(function () {
+        Route::get('/',                   [GatePassController::class, 'index'])->name('index');
+        Route::get('/create',             [GatePassController::class, 'create'])->name('create');
+        Route::post('/',                  [GatePassController::class, 'store'])->name('store');
+        Route::get('/{gatePass}',         [GatePassController::class, 'show'])->name('show');
+        Route::get('/{gatePass}/pdf',     [GatePassController::class, 'pdf'])->name('pdf');
         Route::post('/{gatePass}/cancel', [GatePassController::class, 'cancel'])->name('cancel');
     });
 
@@ -412,6 +437,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/', [QcController::class, 'store'])->name('qc.store');
         Route::get('inspection/{inspection}', [QcController::class, 'show'])->name('qc.show');
         Route::get('inspection/{inspection}/pdf', [QcController::class, 'pdf'])->name('qc.pdf');
+        Route::post('inspection/{inspection}/share', [QcController::class, 'toggleShare'])->name('qc.share');
     });
 
     // NCR
@@ -582,6 +608,9 @@ Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('custo
 
     Route::get('/work-orders', [CustomerWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('/work-orders/{workOrder}', [CustomerWorkOrderController::class, 'show'])->name('work-orders.show');
+    Route::post('/work-orders/{workOrder}/emergency-request',
+        [\App\Http\Controllers\Customer\CustomerEmergencyRequestController::class, 'store']
+    )->name('work-orders.emergency-request');
 
     Route::get('/invoices',                     [CustomerInvoiceController::class, 'index'])->name('invoices.index');
     Route::get('/invoices/{invoice}',           [CustomerInvoiceController::class, 'show'])->name('invoices.show');

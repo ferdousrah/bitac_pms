@@ -20,8 +20,11 @@ class JobNumberService
     public static function next(): int
     {
         return DB::transaction(function () {
-            $max = WorkOrder::lockForUpdate()->max('job_number');
-            $next = $max ? $max + 1 : self::STARTING_NUMBER;
+            // Consider both legacy WO.job_number and per-item job_number — take the max.
+            $maxWo   = WorkOrder::lockForUpdate()->max('job_number');
+            $maxItem = \App\Models\WorkOrderItem::lockForUpdate()->max('job_number');
+            $max = max((int) $maxWo, (int) $maxItem);
+            $next = $max > 0 ? $max + 1 : self::STARTING_NUMBER;
             return (int) $next;
         });
     }

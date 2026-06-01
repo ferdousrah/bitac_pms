@@ -35,14 +35,14 @@ interface Props {
     pass: Pass;
 }
 
-export default function GatePassShow({ pass }: Props) {
+export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: any) {
     const [pdfOpen, setPdfOpen] = useState(false);
     const isIn = pass.direction === 'in';
     const isActive = pass.status === 'issued';
 
     const cancel = () => {
         if (!confirm(`Cancel Gate Pass ${pass.pass_no}? This cannot be undone.`)) return;
-        router.post(`/ied/gate-passes/${pass.id}/cancel`);
+        router.post(`${basePath}/${pass.id}/cancel`);
     };
 
     return (
@@ -82,7 +82,7 @@ export default function GatePassShow({ pass }: Props) {
                                 >
                                     <i className="fi fi-rr-file-pdf text-xs leading-none" /> Print / Download PDF
                                 </button>
-                                <Link href="/ied/gate-passes" className="btn-ghost">Back</Link>
+                                <Link href={basePath} className="btn-ghost">Back</Link>
                             </div>
                         </div>
                     </div>
@@ -132,7 +132,7 @@ export default function GatePassShow({ pass }: Props) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-surface-50">
-                                {pass.items.map((it, idx) => (
+                                {pass.items.map((it: any, idx: number) => (
                                     <tr key={it.id}>
                                         <td className="px-4 py-2 text-xs text-surface-400 font-mono align-top">{idx + 1}</td>
                                         <td className="px-3 py-2 text-surface-900 align-top whitespace-pre-line">{it.description}</td>

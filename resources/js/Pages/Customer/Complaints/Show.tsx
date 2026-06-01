@@ -30,13 +30,13 @@ export default function CustomerComplaintShow({ complaint }: any) {
     const [showGatePdf, setShowGatePdf] = useState(false);
 
     return (
-        <CustomerLayout backHref="/customer/complaints" backLabel="All Complaints" width="narrow">
+        <CustomerLayout backHref="/customer/complaints" backLabel="All Feedback/Compliments" width="narrow">
             {/* Header */}
             <div className="card">
                 <div className="card-body">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="min-w-0">
-                            <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">Complaint</div>
+                            <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">Feedback / Compliment</div>
                             <h2 className="text-xl font-bold font-mono text-rose-600 mt-1">{complaint.reference_number}</h2>
                             <p className="text-surface-800 text-base font-semibold mt-2">{complaint.subject}</p>
                             <div className="flex items-center gap-3 mt-2 text-xs text-surface-500 flex-wrap">
@@ -86,7 +86,7 @@ export default function CustomerComplaintShow({ complaint }: any) {
                     </div>
                     <div className="card-body space-y-3">
                         <div className="text-sm text-surface-700">
-                            We've accepted your complaint and are reworking your job. You'll be notified when the rework is complete and re-dispatched.
+                            We've accepted your feedback and are reworking your job. You'll be notified when the rework is complete and re-dispatched.
                         </div>
                         <div className="text-xs">
                             <span className="text-surface-500">NCR Reference:</span>{' '}
@@ -174,16 +174,16 @@ export default function CustomerComplaintShow({ complaint }: any) {
 
             {isResolved && (
                 <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-700">
-                    <i className="fi fi-rr-check-circle leading-none" /> This complaint has been marked <b>{complaint.status}</b>. Please file a new complaint if you have further concerns.
+                    <i className="fi fi-rr-check-circle leading-none" /> This submission has been marked <b>{complaint.status}</b>. Please submit new feedback if you have further concerns.
                 </div>
             )}
 
             <div className="flex items-center gap-3">
                 <Link href="/customer/complaints" className="btn-outline btn-sm">
-                    <i className="fi fi-rr-arrow-left text-xs leading-none" /> All Complaints
+                    <i className="fi fi-rr-arrow-left text-xs leading-none" /> All Feedback/Compliments
                 </Link>
                 <Link href="/customer/complaints/create" className="btn-ghost btn-sm">
-                    <i className="fi fi-rr-plus text-xs leading-none" /> New Complaint
+                    <i className="fi fi-rr-plus text-xs leading-none" /> New Feedback/Compliment
                 </Link>
             </div>
 
@@ -193,7 +193,7 @@ export default function CustomerComplaintShow({ complaint }: any) {
                     ? `/customer/documents/gate-pass/${complaint.gate_pass.id}?preview=base64`
                     : null}
                 title={complaint.gate_pass ? `Gate-In Pass ${complaint.gate_pass.pass_no}` : 'Gate Pass'}
-                subtitle={`Complaint ${complaint.reference_number}`}
+                subtitle={`Ref ${complaint.reference_number}`}
                 onClose={() => setShowGatePdf(false)}
             />
         </CustomerLayout>

@@ -221,6 +221,24 @@ class QcController extends Controller
      * notes, and an inspector signature block (image + name + designation +
      * center + phone + email).
      */
+    /**
+     * Toggle whether the inspection certificate is visible in the customer portal.
+     * Stores who toggled it and when, so we have an audit trail.
+     */
+    public function toggleShare(QcInspection $inspection)
+    {
+        $newState = ! (bool) $inspection->shared_with_customer;
+        $inspection->update([
+            'shared_with_customer' => $newState,
+            'shared_at'            => $newState ? now() : null,
+            'shared_by'            => $newState ? auth()->id() : null,
+        ]);
+
+        return back()->with('success', $newState
+            ? 'Inspection certificate is now visible in the customer portal.'
+            : 'Inspection certificate hidden from the customer portal.');
+    }
+
     public function pdf(QcInspection $inspection)
     {
         $inspection->load(['workOrder.customer', 'workOrder.product', 'workOrder.rfq.items', 'inspector.center', 'checklistItems']);
@@ -376,7 +394,7 @@ class QcController extends Controller
 
     public function show(QcInspection $inspection)
     {
-        $inspection->load(['workOrder.product', 'inspector', 'checklistItems', 'ncrs']);
+        $inspection->load(['workOrder.product', 'inspector', 'checklistItems', 'ncrs', 'sharedBy']);
         $hasNcr = $inspection->ncrs->isNotEmpty();
 
         return Inertia::render('QC/Result', [
@@ -393,6 +411,9 @@ class QcController extends Controller
                 'work_order_id'   => $inspection->work_order_id,
                 'has_ncr'         => $hasNcr,
                 'notes'           => $inspection->notes,
+                'shared_with_customer' => (bool) $inspection->shared_with_customer,
+                'shared_at'       => $inspection->shared_at?->format('d M Y, H:i'),
+                'shared_by'       => $inspection->sharedBy?->name,
                 'checklist_items' => $inspection->checklistItems->map(fn($c) => [
                     'id'          => $c->id,
                     'check_point' => $c->check_point,

@@ -30,29 +30,36 @@ const STATUS_BADGE: Record<string, string> = {
     cancelled: 'badge-red',
 };
 
-export default function GatePassIndex({ passes, filters }: Props) {
+export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-passes', lockedDirection }: any) {
     const [search, setSearch]     = useState(filters.search || '');
     const [direction, setDir]     = useState(filters.direction || '');
     const [status, setStatus]     = useState(filters.status || '');
+    const isOutOnly = lockedDirection === 'out';
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
-        router.get('/ied/gate-passes', { search, direction, status }, { preserveState: true });
+        router.get(basePath, { search, direction, status }, { preserveState: true });
     };
 
     return (
-        <AppLayout header="Gate Passes">
+        <AppLayout header={isOutOnly ? 'Gate-Out Passes' : 'Gate Passes'}>
             <div className="space-y-6 animate-fade-in">
                 <div className="page-header">
                     <div>
-                        <h1 className="page-title">Gate Passes</h1>
-                        <p className="page-subtitle">Reference sample tracking — IN / OUT records · {passes.total} total</p>
+                        <h1 className="page-title">{isOutOnly ? 'Gate-Out Passes' : 'Gate Passes'}</h1>
+                        <p className="page-subtitle">
+                            {isOutOnly
+                                ? `Outbound passes for sample / production items leaving the floor · ${passes.total} total`
+                                : `Reference sample tracking — IN / OUT records · ${passes.total} total`}
+                        </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Link href="/ied/gate-passes/create?direction=in" className="btn-outline">
-                            <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> New Gate-In
-                        </Link>
-                        <Link href="/ied/gate-passes/create?direction=out" className="btn-primary">
+                        {!isOutOnly && (
+                            <Link href={`${basePath}/create?direction=in`} className="btn-outline">
+                                <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> New Gate-In
+                            </Link>
+                        )}
+                        <Link href={`${basePath}/create?direction=out`} className="btn-primary">
                             <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> New Gate-Out
                         </Link>
                     </div>
@@ -110,12 +117,12 @@ export default function GatePassIndex({ passes, filters }: Props) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {passes.data.map(p => {
+                                    {passes.data.map((p: any) => {
                                         const db = DIRECTION_BADGE[p.direction];
                                         return (
                                             <tr key={p.id} className="group">
                                                 <td>
-                                                    <Link href={`/ied/gate-passes/${p.id}`} className="block">
+                                                    <Link href={`${basePath}/${p.id}`} className="block">
                                                         <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">{p.pass_no}</span>
                                                         <div className="mt-0.5">
                                                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider ${db.cls}`}>
@@ -139,7 +146,7 @@ export default function GatePassIndex({ passes, filters }: Props) {
                                                 <td className="text-xs text-surface-500">{p.issued_by ?? '—'}</td>
                                                 <td className="text-right">
                                                     <Link
-                                                        href={`/ied/gate-passes/${p.id}`}
+                                                        href={`${basePath}/${p.id}`}
                                                         className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface-50 hover:bg-brand-50 hover:text-brand-700 text-surface-500 transition-colors"
                                                         title="View"
                                                     >

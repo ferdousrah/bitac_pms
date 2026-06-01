@@ -23,7 +23,7 @@ export default function CustomerDocumentsIndex({ workOrders }: any) {
 
     return (
         <CustomerLayout title="Documents">
-            <p className="text-sm text-surface-500 -mt-3">All documents for your orders in one place — quotation, delivery challan, inspection certificate, and invoice.</p>
+            <p className="text-sm text-surface-500 -mt-3">All documents for your orders in one place — quotation, delivery challan, inspection certificate, invoice, and gate passes.</p>
 
             {workOrders.length === 0 ? (
                 <div className="card">
@@ -53,7 +53,8 @@ export default function CustomerDocumentsIndex({ workOrders }: any) {
 }
 
 function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void }) {
-    const docCount = (wo.quotation ? 1 : 0) + wo.challans.length + wo.inspections.length + wo.invoices.length;
+    const gatePasses = wo.gate_passes ?? [];
+    const docCount = (wo.quotation ? 1 : 0) + wo.challans.length + wo.inspections.length + wo.invoices.length + gatePasses.length;
     const jobLabel = `Job #${wo.job_number ?? '—'}`;
 
     return (
@@ -172,6 +173,30 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                         />
                     ))}
                 </DocSection>
+
+                {/* Gate Passes */}
+                <DocSection
+                    title="Gate Passes"
+                    icon="fi-rr-shield"
+                    color="rose"
+                    empty={gatePasses.length === 0}
+                    emptyText="No gate passes issued"
+                >
+                    {gatePasses.map((gp: any) => (
+                        <DocLink
+                            key={gp.id}
+                            onClick={() => onPreview({
+                                url: `/customer/documents/gate-pass/${gp.id}`,
+                                title: `${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} Pass ${gp.pass_no}`,
+                                subtitle: jobLabel,
+                            })}
+                            label={gp.pass_no}
+                            sub={`${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} · ${gp.pass_date ?? gp.issued_at ?? ''}`}
+                            badge={gp.status}
+                            ext="PDF"
+                        />
+                    ))}
+                </DocSection>
             </div>
         </div>
     );
@@ -183,6 +208,7 @@ function DocSection({ title, icon, color, empty, emptyText, children }: any) {
         amber:   'bg-amber-50 text-amber-700 border-amber-100',
         emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
         teal:    'bg-teal-50 text-teal-700 border-teal-100',
+        rose:    'bg-rose-50 text-rose-700 border-rose-100',
     };
     return (
         <div className={`rounded-xl border ${colors[color] ?? 'bg-surface-50 border-surface-100'} p-3`}>

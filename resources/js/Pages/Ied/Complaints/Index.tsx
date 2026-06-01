@@ -38,7 +38,7 @@ export default function IedComplaintsIndex({ complaints, stats, filters }: any) 
     const rows = complaints?.data ?? [];
 
     return (
-        <AppLayout header="Customer Complaints">
+        <AppLayout header="Customer Feedback / Compliments">
             <div className="space-y-6 animate-fade-in">
                 {/* Stat tiles */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -52,8 +52,8 @@ export default function IedComplaintsIndex({ complaints, stats, filters }: any) 
                 <div className="card">
                     <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
-                            <h2 className="text-sm font-bold text-surface-900">Complaint Inbox</h2>
-                            <p className="text-xs text-surface-400 mt-0.5">Customer-filed complaints awaiting IED response</p>
+                            <h2 className="text-sm font-bold text-surface-900">Feedback / Compliment Inbox</h2>
+                            <p className="text-xs text-surface-400 mt-0.5">Customer-filed feedback / compliments awaiting IED response</p>
                         </div>
                         <form onSubmit={submit} className="flex items-center gap-2 flex-wrap">
                             <input
@@ -87,8 +87,8 @@ export default function IedComplaintsIndex({ complaints, stats, filters }: any) 
                         {rows.length === 0 ? (
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-comment-alt" /></div>
-                                <p className="empty-state-title">No complaints found</p>
-                                <p className="empty-state-text">When customers file complaints they'll show up here.</p>
+                                <p className="empty-state-title">No submissions found</p>
+                                <p className="empty-state-text">When customers submit feedback or compliments they'll show up here.</p>
                             </div>
                         ) : (
                             <table className="premium-table">

@@ -12,10 +12,20 @@ class QcInspection extends Model
     protected $fillable = [
         'center_id', 'work_order_id', 'inspector_id', 'inspection_type',
         'qty_inspected', 'qty_passed', 'qty_failed', 'result', 'notes',
+        'shared_with_customer', 'shared_at', 'shared_by',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'shared_with_customer' => 'boolean',
+            'shared_at'            => 'datetime',
+        ];
+    }
 
     public function workOrder()      { return $this->belongsTo(WorkOrder::class); }
     public function inspector()      { return $this->belongsTo(User::class, 'inspector_id'); }
     public function checklistItems() { return $this->hasMany(QcChecklistItem::class); }
     public function ncrs()           { return $this->hasMany(Ncr::class); }
+    public function sharedBy()       { return $this->belongsTo(User::class, 'shared_by'); }
 }

@@ -12,11 +12,43 @@ use Inertia\Inertia;
 
 class GatePassController extends Controller
 {
+    /**
+     * Whether the current request is hitting the PCD-side routes. PCD users
+     * only need Gate-Out (sample/finished items going out). IED owns the full
+     * set (Gate-In + Gate-Out).
+     */
+    private function isPcdContext(): bool
+    {
+        return request()->routeIs('pcd.gate-passes.*');
+    }
+
+    /**
+     * Base URL prefix for the active route group — used by the controller
+     * for redirects and by the frontend for back-links / "View Pass" etc.
+     */
+    private function basePath(): string
+    {
+        return $this->isPcdContext() ? '/pcd/gate-passes' : '/ied/gate-passes';
+    }
+
+    /** Route name prefix for redirects. */
+    private function routePrefix(): string
+    {
+        return $this->isPcdContext() ? 'pcd.gate-passes' : 'ied.gate-passes';
+    }
+
     public function index(Request $request)
     {
         $query = GatePass::with(['rfq.customer', 'issuedBy', 'items'])
             ->latest('pass_date')
             ->latest('id');
+
+        // PCD inbox is scoped to outbound passes — that's what production issues.
+        $lockedDirection = null;
+        if ($this->isPcdContext()) {
+            $query->where('direction', 'out');
+            $lockedDirection = 'out';
+        }
 
         if ($search = $request->input('search')) {
             $digits = preg_replace('/\D/', '', $search);
@@ -50,13 +82,16 @@ class GatePassController extends Controller
                 'direction' => $request->input('direction', ''),
                 'status'    => $request->input('status', ''),
             ],
+            'basePath'        => $this->basePath(),
+            'lockedDirection' => $lockedDirection,
         ]);
     }
 
     public function create(Request $request)
     {
         $rfqId     = $request->query('rfq_id');
-        $direction = $request->query('direction', 'in');
+        // PCD only ever issues outbound passes — force direction regardless of query.
+        $direction = $this->isPcdContext() ? 'out' : $request->query('direction', 'in');
 
         if (!in_array($direction, ['in', 'out'], true)) {
             abort(422, 'Invalid direction.');
@@ -85,13 +120,19 @@ class GatePassController extends Controller
                 'customer_ref' => $rfq->customer_ref_no,
             ] : null,
             'direction'        => $direction,
+            'directionLocked'  => $this->isPcdContext(),
             'prefilled_items'  => $prefilledItems,
             'pass'             => null,
+            'basePath'         => $this->basePath(),
         ]);
     }
 
     public function store(Request $request)
     {
+        // Enforce direction on PCD context so the UI can't lie even if tampered with.
+        if ($this->isPcdContext()) {
+            $request->merge(['direction' => 'out']);
+        }
         $validated = $request->validate([
             'rfq_id'                   => 'nullable|exists:rfqs,id',
             'direction'                => 'required|in:in,out',
@@ -145,7 +186,7 @@ class GatePassController extends Controller
             return $pass;
         });
 
-        return redirect()->route('ied.gate-passes.show', $pass)
+        return redirect()->route("{$this->routePrefix()}.show", $pass)
             ->with('success', "Gate Pass {$pass->pass_no} issued.");
     }
 
@@ -177,8 +218,9 @@ class GatePassController extends Controller
                     'unit'           => $i->unit,
                     'condition_note' => $i->condition_note,
                 ])->values(),
-                'pdf_url'                => "/ied/gate-passes/{$gatePass->id}/pdf?preview=base64",
+                'pdf_url'                => "{$this->basePath()}/{$gatePass->id}/pdf?preview=base64",
             ],
+            'basePath' => $this->basePath(),
         ]);
     }
 

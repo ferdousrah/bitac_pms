@@ -40,7 +40,8 @@ export const mainGroups: NavGroup[] = [
             { label: 'Cost Estimates', href: '/cost-estimates',    icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
             { label: 'Quotations',     href: '/quotations',        icon: 'fi-rr-coins',        permission: 'view quotations' },
             { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
-            { label: 'Complaints',     href: '/ied/complaints',    icon: 'fi-rr-comment-alt',  permission: 'manage complaints', badgeKey: 'open_complaints' },
+            { label: 'Feedback/Compliment', href: '/ied/complaints', icon: 'fi-rr-comment-alt', permission: 'manage complaints', badgeKey: 'open_complaints' },
+            { label: 'Emergency Requests', href: '/ied/emergency-requests', icon: 'fi-rr-siren-on', permission: 'manage rfqs', badgeKey: 'pending_emergency_requests' },
         ],
     },
     {
@@ -52,6 +53,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permission: 'view work-orders' },
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
+            { label: 'Gate-Out Passes',      href: '/pcd/gate-passes',           icon: 'fi-rr-sign-out-alt',    permission: 'view pcd' },
         ],
     },
     {

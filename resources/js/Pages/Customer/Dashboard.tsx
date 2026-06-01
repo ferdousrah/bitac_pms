@@ -199,7 +199,7 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                             <i className="fi fi-rr-folder-open leading-none text-xs" /> All Documents
                         </Link>
                         <Link href="/customer/complaints/create" className="btn-outline btn-sm">
-                            <i className="fi fi-rr-comment-alt leading-none text-xs" /> Submit Complaint
+                            <i className="fi fi-rr-comment-alt leading-none text-xs" /> Submit Feedback/Compliment
                         </Link>
                     </div>
                 </div>

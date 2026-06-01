@@ -3,14 +3,21 @@
 namespace App\Http\Controllers\Ied;
 
 use App\Http\Controllers\Controller;
+use App\Mail\ComplaintResponseMail;
+use App\Models\ComplaintDecisionMaker;
+use App\Models\ComplaintDiscussion;
 use App\Models\CustomerComplaint;
 use App\Models\GatePass;
 use App\Models\Ncr;
+use App\Models\User;
 use App\Models\WorkOrderSection;
 use App\Services\NotifyService;
 use App\Services\ReworkOrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
 /**
@@ -77,6 +84,9 @@ class ComplaintController extends Controller
         $complaint->load([
             'customer', 'workOrder.product', 'workOrder.sections.section', 'respondedBy',
             'acceptedBy', 'ncr.reworkOrders.targetSection', 'gatePass',
+            'decisionMakers.user:id,name,email',
+            'decisionMakers.addedBy:id,name',
+            'discussions.user:id,name',
         ]);
 
         // Candidate sections for rework — only sections that are part of this WO's routing
@@ -152,9 +162,188 @@ class ComplaintController extends Controller
                     'pass_date'  => $complaint->gatePass->pass_date?->format('d M Y'),
                 ] : null,
                 'rework_hours'     => round($reworkHours, 2),
+                'decision_emailed_at' => $complaint->decision_emailed_at?->format('d M Y, h:i A'),
+                'decision_makers'  => $complaint->decisionMakers->map(fn ($dm) => [
+                    'id'         => $dm->id,
+                    'user_id'    => $dm->user_id,
+                    'name'       => $dm->user?->name,
+                    'email'      => $dm->user?->email,
+                    'added_by'   => $dm->addedBy?->name,
+                    'added_at'   => $dm->added_at?->format('d M Y, h:i A'),
+                ])->values(),
+                'discussions'      => $complaint->discussions->map(fn ($d) => [
+                    'id'         => $d->id,
+                    'user_id'    => $d->user_id,
+                    'user_name'  => $d->user?->name,
+                    'message'    => $d->message,
+                    'created_at' => $d->created_at?->format('d M Y, h:i A'),
+                    'is_mine'    => $d->user_id === auth()->id(),
+                ])->values(),
             ],
-            'candidateSections' => $candidateSections,
+            'candidateSections'  => $candidateSections,
+            'assignableUsers'    => User::orderBy('name')->get(['id', 'name', 'email']),
+            'currentUserId'      => auth()->id(),
         ]);
+    }
+
+    /**
+     * Add a decision maker to a complaint. Notifies the added user.
+     */
+    public function addDecisionMaker(Request $request, CustomerComplaint $complaint)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $exists = ComplaintDecisionMaker::where('complaint_id', $complaint->id)
+            ->where('user_id', $validated['user_id'])->exists();
+        if ($exists) {
+            return back()->with('error', 'That person is already on the panel.');
+        }
+
+        ComplaintDecisionMaker::create([
+            'complaint_id' => $complaint->id,
+            'user_id'      => $validated['user_id'],
+            'added_by'     => auth()->id(),
+            'added_at'     => now(),
+        ]);
+
+        NotifyService::send(
+            [$validated['user_id']],
+            'complaint_panel',
+            'Added to a feedback panel',
+            "You've been added as a decision maker on feedback/compliment {$complaint->reference_number}",
+            "/ied/complaints/{$complaint->id}",
+            'fi-rr-users',
+            'indigo',
+        );
+
+        return back()->with('success', 'Decision maker added and notified.');
+    }
+
+    public function removeDecisionMaker(CustomerComplaint $complaint, ComplaintDecisionMaker $decisionMaker)
+    {
+        abort_unless($decisionMaker->complaint_id === $complaint->id, 404);
+        $decisionMaker->delete();
+        return back()->with('success', 'Removed from panel.');
+    }
+
+    /**
+     * Post a message into the complaint's deliberation stream. Notifies other
+     * decision makers + the IED reviewer.
+     */
+    public function postMessage(Request $request, CustomerComplaint $complaint)
+    {
+        $validated = $request->validate([
+            'message' => 'required|string|max:4000',
+        ]);
+
+        $msg = ComplaintDiscussion::create([
+            'complaint_id' => $complaint->id,
+            'user_id'      => auth()->id(),
+            'message'      => $validated['message'],
+        ]);
+
+        // Notify other panel members (not the author).
+        $recipients = $complaint->decisionMakers()->where('user_id', '!=', auth()->id())->pluck('user_id')->toArray();
+        if (! empty($recipients)) {
+            NotifyService::send(
+                $recipients,
+                'complaint_message',
+                'New message on feedback panel',
+                "New opinion shared on {$complaint->reference_number}",
+                "/ied/complaints/{$complaint->id}",
+                'fi-rr-comment-alt',
+                'blue',
+            );
+        }
+
+        return back();
+    }
+
+    /**
+     * Fetch new messages since a given timestamp — used by the frontend for
+     * lightweight polling so the discussion stream stays live.
+     */
+    public function pollMessages(Request $request, CustomerComplaint $complaint)
+    {
+        $since = $request->query('since');
+        $q = $complaint->discussions()->with('user:id,name');
+        if ($since) $q->where('created_at', '>', $since);
+        $messages = $q->orderBy('created_at')->get()->map(fn ($d) => [
+            'id'         => $d->id,
+            'user_id'    => $d->user_id,
+            'user_name'  => $d->user?->name,
+            'message'    => $d->message,
+            'created_at' => $d->created_at?->format('d M Y, h:i A'),
+            'is_mine'    => $d->user_id === auth()->id(),
+        ]);
+        return response()->json([
+            'messages' => $messages,
+            'now'      => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Generate a draft final decision using Gemini, summarising the complaint
+     * + discussion stream into a polite formal response to the customer.
+     * Returns plain text — the IED reviewer can edit it before confirming.
+     */
+    public function generateDraft(CustomerComplaint $complaint)
+    {
+        $complaint->load(['customer', 'workOrder', 'discussions.user']);
+        $apiKey = config('services.gemini.api_key');
+        $model  = config('services.gemini.model', 'gemini-2.0-flash');
+
+        $discussion = $complaint->discussions
+            ->map(fn ($d) => '[' . ($d->user?->name ?? 'Unknown') . '] ' . $d->message)
+            ->implode("\n");
+
+        $contextLines = [];
+        $contextLines[] = "Customer: " . ($complaint->customer?->name ?? '—');
+        $contextLines[] = "Reference: {$complaint->reference_number}";
+        $contextLines[] = "Subject: {$complaint->subject}";
+        if ($complaint->category)    $contextLines[] = "Category: {$complaint->category}";
+        if ($complaint->workOrder)   $contextLines[] = "Work order: {$complaint->workOrder->wo_number}";
+        if ($complaint->affected_qty) $contextLines[] = "Affected qty: {$complaint->affected_qty} of {$complaint->total_qty}";
+
+        $prompt = "You are an IED officer at BITAC (Bangladesh Industrial Technical Assistance Centre)."
+            . " A customer has filed a complaint. Internal decision makers have discussed the matter."
+            . " Based on the complaint details and the panel's discussion below, write a polite, professional final response"
+            . " to the customer in clear English. Be specific about what BITAC has decided to do. Keep it concise (3–5 short paragraphs)."
+            . " Do NOT mention the internal discussion explicitly — just present BITAC's decision."
+            . "\n\n=== COMPLAINT DETAILS ===\n" . implode("\n", $contextLines)
+            . "\n\nCustomer's message:\n{$complaint->message}"
+            . "\n\n=== PANEL DISCUSSION ===\n"
+            . ($discussion !== '' ? $discussion : '(no internal discussion recorded yet — base the draft on the complaint alone.)')
+            . "\n\n=== DRAFT RESPONSE ===";
+
+        // Default template fallback if Gemini isn't configured / fails.
+        $fallback = "Dear {$complaint->customer?->name},\n\n"
+            . "Thank you for bringing complaint {$complaint->reference_number} to our attention. "
+            . "After reviewing the matter internally, BITAC has decided to take appropriate action. "
+            . "Our team will follow up shortly with the next steps.\n\nSincerely,\nBITAC IED Team";
+
+        if (empty($apiKey)) return response()->json(['draft' => $fallback, 'source' => 'fallback']);
+
+        try {
+            $resp = Http::timeout(30)->post(
+                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                [
+                    'contents' => [['parts' => [['text' => $prompt]]]],
+                    'generationConfig' => ['temperature' => 0.7, 'maxOutputTokens' => 800],
+                ],
+            );
+            if (! $resp->successful()) {
+                Log::warning('Gemini draft failed', ['status' => $resp->status(), 'body' => $resp->body()]);
+                return response()->json(['draft' => $fallback, 'source' => 'fallback']);
+            }
+            $text = data_get($resp->json(), 'candidates.0.content.parts.0.text', $fallback);
+            return response()->json(['draft' => trim($text), 'source' => 'ai']);
+        } catch (\Throwable $e) {
+            Log::warning('Gemini draft exception', ['error' => $e->getMessage()]);
+            return response()->json(['draft' => $fallback, 'source' => 'fallback']);
+        }
     }
 
     /**
@@ -185,8 +374,8 @@ class ComplaintController extends Controller
             if ($customer && method_exists($customer, 'notifications')) {
                 $customer->notifications()->create([
                     'type'    => 'complaint_response',
-                    'title'   => "BITAC has responded to your complaint",
-                    'body'    => "Your complaint {$complaint->reference_number} has a new response. Status: " . str_replace('_', ' ', $complaint->status) . ".",
+                    'title'   => "BITAC has responded to your feedback",
+                    'body'    => "Your submission {$complaint->reference_number} has a new response. Status: " . str_replace('_', ' ', $complaint->status) . ".",
                     'link'    => "/customer/complaints/{$complaint->id}",
                     'icon'    => 'fi-rr-comment-check',
                     'color'   => 'green',
@@ -196,7 +385,21 @@ class ComplaintController extends Controller
             // Don't block the response save on notification failure.
         }
 
-        return back()->with('success', "Response sent to {$complaint->customer?->name}. Complaint marked " . str_replace('_', ' ', $complaint->status) . '.');
+        // Send the decision by email via Resend. Failure shouldn't roll back the response.
+        $emailFlash = '';
+        try {
+            if ($complaint->customer?->email) {
+                Mail::to($complaint->customer->email)->send(new ComplaintResponseMail($complaint->fresh(['customer'])));
+                $complaint->update(['decision_emailed_at' => now()]);
+                $emailFlash = ' Email sent to ' . $complaint->customer->email . '.';
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Complaint response email failed', ['complaint_id' => $complaint->id, 'error' => $e->getMessage()]);
+            $emailFlash = ' (Email delivery failed — check RESEND_API_KEY / sender verification.)';
+        }
+
+        return back()->with('success', "Response sent to {$complaint->customer?->name}. Submission marked "
+            . str_replace('_', ' ', $complaint->status) . '.' . $emailFlash);
     }
 
     /**
@@ -213,10 +416,10 @@ class ComplaintController extends Controller
     public function approveRework(Request $request, CustomerComplaint $complaint, ReworkOrderService $reworkService)
     {
         if (!$complaint->workOrder) {
-            return back()->with('error', 'This complaint is not linked to a work order — cannot route to rework.');
+            return back()->with('error', 'This submission is not linked to a work order — cannot route to rework.');
         }
         if ($complaint->linked_ncr_id) {
-            return back()->with('error', 'This complaint has already been approved for rework.');
+            return back()->with('error', 'This submission has already been approved for rework.');
         }
 
         $validated = $request->validate([
@@ -292,8 +495,8 @@ class ComplaintController extends Controller
             if ($customer && method_exists($customer, 'notifications')) {
                 $customer->notifications()->create([
                     'type'  => 'complaint_accepted',
-                    'title' => 'Complaint accepted for rework',
-                    'body'  => "Your complaint {$complaint->reference_number} has been approved for rework. We'll keep you updated.",
+                    'title' => 'Feedback accepted for rework',
+                    'body'  => "Your submission {$complaint->reference_number} has been approved for rework. We'll keep you updated.",
                     'link'  => "/customer/complaints/{$complaint->id}",
                     'icon'  => 'fi-rr-refresh',
                     'color' => 'blue',
@@ -303,7 +506,7 @@ class ComplaintController extends Controller
             // skip silently
         }
 
-        return back()->with('success', 'Complaint approved for rework. NCR raised, sections notified, Gate-In pass issued.');
+        return back()->with('success', 'Submission approved for rework. NCR raised, sections notified, Gate-In pass issued.');
     }
 
     /** Change just the status (without sending a response — for triage). */

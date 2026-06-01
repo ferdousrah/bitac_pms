@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 
 const resultBadge: Record<string, string> = {
     pass: 'badge-green',
@@ -10,6 +10,15 @@ const resultBadge: Record<string, string> = {
 
 export default function QCResult({ inspection }: any) {
     const ncrForm = useForm({ qc_inspection_id: inspection.id });
+
+    const toggleShare = () => {
+        const shouldShare = !inspection.shared_with_customer;
+        const msg = shouldShare
+            ? 'Share this Inspection Certificate with the customer? It will appear in their portal Documents page.'
+            : 'Hide this Inspection Certificate from the customer portal?';
+        if (!confirm(msg)) return;
+        router.post(`/qc/inspection/${inspection.id}/share`, {}, { preserveScroll: true });
+    };
 
     const totalQty = (inspection.qty_passed ?? 0) + (inspection.qty_failed ?? 0);
     const passRate = totalQty > 0 ? Math.round((inspection.qty_passed / totalQty) * 100) : 0;
@@ -126,6 +135,18 @@ export default function QCResult({ inspection }: any) {
                                     <i className="fi fi-rr-file-pdf text-xs leading-none" />
                                     Inspection Certificate
                                 </a>
+                                <button
+                                    type="button"
+                                    onClick={toggleShare}
+                                    className={`btn-sm w-full justify-center ${
+                                        inspection.shared_with_customer
+                                            ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                    } rounded-xl px-3 py-2 font-semibold inline-flex items-center gap-1.5 transition-colors`}
+                                >
+                                    <i className={`fi ${inspection.shared_with_customer ? 'fi-rr-eye-crossed' : 'fi-rr-share'} text-xs leading-none`} />
+                                    {inspection.shared_with_customer ? 'Hide from Customer' : 'Share with Customer'}
+                                </button>
                                 <Link
                                     href={`/work-orders/${inspection.work_order_id}`}
                                     className="btn-outline btn-sm w-full justify-center"
@@ -137,6 +158,25 @@ export default function QCResult({ inspection }: any) {
                                     <i className="fi fi-rr-arrow-left text-xs leading-none" />
                                     Back to List
                                 </Link>
+                            </div>
+                        </div>
+
+                        {/* Customer share status */}
+                        <div className={`alert ${inspection.shared_with_customer ? 'alert-success' : 'alert-info'}`}>
+                            <i className={`fi ${inspection.shared_with_customer ? 'fi-rr-check-circle' : 'fi-rr-lock'} text-sm leading-none`} />
+                            <div>
+                                <div className="font-semibold text-sm">
+                                    {inspection.shared_with_customer
+                                        ? 'Visible in Customer Portal'
+                                        : 'Hidden from Customer Portal'}
+                                </div>
+                                <div className="text-xs mt-0.5">
+                                    {inspection.shared_with_customer ? (
+                                        <>Shared {inspection.shared_at && <>on {inspection.shared_at}</>}{inspection.shared_by && <> by {inspection.shared_by}</>}.</>
+                                    ) : (
+                                        'The customer cannot see this certificate yet. Use the "Share" button above to publish it.'
+                                    )}
+                                </div>
                             </div>
                         </div>
 

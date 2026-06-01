@@ -1363,10 +1363,13 @@ HTML;
             'customer_po_file'  => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,doc,docx|max:10240',
         ]);
 
-        $quotation->load('rfq.items.product');
+        $quotation->load('rfq.items.product', 'items');
         $rfq       = $quotation->rfq;
-        $firstItem = $rfq?->items->first();
+        $rfqItems  = $rfq?->items ?? collect();
+        $firstItem = $rfqItems->first();
         $woNumber  = $this->workOrderService->generateWoNumber();
+        // Top-level WO job number — kept for backward compatibility; per-item
+        // job numbers are stamped below on each work_order_items row.
         $jobNumber = \App\Services\JobNumberService::next();
 
         // Product model exposes boms()/firstBom; older code called ->activeBom which doesn't exist
@@ -1389,7 +1392,7 @@ HTML;
             'bom_id'          => $bomId,
             'wo_number'       => $woNumber,
             'job_number'      => $jobNumber,
-            'quantity'        => $rfq?->items->sum('quantity') ?? 1,
+            'quantity'        => $rfqItems->sum('quantity') ?: 1,
             'status'          => 'pcd_pending',
             'priority'        => $request->input('priority', 'normal'),
             'due_date'        => $request->input('due_date'),
@@ -1399,6 +1402,28 @@ HTML;
             'pcd_handoff_at'  => now(),
             'pcd_handoff_by'  => auth()->id(),
         ]);
+
+        // ── Per-item rows (one work_order_items row per RFQ item) ─────────
+        // The first item reuses the top-level WO job_number so legacy code
+        // (which still reads WO.job_number) continues to point at a real item.
+        // Subsequent items get fresh job_numbers from the global sequence.
+        $quotationItemMap = $quotation->items->values();
+        foreach ($rfqItems->values() as $idx => $rItem) {
+            $itemJobNumber = $idx === 0 ? $jobNumber : \App\Services\JobNumberService::next();
+            \App\Models\WorkOrderItem::create([
+                'work_order_id'     => $workOrder->id,
+                'job_number'        => $itemJobNumber,
+                'product_id'        => $rItem->product_id,
+                'rfq_item_id'       => $rItem->id,
+                'quotation_item_id' => $quotationItemMap[$idx]->id ?? null,
+                'description'       => $rItem->job_description ?: ($rItem->product?->name),
+                'quantity'          => $rItem->quantity,
+                'unit'              => $rItem->unit ?: 'pcs',
+                'status'            => 'pending',
+                'display_order'     => $idx + 1,
+                'notes'             => $rItem->notes,
+            ]);
+        }
 
         // Attach the customer PO / authorisation file (mandatory paper trail)
         if ($request->hasFile('customer_po_file')) {

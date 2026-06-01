@@ -25,7 +25,7 @@ interface Item {
     condition_note: string;
 }
 
-export default function GatePassForm({ rfq, direction, prefilled_items }: Props) {
+export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false }: any) {
     const isIn = direction === 'in';
 
     const { data, setData, post, processing, errors } = useForm<any>({
@@ -39,7 +39,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items }: Props)
         notes:                  '',
         signature:              null as string | null,
         items: prefilled_items.length > 0
-            ? prefilled_items.map(i => ({
+            ? prefilled_items.map((i: any) => ({
                 rfq_item_id:    i.rfq_item_id,
                 description:    i.description,
                 quantity:       String(i.quantity),
@@ -68,7 +68,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items }: Props)
         e.preventDefault();
         const sig = padRef.current?.toDataURL() ?? null;
         setData('signature', sig);
-        setTimeout(() => post('/ied/gate-passes'), 0);
+        setTimeout(() => post(basePath), 0);
     };
 
     return (
@@ -275,7 +275,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items }: Props)
                     </div>
 
                     <div className="flex items-center justify-end gap-3">
-                        <Link href={rfq ? `/rfqs/${rfq.id}` : '/ied/gate-passes'} className="btn-ghost">Cancel</Link>
+                        <Link href={rfq ? `/rfqs/${rfq.id}` : basePath} className="btn-ghost">Cancel</Link>
                         <button
                             type="submit"
                             disabled={processing}

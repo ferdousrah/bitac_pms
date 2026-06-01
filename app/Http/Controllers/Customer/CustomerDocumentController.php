@@ -31,8 +31,14 @@ class CustomerDocumentController extends Controller
                 'quotation:id,version,total_amount',
                 'product:id,name',
                 'deliveryOrders:id,work_order_id,challan_number,scheduled_date,delivered_at,status',
-                'qcInspections:id,work_order_id,inspection_type,result,inspected_at',
+                // Only show inspections BITAC has explicitly shared with the customer
+                'qcInspections' => fn($q) => $q
+                    ->where('shared_with_customer', true)
+                    ->select('id', 'work_order_id', 'inspection_type', 'result', 'inspected_at', 'shared_at'),
                 'invoices:id,work_order_id,invoice_number,total_amount,status,issued_at,paid_at',
+                // Gate passes are linked to the RFQ rather than the WO directly.
+                'rfq:id',
+                'rfq.gatePasses:id,rfq_id,pass_no,direction,status,pass_date,notes,issued_at',
             ])
             ->latest('id')
             ->get()
@@ -68,6 +74,14 @@ class CustomerDocumentController extends Controller
                         'status'         => $i->status,
                         'issued_at'      => $i->issued_at?->format('d M Y'),
                         'paid_at'        => $i->paid_at?->format('d M Y'),
+                    ])->values(),
+                    'gate_passes' => ($wo->rfq?->gatePasses ?? collect())->map(fn ($gp) => [
+                        'id'         => $gp->id,
+                        'pass_no'    => $gp->pass_no,
+                        'direction'  => $gp->direction,   // 'in' | 'out'
+                        'status'     => $gp->status,
+                        'pass_date'  => $gp->pass_date?->format('d M Y'),
+                        'issued_at'  => $gp->issued_at?->format('d M Y'),
                     ])->values(),
                 ];
             })
@@ -110,6 +124,8 @@ class CustomerDocumentController extends Controller
     {
         $customer = auth('customer')->user();
         abort_unless($inspection->workOrder?->customer_id === $customer->id, 403);
+        // Customer can only view if BITAC has explicitly shared this certificate.
+        abort_unless((bool) $inspection->shared_with_customer, 403, 'This inspection certificate has not been shared.');
 
         return app(\App\Http\Controllers\QcController::class)->pdf($inspection);
     }
@@ -126,10 +142,17 @@ class CustomerDocumentController extends Controller
         $customer = auth('customer')->user();
         if (!$customer) abort(401, 'Not authenticated.');
 
-        $owned = \App\Models\CustomerComplaint::where('linked_gate_pass_id', $gatePass->id)
+        // Ownership: either the gate pass is linked to one of the customer's
+        // complaints (legacy path) OR the underlying RFQ belongs to them.
+        $ownedViaComplaint = \App\Models\CustomerComplaint::where('linked_gate_pass_id', $gatePass->id)
             ->where('customer_id', $customer->id)
             ->exists();
-        abort_unless($owned, 403, 'This gate pass does not belong to your account.');
+        $ownedViaRfq = $gatePass->rfq_id
+            ? \App\Models\Rfq::where('id', $gatePass->rfq_id)
+                ->where('customer_id', $customer->id)
+                ->exists()
+            : false;
+        abort_unless($ownedViaComplaint || $ownedViaRfq, 403, 'This gate pass does not belong to your account.');
 
         // Forward through to the staff PDF generator with preview=1 OR
         // preview=base64 (JSON, used by the PdfPopupModal to bypass download
