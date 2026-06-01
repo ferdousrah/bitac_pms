@@ -49,30 +49,50 @@ export default function CustomerWorkOrderIndex({ workOrders }: any) {
                                     <th>WO Number</th>
                                     <th>Product</th>
                                     <th>Qty</th>
+                                    <th>Progress</th>
                                     <th>Status</th>
                                     <th>Due Date</th>
-                                    <th>Last Updated</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {list.map((wo: any) => (
-                                    <tr key={wo.id}>
-                                        <td>
-                                            <Link href={`/customer/work-orders/${wo.id}`} className="font-mono font-semibold text-brand-600 hover:text-brand-700 hover:underline">
-                                                {wo.wo_number}
-                                            </Link>
-                                        </td>
-                                        <td className="text-surface-800 font-medium">{wo.product}</td>
-                                        <td className="font-mono text-surface-700">{wo.quantity}</td>
-                                        <td>
-                                            <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>
-                                                {wo.status?.replace(/_/g, ' ')}
-                                            </span>
-                                        </td>
-                                        <td className="text-surface-500">{wo.due_date ?? '—'}</td>
-                                        <td className="text-surface-400 text-xs">{wo.updated_at}</td>
-                                    </tr>
-                                ))}
+                                {list.map((wo: any) => {
+                                    const pct = wo.progress_pct ?? 0;
+                                    const barColor =
+                                        wo.status === 'cancelled' ? 'bg-surface-300' :
+                                        pct >= 100                ? 'bg-emerald-500' :
+                                        pct >= 70                 ? 'bg-blue-500' :
+                                        pct >= 30                 ? 'bg-amber-500' :
+                                                                    'bg-surface-300';
+                                    return (
+                                        <tr key={wo.id}>
+                                            <td>
+                                                <Link href={`/customer/work-orders/${wo.id}`} className="font-mono font-semibold text-brand-600 hover:text-brand-700 hover:underline">
+                                                    {wo.wo_number}
+                                                </Link>
+                                            </td>
+                                            <td className="text-surface-800 font-medium">{wo.product}</td>
+                                            <td className="font-mono text-surface-700">{wo.quantity}</td>
+                                            <td className="min-w-[140px]">
+                                                {wo.status === 'cancelled' ? (
+                                                    <span className="text-xs text-surface-400">—</span>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 h-1.5 rounded-full bg-surface-200 overflow-hidden">
+                                                            <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${Math.max(2, pct)}%` }} />
+                                                        </div>
+                                                        <span className="text-xs font-semibold text-surface-700 tabular-nums w-9 text-right">{pct}%</span>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>
+                                                    {wo.status?.replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="text-surface-500">{wo.due_date ?? '—'}</td>
+                                        </tr>
+                                    );
+                                })}
                                 {list.length === 0 && (
                                     <tr>
                                         <td colSpan={6}>
@@ -90,23 +110,40 @@ export default function CustomerWorkOrderIndex({ workOrders }: any) {
 
                     {/* Mobile */}
                     <div className="md:hidden card-body space-y-3">
-                        {list.map((wo: any) => (
-                            <Link
-                                key={wo.id}
-                                href={`/customer/work-orders/${wo.id}`}
-                                className="block rounded-xl border border-surface-100 bg-surface-50/50 hover:bg-white hover:shadow-sm p-3.5 transition-all"
-                            >
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</span>
-                                    <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>{wo.status?.replace(/_/g, ' ')}</span>
-                                </div>
-                                <p className="text-sm font-medium text-surface-800 truncate">{wo.product}</p>
-                                <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-surface-100 text-xs">
-                                    <span className="text-surface-500">Qty <span className="font-mono text-surface-700">{wo.quantity}</span></span>
-                                    <span className="text-surface-500">Due {wo.due_date ?? '—'}</span>
-                                </div>
-                            </Link>
-                        ))}
+                        {list.map((wo: any) => {
+                            const pct = wo.progress_pct ?? 0;
+                            const barColor =
+                                wo.status === 'cancelled' ? 'bg-surface-300' :
+                                pct >= 100                ? 'bg-emerald-500' :
+                                pct >= 70                 ? 'bg-blue-500' :
+                                pct >= 30                 ? 'bg-amber-500' :
+                                                            'bg-surface-300';
+                            return (
+                                <Link
+                                    key={wo.id}
+                                    href={`/customer/work-orders/${wo.id}`}
+                                    className="block rounded-xl border border-surface-100 bg-surface-50/50 hover:bg-white hover:shadow-sm p-3.5 transition-all"
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</span>
+                                        <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'}`}>{wo.status?.replace(/_/g, ' ')}</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-surface-800 truncate">{wo.product}</p>
+                                    {wo.status !== 'cancelled' && (
+                                        <div className="mt-2.5 flex items-center gap-2">
+                                            <div className="flex-1 h-1.5 rounded-full bg-surface-200 overflow-hidden">
+                                                <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${Math.max(2, pct)}%` }} />
+                                            </div>
+                                            <span className="text-[11px] font-semibold text-surface-700 tabular-nums w-9 text-right">{pct}%</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-surface-100 text-xs">
+                                        <span className="text-surface-500">Qty <span className="font-mono text-surface-700">{wo.quantity}</span></span>
+                                        <span className="text-surface-500">Due {wo.due_date ?? '—'}</span>
+                                    </div>
+                                </Link>
+                            );
+                        })}
                         {list.length === 0 && (
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-clipboard-list" /></div>

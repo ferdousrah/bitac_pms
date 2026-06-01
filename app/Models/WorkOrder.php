@@ -111,4 +111,51 @@ class WorkOrder extends Model
             'all_done'   => $this->has_material_requisition && $this->has_section_assignment && $this->has_operation_sheet,
         ];
     }
+
+    /**
+     * Weighted production progress, 0-100. Returns null for cancelled WOs.
+     * Mirrors DashboardController/ReportController logic; uses the first
+     * operation sheet's steps with their weight_pct. Falls back to equal
+     * weighting when no weights are set. In-progress steps count as half.
+     */
+    public function getProductionProgressAttribute(): ?int
+    {
+        if (in_array($this->status, ['qc_passed', 'ready_for_delivery', 'delivered'], true)) return 100;
+        if ($this->status === 'cancelled') return null;
+
+        $sheet = $this->operationSheets->first() ?? $this->operationSheets()->with('steps')->first();
+        if (!$sheet) return 0;
+
+        $steps = $sheet->relationLoaded('steps') ? $sheet->steps : $sheet->steps()->get();
+        if ($steps->isEmpty()) return 0;
+
+        $weightSum = $steps->sum(fn ($s) => (float) $s->weight_pct);
+        if ($weightSum > 0) {
+            $done = $steps->where('status', 'completed')->sum(fn ($s) => (float) $s->weight_pct);
+            $wip  = $steps->where('status', 'in_progress')->sum(fn ($s) => (float) $s->weight_pct);
+            return (int) round(min(100, $done + $wip * 0.5));
+        }
+        $total = $steps->count();
+        $done  = $steps->where('status', 'completed')->count();
+        $wip   = $steps->where('status', 'in_progress')->count();
+        return (int) round((($done + $wip * 0.5) / $total) * 100);
+    }
+
+    /**
+     * Compact step list for customer-facing progress views.
+     * [{sequence, operation, status, done_qty?, total_qty?}, ...]
+     */
+    public function progressStepsSummary(): array
+    {
+        $sheet = $this->operationSheets->first() ?? $this->operationSheets()->with('steps')->first();
+        if (!$sheet) return [];
+
+        $steps = $sheet->relationLoaded('steps') ? $sheet->steps : $sheet->steps()->orderBy('sequence')->get();
+        return $steps->sortBy('sequence')->values()->map(fn ($s) => [
+            'sequence'  => (int) $s->sequence,
+            'operation' => $s->operation_name ?: ($s->operation?->name ?? 'Operation'),
+            'status'    => $s->status,
+            'weight'    => (float) ($s->weight_pct ?? 0),
+        ])->all();
+    }
 }

@@ -20,7 +20,7 @@ class CustomerDashboardController extends Controller
         ];
 
         $recentOrders = WorkOrder::where('customer_id', $customer->id)
-            ->with('product')->latest()->limit(5)->get()
+            ->with(['product', 'operationSheets.steps'])->latest()->limit(5)->get()
             ->map(fn($wo) => [
                 'id'           => $wo->id,
                 'wo_number'    => $wo->wo_number,
@@ -30,6 +30,7 @@ class CustomerDashboardController extends Controller
                 'status_label' => $wo->status_label,
                 'status_color' => $wo->status_color,
                 'due_date'     => $wo->due_date?->format('d/m/Y'),
+                'progress_pct' => $wo->production_progress,
             ]);
 
         $recentInvoices = \App\Models\Invoice::where('customer_id', $customer->id)

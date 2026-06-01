@@ -97,21 +97,40 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {recentOrders.map((wo: any) => (
-                                        <Link
-                                            key={wo.id}
-                                            href={`/customer/work-orders/${wo.id}`}
-                                            className="flex items-center justify-between rounded-xl border border-surface-100 bg-surface-50/50 hover:bg-white hover:shadow-sm p-3 transition-all"
-                                        >
-                                            <div className="min-w-0">
-                                                <p className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</p>
-                                                <p className="text-xs text-surface-500 truncate mt-0.5">{wo.product}</p>
-                                            </div>
-                                            <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'} shrink-0 ml-3`}>
-                                                {wo.status?.replace(/_/g, ' ')}
-                                            </span>
-                                        </Link>
-                                    ))}
+                                    {recentOrders.map((wo: any) => {
+                                        const pct = wo.progress_pct ?? 0;
+                                        const barColor =
+                                            wo.status === 'cancelled'  ? 'bg-surface-300' :
+                                            pct >= 100                  ? 'bg-emerald-500' :
+                                            pct >= 70                   ? 'bg-blue-500' :
+                                            pct >= 30                   ? 'bg-amber-500' :
+                                                                          'bg-surface-300';
+                                        return (
+                                            <Link
+                                                key={wo.id}
+                                                href={`/customer/work-orders/${wo.id}`}
+                                                className="block rounded-xl border border-surface-100 bg-surface-50/50 hover:bg-white hover:shadow-sm p-3 transition-all"
+                                            >
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="font-mono text-sm font-bold text-brand-600">{wo.wo_number}</p>
+                                                        <p className="text-xs text-surface-500 truncate mt-0.5">{wo.product}</p>
+                                                    </div>
+                                                    <span className={`badge ${STATUS_BADGE[wo.status] ?? 'badge-slate'} shrink-0`}>
+                                                        {wo.status?.replace(/_/g, ' ')}
+                                                    </span>
+                                                </div>
+                                                {wo.status !== 'cancelled' && (
+                                                    <div className="mt-2.5 flex items-center gap-2">
+                                                        <div className="flex-1 h-1.5 rounded-full bg-surface-200 overflow-hidden">
+                                                            <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${Math.max(2, pct)}%` }} />
+                                                        </div>
+                                                        <span className="text-[11px] font-semibold text-surface-600 tabular-nums w-9 text-right">{pct}%</span>
+                                                    </div>
+                                                )}
+                                            </Link>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
