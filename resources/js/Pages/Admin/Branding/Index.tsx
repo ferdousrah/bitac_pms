@@ -111,11 +111,11 @@ export default function BrandingIndex({ settings }: any) {
                                 <div className="card-body">
                                     <div className="flex items-start gap-4">
                                         {/* Current logo preview */}
-                                        <div className="w-16 h-16 rounded-2xl bg-surface-100 border-2 border-dashed border-surface-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                        <div className="w-16 h-16 border-2 border-dashed border-surface-200 flex items-center justify-center shrink-0">
                                             {(data.logo || settings.logo_url) && !data.remove_logo ? (
                                                 <img
                                                     src={data.logo ? URL.createObjectURL(data.logo) : settings.logo_url}
-                                                    className="w-full h-full object-cover rounded-xl"
+                                                    className="w-full h-full object-contain"
                                                     alt="Logo"
                                                 />
                                             ) : (
@@ -260,7 +260,7 @@ export default function BrandingIndex({ settings }: any) {
                                                     {(data.logo || settings.logo_url) && !data.remove_logo ? (
                                                         <img
                                                             src={data.logo ? URL.createObjectURL(data.logo) : settings.logo_url}
-                                                            className="w-6 h-6 rounded-md object-cover"
+                                                            className="w-6 h-6 object-contain"
                                                             alt=""
                                                         />
                                                     ) : (

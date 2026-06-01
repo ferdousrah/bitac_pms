@@ -317,7 +317,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                 style={{ background: `linear-gradient(to bottom, ${theme.sidebar_color || '#0f172a'}, ${theme.sidebar_accent || '#1e293b'})` }}
             >
                 {/* Logo */}
-                <div className={`h-16 flex items-center border-b border-white/5 shrink-0 ${sidebarCollapsed ? 'justify-center px-0' : 'px-5'}`}>
+                <div className={`h-16 flex items-center bg-white border-b border-surface-200 shrink-0 ${sidebarCollapsed ? 'justify-center px-0' : 'px-5'}`}>
                     <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
                         {theme.logo_url ? (
                             <img src={theme.logo_url} className="w-11 h-11 object-contain shrink-0" alt="" />
@@ -328,8 +328,8 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                         )}
                         {!sidebarCollapsed && (
                             <div>
-                                <div className="text-sm font-bold text-white tracking-tight">{theme.brand_name || 'BITAC PMS'}</div>
-                                <div className="text-[10px] text-white/40 font-medium tracking-wider uppercase">
+                                <div className="text-sm font-bold text-surface-900 tracking-tight">{theme.brand_name || 'BITAC PMS'}</div>
+                                <div className="text-[10px] text-surface-500 font-medium tracking-wider uppercase">
                                     {currentCenter?.name ?? theme.brand_subtitle ?? 'Production'}
                                 </div>
                             </div>
