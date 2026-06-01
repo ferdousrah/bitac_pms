@@ -15,15 +15,26 @@
             $primaryHex = $ss->get('primary_color', '#ff7a0f');
             $sidebarHex = $ss->get('sidebar_color', '#0f172a');
             $isLiveDashboard = request()->routeIs('dashboard.live');
+            $logoPath = $ss->get('logo_path');
+            $logoUrl = $logoPath ? \Illuminate\Support\Facades\Storage::disk('public')->url($logoPath) : null;
+            $logoMime = $logoUrl ? (\Illuminate\Support\Str::endsWith(strtolower($logoPath), '.svg') ? 'image/svg+xml'
+                                : (\Illuminate\Support\Str::endsWith(strtolower($logoPath), '.png') ? 'image/png'
+                                : (\Illuminate\Support\Str::endsWith(strtolower($logoPath), '.webp') ? 'image/webp'
+                                : 'image/jpeg'))) : null;
         @endphp
         <meta name="theme-color" content="{{ $isLiveDashboard ? $primaryHex : $sidebarHex }}">
 
         <!-- PWA Manifest (Live dashboard gets its own installable scope) -->
         <link rel="manifest" href="{{ $isLiveDashboard ? '/manifest-live.json' : '/manifest.json' }}">
 
-        <!-- Icons -->
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-        <link rel="apple-touch-icon" sizes="192x192" href="/apple-touch-icon.png">
+        <!-- Icons — uploaded brand logo if present, else default -->
+        @if($logoUrl)
+            <link rel="icon" type="{{ $logoMime }}" href="{{ $logoUrl }}">
+            <link rel="apple-touch-icon" href="{{ $logoUrl }}">
+        @else
+            <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+            <link rel="apple-touch-icon" sizes="192x192" href="/apple-touch-icon.png">
+        @endif
 
         <!-- Fonts — Inter (premium) + JetBrains Mono (code) -->
         <link rel="preconnect" href="https://fonts.bunny.net">
