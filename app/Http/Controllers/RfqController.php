@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\JobCategory;
 use App\Models\Product;
 use App\Models\Rfq;
 use App\Models\RfqItem;
@@ -16,7 +17,7 @@ class RfqController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Rfq::with(['customer', 'items.product', 'createdBy', 'latestQuotation']);
+        $query = Rfq::with(['customer', 'items.product', 'createdBy', 'latestQuotation', 'jobCategory']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -56,6 +57,7 @@ class RfqController extends Controller
                 'customer'        => $r->customer?->name ?? '—',
                 'customer_ref_no' => $r->customer_ref_no,
                 'job_type'        => $r->job_type ?? 'regular',
+                'job_category'    => $r->jobCategory?->name,
                 'items_summary'   => $r->items->map(fn($i) => [
                     'description' => $i->job_description ?? $i->product?->name ?? '—',
                     'quantity'    => $i->quantity,
@@ -82,8 +84,9 @@ class RfqController extends Controller
     public function create()
     {
         return Inertia::render('RFQ/Create', [
-            'customers' => Customer::where('is_active', true)->get(['id', 'name']),
-            'products'  => Product::orderBy('name')->get(['id', 'name', 'code', 'unit']),
+            'customers'      => Customer::where('is_active', true)->get(['id', 'name']),
+            'products'       => Product::orderBy('name')->get(['id', 'name', 'code', 'unit']),
+            'jobCategories'  => JobCategory::active()->orderBy('display_order')->orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 
@@ -91,6 +94,7 @@ class RfqController extends Controller
     {
         $validated = $request->validate([
             'customer_id'        => 'required|exists:customers,id',
+            'job_category_id'    => 'nullable|exists:job_categories,id',
             'customer_ref_no'    => 'nullable|string|max:100',
             'job_type'           => 'nullable|in:regular,rnd',
             'required_by'        => 'nullable|date',
@@ -127,6 +131,7 @@ class RfqController extends Controller
         $rfq = DB::transaction(function () use ($validated, $request) {
             $rfq = Rfq::create([
                 'customer_id'        => $validated['customer_id'],
+                'job_category_id'    => $validated['job_category_id'] ?? null,
                 'customer_ref_no'    => $validated['customer_ref_no'] ?? null,
                 'job_type'           => $validated['job_type'] ?? 'regular',
                 'required_by'        => $validated['required_by'] ?? null,
@@ -270,6 +275,7 @@ class RfqController extends Controller
             'rfq' => [
                 'id'                 => $rfq->id,
                 'customer_id'        => $rfq->customer_id,
+                'job_category_id'    => $rfq->job_category_id,
                 'customer_ref_no'    => $rfq->customer_ref_no,
                 'job_type'           => $rfq->job_type ?? 'regular',
                 'required_by'        => $rfq->required_by?->format('Y-m-d'),
@@ -297,8 +303,9 @@ class RfqController extends Controller
                     'sample_description' => $i->sample_description,
                 ]),
             ],
-            'customers' => Customer::where('is_active', true)->get(['id', 'name']),
-            'products'  => Product::orderBy('name')->get(['id', 'name', 'code', 'unit']),
+            'customers'     => Customer::where('is_active', true)->get(['id', 'name']),
+            'products'      => Product::orderBy('name')->get(['id', 'name', 'code', 'unit']),
+            'jobCategories' => JobCategory::active()->orderBy('display_order')->orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 
@@ -306,6 +313,7 @@ class RfqController extends Controller
     {
         $validated = $request->validate([
             'customer_id'        => 'required|exists:customers,id',
+            'job_category_id'    => 'nullable|exists:job_categories,id',
             'customer_ref_no'    => 'nullable|string|max:100',
             'job_type'           => 'nullable|in:regular,rnd',
             'required_by'        => 'nullable|date',
@@ -335,6 +343,7 @@ class RfqController extends Controller
         DB::transaction(function () use ($rfq, $validated, $request) {
             $rfq->update([
                 'customer_id'        => $validated['customer_id'],
+                'job_category_id'    => $validated['job_category_id'] ?? null,
                 'customer_ref_no'    => $validated['customer_ref_no'] ?? null,
                 'job_type'           => $validated['job_type'] ?? 'regular',
                 'required_by'        => $validated['required_by'] ?? null,

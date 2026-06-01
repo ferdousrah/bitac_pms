@@ -11,10 +11,11 @@ class CostEstimate extends Model
 
     protected $fillable = [
         'estimate_no', 'rfq_id', 'rfq_item_id', 'center_id', 'quotation_id', 'customer_id',
+        'job_category_id',
         'company_name', 'job_name', 'part_no', 'actual_size', 'materials_size',
-        'pricing_group', 'overhead_pct', 'vat_pct', 'times_multiplier', 'job_quantity',
+        'pricing_group', 'overhead_pct', 'vat_pct', 'tax_pct', 'times_multiplier', 'job_quantity',
         'material_cost', 'machining_cost', 'surface_cost', 'other_cost',
-        'net_cost', 'overhead_amount', 'vat_amount', 'total', 'grand_total',
+        'net_cost', 'overhead_amount', 'vat_amount', 'tax_amount', 'total', 'grand_total',
         'status', 'notes', 'created_by',
     ];
 
@@ -23,6 +24,7 @@ class CostEstimate extends Model
         return [
             'overhead_pct'      => 'decimal:2',
             'vat_pct'           => 'decimal:2',
+            'tax_pct'           => 'decimal:2',
             'times_multiplier'  => 'decimal:2',
             'material_cost'     => 'decimal:2',
             'machining_cost'    => 'decimal:2',
@@ -31,6 +33,7 @@ class CostEstimate extends Model
             'net_cost'          => 'decimal:2',
             'overhead_amount'   => 'decimal:2',
             'vat_amount'        => 'decimal:2',
+            'tax_amount'        => 'decimal:2',
             'total'             => 'decimal:2',
             'grand_total'       => 'decimal:2',
         ];
@@ -39,7 +42,8 @@ class CostEstimate extends Model
     public function rfq()       { return $this->belongsTo(Rfq::class); }
     public function rfqItem()   { return $this->belongsTo(RfqItem::class); }
     public function quotation() { return $this->belongsTo(Quotation::class); }
-    public function customer()  { return $this->belongsTo(Customer::class); }
+    public function customer()    { return $this->belongsTo(Customer::class); }
+    public function jobCategory() { return $this->belongsTo(JobCategory::class); }
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
     public function lines()     { return $this->hasMany(CostEstimateLine::class)->orderBy('section')->orderBy('sequence'); }
 
@@ -64,7 +68,9 @@ class CostEstimate extends Model
         $overhead  = $netCost * ((float) $this->overhead_pct / 100);
         $afterOH   = $netCost + $overhead;
         $vat       = $afterOH * ((float) $this->vat_pct / 100);
-        $total     = $afterOH + $vat;
+        // Tax (e.g. AIT) — applied on the post-overhead pre-VAT subtotal, added separately.
+        $tax       = $afterOH * ((float) ($this->tax_pct ?? 0) / 100);
+        $total     = $afterOH + $vat + $tax;
         $withTimes = $total * (float) $this->times_multiplier;
         $grand     = $withTimes * (int) $this->job_quantity;
 
@@ -76,6 +82,7 @@ class CostEstimate extends Model
             'net_cost'        => round($netCost, 2),
             'overhead_amount' => round($overhead, 2),
             'vat_amount'      => round($vat, 2),
+            'tax_amount'      => round($tax, 2),
             'total'           => round($withTimes, 2),
             'grand_total'     => round($grand, 2),
         ])->save();

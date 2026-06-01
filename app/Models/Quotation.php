@@ -10,9 +10,9 @@ class Quotation extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'rfq_id', 'customer_id', 'work_order_id', 'created_by', 'version',
+        'center_id', 'rfq_id', 'customer_id', 'work_order_id', 'job_category_id', 'created_by', 'version',
         'material_cost', 'labour_cost', 'overhead_cost', 'profit_margin',
-        'discount', 'vat_rate', 'vat_amount', 'total_amount',
+        'discount', 'vat_rate', 'vat_amount', 'tax_rate', 'tax_amount', 'total_amount',
         'validity_days', 'status', 'notes',
         'sent_to_customer_at', 'customer_responded_at', 'parent_quotation_id', 'customer_po_no',
         // BITAC official quotation letter fields
@@ -31,6 +31,7 @@ class Quotation extends Model
 
     public function rfq()              { return $this->belongsTo(Rfq::class); }
     public function customer()         { return $this->belongsTo(Customer::class); }
+    public function jobCategory()      { return $this->belongsTo(JobCategory::class); }
     public function workOrder()        { return $this->belongsTo(WorkOrder::class); }
     public function createdBy()        { return $this->belongsTo(User::class, 'created_by'); }
     public function items()            { return $this->hasMany(QuotationItem::class); }

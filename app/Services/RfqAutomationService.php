@@ -111,6 +111,7 @@ class RfqAutomationService
                     'rfq_id'            => $rfq->id,
                     'rfq_item_id'       => $item->id,
                     'customer_id'       => $rfq->customer_id,
+                    'job_category_id'   => $rfq->job_category_id,
                     'company_name'      => $rfq->customer->name ?? '',
                     'job_name'          => $item->job_description ?: ($item->product?->name ?? 'Item #' . $item->id),
                     'part_no'           => $bestMatch->part_no,
@@ -119,6 +120,7 @@ class RfqAutomationService
                     'pricing_group'     => $bestMatch->pricing_group,
                     'overhead_pct'      => $bestMatch->overhead_pct,
                     'vat_pct'           => $bestMatch->vat_pct,
+                    'tax_pct'           => $bestMatch->tax_pct ?? 0,
                     'times_multiplier'  => $bestMatch->times_multiplier,
                     'job_quantity'      => (int) $item->quantity ?: 1,
                     'status'            => 'draft',
@@ -239,6 +241,7 @@ class RfqAutomationService
         $margin      = $overrides['profit_margin'] ?? (float) $this->setting('default_profit_margin', 15);
         $validityDays= (int) $this->setting('default_validity_days', 30);
         $vatRate     = (float) $this->setting('default_vat_rate', 15);
+        $taxRate     = (float) ($estimate->tax_pct ?? 0);
 
         $materialCost = (float) $estimate->material_cost;
         $labourCost   = (float) $estimate->machining_cost + (float) $estimate->surface_cost;
@@ -247,11 +250,13 @@ class RfqAutomationService
         $profitAmount = $subtotal * ($margin / 100);
         $beforeVat    = $subtotal + $profitAmount;
         $vatAmount    = $beforeVat * ($vatRate / 100);
-        $totalAmount  = $beforeVat + $vatAmount;
+        $taxAmount    = $beforeVat * ($taxRate / 100);
+        $totalAmount  = $beforeVat + $vatAmount + $taxAmount;
 
         $quotation = Quotation::create([
             'rfq_id'              => $rfqId,
             'customer_id'         => $customerId,
+            'job_category_id'     => $estimate->job_category_id,
             'work_order_id'       => null,
             'created_by'          => auth()->id() ?? $estimate->created_by,
             'version'             => 1,
@@ -262,6 +267,8 @@ class RfqAutomationService
             'discount'            => 0,
             'vat_rate'            => $vatRate,
             'vat_amount'          => round($vatAmount, 2),
+            'tax_rate'            => $taxRate,
+            'tax_amount'          => round($taxAmount, 2),
             'total_amount'        => round($totalAmount, 2),
             'validity_days'       => $validityDays,
             'status'              => 'draft',

@@ -8,6 +8,7 @@ use App\Http\Controllers\Pcd\WorkOrderSectionController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\MachineController;
 use App\Http\Controllers\Admin\MachiningOperationController;
+use App\Http\Controllers\Admin\JobCategoryController;
 use App\Http\Controllers\Admin\MaterialController;
 use App\Http\Controllers\Admin\OperatorController;
 use App\Http\Controllers\Admin\SectionController;
@@ -537,6 +538,11 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:manage operations-master')
             ->names('admin.operations')
             ->parameters(['operations' => 'operation']);
+        Route::resource('job-categories', JobCategoryController::class)
+            ->middleware('permission:manage materials-master')
+            ->names('admin.job-categories')
+            ->parameters(['job-categories' => 'jobCategory'])
+            ->except(['show']);
         Route::post('machines/{machine}/state', [MachineController::class, 'changeState'])
             ->middleware('permission:manage machines')
             ->name('admin.machines.state');

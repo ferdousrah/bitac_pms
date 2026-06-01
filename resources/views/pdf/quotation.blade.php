@@ -10,7 +10,8 @@
     $withMargin = $subtotal * (1 + $quotation->profit_margin / 100);
     $afterDiscount = $withMargin - $quotation->discount;
     $vat = $afterDiscount * ($quotation->vat_rate / 100);
-    $total = $afterDiscount + $vat;
+    $tax = $afterDiscount * (($quotation->tax_rate ?? 0) / 100);
+    $total = $afterDiscount + $vat + $tax;
 @endphp
 
 <div class="grid-2 section">
@@ -49,6 +50,9 @@
             <tr><td style="color:#dc2626;">Discount</td><td style="text-align:right;font-family:monospace;color:#dc2626;">- {{ number_format($quotation->discount, 2) }}</td></tr>
             @endif
             <tr><td>VAT ({{ $quotation->vat_rate }}%)</td><td style="text-align:right;font-family:monospace;">{{ number_format($vat, 2) }}</td></tr>
+            @if(($quotation->tax_rate ?? 0) > 0)
+            <tr><td>Tax ({{ rtrim(rtrim(number_format($quotation->tax_rate, 2), '0'), '.') }}%)</td><td style="text-align:right;font-family:monospace;">{{ number_format($tax, 2) }}</td></tr>
+            @endif
         </tbody>
     </table>
     <div class="totals">

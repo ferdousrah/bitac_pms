@@ -151,7 +151,17 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                 <td>
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-surface-900 text-sm truncate">{rfq.customer}</div>
-                                                        <div className="text-[10px] text-surface-400">{rfq.item_count} item{rfq.item_count !== 1 && 's'}</div>
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-surface-400 mt-0.5">
+                                                            <span>{rfq.item_count} item{rfq.item_count !== 1 && 's'}</span>
+                                                            {rfq.job_category && (
+                                                                <>
+                                                                    <span>·</span>
+                                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-semibold uppercase tracking-wide">
+                                                                        {rfq.job_category}
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td>

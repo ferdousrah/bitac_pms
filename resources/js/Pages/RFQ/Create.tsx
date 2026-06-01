@@ -3,6 +3,7 @@ import { useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
 import FilePicker, { UserFileItem } from '@/Components/FilePicker/FilePicker';
 import SampleDescriptionAI from '@/Components/SampleDescriptionAI';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 const REFERENCE_OPTIONS = [
     { value: 'none',            label: 'None',             icon: 'fi-rr-ban' },
@@ -51,7 +52,7 @@ const emptyItem = (): Item => ({
     sample_photos: [],
 });
 
-export default function RFQCreate({ customers, products, rfq }: any) {
+export default function RFQCreate({ customers, products, jobCategories, rfq }: any) {
     const initialItems: Item[] = rfq?.items?.length
         ? rfq.items.map((i: any) => ({
             product_id:         String(i.product_id ?? ''),
@@ -136,12 +137,13 @@ export default function RFQCreate({ customers, products, rfq }: any) {
     };
 
     const { data, setData, post, errors, processing, transform } = useForm({
-        customer_id:     rfq?.customer_id ?? '',
-        customer_ref_no: rfq?.customer_ref_no ?? '',
-        job_type:        (rfq?.job_type ?? 'regular') as 'regular' | 'rnd',
-        required_by:     rfq?.required_by ?? '',
-        notes:           rfq?.notes ?? '',
-        items:           initialItems,
+        customer_id:      rfq?.customer_id ?? '',
+        job_category_id:  rfq?.job_category_id ?? '',
+        customer_ref_no:  rfq?.customer_ref_no ?? '',
+        job_type:         (rfq?.job_type ?? 'regular') as 'regular' | 'rnd',
+        required_by:      rfq?.required_by ?? '',
+        notes:            rfq?.notes ?? '',
+        items:            initialItems,
     });
 
     function setItemField<K extends keyof Item>(index: number, field: K, value: Item[K]) {
@@ -224,11 +226,14 @@ export default function RFQCreate({ customers, products, rfq }: any) {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="form-group">
                                     <label className="form-label">Customer *</label>
-                                    <select value={data.customer_id} onChange={e => setData('customer_id', e.target.value)}
-                                        className="form-select" required>
-                                        <option value="">Select customer...</option>
-                                        {customers?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
+                                    <SearchableSelect
+                                        value={data.customer_id}
+                                        onChange={(v) => setData('customer_id', v as any)}
+                                        options={(customers ?? []).map((c: any) => ({ value: c.id, label: c.name }))}
+                                        placeholder="Search & select customer…"
+                                        clearable={false}
+                                        required
+                                    />
                                     {errors.customer_id && <p className="form-error">{errors.customer_id}</p>}
                                 </div>
                                 <div className="form-group">
@@ -240,6 +245,21 @@ export default function RFQCreate({ customers, products, rfq }: any) {
                                         placeholder="e.g. PO-2024-123"
                                         className="form-input" />
                                 </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">
+                                    Job Category <span className="form-label-optional">(optional)</span>
+                                </label>
+                                <SearchableSelect
+                                    value={data.job_category_id}
+                                    onChange={(v) => setData('job_category_id', v as any)}
+                                    options={(jobCategories ?? []).map((j: any) => ({
+                                        value: j.id, label: j.name, sublabel: j.code ?? '',
+                                    }))}
+                                    placeholder="Select category…"
+                                />
+                                <p className="form-hint">Carried through downstream to Cost Estimate, Quotation and Work Order.</p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="form-group">

@@ -1,10 +1,12 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent } from 'react';
+import SearchableSelect from '@/Components/SearchableSelect';
 
-export default function WorkOrderCreate({ customers, products, rfq, quotation }: any) {
+export default function WorkOrderCreate({ customers, products, jobCategories, rfq, quotation }: any) {
     const { data, setData, post, errors, processing } = useForm({
         customer_id: rfq?.customer_id ?? quotation?.rfq?.customer_id ?? '',
+        job_category_id: rfq?.job_category_id ?? quotation?.job_category_id ?? '',
         product_id: rfq?.product_id ?? quotation?.rfq?.product_id ?? '',
         quotation_id: quotation?.id ?? '',
         quantity: rfq?.quantity ?? quotation?.rfq?.quantity ?? '',
@@ -52,34 +54,44 @@ export default function WorkOrderCreate({ customers, products, rfq, quotation }:
 
                             <div className="form-group">
                                 <label className="form-label">Customer</label>
-                                <select
+                                <SearchableSelect
                                     value={data.customer_id}
-                                    onChange={e => setData('customer_id', e.target.value)}
-                                    className="form-select"
+                                    onChange={(v) => setData('customer_id', v as any)}
+                                    options={(customers ?? []).map((c: any) => ({ value: c.id, label: c.name }))}
+                                    placeholder="Search & select customer…"
+                                    clearable={false}
                                     required
-                                >
-                                    <option value="">Select customer...</option>
-                                    {customers?.map((c: any) => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
+                                />
                                 {errors.customer_id && <p className="form-error">{errors.customer_id}</p>}
                             </div>
 
                             <div className="form-group">
                                 <label className="form-label">Product</label>
-                                <select
+                                <SearchableSelect
                                     value={data.product_id}
-                                    onChange={e => setData('product_id', e.target.value)}
-                                    className="form-select"
+                                    onChange={(v) => setData('product_id', v as any)}
+                                    options={(products ?? []).map((p: any) => ({
+                                        value: p.id, label: p.name, sublabel: p.code ?? '',
+                                    }))}
+                                    placeholder="Search & select product…"
+                                    clearable={false}
                                     required
-                                >
-                                    <option value="">Select product...</option>
-                                    {products?.map((p: any) => (
-                                        <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-                                    ))}
-                                </select>
+                                />
                                 {errors.product_id && <p className="form-error">{errors.product_id}</p>}
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">
+                                    Job Category <span className="form-label-optional">(optional)</span>
+                                </label>
+                                <SearchableSelect
+                                    value={data.job_category_id}
+                                    onChange={(v) => setData('job_category_id', v as any)}
+                                    options={(jobCategories ?? []).map((j: any) => ({
+                                        value: j.id, label: j.name, sublabel: j.code ?? '',
+                                    }))}
+                                    placeholder="Select category…"
+                                />
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

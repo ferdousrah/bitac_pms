@@ -21,7 +21,7 @@ class QuotationController extends Controller
 
     public function index(Request $request)
     {
-        $query = Quotation::with(['rfq.items.product', 'customer', 'createdBy']);
+        $query = Quotation::with(['rfq.items.product', 'customer', 'createdBy', 'jobCategory']);
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
@@ -54,6 +54,7 @@ class QuotationController extends Controller
                                     ?? '—',
                 'rfq_id'       => $q->rfq_id,
                 'job_type'     => $q->rfq?->job_type ?? 'regular',
+                'job_category' => $q->jobCategory?->name,
                 'version'      => $q->version,
                 'total_amount' => $q->total_amount,
                 'status'       => $q->status,
@@ -312,6 +313,7 @@ class QuotationController extends Controller
         $validated = $request->validate([
             'rfq_id'                  => 'required|exists:rfqs,id',
             'vat_rate'                => 'required|numeric|min:0|max:100',
+            'tax_rate'                => 'nullable|numeric|min:0|max:100',
             'validity_days'           => 'nullable|integer|min:1',
             'notes'                   => 'nullable|string',
             'items'                   => 'required|array|min:1',
@@ -345,8 +347,11 @@ class QuotationController extends Controller
         $vatAmount = $vatRate > 0
             ? round($grossTotal * $vatRate / (100 + $vatRate), 2)
             : 0.0;
-        $total     = round($grossTotal, 2);
+        // Tax (AIT etc.) — applied on the PRE-VAT subtotal and ADDED on top of gross.
+        $taxRate   = (float) ($validated['tax_rate'] ?? 0);
         $subtotal  = round($grossTotal - $vatAmount, 2);
+        $taxAmount = $taxRate > 0 ? round($subtotal * $taxRate / 100, 2) : 0.0;
+        $total     = round($grossTotal + $taxAmount, 2);
 
         $saveAsDraft = $request->boolean('save_as_draft');
 
@@ -358,20 +363,23 @@ class QuotationController extends Controller
             ->all();
 
         $quotation = Quotation::create([
-            'rfq_id'        => $validated['rfq_id'],
-            'customer_id'   => $rfq->customer_id,
-            'version'       => $this->quotationService->getNextVersion($rfq->id),
-            'material_cost' => $subtotal,  // legacy column — pre-VAT portion (computed by extracting embedded VAT from gross)
-            'labour_cost'   => 0,
-            'overhead_cost' => 0,
-            'profit_margin' => 0,
-            'discount'      => 0,
-            'vat_rate'      => $vatRate,
-            'vat_amount'    => $vatAmount,
-            'total_amount'  => $total,
-            'validity_days' => $validated['validity_days'] ?? 90,
-            'notes'         => $validated['notes'] ?? null,
-            'status'        => $saveAsDraft ? 'draft' : 'pending_approval',
+            'rfq_id'         => $validated['rfq_id'],
+            'customer_id'    => $rfq->customer_id,
+            'job_category_id'=> $rfq->job_category_id,
+            'version'        => $this->quotationService->getNextVersion($rfq->id),
+            'material_cost'  => $subtotal,  // legacy column — pre-VAT portion (computed by extracting embedded VAT from gross)
+            'labour_cost'    => 0,
+            'overhead_cost'  => 0,
+            'profit_margin'  => 0,
+            'discount'       => 0,
+            'vat_rate'       => $vatRate,
+            'vat_amount'     => $vatAmount,
+            'tax_rate'       => $taxRate,
+            'tax_amount'     => $taxAmount,
+            'total_amount'   => $total,
+            'validity_days'  => $validated['validity_days'] ?? 90,
+            'notes'          => $validated['notes'] ?? null,
+            'status'         => $saveAsDraft ? 'draft' : 'pending_approval',
             'created_by'    => auth()->id(),
             // BITAC letter header
             'memo_no'           => $validated['memo_no'] ?? null,
@@ -1376,6 +1384,7 @@ HTML;
             'quotation_id'    => $quotation->id,
             'rfq_id'          => $quotation->rfq_id, // direct link so PCD inbox can fetch items without going through quotation
             'customer_id'     => $quotation->customer_id,
+            'job_category_id' => $quotation->job_category_id ?? $rfq?->job_category_id,
             'product_id'      => $firstItem?->product_id,
             'bom_id'          => $bomId,
             'wo_number'       => $woNumber,

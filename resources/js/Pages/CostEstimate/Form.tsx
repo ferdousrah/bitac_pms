@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo, useState, useCallback, useRef } from 'react';
 import WeightCalculator from '@/Components/Widgets/WeightCalculator';
+import SearchableSelect from '@/Components/SearchableSelect';
 import axios from 'axios';
 
 interface Line {
@@ -49,6 +50,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
         pricing_group:    estimate?.pricing_group ?? 'B',
         overhead_pct:     estimate?.overhead_pct ?? 25,
         vat_pct:          estimate?.vat_pct ?? 15,
+        tax_pct:          estimate?.tax_pct ?? 0,
         times_multiplier: estimate?.times_multiplier ?? 1,
         job_quantity:     defaultJobQty,
         notes:            estimate?.notes ?? '',
@@ -259,11 +261,12 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
         const overhead  = net * ((parseFloat(data.overhead_pct) || 0) / 100);
         const afterOH   = net + overhead;
         const vat       = afterOH * ((parseFloat(data.vat_pct) || 0) / 100);
-        const total     = afterOH + vat;
+        const tax       = afterOH * ((parseFloat(data.tax_pct) || 0) / 100);
+        const total     = afterOH + vat + tax;
         const withTimes = total * (parseFloat(data.times_multiplier) || 1);
         const grand     = withTimes * (parseInt(data.job_quantity) || 1);
-        return { material, machining, surface, other, net, overhead, afterOH, vat, total: withTimes, grand };
-    }, [data.lines, data.overhead_pct, data.vat_pct, data.times_multiplier, data.job_quantity]);
+        return { material, machining, surface, other, net, overhead, afterOH, vat, tax, total: withTimes, grand };
+    }, [data.lines, data.overhead_pct, data.vat_pct, data.tax_pct, data.times_multiplier, data.job_quantity]);
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
@@ -477,12 +480,12 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="form-group">
                                     <label className="form-label">Customer / Company</label>
-                                    <select value={data.customer_id ?? ''}
-                                        onChange={e => setData('customer_id', e.target.value || null)}
-                                        className="form-select">
-                                        <option value="">Select customer...</option>
-                                        {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
+                                    <SearchableSelect
+                                        value={data.customer_id ?? ''}
+                                        onChange={(v) => setData('customer_id', (v as any) || null)}
+                                        options={(customers ?? []).map((c: any) => ({ value: c.id, label: c.name }))}
+                                        placeholder="Search & select customer…"
+                                    />
                                     {errors.customer_id && <p className="form-error">{errors.customer_id}</p>}
                                 </div>
                                 <div className="form-group">
@@ -563,14 +566,13 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                         <td className="text-surface-400 font-mono text-xs">{data.lines.filter((l: Line, i: number) => l.section === 'material' && i <= idx).length}</td>
                                         <td>
                                             <div className="space-y-1">
-                                                <select value={line.material_id ?? ''}
-                                                    onChange={e => onMaterialChange(idx, e.target.value)}
-                                                    className="form-select text-xs py-1.5">
-                                                    <option value="">— Select material —</option>
-                                                    {materials.map((m: any) => (
-                                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                                    ))}
-                                                </select>
+                                                <SearchableSelect
+                                                    size="sm"
+                                                    value={line.material_id ?? ''}
+                                                    onChange={(v) => onMaterialChange(idx, String(v))}
+                                                    options={materials.map((m: any) => ({ value: m.id, label: m.name }))}
+                                                    placeholder="Select material…"
+                                                />
                                                 {!line.material_id && (
                                                     <input type="text" value={line.description}
                                                         onChange={e => updateLine(idx, { description: e.target.value })}
@@ -811,7 +813,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
 
                                 {/* Multipliers + Grand Total */}
                                 <div className="space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         <div className="form-group">
                                             <label className="form-label text-xs">F. Overhead %</label>
                                             <input type="number" min="0" step="0.01" value={data.overhead_pct}
@@ -822,6 +824,12 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                             <label className="form-label text-xs">G. VAT %</label>
                                             <input type="number" min="0" step="0.01" value={data.vat_pct}
                                                 onChange={e => setData('vat_pct', e.target.value)}
+                                                className="form-input text-xs py-1.5" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label text-xs">Tax % <span className="form-label-optional">e.g. AIT</span></label>
+                                            <input type="number" min="0" step="0.01" value={data.tax_pct}
+                                                onChange={e => setData('tax_pct', e.target.value)}
                                                 className="form-input text-xs py-1.5" />
                                         </div>
                                         <div className="form-group">
@@ -847,6 +855,12 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                             <span>VAT Amount</span>
                                             <span className="font-mono">{fmt(totals.vat)}</span>
                                         </div>
+                                        {totals.tax > 0 && (
+                                            <div className="flex items-center justify-between text-xs mb-1 text-white/60">
+                                                <span>Tax Amount</span>
+                                                <span className="font-mono">{fmt(totals.tax)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between text-sm pt-2 mt-2 border-t border-white/10">
                                             <span>I. Total (per piece × times)</span>
                                             <span className="font-mono font-semibold">{fmt(totals.total)}</span>
@@ -957,16 +971,19 @@ function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationCh
                     <tr key={idx}>
                         <td className="text-surface-400 font-mono text-xs">{lines.filter((l: Line, i: number) => l.section === section && i <= idx).length}</td>
                         <td>
-                            <select value={line.operation_id ?? ''}
-                                onChange={e => onOperationChange(idx, e.target.value)}
-                                className="form-select text-xs py-1.5">
-                                <option value="">— Select operation —</option>
-                                {Object.entries(opsByCategory).map(([cat, ops]: any) => (
-                                    <optgroup key={cat} label={cat.replace(/_/g, ' ').toUpperCase()}>
-                                        {ops.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                    </optgroup>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                size="sm"
+                                value={line.operation_id ?? ''}
+                                onChange={(v) => onOperationChange(idx, String(v))}
+                                options={Object.entries(opsByCategory).flatMap(([cat, ops]: any) =>
+                                    ops.map((o: any) => ({
+                                        value: o.id,
+                                        label: o.name,
+                                        sublabel: cat.replace(/_/g, ' '),
+                                    }))
+                                )}
+                                placeholder="Select operation…"
+                            />
                             {!line.operation_id && (
                                 <input type="text" value={line.description}
                                     onChange={e => onUpdate(idx, { description: e.target.value })}

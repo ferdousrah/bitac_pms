@@ -13,7 +13,7 @@ class WorkOrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps', 'rfq:id,job_type']);
+        $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps', 'rfq:id,job_type', 'jobCategory']);
 
         if ($search = $request->input('search')) {
             // job_number is an unsigned int — strip prefixes like "Job", "#", spaces
@@ -51,6 +51,7 @@ class WorkOrderController extends Controller
                 'wo_number'    => $wo->wo_number,
                 'job_number'   => $wo->job_number,
                 'job_type'     => $wo->rfq?->job_type ?? 'regular',
+                'job_category' => $wo->jobCategory?->name,
                 'product'      => $wo->product->name ?? '',
                 'customer'     => $wo->customer->name ?? '',
                 'quantity'     => $wo->quantity,
@@ -266,20 +267,22 @@ class WorkOrderController extends Controller
     public function create()
     {
         return Inertia::render('WorkOrder/Create', [
-            'customers' => \App\Models\Customer::where('is_active', true)->get(['id', 'name']),
-            'products'  => \App\Models\Product::with('activeBom')->get(['id', 'name', 'code']),
+            'customers'     => \App\Models\Customer::where('is_active', true)->get(['id', 'name']),
+            'products'      => \App\Models\Product::with('activeBom')->get(['id', 'name', 'code']),
+            'jobCategories' => \App\Models\JobCategory::active()->orderBy('display_order')->orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'product_id'  => 'required|exists:products,id',
-            'quantity'    => 'required|numeric|min:1',
-            'priority'    => 'required|in:urgent,normal,low',
-            'due_date'    => 'nullable|date',
-            'notes'       => 'nullable|string',
+            'customer_id'     => 'required|exists:customers,id',
+            'job_category_id' => 'nullable|exists:job_categories,id',
+            'product_id'      => 'required|exists:products,id',
+            'quantity'        => 'required|numeric|min:1',
+            'priority'        => 'required|in:urgent,normal,low',
+            'due_date'        => 'nullable|date',
+            'notes'           => 'nullable|string',
         ]);
 
         $product = \App\Models\Product::find($validated['product_id']);

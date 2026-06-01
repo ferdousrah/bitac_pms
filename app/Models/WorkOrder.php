@@ -11,6 +11,7 @@ class WorkOrder extends Model
 
     protected $fillable = [
         'center_id', 'wo_number', 'job_number', 'rfq_id', 'quotation_id', 'customer_id', 'product_id',
+        'job_category_id',
         'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'customer_po_no', 'created_by',
         'pcd_handoff_at', 'pcd_handoff_by', 'released_to_shops_at', 'released_by',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
@@ -63,6 +64,7 @@ class WorkOrder extends Model
 
     public function section()      { return $this->belongsTo(Section::class); }
     public function customer()     { return $this->belongsTo(Customer::class); }
+    public function jobCategory()  { return $this->belongsTo(JobCategory::class); }
     public function product()      { return $this->belongsTo(Product::class); }
     public function rfq()          { return $this->belongsTo(Rfq::class); }
     public function quotation()    { return $this->belongsTo(Quotation::class); }

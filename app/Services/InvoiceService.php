@@ -11,16 +11,22 @@ class InvoiceService
     {
         $workOrder  = $delivery->workOrder;
         $quotation  = $workOrder->quotation;
-        $vatRate    = (float) config('app.vat_rate', 15);
+        $vatRate    = $quotation?->vat_rate !== null ? (float) $quotation->vat_rate : (float) config('app.vat_rate', 15);
+        $taxRate    = (float) ($quotation?->tax_rate ?? 0);
 
         // BITAC quotations are VAT-inclusive — strip out embedded VAT so the
-        // invoice shows the legal split (subtotal + VAT = total).
+        // invoice shows the legal split (subtotal + VAT + Tax = total).
+        // Tax (e.g. AIT) is additive on top of the VAT-inclusive total.
         if ($quotation) {
-            $total     = (float) $quotation->total_amount;
-            $vatAmount = $total * ($vatRate / (100 + $vatRate));
-            $subtotal  = $total - $vatAmount;
+            $quoteTotal = (float) $quotation->total_amount;
+            // Reverse out the tax portion the quotation already added on top
+            $taxAmount  = (float) ($quotation->tax_amount ?? 0);
+            $grossVatIncl = $quoteTotal - $taxAmount;
+            $vatAmount  = $grossVatIncl * ($vatRate / (100 + $vatRate));
+            $subtotal   = $grossVatIncl - $vatAmount;
+            $total      = $grossVatIncl + $taxAmount;
         } else {
-            $subtotal = $vatAmount = $total = 0.0;
+            $subtotal = $vatAmount = $taxAmount = $total = 0.0;
         }
 
         $year  = now()->year;
@@ -33,7 +39,10 @@ class InvoiceService
             'delivery_order_id' => $delivery->id,
             'customer_id'       => $workOrder->customer_id,
             'subtotal'          => round($subtotal, 2),
+            'vat_rate'          => round($vatRate, 2),
             'vat_amount'        => round($vatAmount, 2),
+            'tax_rate'          => round($taxRate, 2),
+            'tax_amount'        => round($taxAmount, 2),
             'discount'          => 0,
             'total_amount'      => round($total, 2),
             'status'            => 'issued',
@@ -178,6 +187,9 @@ class InvoiceService
                        ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; color: #dc2626;">Discount</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt; color: #dc2626;">- ৳ ' . $fmt($discount) . '</td></tr>'
                        : '')
             .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">VAT (' . $fmt($vatRate) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->vat_amount) . '</td></tr>'
+            .       (((float) ($invoice->tax_amount ?? 0)) > 0
+                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">Tax (' . $fmt($invoice->tax_rate ?? 0) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->tax_amount) . '</td></tr>'
+                       : '')
             .       '<tr style="background: #f3f4f6;"><td style="padding: 6pt 8pt; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">TOTAL DUE</td><td style="padding: 6pt 8pt; text-align: right; font-family: monospace; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">৳ ' . $fmt($invoice->total_amount) . '</td></tr>'
             .     '</table>'
             .   '</td>'

@@ -101,7 +101,14 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                                 </td>
                                                 <td>
                                                     <div className="font-semibold text-surface-900 text-sm">{wo.product}</div>
-                                                    <div className="text-xs text-surface-400">{wo.customer}</div>
+                                                    <div className="flex items-center gap-1.5 text-xs text-surface-400">
+                                                        <span className="truncate">{wo.customer}</span>
+                                                        {wo.job_category && (
+                                                            <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-semibold uppercase tracking-wide">
+                                                                {wo.job_category}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="text-right font-bold text-surface-700">{wo.quantity}</td>
                                                 <td>

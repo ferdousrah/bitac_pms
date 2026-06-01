@@ -10,7 +10,7 @@ class Rfq extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'customer_id', 'required_by', 'notes',
+        'center_id', 'customer_id', 'job_category_id', 'required_by', 'notes',
         'customer_ref_no', 'job_type',
         'status', 'created_by', 'reference_type', 'drawing_path', 'sample_received', 'sample_description',
     ];
@@ -21,6 +21,7 @@ class Rfq extends Model
     }
 
     public function customer()        { return $this->belongsTo(Customer::class); }
+    public function jobCategory()     { return $this->belongsTo(JobCategory::class); }
     public function createdBy()       { return $this->belongsTo(User::class, 'created_by'); }
     public function items()           { return $this->hasMany(RfqItem::class); }
     public function quotations()      { return $this->hasMany(Quotation::class); }

@@ -11,7 +11,7 @@ class Invoice extends Model
 
     protected $fillable = [
         'center_id', 'work_order_id', 'customer_id', 'delivery_order_id', 'invoice_number',
-        'subtotal', 'discount', 'vat_rate', 'vat_amount', 'total_amount',
+        'subtotal', 'discount', 'vat_rate', 'vat_amount', 'tax_rate', 'tax_amount', 'total_amount',
         'status', 'issued_at', 'issued_date', 'due_date', 'payment_terms',
         'paid_at', 'paid_amount', 'payment_method', 'payment_reference',
         'payment_notes', 'marked_paid_by',

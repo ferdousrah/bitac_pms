@@ -128,7 +128,14 @@ export default function QuotationIndex({ quotations, filters, customers }: any) 
                                                 <td>
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-surface-900 text-sm truncate">{q.customer}</div>
-                                                        <div className="text-xs text-surface-400 truncate max-w-[200px]">{q.product}</div>
+                                                        <div className="flex items-center gap-1.5 text-xs text-surface-400 max-w-[220px]">
+                                                            <span className="truncate">{q.product}</span>
+                                                            {q.job_category && (
+                                                                <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-semibold uppercase tracking-wide">
+                                                                    {q.job_category}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td>

@@ -59,6 +59,9 @@
         <div class="total-row" style="color:#dc2626;"><span>Discount</span><span style="font-family:monospace;">- ৳{{ number_format($invoice->discount, 2) }}</span></div>
         @endif
         <div class="total-row"><span>VAT ({{ $invoice->vat_rate }}%)</span><span style="font-family:monospace;">৳{{ number_format($invoice->vat_amount, 2) }}</span></div>
+        @if(($invoice->tax_amount ?? 0) > 0)
+        <div class="total-row"><span>Tax ({{ rtrim(rtrim(number_format($invoice->tax_rate, 2), '0'), '.') }}%)</span><span style="font-family:monospace;">৳{{ number_format($invoice->tax_amount, 2) }}</span></div>
+        @endif
         <div class="total-row total-final"><span>TOTAL DUE</span><span style="font-family:monospace;">৳{{ number_format($invoice->total_amount, 2) }}</span></div>
     </div>
 </div>

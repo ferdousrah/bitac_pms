@@ -134,11 +134,17 @@ class CostEstimateController extends Controller
         $validated = $this->validateEstimate($request);
 
         $estimate = DB::transaction(function () use ($validated) {
-            // If rfq_item_id given, auto-populate rfq_id from it
+            // If rfq_item_id given, auto-populate rfq_id + job_category_id from the parent RFQ
             $rfqId = $validated['rfq_id'] ?? null;
+            $jobCategoryId = null;
             if (!empty($validated['rfq_item_id'])) {
-                $item = \App\Models\RfqItem::find($validated['rfq_item_id']);
-                if ($item) $rfqId = $item->rfq_id;
+                $item = \App\Models\RfqItem::with('rfq')->find($validated['rfq_item_id']);
+                if ($item) {
+                    $rfqId = $item->rfq_id;
+                    $jobCategoryId = $item->rfq?->job_category_id;
+                }
+            } elseif ($rfqId) {
+                $jobCategoryId = \App\Models\Rfq::find($rfqId)?->job_category_id;
             }
 
             $estimate = CostEstimate::create([
@@ -146,6 +152,7 @@ class CostEstimateController extends Controller
                 'rfq_id'           => $rfqId,
                 'rfq_item_id'      => $validated['rfq_item_id'] ?? null,
                 'customer_id'      => $validated['customer_id'] ?? null,
+                'job_category_id'  => $jobCategoryId,
                 'company_name'     => $validated['company_name'] ?? null,
                 'job_name'         => $validated['job_name'],
                 'part_no'          => $validated['part_no'] ?? null,
@@ -154,6 +161,7 @@ class CostEstimateController extends Controller
                 'pricing_group'    => $validated['pricing_group'],
                 'overhead_pct'     => $validated['overhead_pct'] ?? 0,
                 'vat_pct'          => $validated['vat_pct'] ?? 15,
+                'tax_pct'          => $validated['tax_pct'] ?? 0,
                 'times_multiplier' => $validated['times_multiplier'] ?? 1,
                 'job_quantity'     => $validated['job_quantity'] ?? 1,
                 'notes'            => $validated['notes'] ?? null,
@@ -548,6 +556,7 @@ class CostEstimateController extends Controller
                 'pricing_group'    => $validated['pricing_group'],
                 'overhead_pct'     => $validated['overhead_pct'] ?? 0,
                 'vat_pct'          => $validated['vat_pct'] ?? 15,
+                'tax_pct'          => $validated['tax_pct'] ?? 0,
                 'times_multiplier' => $validated['times_multiplier'] ?? 1,
                 'job_quantity'     => $validated['job_quantity'] ?? 1,
                 'notes'            => $validated['notes'] ?? null,
@@ -650,6 +659,7 @@ class CostEstimateController extends Controller
             'pricing_group'    => $e->pricing_group,
             'overhead_pct'     => $e->overhead_pct,
             'vat_pct'          => $e->vat_pct,
+            'tax_pct'          => $e->tax_pct ?? 0,
             'times_multiplier' => $e->times_multiplier,
             'job_quantity'     => $e->job_quantity,
             'material_cost'    => $e->material_cost,
@@ -694,6 +704,7 @@ class CostEstimateController extends Controller
             'pricing_group'    => 'required|in:A,B,C',
             'overhead_pct'     => 'nullable|numeric|min:0|max:1000',
             'vat_pct'          => 'nullable|numeric|min:0|max:100',
+            'tax_pct'          => 'nullable|numeric|min:0|max:100',
             'times_multiplier' => 'nullable|numeric|min:0|max:100',
             'job_quantity'     => 'nullable|integer|min:1',
             'notes'            => 'nullable|string|max:1000',
@@ -903,10 +914,15 @@ class CostEstimateController extends Controller
             ['Net Cost',                                    $e->net_cost,        false],
             ["Overhead ({$e->overhead_pct}%)",              $e->overhead_amount, false],
             ["VAT ({$e->vat_pct}%)",                        $e->vat_amount,      false],
-            ['Total (per unit, incl. VAT)',                 $e->total,           true],
+        ];
+        if (((float) ($e->tax_amount ?? 0)) > 0) {
+            $rows[] = ["Tax ({$e->tax_pct}%)",              $e->tax_amount,      false];
+        }
+        $rows = array_merge($rows, [
+            ['Total (per unit, incl. VAT & Tax)',           $e->total,           true],
             ['Times Multiplier',                            $e->times_multiplier,false],
             ['Job Quantity',                                $e->job_quantity,    false],
-        ];
+        ]);
         foreach ($rows as [$label, $val, $bold]) {
             $weight = $bold ? 'font-weight: bold;' : '';
             $summary .= '<tr>';
