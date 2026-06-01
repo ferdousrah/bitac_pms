@@ -13,13 +13,18 @@ class Customer extends Authenticatable
 
     protected $fillable = [
         'center_id', 'name', 'contact_person', 'email', 'phone', 'address', 'password', 'is_active',
+        'password_change_required',
     ];
 
     protected $hidden = ['password', 'remember_token'];
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'is_active' => 'boolean'];
+        return [
+            'password' => 'hashed',
+            'is_active' => 'boolean',
+            'password_change_required' => 'boolean',
+        ];
     }
 
     public function workOrders()    { return $this->hasMany(WorkOrder::class); }

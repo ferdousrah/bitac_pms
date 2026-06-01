@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\CustomerWelcomeMail;
 use App\Models\Customer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CustomerManagementController extends Controller
@@ -36,13 +39,29 @@ class CustomerManagementController extends Controller
             'email'          => 'required|email|unique:customers',
             'phone'          => 'nullable|string|max:20',
             'address'        => 'nullable|string',
-            'password'       => 'required|string|min:8|confirmed',
         ]);
 
-        // Model cast 'password' => 'hashed' auto-hashes. Don't double-hash.
-        Customer::create([...$validated, 'is_active' => true]);
+        // Auto-generate a memorable-but-secure temporary password.
+        $plainPassword = $this->generatePassword();
 
-        return redirect()->route('admin.customers.index')->with('success', 'Customer portal account created.');
+        // Model cast 'password' => 'hashed' auto-hashes.
+        $customer = Customer::create([
+            ...$validated,
+            'password'                  => $plainPassword,
+            'is_active'                 => true,
+            'password_change_required'  => true,
+        ]);
+
+        // Email credentials. Failures don't block creation — flash a warning instead.
+        try {
+            Mail::to($customer->email)->send(new CustomerWelcomeMail($customer, $plainPassword));
+            $flash = 'Customer created. Login credentials emailed to ' . $customer->email . '.';
+        } catch (\Throwable $e) {
+            Log::warning('Customer welcome email failed', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
+            $flash = 'Customer created, but the welcome email could not be sent. Check RESEND_API_KEY / sender verification.';
+        }
+
+        return redirect()->route('admin.customers.index')->with('success', $flash);
     }
 
     public function edit(Customer $customer)
@@ -68,18 +87,33 @@ class CustomerManagementController extends Controller
             'email'          => 'required|email|unique:customers,email,' . $customer->id,
             'phone'          => 'nullable|string|max:20',
             'address'        => 'nullable|string',
-            'password'       => 'nullable|string|min:8',
             'is_active'      => 'boolean',
+            'reset_password' => 'sometimes|boolean',
         ]);
 
-        // Only update password if provided (leave empty to keep existing)
-        if (empty($validated['password'])) {
-            unset($validated['password']);
+        $resetPassword = (bool) ($validated['reset_password'] ?? false);
+        unset($validated['reset_password']);
+
+        if ($resetPassword) {
+            $plainPassword = $this->generatePassword();
+            $validated['password'] = $plainPassword;
+            $validated['password_change_required'] = true;
         }
-        // Model cast 'password' => 'hashed' will auto-hash
 
         $customer->update($validated);
-        return redirect()->route('admin.customers.index')->with('success', 'Customer updated.');
+
+        $flash = 'Customer updated.';
+        if ($resetPassword) {
+            try {
+                Mail::to($customer->email)->send(new CustomerWelcomeMail($customer->fresh(), $plainPassword));
+                $flash = 'Customer updated. New temporary password emailed to ' . $customer->email . '.';
+            } catch (\Throwable $e) {
+                Log::warning('Customer reset email failed', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
+                $flash = 'Customer updated, but the password reset email could not be sent.';
+            }
+        }
+
+        return redirect()->route('admin.customers.index')->with('success', $flash);
     }
 
     public function destroy(Customer $customer)
@@ -91,5 +125,18 @@ class CustomerManagementController extends Controller
     public function show(Customer $customer)
     {
         return redirect()->route('admin.customers.edit', $customer);
+    }
+
+    /**
+     * Generate a 12-char temporary password: easy to type, no ambiguous chars (0/O, 1/l/I).
+     */
+    private function generatePassword(): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        $out = '';
+        for ($i = 0; $i < 12; $i++) {
+            $out .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        }
+        return $out;
     }
 }

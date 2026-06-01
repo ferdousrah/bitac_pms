@@ -9,8 +9,8 @@ export default function CustomerCreateEdit({ customer }: any) {
         email: customer?.email ?? '',
         phone: customer?.phone ?? '',
         address: customer?.address ?? '',
-        password: '',
         is_active: customer?.is_active ?? true,
+        reset_password: false as boolean,
     });
 
     const submit = (e: FormEvent) => {
@@ -101,21 +101,28 @@ export default function CustomerCreateEdit({ customer }: any) {
                                 {errors.email && <p className="form-error">{errors.email}</p>}
                             </div>
 
-                            <div className="form-group">
-                                <label className="form-label">
-                                    {customer ? 'New Password' : 'Password'} {!customer && <span className="text-red-500">*</span>}
-                                </label>
-                                {customer && <p className="form-hint">Leave blank to keep current password</p>}
-                                <input
-                                    type="password"
-                                    value={data.password}
-                                    onChange={e => setData('password', e.target.value)}
-                                    className="form-input"
-                                    placeholder={customer ? 'Enter new password' : 'Enter password'}
-                                    required={!customer}
-                                />
-                                {errors.password && <p className="form-error">{errors.password}</p>}
-                            </div>
+                            {/* Password — auto-generated on create, optional reset on edit */}
+                            {!customer ? (
+                                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-blue-50/60 border border-blue-100">
+                                    <i className="fi fi-rr-shield-check text-blue-500 text-base leading-none mt-0.5 shrink-0" />
+                                    <div className="text-xs text-blue-900/80 leading-relaxed">
+                                        <strong className="font-semibold text-blue-900">Auto-generated password.</strong> A secure temporary password will be created and emailed to the customer on save. They'll be required to set a new password on first sign-in.
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-3 p-3.5 rounded-xl bg-surface-50 border border-surface-200">
+                                    <input
+                                        type="checkbox"
+                                        id="reset_password"
+                                        checked={Boolean(data.reset_password)}
+                                        onChange={e => setData('reset_password', e.target.checked)}
+                                        className="rounded border-surface-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <label htmlFor="reset_password" className="text-sm font-medium text-surface-700 select-none cursor-pointer">
+                                        Reset password and email new credentials
+                                    </label>
+                                </div>
+                            )}
 
                             <div className="form-group">
                                 <label className="form-label">
@@ -158,7 +165,7 @@ export default function CustomerCreateEdit({ customer }: any) {
                                     ) : (
                                         <>
                                             <i className={`fi fi-rr-${customer ? 'check' : 'plus'} mr-1.5`} />
-                                            {customer ? 'Update Account' : 'Create Account'}
+                                            {customer ? 'Update Account' : 'Create & Email Credentials'}
                                         </>
                                     )}
                                 </button>

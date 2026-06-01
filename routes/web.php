@@ -565,7 +565,13 @@ Route::middleware(['auth'])->group(function () {
 // ======================================================================
 // Customer Portal Routes
 // ======================================================================
+// Force-change-password routes — auth required but exempt from the change-required gate
 Route::middleware(['auth:customer'])->prefix('customer')->name('customer.')->group(function () {
+    Route::get('/password/force',  [\App\Http\Controllers\Customer\CustomerForcePasswordController::class, 'show'])->name('password.force.show');
+    Route::post('/password/force', [\App\Http\Controllers\Customer\CustomerForcePasswordController::class, 'update'])->name('password.force.update');
+});
+
+Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('customer')->name('customer.')->group(function () {
     Route::get('/dashboard', [CustomerDashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/work-orders', [CustomerWorkOrderController::class, 'index'])->name('work-orders.index');
