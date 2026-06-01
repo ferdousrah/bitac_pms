@@ -388,6 +388,16 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                         )}
                     </a>
                 </div>
+
+                {/* Collapse / Expand toggle — floats on right edge */}
+                <button
+                    onClick={() => setSidebarCollapsed(prev => !prev)}
+                    className="absolute top-[52px] -right-3 w-6 h-6 rounded-full bg-white border border-surface-200 shadow-md flex items-center justify-center hover:bg-surface-50 hover:border-surface-300 transition-colors z-10"
+                    title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                    <i className={`fi ${sidebarCollapsed ? 'fi-rr-angle-small-right' : 'fi-rr-angle-small-left'} text-xs text-surface-700 leading-none`} />
+                </button>
             </aside>
 
             {/* ─── Mobile Drawer (Android-style) ──────────────────────────────── */}
