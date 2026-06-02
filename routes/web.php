@@ -84,6 +84,12 @@ require __DIR__.'/auth.php';
 Route::middleware('guest:customer')->prefix('customer')->group(function () {
     Route::get('login', [CustomerLoginController::class, 'showLoginForm'])->name('customer.login');
     Route::post('login', [CustomerLoginController::class, 'login'])->name('customer.login.post');
+
+    // ─── Customer Password Reset ─────────────────────────────────
+    Route::get('password/forgot',  [\App\Http\Controllers\Auth\CustomerPasswordResetController::class, 'showRequestForm'])->name('customer.password.request');
+    Route::post('password/forgot', [\App\Http\Controllers\Auth\CustomerPasswordResetController::class, 'sendResetLink'])->name('customer.password.email');
+    Route::get('password/reset/{token}',  [\App\Http\Controllers\Auth\CustomerPasswordResetController::class, 'showResetForm'])->name('customer.password.reset');
+    Route::post('password/reset',         [\App\Http\Controllers\Auth\CustomerPasswordResetController::class, 'reset'])->name('customer.password.update');
 });
 
 Route::post('customer/logout', [CustomerLoginController::class, 'logout'])

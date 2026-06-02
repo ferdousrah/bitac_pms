@@ -30,4 +30,13 @@ class Customer extends Authenticatable
     public function workOrders()    { return $this->hasMany(WorkOrder::class); }
     public function invoices()      { return $this->hasMany(Invoice::class); }
     public function notifications() { return $this->hasMany(CustomerNotification::class); }
+
+    /**
+     * Send the password reset notification using our own template,
+     * so the link points at the customer portal — not the staff one.
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $this->notify(new \App\Notifications\CustomerResetPasswordNotification($token));
+    }
 }

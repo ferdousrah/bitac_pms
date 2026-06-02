@@ -1,0 +1,152 @@
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
+import { applyTheme, type AppSettings } from '@/lib/theme';
+
+export default function CustomerResetPassword({ token, email }: { token: string; email: string }) {
+    const { appSettings } = usePage().props as any;
+    const theme = (appSettings ?? {}) as Partial<AppSettings>;
+    const [showNew, setShowNew] = useState(false);
+
+    const { data, setData, post, processing, errors } = useForm({
+        token,
+        email,
+        password: '',
+        password_confirmation: '',
+    });
+
+    if (typeof window !== 'undefined' && theme.primary_color) applyTheme(theme);
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post('/customer/password/reset');
+    };
+
+    return (
+        <>
+            <Head title="Customer Portal — Set new password" />
+            <div className="min-h-[100dvh] flex flex-col bg-white">
+
+                <div className="pointer-events-none fixed inset-0 -z-10">
+                    <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-brand-500/[0.04] blur-3xl" />
+                    <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] rounded-full bg-brand-500/[0.03] blur-3xl" />
+                </div>
+
+                <header className="flex items-center justify-between px-6 sm:px-10 py-5">
+                    <div className="flex items-center gap-2.5">
+                        {theme.logo_url ? (
+                            <img src={theme.logo_url} className="w-8 h-8 object-contain" alt="" />
+                        ) : (
+                            <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center">
+                                <i className="fi fi-sr-industry-windows text-white text-xs leading-none" />
+                            </div>
+                        )}
+                        <span className="text-sm font-semibold text-surface-900 tracking-tight">
+                            {theme.brand_name || 'BITAC PMS'}
+                        </span>
+                    </div>
+                    <Link href="/customer/login"
+                        className="text-xs font-medium text-surface-500 hover:text-surface-900 transition-colors">
+                        Back to sign in <span aria-hidden>&rarr;</span>
+                    </Link>
+                </header>
+
+                <main className="flex-1 flex items-center justify-center px-6 py-10">
+                    <div className="w-full max-w-[380px]">
+
+                        <div className="mb-8">
+                            <div className="inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 bg-brand-50 text-brand-700 rounded-full text-[11px] font-medium border border-brand-100">
+                                <i className="fi fi-rr-key text-[10px] leading-none" />
+                                Customer Portal
+                            </div>
+                            <h1 className="text-[28px] leading-tight font-semibold text-surface-900 tracking-tight">
+                                Set a new password
+                            </h1>
+                            <p className="text-sm text-surface-500 mt-1.5">
+                                Choose a strong password to secure your account.
+                            </p>
+                        </div>
+
+                        <form onSubmit={submit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-surface-600 mb-1.5">Email</label>
+                                <input
+                                    type="email"
+                                    value={data.email}
+                                    onChange={e => setData('email', e.target.value)}
+                                    className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-surface-50 text-sm text-surface-700"
+                                    readOnly
+                                />
+                                {errors.email && <p className="mt-1.5 text-[11px] text-red-600">{errors.email}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-surface-600 mb-1.5">New password</label>
+                                <div className="relative">
+                                    <input
+                                        type={showNew ? 'text' : 'password'}
+                                        value={data.password}
+                                        onChange={e => setData('password', e.target.value)}
+                                        className="w-full px-3.5 py-2.5 pr-10 rounded-lg border border-surface-200 bg-white text-sm
+                                                   placeholder:text-surface-300
+                                                   focus:outline-none focus:border-surface-900 focus:ring-0
+                                                   transition-colors"
+                                        placeholder="At least 8 characters"
+                                        autoComplete="new-password"
+                                        autoFocus
+                                        required
+                                    />
+                                    <button type="button" onClick={() => setShowNew(!showNew)} tabIndex={-1}
+                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-surface-400 hover:text-surface-700 transition-colors">
+                                        <i className={`fi ${showNew ? 'fi-rr-eye-crossed' : 'fi-rr-eye'} text-xs leading-none`} />
+                                    </button>
+                                </div>
+                                {errors.password && <p className="mt-1.5 text-[11px] text-red-600">{errors.password}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-surface-600 mb-1.5">Confirm new password</label>
+                                <input
+                                    type={showNew ? 'text' : 'password'}
+                                    value={data.password_confirmation}
+                                    onChange={e => setData('password_confirmation', e.target.value)}
+                                    className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-sm
+                                               placeholder:text-surface-300
+                                               focus:outline-none focus:border-surface-900 focus:ring-0
+                                               transition-colors"
+                                    placeholder="Re-enter new password"
+                                    autoComplete="new-password"
+                                    required
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="w-full py-2.5 mt-2 rounded-lg text-sm font-medium text-white
+                                           bg-surface-900 hover:bg-surface-800
+                                           disabled:opacity-60 disabled:cursor-not-allowed
+                                           active:scale-[0.99] transition-all duration-150
+                                           flex items-center justify-center gap-2"
+                            >
+                                {processing ? (
+                                    <><i className="fi fi-rr-spinner animate-spin text-xs leading-none" /> Saving</>
+                                ) : (
+                                    <>Update password <span aria-hidden>&rarr;</span></>
+                                )}
+                            </button>
+                        </form>
+
+                        <p className="mt-6 text-[11px] text-surface-400 leading-relaxed">
+                            Use at least 8 characters with a mix of letters and numbers.
+                        </p>
+                    </div>
+                </main>
+
+                <footer className="px-6 sm:px-10 py-5 flex items-center justify-between text-[11px] text-surface-400">
+                    <span>{theme.brand_subtitle || 'Bangladesh Industrial Technical Assistance Centre'}</span>
+                    <span className="hidden sm:inline">&copy; {new Date().getFullYear()}</span>
+                </footer>
+            </div>
+        </>
+    );
+}
