@@ -4,10 +4,15 @@ namespace App\Models;
 
 use App\Traits\HasCenter;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\RoutesNotifications;
 
 class Customer extends Authenticatable
 {
-    use HasCenter;
+    // RoutesNotifications (subset of Notifiable) gives us the `notify()` method
+    // for Mail/Resend notifications without the database-notifications half —
+    // we already expose our own `notifications()` relation pointing at the
+    // CustomerNotification model, which would collide with the full trait.
+    use HasCenter, RoutesNotifications;
 
     protected $guard = 'customer';
 
