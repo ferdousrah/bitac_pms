@@ -18,6 +18,7 @@ class User extends Authenticatable
         'phone',
         'designation',
         'signature_path',
+        'avatar_path',
         'password',
         'center_id',
         'section_id',
@@ -59,6 +60,16 @@ class User extends Authenticatable
     {
         return $this->signature_path
             ? \Storage::disk('public')->url($this->signature_path)
+            : null;
+    }
+
+    /**
+     * Public URL of the user's profile photo (avatar), or null if not uploaded.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar_path
+            ? \Storage::disk('public')->url($this->avatar_path)
             : null;
     }
 

@@ -596,9 +596,17 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                                     ${userOpen ? 'bg-surface-100' : 'hover:bg-surface-50'}`}
                             >
                                 <div className="relative">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-surface-800 to-surface-900 flex items-center justify-center text-white text-xs font-bold shrink-0 ring-2 ring-white shadow-sm">
-                                        {(auth?.user?.name || auth?.customer?.name || 'U').charAt(0).toUpperCase()}
-                                    </div>
+                                    {auth?.user?.avatar_url ? (
+                                        <img
+                                            src={auth.user.avatar_url}
+                                            alt={auth.user.name}
+                                            className="w-8 h-8 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm"
+                                        />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-surface-800 to-surface-900 flex items-center justify-center text-white text-xs font-bold shrink-0 ring-2 ring-white shadow-sm">
+                                            {(auth?.user?.name || auth?.customer?.name || 'U').charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
                                     {/* Online indicator */}
                                     <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
                                 </div>
@@ -618,9 +626,17 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
 
                                         <div className="relative flex items-center gap-3">
                                             <div className="relative">
-                                                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xl font-bold ring-4 ring-white/10 shadow-[0_4px_16px_rgba(255,122,15,0.35)]">
-                                                    {(auth?.user?.name || auth?.customer?.name || 'U').charAt(0).toUpperCase()}
-                                                </div>
+                                                {auth?.user?.avatar_url ? (
+                                                    <img
+                                                        src={auth.user.avatar_url}
+                                                        alt={auth.user.name}
+                                                        className="w-14 h-14 rounded-full object-cover ring-4 ring-white/10 shadow-[0_4px_16px_rgba(255,122,15,0.35)]"
+                                                    />
+                                                ) : (
+                                                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xl font-bold ring-4 ring-white/10 shadow-[0_4px_16px_rgba(255,122,15,0.35)]">
+                                                        {(auth?.user?.name || auth?.customer?.name || 'U').charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
                                                 <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-surface-900 shadow-sm" />
                                             </div>
                                             <div className="flex-1 min-w-0">

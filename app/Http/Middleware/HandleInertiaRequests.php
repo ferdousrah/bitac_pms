@@ -61,6 +61,8 @@ class HandleInertiaRequests extends Middleware
                     // Approver's saved signature — shown as the default option in
                     // the approval modal's "Use my saved signature" toggle.
                     'signature_url'  => method_exists($user, 'getSignatureUrlAttribute') ? $user->signature_url : null,
+                    // Profile photo — used in sidebar / topbar avatar widgets.
+                    'avatar_url'     => method_exists($user, 'getAvatarUrlAttribute') ? $user->avatar_url : null,
                 ] : null,
             ],
             'flash' => [
