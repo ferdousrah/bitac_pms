@@ -99,6 +99,40 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
     });
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    // Resizable sidebar width — persists across sessions via localStorage.
+    const SIDEBAR_MIN = 220;
+    const SIDEBAR_MAX = 420;
+    const SIDEBAR_DEFAULT = 260;
+    const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+        if (typeof window === 'undefined') return SIDEBAR_DEFAULT;
+        const saved = parseInt(window.localStorage.getItem('sidebarWidth') ?? '', 10);
+        if (Number.isFinite(saved) && saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX) return saved;
+        return SIDEBAR_DEFAULT;
+    });
+    const [isResizing, setIsResizing] = useState(false);
+
+    // Pointer-driven resize. Wired once; cleanup on unmount.
+    useEffect(() => {
+        if (!isResizing) return;
+        const onMove = (e: PointerEvent) => {
+            const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
+            setSidebarWidth(w);
+        };
+        const onUp = () => {
+            setIsResizing(false);
+            try { window.localStorage.setItem('sidebarWidth', String(sidebarWidth)); } catch {}
+        };
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        return () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+    }, [isResizing, sidebarWidth]);
     const [centerOpen, setCenterOpen] = useState(false);
     const [userOpen, setUserOpen] = useState(false);
     const [moreOpen, setMoreOpen] = useState(false);
@@ -310,11 +344,13 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                 className={`
                     hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col
                     border-r border-white/5
-                    transition-all duration-300 ease-out
-                    ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'}
+                    ${isResizing ? '' : 'transition-[width] duration-300 ease-out'}
                     lg:static
                 `}
-                style={{ background: `linear-gradient(to bottom, ${theme.sidebar_color || '#0f172a'}, ${theme.sidebar_accent || '#1e293b'})` }}
+                style={{
+                    background: `linear-gradient(to bottom, ${theme.sidebar_color || '#0f172a'}, ${theme.sidebar_accent || '#1e293b'})`,
+                    width: sidebarCollapsed ? '68px' : `${sidebarWidth}px`,
+                }}
             >
                 {/* Logo */}
                 <div className={`h-16 flex items-center bg-white border-b border-surface-200 shrink-0 ${sidebarCollapsed ? 'justify-center px-0' : 'px-5'}`}>
@@ -398,6 +434,24 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                 >
                     <i className={`fi ${sidebarCollapsed ? 'fi-rr-angle-small-right' : 'fi-rr-angle-small-left'} text-xs text-surface-700 leading-none`} />
                 </button>
+
+                {/* Drag handle — vertical strip on the right edge; only when expanded */}
+                {!sidebarCollapsed && (
+                    <div
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label="Resize sidebar (drag, or double-click to reset)"
+                        title="Drag to resize — double-click to reset"
+                        onPointerDown={(e) => { e.preventDefault(); setIsResizing(true); }}
+                        onDoubleClick={() => {
+                            setSidebarWidth(SIDEBAR_DEFAULT);
+                            try { window.localStorage.setItem('sidebarWidth', String(SIDEBAR_DEFAULT)); } catch {}
+                        }}
+                        className={`absolute top-0 right-0 h-full w-1.5 -mr-0.5 cursor-col-resize z-20
+                                    hover:bg-brand-500/40 active:bg-brand-500/60 transition-colors
+                                    ${isResizing ? 'bg-brand-500/60' : 'bg-transparent'}`}
+                    />
+                )}
             </aside>
 
             {/* ─── Mobile Drawer (Android-style) ──────────────────────────────── */}
