@@ -12,9 +12,16 @@ const STATUS: Record<string, { badge: string; icon: string; label: string }> = {
 };
 
 const GROUP_COLOR: Record<string, string> = {
-    A: 'bg-brand-50 text-brand-700 border-brand-200',
-    B: 'bg-blue-50 text-blue-700 border-blue-200',
-    C: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    A:       'bg-brand-50 text-brand-700 border-brand-200',
+    B:       'bg-blue-50 text-blue-700 border-blue-200',
+    C:       'bg-emerald-50 text-emerald-700 border-emerald-200',
+    STUDENT: 'bg-purple-50 text-purple-700 border-purple-200',
+    PUBLIC:  'bg-amber-50 text-amber-700 border-amber-200',
+};
+// Short labels for the badge tile (single-letter groups stay 1 char,
+// Student/Public abbreviate to 3 letters).
+const GROUP_SHORT: Record<string, string> = {
+    A: 'A', B: 'B', C: 'C', STUDENT: 'STU', PUBLIC: 'PUB',
 };
 
 const fmt = (v: any) => Number(v ?? 0).toLocaleString('en-IN');
@@ -87,11 +94,13 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                 <option value="used">🔗 Used</option>
                             </select>
                             <select value={filters?.pricing_group ?? ''} onChange={e => applyFilters({ pricing_group: e.target.value })}
-                                className="form-select !py-2 text-sm w-full sm:w-32">
+                                className="form-select !py-2 text-sm w-full sm:w-36">
                                 <option value="">All Groups</option>
                                 <option value="A">Group A</option>
                                 <option value="B">Group B</option>
                                 <option value="C">Group C</option>
+                                <option value="STUDENT">Student</option>
+                                <option value="PUBLIC">Public</option>
                             </select>
                             <div className="flex items-center gap-1.5">
                                 <button type="submit" className="btn-primary btn-sm"><i className="fi fi-rr-search text-xs leading-none" /> Search</button>
@@ -146,8 +155,9 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                                     )}
                                                 </td>
                                                 <td className="text-center">
-                                                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold border ${gc}`}>
-                                                        {e.pricing_group}
+                                                    <span className={`inline-flex items-center justify-center min-w-[2rem] h-8 px-1.5 rounded-lg text-[10px] font-bold border ${gc}`}
+                                                        title={e.pricing_group}>
+                                                        {GROUP_SHORT[e.pricing_group] ?? e.pricing_group}
                                                     </span>
                                                 </td>
                                                 <td className="text-right">
@@ -213,7 +223,10 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                             <div className="text-xs text-surface-400">{e.customer ?? e.company_name ?? '—'}</div>
                                         </div>
                                         <div className="flex items-center gap-1.5 shrink-0">
-                                            <span className={`w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold border ${gc}`}>{e.pricing_group}</span>
+                                            <span className={`min-w-[1.75rem] h-7 px-1.5 rounded-md inline-flex items-center justify-center text-[10px] font-bold border ${gc}`}
+                                                title={e.pricing_group}>
+                                                {GROUP_SHORT[e.pricing_group] ?? e.pricing_group}
+                                            </span>
                                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${st.badge}`}>
                                                 <i className={`fi ${st.icon} leading-none`} /> {st.label}
                                             </span>
