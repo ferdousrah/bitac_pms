@@ -16,8 +16,9 @@ const URGENCY_BADGE: Record<string, string> = {
     low:    'bg-slate-50 text-slate-700 border-slate-200',
 };
 
-export default function MaintenanceIndex({ requests, filters, counts, can }: any) {
-    const setStatus = (s: string) => router.get('/maintenance-requests', { ...filters, status: s }, { preserveState: true });
+export default function MaintenanceIndex({ requests, filters, counts, can, sections = [] }: any) {
+    const setStatus     = (s: string) => router.get('/maintenance-requests', { ...filters, status: s }, { preserveState: true });
+    const setSectionId  = (v: string) => router.get('/maintenance-requests', { ...filters, section_id: v }, { preserveState: true });
 
     const tabs = [
         { key: 'open',        label: 'Open',         count: counts.pending + counts.approved + counts.in_progress },
@@ -50,8 +51,8 @@ export default function MaintenanceIndex({ requests, filters, counts, can }: any
                         )}
                     </div>
 
-                    {/* Tabs */}
-                    <div className="card-body border-b border-surface-100 flex flex-wrap gap-2">
+                    {/* Tabs + section filter */}
+                    <div className="card-body border-b border-surface-100 flex flex-wrap items-center gap-2">
                         {tabs.map(t => (
                             <button key={t.key} onClick={() => setStatus(t.key)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -69,6 +70,17 @@ export default function MaintenanceIndex({ requests, filters, counts, can }: any
                                 )}
                             </button>
                         ))}
+                        {sections.length > 0 && (
+                            <select
+                                value={filters.section_id ?? ''}
+                                onChange={(e) => setSectionId(e.target.value)}
+                                className="ml-auto text-xs px-2.5 py-1.5 rounded-xl border border-surface-200 bg-white text-surface-700 font-semibold">
+                                <option value="all">All sections</option>
+                                {sections.map((s: any) => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
 
                     {/* Table */}

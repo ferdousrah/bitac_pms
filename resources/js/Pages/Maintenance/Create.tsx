@@ -1,10 +1,12 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import { FormEvent, useEffect, useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
 
 interface Props {
     machines: any[];
+    sections?: any[];
+    activeSection?: { id: number; name: string; code: string } | null;
     preselectedId?: number | null;
 }
 
@@ -14,7 +16,7 @@ const URGENCY_OPTIONS = [
     { value: 'low',    label: 'Low — minor / preventive',     color: 'slate' },
 ];
 
-export default function MaintenanceCreate({ machines, preselectedId }: Props) {
+export default function MaintenanceCreate({ machines, sections = [], activeSection, preselectedId }: Props) {
     const [previews, setPreviews] = useState<string[]>([]);
     const form = useForm<{
         machine_id: string | number | '';
@@ -76,6 +78,38 @@ export default function MaintenanceCreate({ machines, preselectedId }: Props) {
                         </div>
 
                         <div className="card-body space-y-5">
+                            {/* Section scope banner */}
+                            {(activeSection || sections.length > 0) && (
+                                <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="text-indigo-700 font-semibold inline-flex items-center gap-1">
+                                        <i className="fi fi-rr-filter text-[10px] leading-none" />
+                                        Section scope:
+                                    </span>
+                                    {activeSection ? (
+                                        <span className="px-2 py-0.5 bg-white border border-indigo-200 rounded-md font-bold text-indigo-800">
+                                            {activeSection.name}
+                                        </span>
+                                    ) : (
+                                        <span className="px-2 py-0.5 bg-white border border-surface-200 rounded-md text-surface-700">All machines</span>
+                                    )}
+                                    <span className="text-surface-400 ml-1">{machines.length} machine{machines.length === 1 ? '' : 's'} in list</span>
+                                    <select
+                                        onChange={(e) => {
+                                            const v = e.target.value;
+                                            router.get('/maintenance-requests/create',
+                                                v === 'all' ? { section_id: 0 } : { section_id: v },
+                                                { preserveState: false, replace: true });
+                                        }}
+                                        value={activeSection?.id ?? 'all'}
+                                        className="ml-auto text-xs px-2 py-1 rounded-md border border-surface-200 bg-white">
+                                        <option value="all">All sections</option>
+                                        {sections.map((s: any) => (
+                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             {/* Machine picker */}
                             <div className="form-group">
                                 <label className="form-label">Machine <span className="text-red-500">*</span></label>

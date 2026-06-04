@@ -15,7 +15,21 @@ class MaintenanceRequestController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        $canApprove = $user?->can('approve maintenance-requests') ?? false;
+        $canPerform = $user?->can('perform maintenance') ?? false;
+
         $status = $request->input('status', 'open');
+
+        // Default scope:
+        //   - Approvers & technicians see everything (they need the full inbox).
+        //   - Shop-floor only roles see their own section by default — they can
+        //     widen via the "All sections" pill on the toolbar.
+        $defaultSectionScope = (! $canApprove && ! $canPerform && $user?->section_id)
+            ? (string) $user->section_id
+            : '';
+        $sectionFilter = $request->input('section_id', $defaultSectionScope);
+
         $q = MaintenanceRequest::with([
             'machine:id,name,machine_code,current_state',
             'section:id,name,code',
@@ -35,8 +49,12 @@ class MaintenanceRequestController extends Controller
         if ($urgency = $request->input('urgency')) {
             $q->where('urgency', $urgency);
         }
+        if ($sectionFilter !== '' && $sectionFilter !== 'all') {
+            $q->where('section_id', (int) $sectionFilter);
+        }
 
         return Inertia::render('Maintenance/Index', [
+            'sections' => \App\Models\Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
             'requests' => $q->paginate(20)->withQueryString()->through(fn ($r) => [
                 'id'                       => $r->id,
                 'machine'                  => $r->machine ? [
@@ -60,6 +78,7 @@ class MaintenanceRequestController extends Controller
                 'status'     => $status,
                 'machine_id' => $request->input('machine_id', ''),
                 'urgency'    => $request->input('urgency', ''),
+                'section_id' => $sectionFilter,
             ],
             'counts' => [
                 'pending'     => MaintenanceRequest::pending()->count(),
@@ -78,12 +97,29 @@ class MaintenanceRequestController extends Controller
 
     public function create(Request $request)
     {
+        // Section pre-filter: come from ?section_id=N OR fall back to the user's own section.
+        // Shop-floor users almost always submit for a machine in their own section, so this
+        // keeps the picker short. Pass ?section_id=0 to force "all machines".
+        $sectionId = $request->query('section_id', $request->user()?->section_id);
+        $sectionId = $sectionId === '0' || $sectionId === 0 ? null : ($sectionId ? (int) $sectionId : null);
+
         $machines = Machine::with('section:id,name,code')
+            ->when($sectionId, fn ($q) => $q->where('section_id', $sectionId))
             ->orderBy('machine_code')
             ->get(['id', 'name', 'machine_code', 'section_id', 'current_state']);
 
+        // Also pass all sections so the form can offer "Show machines in another section".
+        $sections = \App\Models\Section::active()->shops()->orderBy('display_order')
+            ->get(['id', 'name', 'code']);
+
+        $activeSection = $sectionId
+            ? \App\Models\Section::find($sectionId)?->only(['id', 'name', 'code'])
+            : null;
+
         return Inertia::render('Maintenance/Create', [
             'machines'      => $machines,
+            'sections'      => $sections,
+            'activeSection' => $activeSection,
             'preselectedId' => $request->query('machine_id') ? (int) $request->query('machine_id') : null,
         ]);
     }

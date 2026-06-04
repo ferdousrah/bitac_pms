@@ -101,22 +101,34 @@ export default function ProductionQueue({ section, jobs, available_sections, can
                                 </div>
                             </div>
                         </div>
-                        {can_switch && available_sections.length > 1 && (
-                            <div>
-                                <label className="form-label-optional text-[10px]">Switch section</label>
-                                <select
-                                    value={section.id}
-                                    onChange={(e) => switchSection(Number(e.target.value))}
-                                    className="form-select w-56"
-                                >
-                                    {available_sections.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.name} ({s.code})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <Link
+                                href={`/maintenance-requests/create?section_id=${section.id}`}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold
+                                           bg-amber-50 text-amber-800 border border-amber-200
+                                           hover:bg-amber-100 hover:border-amber-300 transition-colors shadow-sm"
+                                title="Report a machine problem for the maintenance team"
+                            >
+                                <i className="fi fi-rr-wrench-simple text-xs leading-none" />
+                                Request Maintenance
+                            </Link>
+                            {can_switch && available_sections.length > 1 && (
+                                <div>
+                                    <label className="form-label-optional text-[10px]">Switch section</label>
+                                    <select
+                                        value={section.id}
+                                        onChange={(e) => switchSection(Number(e.target.value))}
+                                        className="form-select w-56"
+                                    >
+                                        {available_sections.map((s) => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name} ({s.code})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

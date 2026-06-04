@@ -31,7 +31,7 @@ function staticElapsed(startIso: string | null, endIso: string | null): string |
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-interface SectionLite { id?: number; name: string; code: string; name_bn?: string | null; }
+interface SectionLite { id: number; name: string; code: string; name_bn?: string | null; }
 
 interface HandoffFile {
     id: number;
@@ -180,6 +180,16 @@ export default function ProductionShow({ wos, routing, op_steps, handoffs, rewor
                             <div className="flex flex-wrap items-center gap-2 shrink-0">
                                 <Link href="/production/queue" className="btn-outline btn-sm">
                                     <i className="fi fi-rr-arrow-left text-xs" /> Queue
+                                </Link>
+                                <Link
+                                    href={`/maintenance-requests/create?section_id=${wos.section.id}`}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
+                                               bg-amber-50 text-amber-800 border border-amber-200
+                                               hover:bg-amber-100 hover:border-amber-300 transition-colors"
+                                    title="Report a machine problem"
+                                >
+                                    <i className="fi fi-rr-wrench-simple text-xs leading-none" />
+                                    Request Maintenance
                                 </Link>
                                 {canSendBack && (
                                     <button
