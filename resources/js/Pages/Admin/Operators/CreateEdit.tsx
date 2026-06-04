@@ -13,7 +13,6 @@ export default function OperatorCreateEdit({ operator, sections, users }: any) {
         user_id:     operator?.user_id ?? '',
         phone:       operator?.phone ?? '',
         skills:      operator?.skills ?? [] as string[],
-        shift:       operator?.shift ?? 'general',
         is_active:   operator?.is_active ?? true,
         joined_on:   operator?.joined_on ?? '',
     });
@@ -77,27 +76,16 @@ export default function OperatorCreateEdit({ operator, sections, users }: any) {
                                     {errors.name && <p className="form-error">{errors.name}</p>}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="form-group">
-                                    <label className="form-label">Section *</label>
-                                    <select value={data.section_id} onChange={e => setData('section_id', e.target.value)}
-                                        className="form-select" required>
-                                        <option value="">Select section...</option>
-                                        {sections.map((s: any) => (
-                                            <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                                        ))}
-                                    </select>
-                                    {errors.section_id && <p className="form-error">{errors.section_id}</p>}
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Shift *</label>
-                                    <select value={data.shift} onChange={e => setData('shift', e.target.value)}
-                                        className="form-select" required>
-                                        <option value="general">General (9-5)</option>
-                                        <option value="day">Day Shift</option>
-                                        <option value="night">Night Shift</option>
-                                    </select>
-                                </div>
+                            <div className="form-group">
+                                <label className="form-label">Section *</label>
+                                <select value={data.section_id} onChange={e => setData('section_id', e.target.value)}
+                                    className="form-select" required>
+                                    <option value="">Select section...</option>
+                                    {sections.map((s: any) => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                    ))}
+                                </select>
+                                {errors.section_id && <p className="form-error">{errors.section_id}</p>}
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="form-group">

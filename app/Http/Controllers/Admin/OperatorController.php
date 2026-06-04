@@ -22,7 +22,6 @@ class OperatorController extends Controller
                 'name'         => $o->name,
                 'phone'        => $o->phone,
                 'section'      => $o->section ? ['id' => $o->section->id, 'name' => $o->section->name, 'code' => $o->section->code] : null,
-                'shift'        => $o->shift,
                 'skills'       => $o->skills ?? [],
                 'is_active'    => $o->is_active,
                 'joined_on'    => $o->joined_on?->format('d M Y'),
@@ -51,7 +50,6 @@ class OperatorController extends Controller
             'user_id'     => 'nullable|exists:users,id',
             'phone'       => 'nullable|string|max:30',
             'skills'      => 'nullable|array',
-            'shift'       => 'required|in:day,night,general',
             'is_active'   => 'boolean',
             'joined_on'   => 'nullable|date',
         ]);
@@ -72,7 +70,6 @@ class OperatorController extends Controller
                 'user_id'     => $operator->user_id,
                 'phone'       => $operator->phone,
                 'skills'      => $operator->skills ?? [],
-                'shift'       => $operator->shift,
                 'is_active'   => $operator->is_active,
                 'joined_on'   => $operator->joined_on?->format('Y-m-d'),
             ],
@@ -90,7 +87,6 @@ class OperatorController extends Controller
             'user_id'     => 'nullable|exists:users,id',
             'phone'       => 'nullable|string|max:30',
             'skills'      => 'nullable|array',
-            'shift'       => 'required|in:day,night,general',
             'is_active'   => 'boolean',
             'joined_on'   => 'nullable|date',
         ]);

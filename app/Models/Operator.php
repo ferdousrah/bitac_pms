@@ -8,7 +8,7 @@ class Operator extends Model
 {
     protected $fillable = [
         'employee_id', 'name', 'section_id', 'user_id',
-        'phone', 'skills', 'shift', 'is_active', 'joined_on',
+        'phone', 'skills', 'is_active', 'joined_on',
     ];
 
     protected function casts(): array

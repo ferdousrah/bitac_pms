@@ -1,12 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 
-const SHIFT_BADGE: Record<string, string> = {
-    day:     'badge-amber',
-    night:   'badge-purple',
-    general: 'badge-blue',
-};
-
 export default function OperatorsIndex({ operators }: any) {
     const remove = (id: number, name: string) => {
         if (!confirm(`Delete operator "${name}"?`)) return;
@@ -42,7 +36,6 @@ export default function OperatorsIndex({ operators }: any) {
                                         <th>Name</th>
                                         <th>Section</th>
                                         <th>Phone</th>
-                                        <th>Shift</th>
                                         <th>Status</th>
                                         <th>Joined</th>
                                         <th>Actions</th>
@@ -62,11 +55,6 @@ export default function OperatorsIndex({ operators }: any) {
                                             </td>
                                             <td className="text-surface-600">{o.section?.name ?? '—'}</td>
                                             <td className="text-surface-600">{o.phone ?? '—'}</td>
-                                            <td>
-                                                <span className={`badge ${SHIFT_BADGE[o.shift] ?? 'badge-slate'}`}>
-                                                    {o.shift}
-                                                </span>
-                                            </td>
                                             <td>
                                                 <span className={`badge ${o.is_active ? 'badge-green' : 'badge-slate'}`}>
                                                     {o.is_active ? 'Active' : 'Inactive'}
@@ -115,7 +103,6 @@ export default function OperatorsIndex({ operators }: any) {
                                 <div className="flex items-center gap-2 text-xs text-surface-500">
                                     <span><i className="fi fi-rr-building" /> {o.section?.name ?? '—'}</span>
                                     <span><i className="fi fi-rr-phone-call" /> {o.phone ?? '—'}</span>
-                                    <span className={`badge ${SHIFT_BADGE[o.shift] ?? 'badge-slate'} ml-auto`}>{o.shift}</span>
                                 </div>
                                 <div className="flex items-center gap-2 pt-2 border-t border-surface-100">
                                     <Link href={`/admin/operators/${o.id}/edit`} className="btn-outline btn-xs flex-1 justify-center">
