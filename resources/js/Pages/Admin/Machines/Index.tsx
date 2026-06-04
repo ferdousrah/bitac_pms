@@ -40,7 +40,7 @@ export default function MachinesIndex({ machines, fleet }: any) {
                         <FleetCard label="Idle" value={fleet.idle} icon="fi-rr-pause-circle" color="slate" />
                         <FleetCard label="Maintenance" value={fleet.maintenance} icon="fi-rr-wrench-simple" color="purple" />
                         <FleetCard label="Breakdown" value={fleet.breakdown} icon="fi-rr-triangle-warning" color="red" />
-                        <FleetCard label="Avg Health" value={`${fleet.avg_health}%`} icon="fi-rr-heart-pulse" color="brand" />
+                        <FleetCard label="Avg Health" value={`${fleet.avg_health}%`} icon="fi-rr-pulse" color="brand" />
                     </div>
                 )}
 
@@ -83,7 +83,6 @@ export default function MachinesIndex({ machines, fleet }: any) {
                                         <th>State</th>
                                         <th>Health</th>
                                         <th>Maintenance</th>
-                                        <th className="text-right">Rate B</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -141,11 +140,10 @@ export default function MachinesIndex({ machines, fleet }: any) {
                                                     <span className="text-xs text-surface-300">—</span>
                                                 )}
                                             </td>
-                                            <td className="text-right font-mono text-sm">{fmt(m.rate_group_b)}</td>
                                             <td>
                                                 <div className="flex items-center gap-1">
                                                     <Link href={`/admin/machines/${m.id}`} className="btn-ghost btn-xs" title="View health">
-                                                        <i className="fi fi-rr-heart-pulse text-xs leading-none" />
+                                                        <i className="fi fi-rr-pulse text-xs leading-none" />
                                                     </Link>
                                                     <Link href={`/admin/machines/${m.id}/edit`} className="btn-ghost btn-xs" title="Edit">
                                                         <i className="fi fi-rr-pencil text-xs leading-none" />
