@@ -49,6 +49,7 @@ export const mainGroups: NavGroup[] = [
         icon: 'fi-rr-clipboard-list-check',
         items: [
             { label: 'PCD Inbox',            href: '/pcd/inbox',                 icon: 'fi-rr-inbox',           permission: 'view pcd-inbox', badgeKey: 'pcd_pending' },
+            { label: 'Maintenance Requests', href: '/maintenance-requests',      icon: 'fi-rr-wrench-simple',   permission: 'submit maintenance-requests', badgeKey: 'maintenance_pending' },
             { label: 'Material Requisitions',href: '/pcd/material-requisitions', icon: 'fi-rr-clipboard-list',  permission: 'create material-requisitions' },
             { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permission: 'view work-orders' },
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },

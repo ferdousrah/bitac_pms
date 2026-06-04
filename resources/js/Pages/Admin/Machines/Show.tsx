@@ -136,6 +136,10 @@ export default function MachineShow({ machine }: any) {
                                     </div>
                                 )}
                             </div>
+                            <Link href={`/maintenance-requests/create?machine_id=${machine.id}`}
+                                className="btn-sm rounded-xl px-3 py-1.5 inline-flex items-center gap-1.5 font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors">
+                                <i className="fi fi-rr-paper-plane text-xs leading-none" /> Request Maintenance
+                            </Link>
                             <button onClick={() => setShowMaintForm(true)} className="btn-primary btn-sm">
                                 <i className="fi fi-rr-wrench-simple text-xs leading-none" /> Log Maintenance
                             </button>

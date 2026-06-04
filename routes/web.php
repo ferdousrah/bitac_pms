@@ -409,6 +409,19 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{sheet}/qr', [OperationSheetController::class, 'qr'])->name('operation-sheets.qr');
     });
 
+    // ─── Maintenance Requests (shop-floor → manager → technician flow) ───
+    Route::prefix('maintenance-requests')->name('maintenance-requests.')->group(function () {
+        Route::get('/',                       [\App\Http\Controllers\MaintenanceRequestController::class, 'index'])->name('index');
+        Route::get('/create',                 [\App\Http\Controllers\MaintenanceRequestController::class, 'create'])->middleware('permission:submit maintenance-requests')->name('create');
+        Route::post('/',                      [\App\Http\Controllers\MaintenanceRequestController::class, 'store'])->middleware('permission:submit maintenance-requests')->name('store');
+        Route::get('/{maintenanceRequest}',   [\App\Http\Controllers\MaintenanceRequestController::class, 'show'])->name('show');
+        Route::post('/{maintenanceRequest}/approve',  [\App\Http\Controllers\MaintenanceRequestController::class, 'approve'])->middleware('permission:approve maintenance-requests')->name('approve');
+        Route::post('/{maintenanceRequest}/reject',   [\App\Http\Controllers\MaintenanceRequestController::class, 'reject'])->middleware('permission:approve maintenance-requests')->name('reject');
+        Route::post('/{maintenanceRequest}/start',    [\App\Http\Controllers\MaintenanceRequestController::class, 'start'])->middleware('permission:perform maintenance')->name('start');
+        Route::post('/{maintenanceRequest}/complete', [\App\Http\Controllers\MaintenanceRequestController::class, 'complete'])->middleware('permission:perform maintenance')->name('complete');
+        Route::post('/{maintenanceRequest}/cancel',   [\App\Http\Controllers\MaintenanceRequestController::class, 'cancel'])->name('cancel');
+    });
+
     // Production (per-section supervisor queue + section handoff routing)
     Route::prefix('production')->middleware('permission:view production')->name('production.')->group(function () {
         Route::get('/queue', [ProductionController::class, 'queue'])->name('queue');
