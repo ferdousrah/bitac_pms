@@ -124,7 +124,7 @@ class CostEstimateController extends Controller
             ] : null,
             'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
-                ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c']),
+                ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
             'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -536,7 +536,7 @@ class CostEstimateController extends Controller
             'rfq'        => null,
             'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
-                ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c']),
+                ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
             'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
@@ -701,7 +701,7 @@ class CostEstimateController extends Controller
             'part_no'          => 'nullable|string|max:50',
             'actual_size'      => 'nullable|string|max:100',
             'materials_size'   => 'nullable|string|max:100',
-            'pricing_group'    => 'required|in:A,B,C',
+            'pricing_group'    => 'required|in:A,B,C,STUDENT,PUBLIC',
             'overhead_pct'     => 'nullable|numeric|min:0|max:1000',
             'vat_pct'          => 'nullable|numeric|min:0|max:100',
             'tax_pct'          => 'nullable|numeric|min:0|max:100',

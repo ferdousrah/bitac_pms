@@ -32,6 +32,8 @@ class MachineController extends Controller
                 'rate_group_a'       => $m->rate_group_a,
                 'rate_group_b'       => $m->rate_group_b,
                 'rate_group_c'       => $m->rate_group_c,
+                'rate_group_student' => $m->rate_group_student,
+                'rate_group_public'  => $m->rate_group_public,
             ]);
 
         return Inertia::render('Admin/Machines/Index', [
@@ -90,6 +92,8 @@ class MachineController extends Controller
                 'rate_group_a'              => $machine->rate_group_a,
                 'rate_group_b'              => $machine->rate_group_b,
                 'rate_group_c'              => $machine->rate_group_c,
+                'rate_group_student'        => $machine->rate_group_student,
+                'rate_group_public'         => $machine->rate_group_public,
                 'mtbf_days'                 => MachineHealthService::mtbf($machine),
                 'mttr_hours'                => MachineHealthService::mttr($machine),
                 'downtime_30d'              => MachineHealthService::totalDowntime($machine, 30),
@@ -133,6 +137,8 @@ class MachineController extends Controller
                 'rate_group_a'              => $machine->rate_group_a,
                 'rate_group_b'              => $machine->rate_group_b,
                 'rate_group_c'              => $machine->rate_group_c,
+                'rate_group_student'        => $machine->rate_group_student,
+                'rate_group_public'         => $machine->rate_group_public,
             ],
             'sections' => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
         ]);
@@ -198,6 +204,8 @@ class MachineController extends Controller
             'rate_group_a'              => 'nullable|numeric|min:0',
             'rate_group_b'              => 'nullable|numeric|min:0',
             'rate_group_c'              => 'nullable|numeric|min:0',
+            'rate_group_student'        => 'nullable|numeric|min:0',
+            'rate_group_public'         => 'nullable|numeric|min:0',
             // Asset
             'manufacturer'              => 'nullable|string|max:100',
             'model'                     => 'nullable|string|max:100',

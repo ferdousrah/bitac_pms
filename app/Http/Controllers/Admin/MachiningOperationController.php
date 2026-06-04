@@ -48,7 +48,7 @@ class MachiningOperationController extends Controller
         return Inertia::render('Admin/Operations/CreateEdit', [
             'operation' => $operation->only([
                 'id', 'name', 'category', 'default_unit',
-                'rate_group_a', 'rate_group_b', 'rate_group_c',
+                'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public',
                 'section_id', 'notes', 'is_active', 'display_order',
             ]),
             'sections' => Section::active()->orderBy('display_order')->get(['id', 'name', 'code']),
@@ -74,9 +74,11 @@ class MachiningOperationController extends Controller
             'name'         => 'required|string|max:150',
             'category'     => 'required|in:machining,casting,plating,heat_treatment,surface_treatment,fabrication,other',
             'default_unit' => 'required|string|max:20',
-            'rate_group_a' => 'nullable|numeric|min:0',
-            'rate_group_b' => 'nullable|numeric|min:0',
-            'rate_group_c' => 'nullable|numeric|min:0',
+            'rate_group_a'       => 'nullable|numeric|min:0',
+            'rate_group_b'       => 'nullable|numeric|min:0',
+            'rate_group_c'       => 'nullable|numeric|min:0',
+            'rate_group_student' => 'nullable|numeric|min:0',
+            'rate_group_public'  => 'nullable|numeric|min:0',
             'section_id'   => 'nullable|exists:sections,id',
             'notes'        => 'nullable|string|max:255',
             'is_active'    => 'boolean',

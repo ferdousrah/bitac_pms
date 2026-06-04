@@ -8,17 +8,19 @@ class MachiningOperation extends Model
 {
     protected $fillable = [
         'name', 'category', 'default_unit',
-        'rate_group_a', 'rate_group_b', 'rate_group_c',
+        'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public',
         'section_id', 'notes', 'is_active', 'display_order',
     ];
 
     protected function casts(): array
     {
         return [
-            'rate_group_a' => 'decimal:2',
-            'rate_group_b' => 'decimal:2',
-            'rate_group_c' => 'decimal:2',
-            'is_active'    => 'boolean',
+            'rate_group_a'        => 'decimal:2',
+            'rate_group_b'        => 'decimal:2',
+            'rate_group_c'        => 'decimal:2',
+            'rate_group_student'  => 'decimal:2',
+            'rate_group_public'   => 'decimal:2',
+            'is_active'           => 'boolean',
         ];
     }
 
@@ -30,10 +32,12 @@ class MachiningOperation extends Model
     public function rateForGroup(string $group): ?float
     {
         return match (strtoupper($group)) {
-            'A' => (float) $this->rate_group_a,
-            'B' => (float) $this->rate_group_b,
-            'C' => (float) $this->rate_group_c,
-            default => null,
+            'A'       => (float) $this->rate_group_a,
+            'B'       => (float) $this->rate_group_b,
+            'C'       => (float) $this->rate_group_c,
+            'STUDENT' => (float) $this->rate_group_student,
+            'PUBLIC'  => (float) $this->rate_group_public,
+            default   => null,
         };
     }
 }

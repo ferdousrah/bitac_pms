@@ -14,6 +14,8 @@ export default function MachineCreateEdit({ machine, sections }: any) {
         rate_group_a:               machine?.rate_group_a ?? '',
         rate_group_b:               machine?.rate_group_b ?? '',
         rate_group_c:               machine?.rate_group_c ?? '',
+        rate_group_student:         machine?.rate_group_student ?? '',
+        rate_group_public:          machine?.rate_group_public ?? '',
         manufacturer:               machine?.manufacturer ?? '',
         model:                      machine?.model ?? '',
         serial_number:              machine?.serial_number ?? '',
@@ -244,21 +246,29 @@ export default function MachineCreateEdit({ machine, sections }: any) {
                         <div className="card-body space-y-4">
                             <div className="alert alert-info">
                                 <i className="fi fi-rr-info text-blue-500 text-base leading-none shrink-0 mt-0.5" />
-                                <div className="text-xs">
+                                <div className="text-xs leading-relaxed">
                                     <strong>Group A</strong> = Small &amp; Cottage Industry &nbsp;·&nbsp;
                                     <strong>Group B</strong> = Corporate / Multinational &nbsp;·&nbsp;
-                                    <strong>Group C</strong> = Import Substitute
+                                    <strong>Group C</strong> = Import Substitute &nbsp;·&nbsp;
+                                    <strong>Student</strong> = Educational / Training jobs &nbsp;·&nbsp;
+                                    <strong>Public</strong> = Walk-in / Public service jobs
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                {(['a', 'b', 'c'] as const).map(g => (
-                                    <div key={g} className="form-group">
-                                        <label className="form-label">Group {g.toUpperCase()} Rate <span className="form-label-optional">৳/hour</span></label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {([
+                                    { key: 'a',       label: 'Group A' },
+                                    { key: 'b',       label: 'Group B' },
+                                    { key: 'c',       label: 'Group C' },
+                                    { key: 'student', label: 'Student' },
+                                    { key: 'public',  label: 'Public' },
+                                ] as const).map(g => (
+                                    <div key={g.key} className="form-group">
+                                        <label className="form-label">{g.label} Rate <span className="form-label-optional">৳/hour</span></label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm">৳</span>
                                             <input type="number" min="0" step="0.01"
-                                                value={(data as any)[`rate_group_${g}`]}
-                                                onChange={e => setData(`rate_group_${g}` as any, e.target.value)}
+                                                value={(data as any)[`rate_group_${g.key}`]}
+                                                onChange={e => setData(`rate_group_${g.key}` as any, e.target.value)}
                                                 placeholder="0.00"
                                                 className="form-input pl-8" />
                                         </div>

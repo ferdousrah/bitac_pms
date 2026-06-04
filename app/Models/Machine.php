@@ -11,7 +11,7 @@ class Machine extends Model
 
     protected $fillable = [
         'center_id', 'name', 'machine_code', 'work_centre_id', 'section_id',
-        'status', 'description', 'rate_group_a', 'rate_group_b', 'rate_group_c',
+        'status', 'description', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public',
         // Asset
         'manufacturer', 'model', 'serial_number', 'purchased_on', 'warranty_expires_on',
         'asset_value', 'location',
@@ -29,6 +29,8 @@ class Machine extends Model
             'rate_group_a'              => 'decimal:2',
             'rate_group_b'              => 'decimal:2',
             'rate_group_c'              => 'decimal:2',
+            'rate_group_student'        => 'decimal:2',
+            'rate_group_public'         => 'decimal:2',
             'purchased_on'              => 'date',
             'warranty_expires_on'       => 'date',
             'asset_value'               => 'decimal:2',

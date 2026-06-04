@@ -22,6 +22,27 @@ const newLine = (section: Line['section']): Line => ({
 
 const fmt = (n: number) => `৳${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/** Pick the right per-group rate column off a MachiningOperation row. */
+function opRateForGroup(op: any, group: string): number | null {
+    if (!op) return null;
+    switch (group) {
+        case 'A':       return op.rate_group_a;
+        case 'B':       return op.rate_group_b;
+        case 'C':       return op.rate_group_c;
+        case 'STUDENT': return op.rate_group_student;
+        case 'PUBLIC':  return op.rate_group_public;
+        default:        return op.rate_group_b;
+    }
+}
+
+const PRICING_GROUPS = [
+    { value: 'A',       label: 'Group A' },
+    { value: 'B',       label: 'Group B' },
+    { value: 'C',       label: 'Group C' },
+    { value: 'STUDENT', label: 'Student' },
+    { value: 'PUBLIC',  label: 'Public' },
+] as const;
+
 export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, operations, customers }: any) {
     const isEdit = !!estimate;
 
@@ -126,9 +147,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
             if (line.operation_id) {
                 const op = operations.find((o: any) => o.id === line.operation_id);
                 if (op) {
-                    const rate = currentGroup === 'A' ? op.rate_group_a
-                               : currentGroup === 'C' ? op.rate_group_c
-                               : op.rate_group_b;
+                    const rate = opRateForGroup(op, currentGroup);
                     adjusted.rate = String(rate ?? line.rate);
                 }
             }
@@ -215,9 +234,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
     const onOperationChange = (idx: number, operationId: string) => {
         const op = operations.find((o: any) => o.id === Number(operationId));
         if (op) {
-            const rate = data.pricing_group === 'A' ? op.rate_group_a
-                       : data.pricing_group === 'C' ? op.rate_group_c
-                       : op.rate_group_b;
+            const rate = opRateForGroup(op, data.pricing_group);
             updateLine(idx, {
                 operation_id: op.id,
                 description: op.name,
@@ -236,9 +253,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
             if (l.operation_id) {
                 const op = operations.find((o: any) => o.id === l.operation_id);
                 if (op) {
-                    const rate = group === 'A' ? op.rate_group_a
-                               : group === 'C' ? op.rate_group_c
-                               : op.rate_group_b;
+                    const rate = opRateForGroup(op, group);
                     return { ...l, rate: String(rate ?? 0) };
                 }
             }
@@ -362,16 +377,16 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                 </button>
 
                                 {/* Pricing Group selector */}
-                                <div className="flex items-center gap-1 bg-surface-100 p-1 rounded-xl">
-                                    {(['A', 'B', 'C'] as const).map(g => (
-                                        <button key={g} type="button"
-                                            onClick={() => onGroupChange(g)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                                data.pricing_group === g
+                                <div className="flex flex-wrap items-center gap-1 bg-surface-100 p-1 rounded-xl">
+                                    {PRICING_GROUPS.map(g => (
+                                        <button key={g.value} type="button"
+                                            onClick={() => onGroupChange(g.value)}
+                                            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                                data.pricing_group === g.value
                                                     ? 'bg-white text-brand-700 shadow-premium'
                                                     : 'text-surface-500 hover:text-surface-700'
                                             }`}>
-                                            Group {g}
+                                            {g.label}
                                         </button>
                                     ))}
                                 </div>
