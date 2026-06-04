@@ -76,7 +76,17 @@ class NotifyService
         string $color = 'blue',
         ?array $data = null,
     ): void {
-        $userIds = User::permission($permission)->pluck('id')->toArray();
+        // Resilient lookup: if the permission row doesn't exist yet (e.g. a
+        // fresh deploy without the matching seeder), don't crash the caller —
+        // just log and silently skip the fan-out. The feature itself keeps
+        // working; only the notification is lost.
+        try {
+            $userIds = User::permission($permission)->pluck('id')->toArray();
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            \Log::warning("NotifyService::toPermission — permission '{$permission}' does not exist. "
+                . "Run the seeder + php artisan permission:cache-reset to fix.");
+            return;
+        }
         if (!empty($userIds)) {
             static::send($userIds, $type, $title, $body, $link, $icon, $color, $data);
         }
