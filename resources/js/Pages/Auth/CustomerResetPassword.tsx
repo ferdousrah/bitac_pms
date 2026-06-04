@@ -143,7 +143,10 @@ export default function CustomerResetPassword({ token, email }: { token: string;
                 </main>
 
                 <footer className="px-6 sm:px-10 py-5 flex items-center justify-between text-[11px] text-surface-400">
-                    <span>{theme.brand_subtitle || 'Bangladesh Industrial Technical Assistance Centre'}</span>
+                    <a href="https://technocratsbd.com" target="_blank" rel="noopener noreferrer"
+                        className="hover:text-surface-700 transition-colors">
+                        Developed by <span className="font-semibold">Technocrats</span>
+                    </a>
                     <span className="hidden sm:inline">&copy; {new Date().getFullYear()}</span>
                 </footer>
             </div>
