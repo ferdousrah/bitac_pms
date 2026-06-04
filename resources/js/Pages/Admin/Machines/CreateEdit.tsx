@@ -34,10 +34,29 @@ export default function MachineCreateEdit({ machine, sections }: any) {
         else post('/admin/machines');
     };
 
+    const errorList = Object.entries(errors ?? {}).filter(([_, v]) => v);
+
     return (
         <AppLayout header={isEdit ? 'Edit Machine' : 'New Machine'}>
             <div className="max-w-3xl animate-fade-in">
                 <form onSubmit={submit} className="space-y-6">
+
+                    {/* Validation summary — surfaces errors on fields that don't have inline error display */}
+                    {errorList.length > 0 && (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm text-rose-800 animate-slide-up">
+                            <div className="flex items-start gap-2.5">
+                                <i className="fi fi-rr-triangle-warning text-base leading-none mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-semibold mb-1">Please fix the following:</p>
+                                    <ul className="list-disc pl-5 text-xs space-y-0.5">
+                                        {errorList.map(([k, msg]) => (
+                                            <li key={k}><span className="font-mono font-semibold">{k}</span> — {msg as string}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Basic Info */}
                     <div className="card animate-slide-up">

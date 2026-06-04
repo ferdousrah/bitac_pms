@@ -54,10 +54,12 @@ class Machine extends Model
     public function rateForGroup(string $group): ?float
     {
         return match (strtoupper($group)) {
-            'A' => (float) $this->rate_group_a,
-            'B' => (float) $this->rate_group_b,
-            'C' => (float) $this->rate_group_c,
-            default => null,
+            'A'       => (float) $this->rate_group_a,
+            'B'       => (float) $this->rate_group_b,
+            'C'       => (float) $this->rate_group_c,
+            'STUDENT' => (float) $this->rate_group_student,
+            'PUBLIC'  => (float) $this->rate_group_public,
+            default   => null,
         };
     }
 
