@@ -1459,9 +1459,17 @@ function MobileDrawer({ open, onClose, auth, currentCenter, currentUrl, unreadCo
                 <div className="px-5 pt-10 pb-5 safe-area-top"
                     style={{ background: `linear-gradient(135deg, ${theme.sidebar_color || '#0f172a'}, ${theme.sidebar_accent || '#1e293b'})` }}>
                     <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-lg font-bold shadow-lg ring-2 ring-white/20">
-                            {initials}
-                        </div>
+                        {auth?.user?.avatar_url ? (
+                            <img
+                                src={auth.user.avatar_url}
+                                alt={userName}
+                                className="w-14 h-14 rounded-full object-cover shadow-lg ring-2 ring-white/20"
+                            />
+                        ) : (
+                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-lg font-bold shadow-lg ring-2 ring-white/20">
+                                {initials}
+                            </div>
+                        )}
                         <div className="flex-1 min-w-0">
                             <p className="text-white font-bold text-base truncate">{userName}</p>
                             <p className="text-surface-400 text-xs truncate">{userEmail}</p>
