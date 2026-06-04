@@ -7,15 +7,21 @@
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="mobile-web-app-capable" content="yes">
 
-        <title inertia>{{ app(\App\Services\SettingService::class)->get('brand_name', config('app.name', 'BITAC PMS')) }}</title>
-
-        <!-- Server-side theme injection (prevents flash of default colors) -->
         @php
             $ss = app(\App\Services\SettingService::class);
+            $brandName  = $ss->get('brand_name', config('app.name', 'BITAC PMS'));
             $primaryHex = $ss->get('primary_color', '#ff7a0f');
             $sidebarHex = $ss->get('sidebar_color', '#0f172a');
             $isLiveDashboard = request()->routeIs('dashboard.live');
             $logoPath = $ss->get('logo_path');
+        @endphp
+        <title inertia>{{ $brandName }}</title>
+
+        <!-- Make brand name available to the JS bundle for the Inertia title callback -->
+        <script>window.__BRAND_NAME__ = @json($brandName);</script>
+
+        <!-- Server-side theme injection (prevents flash of default colors) -->
+        @php
             $logoUrl = $logoPath ? \Illuminate\Support\Facades\Storage::disk('public')->url($logoPath) : null;
             $logoMime = $logoUrl ? (\Illuminate\Support\Str::endsWith(strtolower($logoPath), '.svg') ? 'image/svg+xml'
                                 : (\Illuminate\Support\Str::endsWith(strtolower($logoPath), '.png') ? 'image/png'

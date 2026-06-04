@@ -7,7 +7,12 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+// Pulls the live brand name from the blade template (kept in sync with
+// SettingService::get('brand_name')) so admins can rename via /admin/branding
+// without rebuilding the bundle. Falls back to build-time env or hard default.
+const appName = (window as any).__BRAND_NAME__
+    || import.meta.env.VITE_APP_NAME
+    || 'BITAC PMS';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
