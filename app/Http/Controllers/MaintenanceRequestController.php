@@ -215,10 +215,25 @@ class MaintenanceRequestController extends Controller
             ],
             'can' => [
                 'approve' => auth()->user()?->can('approve maintenance-requests'),
-                'perform' => auth()->user()?->can('perform maintenance'),
+                // The requesting section coordinates the handover — they decide
+                // when the machine can be released. So the requester themselves
+                // (plus the technician role) can start/complete.
+                'perform' => auth()->id() === $r->requested_by
+                            || auth()->user()?->can('perform maintenance')
+                            || auth()->user()?->can('submit maintenance-requests'),
                 'cancel'  => auth()->id() === $r->requested_by || auth()->user()?->can('approve maintenance-requests'),
             ],
         ]);
+    }
+
+    /** Same authorisation rule as the show page surfaces — keeps the gate consistent. */
+    private function canPerform(MaintenanceRequest $r): bool
+    {
+        $u = auth()->user();
+        if (! $u) return false;
+        return $u->id === $r->requested_by
+            || $u->can('perform maintenance')
+            || $u->can('submit maintenance-requests');
     }
 
     public function approve(Request $request, MaintenanceRequest $maintenanceRequest)
@@ -275,6 +290,7 @@ class MaintenanceRequestController extends Controller
 
     public function start(Request $request, MaintenanceRequest $maintenanceRequest)
     {
+        abort_unless($this->canPerform($maintenanceRequest), 403, 'You do not have permission to start this request.');
         abort_unless($maintenanceRequest->status === 'approved', 422, 'Only approved requests can be started.');
 
         $machine = $maintenanceRequest->machine;
@@ -298,6 +314,7 @@ class MaintenanceRequestController extends Controller
 
     public function complete(Request $request, MaintenanceRequest $maintenanceRequest)
     {
+        abort_unless($this->canPerform($maintenanceRequest), 403, 'You do not have permission to complete this request.');
         abort_unless($maintenanceRequest->status === 'in_progress', 422, 'Only in-progress requests can be completed.');
 
         $validated = $request->validate([

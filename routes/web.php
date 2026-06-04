@@ -417,8 +417,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{maintenanceRequest}',   [\App\Http\Controllers\MaintenanceRequestController::class, 'show'])->name('show');
         Route::post('/{maintenanceRequest}/approve',  [\App\Http\Controllers\MaintenanceRequestController::class, 'approve'])->middleware('permission:approve maintenance-requests')->name('approve');
         Route::post('/{maintenanceRequest}/reject',   [\App\Http\Controllers\MaintenanceRequestController::class, 'reject'])->middleware('permission:approve maintenance-requests')->name('reject');
-        Route::post('/{maintenanceRequest}/start',    [\App\Http\Controllers\MaintenanceRequestController::class, 'start'])->middleware('permission:perform maintenance')->name('start');
-        Route::post('/{maintenanceRequest}/complete', [\App\Http\Controllers\MaintenanceRequestController::class, 'complete'])->middleware('permission:perform maintenance')->name('complete');
+        // Start/complete are gated *inline* in the controller — the requesting
+        // section + anyone with `perform maintenance` can act, not just techs.
+        Route::post('/{maintenanceRequest}/start',    [\App\Http\Controllers\MaintenanceRequestController::class, 'start'])->name('start');
+        Route::post('/{maintenanceRequest}/complete', [\App\Http\Controllers\MaintenanceRequestController::class, 'complete'])->name('complete');
         Route::post('/{maintenanceRequest}/cancel',   [\App\Http\Controllers\MaintenanceRequestController::class, 'cancel'])->name('cancel');
     });
 

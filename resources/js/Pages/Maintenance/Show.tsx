@@ -205,13 +205,17 @@ export default function MaintenanceShow({ request: r, can }: any) {
                             </form>
                         )}
 
-                        {/* Start Work */}
+                        {/* Start Work — the requesting section coordinates handover */}
                         {isApproved && can?.perform && (
                             <div className="card border-blue-200 bg-blue-50/30">
                                 <div className="card-body flex flex-col sm:flex-row sm:items-center gap-3">
                                     <div className="flex-1">
                                         <p className="text-sm font-bold text-blue-700">Approved &mdash; ready to start.</p>
-                                        <p className="text-xs text-surface-500 mt-0.5">Clicking start flips the machine to <strong>maintenance</strong> state.</p>
+                                        <p className="text-xs text-surface-500 mt-0.5">
+                                            When your section is ready to release the machine to maintenance,
+                                            click <strong>Start Work</strong>. The machine will flip to
+                                            <span className="font-semibold"> maintenance</span> state.
+                                        </p>
                                     </div>
                                     <button onClick={startWork} disabled={startForm.processing}
                                         className="btn-primary btn-sm">
