@@ -104,11 +104,10 @@ class MaterialsSeeder extends Seeder
             Material::updateOrCreate(
                 ['name' => $name],
                 [
-                    'category'       => $category,
-                    'rate_per_kg'    => $rate,
-                    'density_kg_m3'  => $density_kg_m3,
-                    'density_kg_in3' => round(($density_kg_m3 / 1000) / 61023.7441, 5), // kg/m³ → kg/in³
-                    'is_active'      => true,
+                    'category'      => $category,
+                    'rate_per_kg'   => $rate,
+                    'density_kg_m3' => $density_kg_m3,
+                    'is_active'     => true,
                 ]
             );
         }
