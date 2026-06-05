@@ -2,12 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent } from 'react';
 
-const CATEGORIES = [
-    'quality_steel', 'tool_steel', 'standard_steel', 'cast_iron', 'stainless',
-    'aluminum', 'copper', 'brass', 'bronze', 'precious', 'specialty', 'pattern',
-];
-
-export default function MaterialCreateEdit({ material }: any) {
+export default function MaterialCreateEdit({ material, categories = [] }: any) {
     const isEdit = !!material;
     const { data, setData, post, put, processing, errors } = useForm({
         name:           material?.name ?? '',
@@ -44,10 +39,17 @@ export default function MaterialCreateEdit({ material }: any) {
                                     {errors.name && <p className="form-error">{errors.name}</p>}
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Category</label>
+                                    <label className="form-label">
+                                        Category
+                                        <Link href="/admin/material-categories" className="ml-2 text-[10px] text-brand-600 hover:text-brand-700 font-semibold">
+                                            Manage →
+                                        </Link>
+                                    </label>
                                     <select value={data.category} onChange={e => setData('category', e.target.value)} className="form-select">
                                         <option value="">— None —</option>
-                                        {CATEGORIES.map(c => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
+                                        {categories.map((c: any) => (
+                                            <option key={c.code} value={c.code}>{c.name}</option>
+                                        ))}
                                     </select>
                                 </div>
                             </div>

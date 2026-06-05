@@ -583,6 +583,11 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('materials', MaterialController::class)
             ->middleware('permission:manage materials-master')
             ->names('admin.materials');
+        Route::resource('material-categories', \App\Http\Controllers\Admin\MaterialCategoryController::class)
+            ->middleware('permission:manage materials-master')
+            ->names('admin.material-categories')
+            ->parameters(['material-categories' => 'materialCategory'])
+            ->except(['show']);
         Route::resource('operations', MachiningOperationController::class)
             ->middleware('permission:manage operations-master')
             ->names('admin.operations')

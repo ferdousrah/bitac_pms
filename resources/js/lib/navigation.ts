@@ -116,6 +116,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Machines',   href: '/admin/machines',   icon: 'fi-rr-settings',             permission: 'manage machines' },
                 { label: 'Operators',  href: '/admin/operators',  icon: 'fi-rr-user-helmet-safety',   permission: 'manage operators' },
                 { label: 'Materials',      href: '/admin/materials',      icon: 'fi-rr-cube',                 permission: 'manage materials-master' },
+                { label: 'Material Categories', href: '/admin/material-categories', icon: 'fi-rr-tags', permission: 'manage materials-master' },
                 { label: 'Operations',     href: '/admin/operations',     icon: 'fi-rr-tools',                permission: 'manage operations-master' },
                 { label: 'Job Categories', href: '/admin/job-categories', icon: 'fi-rr-tags',                 permission: 'manage materials-master' },
                 { label: 'Portfolio',      href: '/admin/portfolio',      icon: 'fi-rr-images',               permission: 'manage portfolio' },

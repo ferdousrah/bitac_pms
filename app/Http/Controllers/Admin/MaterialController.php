@@ -24,13 +24,17 @@ class MaterialController extends Controller
         return Inertia::render('Admin/Materials/Index', [
             'materials'  => $materials,
             'filters'    => $request->only(['search', 'category']),
-            'categories' => Material::distinct()->pluck('category')->filter()->values(),
+            // Pull from the master so unused categories still appear in the filter
+            // dropdown — gives admins a true picture of what's defined.
+            'categories' => \App\Models\MaterialCategory::active()->orderBy('display_order')->orderBy('name')->pluck('code'),
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('Admin/Materials/CreateEdit');
+        return Inertia::render('Admin/Materials/CreateEdit', [
+            'categories' => \App\Models\MaterialCategory::active()->orderBy('display_order')->orderBy('name')->get(['code', 'name']),
+        ]);
     }
 
     public function store(Request $request)
@@ -46,6 +50,7 @@ class MaterialController extends Controller
             'material' => $material->only([
                 'id', 'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3', 'notes', 'is_active',
             ]),
+            'categories' => \App\Models\MaterialCategory::active()->orderBy('display_order')->orderBy('name')->get(['code', 'name']),
         ]);
     }
 
