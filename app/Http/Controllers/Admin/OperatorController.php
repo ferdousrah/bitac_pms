@@ -13,9 +13,23 @@ class OperatorController extends Controller
 {
     public function index()
     {
-        $operators = Operator::with('section', 'user')
-            ->orderBy('name')
-            ->paginate(20)
+        $q = Operator::with('section', 'user')->orderBy('name');
+
+        if ($search = trim((string) request('search'))) {
+            $q->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('employee_id', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+        if ($sectionId = request('section_id')) {
+            $q->where('section_id', $sectionId);
+        }
+        if (($status = request('status')) !== null && $status !== '') {
+            $q->where('is_active', $status === 'active');
+        }
+
+        $operators = $q->paginate(20)->withQueryString()
             ->through(fn($o) => [
                 'id'           => $o->id,
                 'employee_id'  => $o->employee_id,
@@ -30,6 +44,8 @@ class OperatorController extends Controller
 
         return Inertia::render('Admin/Operators/Index', [
             'operators' => $operators,
+            'sections'  => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'filters'   => request()->only(['search', 'section_id', 'status']),
         ]);
     }
 

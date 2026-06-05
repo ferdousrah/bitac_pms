@@ -11,11 +11,30 @@ use Inertia\Inertia;
 
 class MachineController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $machines = Machine::with('section')
-            ->orderBy('name')
-            ->paginate(20)
+        $q = Machine::with('section')->orderBy('name');
+
+        if ($search = trim((string) $request->input('search'))) {
+            $q->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('machine_code', 'like', "%{$search}%")
+                  ->orWhere('manufacturer', 'like', "%{$search}%")
+                  ->orWhere('model', 'like', "%{$search}%")
+                  ->orWhere('location', 'like', "%{$search}%");
+            });
+        }
+        if ($sectionId = $request->input('section_id')) {
+            $q->where('section_id', $sectionId);
+        }
+        if ($state = $request->input('current_state')) {
+            $q->where('current_state', $state);
+        }
+        if ($status = $request->input('status')) {
+            $q->where('status', $status);
+        }
+
+        $machines = $q->paginate(20)->withQueryString()
             ->through(fn($m) => [
                 'id'                 => $m->id,
                 'name'               => $m->name,
@@ -39,6 +58,8 @@ class MachineController extends Controller
         return Inertia::render('Admin/Machines/Index', [
             'machines' => $machines,
             'fleet'    => MachineHealthService::fleetSummary(),
+            'sections' => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'filters'  => $request->only(['search', 'section_id', 'current_state', 'status']),
         ]);
     }
 

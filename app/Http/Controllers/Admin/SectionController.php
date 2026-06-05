@@ -9,26 +9,40 @@ use Inertia\Inertia;
 
 class SectionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $sections = Section::orderBy('display_order')
-            ->withCount(['machines', 'operators'])
-            ->get()
-            ->map(fn($s) => [
-                'id'            => $s->id,
-                'code'          => $s->code,
-                'name'          => $s->name,
-                'name_bn'       => $s->name_bn,
-                'type'          => $s->type,
-                'description'   => $s->description,
-                'display_order' => $s->display_order,
-                'is_active'     => $s->is_active,
-                'machines_count'  => $s->machines_count,
-                'operators_count' => $s->operators_count,
-            ]);
+        $q = Section::orderBy('display_order')->withCount(['machines', 'operators']);
+
+        if ($search = trim((string) $request->input('search'))) {
+            $q->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('code', 'like', "%{$search}%")
+                  ->orWhere('name_bn', 'like', "%{$search}%");
+            });
+        }
+        if ($type = $request->input('type')) {
+            $q->where('type', $type);
+        }
+        if (($status = $request->input('status')) !== null && $status !== '') {
+            $q->where('is_active', $status === 'active');
+        }
+
+        $sections = $q->get()->map(fn($s) => [
+            'id'            => $s->id,
+            'code'          => $s->code,
+            'name'          => $s->name,
+            'name_bn'       => $s->name_bn,
+            'type'          => $s->type,
+            'description'   => $s->description,
+            'display_order' => $s->display_order,
+            'is_active'     => $s->is_active,
+            'machines_count'  => $s->machines_count,
+            'operators_count' => $s->operators_count,
+        ]);
 
         return Inertia::render('Admin/Sections/Index', [
             'sections' => $sections,
+            'filters'  => $request->only(['search', 'type', 'status']),
         ]);
     }
 

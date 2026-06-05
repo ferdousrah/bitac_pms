@@ -1,13 +1,28 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
-export default function OperatorsIndex({ operators }: any) {
+export default function OperatorsIndex({ operators, sections = [], filters }: any) {
+    const [search, setSearch]       = useState(filters?.search ?? '');
+    const [sectionId, setSectionId] = useState(filters?.section_id ?? '');
+    const [status, setStatus]       = useState(filters?.status ?? '');
+
+    const apply = (override: any = {}) => router.get('/admin/operators',
+        { search, section_id: sectionId, status, ...override },
+        { preserveState: true, replace: true });
+
+    const reset = () => {
+        setSearch(''); setSectionId(''); setStatus('');
+        router.get('/admin/operators', {}, { preserveState: true, replace: true });
+    };
+
     const remove = (id: number, name: string) => {
         if (!confirm(`Delete operator "${name}"?`)) return;
         router.delete(`/admin/operators/${id}`);
     };
 
     const rows = operators?.data ?? operators ?? [];
+    const hasFilters = !!(search || sectionId || status);
 
     return (
         <AppLayout header="Operators">
@@ -17,13 +32,48 @@ export default function OperatorsIndex({ operators }: any) {
                         <div>
                             <h2 className="text-base font-bold text-surface-900">Shop Operators</h2>
                             <p className="text-xs text-surface-400 mt-0.5">
-                                {rows.length} operator{rows.length !== 1 && 's'} registered
+                                {operators?.total ?? rows.length} operator{(operators?.total ?? rows.length) !== 1 && 's'}{hasFilters && ' matching filters'} registered
                             </p>
                         </div>
                         <Link href="/admin/operators/create" className="btn-primary btn-sm">
                             <i className="fi fi-rr-user-add text-xs leading-none" />
                             New Operator
                         </Link>
+                    </div>
+
+                    {/* Filter toolbar */}
+                    <div className="card-body border-b border-surface-100 flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <div className="relative flex-1 min-w-0">
+                            <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-xs leading-none" />
+                            <input type="text" value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && apply()}
+                                placeholder="Search by employee ID, name or phone…"
+                                className="form-input pl-9 w-full" />
+                        </div>
+                        <select value={sectionId}
+                            onChange={e => { setSectionId(e.target.value); apply({ section_id: e.target.value }); }}
+                            className="form-select sm:w-48">
+                            <option value="">All sections</option>
+                            {sections.map((s: any) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                        </select>
+                        <select value={status}
+                            onChange={e => { setStatus(e.target.value); apply({ status: e.target.value }); }}
+                            className="form-select sm:w-36">
+                            <option value="">All status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                        <button onClick={() => apply()} className="btn-outline btn-sm">
+                            <i className="fi fi-rr-search text-xs leading-none" /> Search
+                        </button>
+                        {hasFilters && (
+                            <button onClick={reset} className="btn-ghost btn-sm text-surface-500">
+                                <i className="fi fi-rr-refresh text-xs leading-none" /> Reset
+                            </button>
+                        )}
                     </div>
 
                     {/* Desktop table */}

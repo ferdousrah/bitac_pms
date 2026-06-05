@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 const TYPE_BADGE: Record<string, string> = {
     functional:      'badge-blue',
@@ -11,11 +12,26 @@ const TYPE_LABEL: Record<string, string> = {
     production_shop: 'Production Shop',
 };
 
-export default function SectionsIndex({ sections }: any) {
+export default function SectionsIndex({ sections, filters }: any) {
+    const [search, setSearch] = useState(filters?.search ?? '');
+    const [type,   setType]   = useState(filters?.type   ?? '');
+    const [status, setStatus] = useState(filters?.status ?? '');
+
+    const apply = (override: any = {}) => router.get('/admin/sections',
+        { search, type, status, ...override },
+        { preserveState: true, replace: true });
+
+    const reset = () => {
+        setSearch(''); setType(''); setStatus('');
+        router.get('/admin/sections', {}, { preserveState: true, replace: true });
+    };
+
     const remove = (id: number, name: string) => {
         if (!confirm(`Delete section "${name}"?`)) return;
         router.delete(`/admin/sections/${id}`);
     };
+
+    const hasFilters = !!(search || type || status);
 
     return (
         <AppLayout header="Sections / Departments">
@@ -25,13 +41,47 @@ export default function SectionsIndex({ sections }: any) {
                         <div>
                             <h2 className="text-base font-bold text-surface-900">Departments & Production Shops</h2>
                             <p className="text-xs text-surface-400 mt-0.5">
-                                {sections.length} section{sections.length !== 1 && 's'} configured — IED, PCD, Shops, QC
+                                {sections.length} section{sections.length !== 1 && 's'}{hasFilters && ' matching filters'} — IED, PCD, Shops, QC
                             </p>
                         </div>
                         <Link href="/admin/sections/create" className="btn-primary btn-sm">
                             <i className="fi fi-rr-plus text-xs leading-none" />
                             New Section
                         </Link>
+                    </div>
+
+                    {/* Filter toolbar */}
+                    <div className="card-body border-b border-surface-100 flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <div className="relative flex-1 min-w-0">
+                            <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-xs leading-none" />
+                            <input type="text" value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && apply()}
+                                placeholder="Search by code, name or Bengali name…"
+                                className="form-input pl-9 w-full" />
+                        </div>
+                        <select value={type}
+                            onChange={e => { setType(e.target.value); apply({ type: e.target.value }); }}
+                            className="form-select sm:w-44">
+                            <option value="">All types</option>
+                            <option value="functional">Functional</option>
+                            <option value="production_shop">Production Shop</option>
+                        </select>
+                        <select value={status}
+                            onChange={e => { setStatus(e.target.value); apply({ status: e.target.value }); }}
+                            className="form-select sm:w-36">
+                            <option value="">All status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                        <button onClick={() => apply()} className="btn-outline btn-sm">
+                            <i className="fi fi-rr-search text-xs leading-none" /> Search
+                        </button>
+                        {hasFilters && (
+                            <button onClick={reset} className="btn-ghost btn-sm text-surface-500">
+                                <i className="fi fi-rr-refresh text-xs leading-none" /> Reset
+                            </button>
+                        )}
                     </div>
 
                     {/* Desktop table */}
