@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Material extends Model
 {
     protected $fillable = [
-        'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3',
+        'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3',
         'notes', 'is_active',
     ];
 
@@ -16,7 +16,6 @@ class Material extends Model
         return [
             'rate_per_kg'    => 'decimal:2',
             'density_kg_m3'  => 'decimal:2',
-            'density_kg_in3' => 'decimal:5',
             'is_active'      => 'boolean',
         ];
     }

@@ -15,19 +15,9 @@ export default function MaterialCreateEdit({ material }: any) {
         unit:           material?.unit ?? 'kg',
         rate_per_kg:    material?.rate_per_kg ?? '',
         density_kg_m3:  material?.density_kg_m3 ?? '',
-        density_kg_in3: material?.density_kg_in3 ?? '',
         notes:          material?.notes ?? '',
         is_active:      material?.is_active ?? true,
     });
-
-    // Auto-convert density when m³ changes
-    const onDensityM3Change = (v: string) => {
-        setData('density_kg_m3', v);
-        const m3 = parseFloat(v);
-        if (m3 > 0) {
-            setData('density_kg_in3', ((m3 / 1000) / 61023.7441).toFixed(5) as any);
-        }
-    };
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
@@ -95,15 +85,8 @@ export default function MaterialCreateEdit({ material }: any) {
                                 <div className="form-group">
                                     <label className="form-label">Density <span className="form-label-optional">kg/m³</span></label>
                                     <input type="number" min="0" step="0.01" value={data.density_kg_m3}
-                                        onChange={e => onDensityM3Change(e.target.value)}
+                                        onChange={e => setData('density_kg_m3', e.target.value)}
                                         className="form-input font-mono" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Density <span className="form-label-optional">kg/in³</span></label>
-                                    <input type="number" min="0" step="0.00001" value={data.density_kg_in3}
-                                        onChange={e => setData('density_kg_in3', e.target.value)}
-                                        className="form-input font-mono"
-                                        readOnly />
                                 </div>
                             </div>
 

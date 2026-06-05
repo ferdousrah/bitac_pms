@@ -122,7 +122,7 @@ class CostEstimateController extends Controller
                 'customer_id'     => $rfqItem->rfq?->customer_id,
                 'customer_name'   => $rfqItem->rfq?->customer?->name,
             ] : null,
-            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
+            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
             'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -534,7 +534,7 @@ class CostEstimateController extends Controller
         return Inertia::render('CostEstimate/Form', [
             'estimate'   => $this->serializeEstimate($costEstimate),
             'rfq'        => null,
-            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
+            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
             'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
