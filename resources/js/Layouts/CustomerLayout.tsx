@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import NotificationBell from '@/Components/Customer/NotificationBell';
 
 interface Props {
@@ -32,6 +32,18 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
 
     const displayName = customer?.contact_person ?? customer?.name ?? 'Customer';
     const initial = (displayName).charAt(0).toUpperCase();
+
+    // Profile dropdown
+    const [profileOpen, setProfileOpen] = useState(false);
+    const profileRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!profileOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [profileOpen]);
 
     return (
         <div className="min-h-screen bg-surface-50 flex flex-col">
@@ -70,26 +82,87 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
                         {/* Vertical divider — separates bell from profile chip */}
                         <div className="hidden sm:block w-px h-8 bg-surface-100" />
 
-                        {/* Customer profile chip */}
-                        <div className="hidden md:flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-surface-50 transition-colors">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                                {initial}
-                            </div>
-                            <div className="leading-tight min-w-0">
-                                <p className="text-[13px] font-semibold text-surface-900 truncate max-w-[160px]">{displayName}</p>
-                                <p className="text-[10px] text-surface-400 uppercase tracking-wider font-semibold">Customer</p>
-                            </div>
-                        </div>
+                        {/* Profile dropdown */}
+                        <div ref={profileRef} className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setProfileOpen(o => !o)}
+                                className={`flex items-center gap-2.5 pl-1 pr-2 sm:pr-3 py-1 rounded-xl transition-colors ${
+                                    profileOpen ? 'bg-surface-100' : 'hover:bg-surface-50'
+                                }`}
+                            >
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                                    {initial}
+                                </div>
+                                <div className="leading-tight min-w-0 hidden md:block text-left">
+                                    <p className="text-[13px] font-semibold text-surface-900 truncate max-w-[160px]">{displayName}</p>
+                                    <p className="text-[10px] text-surface-400 uppercase tracking-wider font-semibold">Customer</p>
+                                </div>
+                                <i className={`fi fi-rr-angle-small-down text-xs leading-none text-surface-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                            </button>
 
-                        <button
-                            type="button"
-                            onClick={() => router.post('/customer/logout')}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-surface-600 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            title="Sign out"
-                        >
-                            <i className="fi fi-rr-sign-out-alt leading-none text-xs" />
-                            <span className="hidden sm:inline">Logout</span>
-                        </button>
+                            {profileOpen && (
+                                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.25)] border border-surface-100 z-50 overflow-hidden animate-scale-in origin-top-right">
+                                    {/* Header — customer identity */}
+                                    <div className="px-4 py-4 bg-gradient-to-br from-surface-50 to-white border-b border-surface-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+                                                {initial}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-surface-900 truncate">{displayName}</p>
+                                                <p className="text-[11px] text-surface-500 truncate">{customer?.name}</p>
+                                                {customer?.email && (
+                                                    <p className="text-[10px] text-surface-400 truncate mt-0.5">{customer.email}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quick links */}
+                                    <div className="py-1.5">
+                                        <Link href="/customer/dashboard" onClick={() => setProfileOpen(false)}
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-surface-700 hover:bg-surface-50 transition-colors">
+                                            <i className="fi fi-rr-apps text-xs leading-none text-surface-400 w-4" />
+                                            Dashboard
+                                        </Link>
+                                        <Link href="/customer/notifications" onClick={() => setProfileOpen(false)}
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-surface-700 hover:bg-surface-50 transition-colors">
+                                            <i className="fi fi-rr-bell text-xs leading-none text-surface-400 w-4" />
+                                            Notifications
+                                            {(props.customerNotifications?.unread_count ?? 0) > 0 && (
+                                                <span className="ml-auto inline-flex min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold items-center justify-center">
+                                                    {props.customerNotifications.unread_count}
+                                                </span>
+                                            )}
+                                        </Link>
+                                        <Link href="/customer/complaints/create" onClick={() => setProfileOpen(false)}
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-surface-700 hover:bg-surface-50 transition-colors">
+                                            <i className="fi fi-rr-headset text-xs leading-none text-surface-400 w-4" />
+                                            Send Feedback
+                                        </Link>
+                                        <a href="/portfolio" target="_blank" rel="noreferrer noopener" onClick={() => setProfileOpen(false)}
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-surface-700 hover:bg-surface-50 transition-colors">
+                                            <i className="fi fi-rr-briefcase text-xs leading-none text-surface-400 w-4" />
+                                            BITAC Portfolio
+                                            <i className="fi fi-rr-arrow-up-right-from-square text-[9px] leading-none text-surface-300 ml-auto" />
+                                        </a>
+                                    </div>
+
+                                    {/* Logout */}
+                                    <div className="border-t border-surface-100 py-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setProfileOpen(false); router.post('/customer/logout'); }}
+                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                                        >
+                                            <i className="fi fi-rr-sign-out-alt text-xs leading-none w-4" />
+                                            Sign out
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

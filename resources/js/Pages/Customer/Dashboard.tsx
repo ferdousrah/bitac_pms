@@ -38,13 +38,6 @@ export default function CustomerDashboard({ customer, stats, lifetime, recentOrd
         <CustomerLayout>
             <div className="space-y-6 animate-fade-in">
 
-                {/* Simple welcome — no banner, no dark gradient */}
-                <div>
-                    <p className="text-xs uppercase tracking-wider text-surface-400 font-semibold">{timeGreet}</p>
-                    <h1 className="text-xl sm:text-2xl font-bold text-surface-900 mt-1">{greetName}</h1>
-                    <p className="text-sm text-surface-500 mt-1">{customer?.name}</p>
-                </div>
-
                 {/* ─────────── HERO CTA ─────────── */}
                 <Link href="/customer/rfqs/create"
                     className="block group relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-700 text-white p-5 sm:p-6 shadow-premium-lg hover:shadow-2xl transition-all hover:-translate-y-0.5">
