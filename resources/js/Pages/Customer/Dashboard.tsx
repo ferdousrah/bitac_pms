@@ -38,59 +38,11 @@ export default function CustomerDashboard({ customer, stats, lifetime, recentOrd
         <CustomerLayout>
             <div className="space-y-6 animate-fade-in">
 
-                {/* ─────────── HEADER: Account banner with gear motif ─────────── */}
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7">
-                    {/* Decorative gear SVG — industrial motif */}
-                    <svg className="absolute -right-12 -bottom-12 w-56 h-56 opacity-[0.08] pointer-events-none"
-                        viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19.43 12.98c.04-.32.07-.64.07-.98 0-.34-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98 0 .33.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-                    </svg>
-                    <svg className="absolute -left-6 -top-6 w-32 h-32 opacity-[0.05] pointer-events-none"
-                        viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19.43 12.98c.04-.32.07-.64.07-.98 0-.34-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98 0 .33.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-                    </svg>
-
-                    <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                        <div className="flex items-start gap-4">
-                            {/* Customer initial avatar */}
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-lg ring-2 ring-white/10 shrink-0">
-                                <span className="font-bold text-xl">{(customer?.name ?? 'C').charAt(0).toUpperCase()}</span>
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs uppercase tracking-[0.2em] text-white/50 font-semibold mb-1">{timeGreet}</p>
-                                <h1 className="text-xl sm:text-2xl font-bold leading-tight">{greetName}</h1>
-                                <p className="text-sm text-white/70 mt-1 truncate">{customer?.name}</p>
-                                <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-white/60">
-                                    {lifetime?.member_since && (
-                                        <span className="inline-flex items-center gap-1">
-                                            <i className="fi fi-rr-calendar text-[10px] leading-none" />
-                                            BITAC client since {lifetime.member_since}
-                                        </span>
-                                    )}
-                                    {customer?.email && (
-                                        <span className="inline-flex items-center gap-1 truncate">
-                                            <i className="fi fi-rr-envelope text-[10px] leading-none" /> {customer.email}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Lifetime mini-stats — only shown for established customers */}
-                        {hasAnyActivity && (
-                            <div className="flex items-center gap-6 px-5 py-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur shrink-0">
-                                <div>
-                                    <div className="text-[10px] uppercase tracking-wider text-white/50 font-semibold">Projects</div>
-                                    <div className="text-xl font-bold mt-0.5">{lifetime.total_projects}</div>
-                                </div>
-                                <div className="w-px h-8 bg-white/15"></div>
-                                <div>
-                                    <div className="text-[10px] uppercase tracking-wider text-white/50 font-semibold">Lifetime Value</div>
-                                    <div className="text-xl font-bold mt-0.5">{formatBDT(lifetime.total_billed)}</div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                {/* Simple welcome — no banner, no dark gradient */}
+                <div>
+                    <p className="text-xs uppercase tracking-wider text-surface-400 font-semibold">{timeGreet}</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-surface-900 mt-1">{greetName}</h1>
+                    <p className="text-sm text-surface-500 mt-1">{customer?.name}</p>
                 </div>
 
                 {/* ─────────── HERO CTA ─────────── */}
