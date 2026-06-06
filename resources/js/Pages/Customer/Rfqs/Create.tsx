@@ -37,7 +37,7 @@ const emptyItem = (): Item => ({
 });
 
 export default function CustomerRfqCreate({ products = [] }: any) {
-    const { data, setData, post, errors, processing, transform } = useForm<{
+    const { data, setData, post, errors, processing } = useForm<{
         customer_ref_no: string;
         required_by: string;
         notes: string;
@@ -72,13 +72,35 @@ export default function CustomerRfqCreate({ products = [] }: any) {
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
-        transform((d: any) => d);
         post('/customer/rfqs', { forceFormData: true });
     };
+
+    const errorKeys = Object.keys(errors as any);
 
     return (
         <CustomerLayout backHref="/customer/rfqs" backLabel="My RFQs" title="New RFQ" width="narrow">
             <form onSubmit={submit} className="space-y-6">
+
+                {/* Global validation error banner — shows every field-level
+                    error so customers never get stuck wondering why submit
+                    appears to do nothing. */}
+                {errorKeys.length > 0 && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                        <div className="flex items-start gap-2.5">
+                            <i className="fi fi-rr-exclamation text-rose-600 mt-0.5 text-base leading-none" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-rose-800 mb-1.5">Please fix these errors:</p>
+                                <ul className="text-xs text-rose-700 space-y-0.5 list-disc list-inside">
+                                    {errorKeys.map(k => (
+                                        <li key={k}>
+                                            <span className="font-mono text-[10px] opacity-60">{k}</span>: {(errors as any)[k]}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Header */}
                 <div className="card">
