@@ -25,18 +25,25 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
     const flash = props.flash ?? {};
     const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
     const maxW = width === 'narrow' ? 'max-w-4xl' : 'max-w-6xl';
+    const theme = (props.appSettings ?? {}) as { logo_url?: string | null; brand_name?: string };
+    const brandName = theme.brand_name || 'BITAC';
+    const currentYear = new Date().getFullYear();
 
     return (
-        <div className="min-h-screen bg-surface-50">
+        <div className="min-h-screen bg-surface-50 flex flex-col">
             {/* Top Nav */}
             <nav className="bg-white border-b border-surface-100 shadow-sm sticky top-0 z-30">
                 <div className={`${maxW} mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4`}>
                     <Link href="/customer/dashboard" className="flex items-center gap-3 shrink-0">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-md">
-                            <span className="font-bold text-sm">B</span>
-                        </div>
+                        {theme.logo_url ? (
+                            <img src={theme.logo_url} alt={brandName} className="w-10 h-10 object-contain shrink-0" />
+                        ) : (
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-md">
+                                <span className="font-bold text-sm">B</span>
+                            </div>
+                        )}
                         <div>
-                            <p className="font-bold text-surface-900 text-sm leading-tight">BITAC Customer Portal</p>
+                            <p className="font-bold text-surface-900 text-sm leading-tight">{brandName} Customer Portal</p>
                             <p className="text-xs text-surface-400 leading-tight hidden sm:block">Project management</p>
                         </div>
                     </Link>
@@ -78,7 +85,7 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
                 </div>
             </nav>
 
-            <div className={`${maxW} mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-fade-in`}>
+            <div className={`${maxW} mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-fade-in flex-1 w-full`}>
                 {flash.success && (
                     <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-2.5 flex items-start gap-2">
                         <i className="fi fi-rr-check-circle text-emerald-600 leading-none text-base mt-0.5" />
@@ -107,6 +114,37 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
 
                 {children}
             </div>
+
+            {/* Footer */}
+            <footer className="bg-white border-t border-surface-100 mt-auto">
+                <div className={`${maxW} mx-auto px-4 sm:px-6 py-5`}>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-surface-500">
+                        <div className="flex items-center gap-2.5">
+                            {theme.logo_url ? (
+                                <img src={theme.logo_url} alt={brandName} className="w-7 h-7 object-contain shrink-0 opacity-80" />
+                            ) : (
+                                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shrink-0">
+                                    <span className="font-bold text-[10px]">B</span>
+                                </div>
+                            )}
+                            <span className="text-center sm:text-left">
+                                &copy; {currentYear} <span className="font-semibold text-surface-700">Bangladesh Industrial Technical Assistance Centre</span>. All rights reserved.
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span>Developed by</span>
+                            <a
+                                href="https://technocratsbd.com"
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="font-semibold text-brand-600 hover:text-brand-700 hover:underline inline-flex items-center gap-1"
+                            >
+                                Technocrats <i className="fi fi-rr-arrow-up-right-from-square text-[9px] leading-none" />
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }
