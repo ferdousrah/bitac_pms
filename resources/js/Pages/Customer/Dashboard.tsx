@@ -47,6 +47,25 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                     </div>
                 </Link>
 
+                {/* Portfolio showcase strip */}
+                <a href="/portfolio" target="_blank" rel="noreferrer noopener"
+                    className="block group rounded-2xl bg-white border border-surface-200 p-4 sm:p-5 hover:border-brand-300 hover:shadow-premium transition-all">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-600 flex items-center justify-center shrink-0">
+                            <i className="fi fi-rr-briefcase text-lg sm:text-xl leading-none" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold uppercase tracking-wider text-indigo-600/80">Explore Our Capability</div>
+                            <div className="text-sm sm:text-base font-bold text-surface-900 mt-0.5">See BITAC's previous work portfolio</div>
+                            <div className="text-xs text-surface-500 mt-0.5 hidden sm:block">Castings, precision machining, repair &amp; overhaul, tool &amp; die, heat treatment — and more.</div>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs font-semibold text-brand-600 group-hover:translate-x-0.5 transition-transform shrink-0">
+                            <span className="hidden sm:inline">View Portfolio</span>
+                            <i className="fi fi-rr-arrow-up-right-from-square text-xs leading-none" />
+                        </div>
+                    </div>
+                </a>
+
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {STAT_CARDS.map(s => (

@@ -10,13 +10,14 @@ interface Props {
     width?: 'narrow' | 'wide';
 }
 
-const NAV_ITEMS = [
-    { href: '/customer/dashboard',    label: 'Dashboard',   icon: 'fi-rr-apps' },
-    { href: '/customer/rfqs',         label: 'My RFQs',     icon: 'fi-rr-file-invoice' },
-    { href: '/customer/work-orders',  label: 'My Orders',   icon: 'fi-rr-clipboard-list' },
-    { href: '/customer/invoices',     label: 'Invoices',    icon: 'fi-rr-receipt' },
-    { href: '/customer/documents',    label: 'Documents',   icon: 'fi-rr-folder-open' },
-    { href: '/customer/complaints',   label: 'Feedback/Compliment',  icon: 'fi-rr-comment-alt' },
+const NAV_ITEMS: { href: string; label: string; icon: string; external?: boolean }[] = [
+    { href: '/customer/dashboard',    label: 'Dashboard',                icon: 'fi-rr-apps' },
+    { href: '/customer/rfqs',         label: 'My RFQs',                  icon: 'fi-rr-file-invoice' },
+    { href: '/customer/work-orders',  label: 'My Orders',                icon: 'fi-rr-clipboard-list' },
+    { href: '/customer/invoices',     label: 'Invoices',                 icon: 'fi-rr-receipt' },
+    { href: '/customer/documents',    label: 'Documents',                icon: 'fi-rr-folder-open' },
+    { href: '/customer/complaints',   label: 'Feedback/Compliment',      icon: 'fi-rr-comment-alt' },
+    { href: '/portfolio',             label: 'Our Work',                 icon: 'fi-rr-briefcase',          external: true },
 ];
 
 export default function CustomerLayout({ title, backHref, backLabel, children, width = 'wide' }: Props) {
@@ -65,17 +66,25 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
                 <div className={`${maxW} mx-auto px-4 sm:px-6 -mb-px overflow-x-auto`}>
                     <div className="flex items-center gap-1 text-sm">
                         {NAV_ITEMS.map(item => {
-                            const active = currentPath === item.href || (item.href !== '/customer/dashboard' && currentPath.startsWith(item.href));
+                            const active = !item.external && (currentPath === item.href || (item.href !== '/customer/dashboard' && currentPath.startsWith(item.href)));
+                            const className = `flex items-center gap-1.5 px-3 py-2.5 border-b-2 whitespace-nowrap transition-colors ${
+                                active
+                                    ? 'border-brand-500 text-brand-600 font-semibold'
+                                    : 'border-transparent text-surface-500 hover:text-surface-800 hover:border-surface-200'
+                            }`;
+                            // External links (e.g. public portfolio) open in a
+                            // new tab so the customer keeps their portal session.
+                            if (item.external) {
+                                return (
+                                    <a key={item.href} href={item.href} target="_blank" rel="noreferrer noopener" className={className}>
+                                        <i className={`fi ${item.icon} leading-none text-xs`} />
+                                        {item.label}
+                                        <i className="fi fi-rr-arrow-up-right-from-square text-[9px] leading-none opacity-60" />
+                                    </a>
+                                );
+                            }
                             return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 whitespace-nowrap transition-colors ${
-                                        active
-                                            ? 'border-brand-500 text-brand-600 font-semibold'
-                                            : 'border-transparent text-surface-500 hover:text-surface-800 hover:border-surface-200'
-                                    }`}
-                                >
+                                <Link key={item.href} href={item.href} className={className}>
                                     <i className={`fi ${item.icon} leading-none text-xs`} />
                                     {item.label}
                                 </Link>
