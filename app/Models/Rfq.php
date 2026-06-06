@@ -12,7 +12,7 @@ class Rfq extends Model
     protected $fillable = [
         'center_id', 'customer_id', 'job_category_id', 'required_by', 'notes',
         'customer_ref_no', 'job_type',
-        'status', 'created_by', 'reference_type', 'drawing_path', 'sample_received', 'sample_description',
+        'status', 'source', 'created_by', 'reference_type', 'drawing_path', 'sample_received', 'sample_description',
     ];
 
     protected function casts(): array

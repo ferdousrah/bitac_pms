@@ -634,6 +634,12 @@ Route::middleware(['auth:customer'])->prefix('customer')->name('customer.')->gro
 Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('customer')->name('customer.')->group(function () {
     Route::get('/dashboard', [CustomerDashboardController::class, 'index'])->name('dashboard');
 
+    Route::get('/rfqs',                       [\App\Http\Controllers\Customer\CustomerRfqController::class, 'index'])->name('rfqs.index');
+    Route::get('/rfqs/create',                [\App\Http\Controllers\Customer\CustomerRfqController::class, 'create'])->name('rfqs.create');
+    Route::post('/rfqs',                      [\App\Http\Controllers\Customer\CustomerRfqController::class, 'store'])->name('rfqs.store');
+    Route::get('/rfqs/{rfq}',                 [\App\Http\Controllers\Customer\CustomerRfqController::class, 'show'])->name('rfqs.show');
+    Route::post('/rfqs/{rfq}/cancel',         [\App\Http\Controllers\Customer\CustomerRfqController::class, 'cancel'])->name('rfqs.cancel');
+
     Route::get('/work-orders', [CustomerWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('/work-orders/{workOrder}', [CustomerWorkOrderController::class, 'show'])->name('work-orders.show');
     Route::post('/work-orders/{workOrder}/emergency-request',

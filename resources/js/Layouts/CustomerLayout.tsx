@@ -11,6 +11,7 @@ interface Props {
 
 const NAV_ITEMS = [
     { href: '/customer/dashboard',    label: 'Dashboard',   icon: 'fi-rr-apps' },
+    { href: '/customer/rfqs',         label: 'My RFQs',     icon: 'fi-rr-file-invoice' },
     { href: '/customer/work-orders',  label: 'My Orders',   icon: 'fi-rr-clipboard-list' },
     { href: '/customer/invoices',     label: 'Invoices',    icon: 'fi-rr-receipt' },
     { href: '/customer/documents',    label: 'Documents',   icon: 'fi-rr-folder-open' },

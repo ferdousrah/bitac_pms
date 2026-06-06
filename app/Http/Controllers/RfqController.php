@@ -69,6 +69,7 @@ class RfqController extends Controller
                 'created_by'      => $r->createdBy?->name ?? '—',
                 'created_at'      => $r->created_at->format('d/m/Y'),
                 'has_quotation'   => $r->latestQuotation !== null,
+                'source'          => $r->source ?? 'staff',
             ]),
             'filters' => [
                 'search'      => $request->input('search', ''),

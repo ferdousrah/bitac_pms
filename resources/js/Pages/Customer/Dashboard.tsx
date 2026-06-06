@@ -53,6 +53,24 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                     <p className="text-sm text-surface-500 mt-1">Track your orders, invoices and submit new requests</p>
                 </div>
 
+                {/* Hero CTA — Submit RFQ */}
+                <Link href="/customer/rfqs/create"
+                    className="block group rounded-2xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-700 text-white p-5 sm:p-6 shadow-premium-lg hover:shadow-2xl transition-all hover:-translate-y-0.5">
+                    <div className="flex items-center gap-4 sm:gap-5">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0 ring-1 ring-white/20">
+                            <i className="fi fi-rr-paper-plane text-xl sm:text-2xl leading-none" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold uppercase tracking-wider text-white/70">Need a new job done?</div>
+                            <div className="text-base sm:text-lg font-bold mt-0.5">Submit a Request for Quotation</div>
+                            <div className="text-xs sm:text-sm text-white/80 mt-1">Describe the job, attach drawings/samples, get a formal quotation from BITAC IED.</div>
+                        </div>
+                        <div className="hidden sm:flex items-center gap-1 px-3 py-2 rounded-xl bg-white/15 backdrop-blur text-xs font-bold shrink-0 group-hover:bg-white/25 transition-colors">
+                            Start <i className="fi fi-rr-arrow-right text-xs leading-none" />
+                        </div>
+                    </div>
+                </Link>
+
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {STAT_CARDS.map(s => (
