@@ -634,6 +634,12 @@ Route::middleware(['auth:customer'])->prefix('customer')->name('customer.')->gro
 Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('customer')->name('customer.')->group(function () {
     Route::get('/dashboard', [CustomerDashboardController::class, 'index'])->name('dashboard');
 
+    // Notifications (bell + full-page list)
+    Route::get('/notifications',                       [\App\Http\Controllers\Customer\CustomerNotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/poll',                  [\App\Http\Controllers\Customer\CustomerNotificationController::class, 'poll'])->name('notifications.poll');
+    Route::post('/notifications/{notification}/read',  [\App\Http\Controllers\Customer\CustomerNotificationController::class, 'markRead'])->name('notifications.read');
+    Route::post('/notifications/read-all',             [\App\Http\Controllers\Customer\CustomerNotificationController::class, 'markAllRead'])->name('notifications.read-all');
+
     Route::get('/rfqs',                       [\App\Http\Controllers\Customer\CustomerRfqController::class, 'index'])->name('rfqs.index');
     Route::get('/rfqs/create',                [\App\Http\Controllers\Customer\CustomerRfqController::class, 'create'])->name('rfqs.create');
     Route::post('/rfqs',                      [\App\Http\Controllers\Customer\CustomerRfqController::class, 'store'])->name('rfqs.store');

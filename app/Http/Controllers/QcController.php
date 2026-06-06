@@ -132,7 +132,9 @@ class QcController extends Controller
         }
 
         if ($validated['result'] === 'pass') {
+            $previousStatus = $workOrder->status;
             $workOrder->update(['status' => 'qc_passed']);
+            \App\Services\CustomerNotifyService::workOrderStateChanged($workOrder->fresh('customer'), $previousStatus);
             $this->audit->log('qc_passed', 'WorkOrder', $workOrder->id, [], [
                 'message' => "QC Passed: {$workOrder->wo_number}",
             ]);
@@ -201,7 +203,9 @@ class QcController extends Controller
                     'challan_number'     => 'CH-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT),
                     'status'             => 'scheduled',
                 ]);
+                $previous = $workOrder->status;
                 $workOrder->update(['status' => 'ready_for_delivery']);
+                \App\Services\CustomerNotifyService::workOrderStateChanged($workOrder->fresh('customer'), $previous);
             }
         } elseif ($validated['result'] === 'fail') {
             $workOrder->update(['status' => 'qc_hold']);

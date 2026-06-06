@@ -171,10 +171,16 @@ class DeliveryController extends Controller
         ]);
 
         $delivery->update(['status' => 'delivered', 'delivered_at' => now()]);
+        $previousWoStatus = $delivery->workOrder->status;
         $delivery->workOrder->update(['status' => 'delivered']);
 
         $invoice = $this->invoiceService->createFromDelivery($delivery);
-        $this->notificationService->workOrderStatusChanged($delivery->workOrder);
+
+        // Customer-portal live notifications
+        \App\Services\CustomerNotifyService::workOrderStateChanged($delivery->workOrder->fresh('customer'), $previousWoStatus);
+        if ($invoice) {
+            \App\Services\CustomerNotifyService::invoiceIssued($invoice->fresh('customer', 'workOrder'));
+        }
 
         return redirect()->route('delivery.index')
             ->with('success', "Delivery confirmed. Invoice {$invoice->invoice_number} created.");

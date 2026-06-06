@@ -719,6 +719,12 @@ class QuotationController extends Controller
                 'fi-rr-check-circle',
                 'green',
             );
+
+            // Customer-portal: tell the customer their quotation is ready.
+            \App\Services\CustomerNotifyService::quotationSent($quotation->fresh(['customer', 'rfq.customer']));
+            if ($quotation->rfq) {
+                \App\Services\CustomerNotifyService::rfqQuoted($quotation->rfq->fresh('customer'), $quotation);
+            }
         } else if ($remark) {
             // Partial approval with a note — still notify the creator about the approver's comment
             NotifyService::send(

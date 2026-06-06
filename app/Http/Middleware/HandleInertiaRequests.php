@@ -48,8 +48,14 @@ class HandleInertiaRequests extends Middleware
             ? $user->getAllPermissions()->pluck('name')->toArray()
             : [];
 
+        // Customer guard awareness — used for the customer portal bell + dashboard.
+        $customer = auth('customer')->user();
+
         return [
             ...parent::share($request),
+            'customerNotifications' => $customer ? [
+                'unread_count' => $customer->notifications()->where('is_read', false)->count(),
+            ] : null,
             'auth' => [
                 'user' => $user ? [
                     'id'             => $user->id,

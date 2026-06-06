@@ -144,6 +144,8 @@ class InvoiceController extends Controller
             'marked_paid_by'    => auth()->id(),
         ]);
 
+        \App\Services\CustomerNotifyService::invoicePaid($invoice->fresh(['customer', 'workOrder']));
+
         return back()->with('success', "Invoice {$invoice->invoice_number} marked as paid.");
     }
 }

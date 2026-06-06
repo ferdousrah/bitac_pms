@@ -186,6 +186,9 @@ class GatePassController extends Controller
             return $pass;
         });
 
+        // Customer-portal: tell the customer their gate pass is ready to print.
+        \App\Services\CustomerNotifyService::gatePassIssued($pass->fresh('rfq.customer'));
+
         return redirect()->route("{$this->routePrefix()}.show", $pass)
             ->with('success', "Gate Pass {$pass->pass_no} issued.");
     }

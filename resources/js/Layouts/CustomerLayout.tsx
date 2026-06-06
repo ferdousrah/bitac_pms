@@ -1,5 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { ReactNode } from 'react';
+import NotificationBell from '@/Components/Customer/NotificationBell';
 
 interface Props {
     title?: string;
@@ -40,8 +41,9 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
                         </div>
                     </Link>
 
-                    <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-surface-700 hidden md:inline">{customer?.contact_person ?? customer?.name}</span>
+                    <div className="flex items-center gap-2">
+                        <NotificationBell initialUnread={props.customerNotifications?.unread_count ?? 0} />
+                        <span className="text-sm font-medium text-surface-700 hidden md:inline ml-1">{customer?.contact_person ?? customer?.name}</span>
                         <button
                             type="button"
                             onClick={() => router.post('/customer/logout')}

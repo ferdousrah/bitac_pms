@@ -64,7 +64,9 @@ class ShopFloorController extends Controller
         // Update WO status if not already in production
         $wo = $step->operationSheet->workOrder;
         if ($wo->status === 'approved') {
+            $previous = $wo->status;
             $wo->update(['status' => 'in_production']);
+            \App\Services\CustomerNotifyService::workOrderStateChanged($wo->fresh('customer'), $previous);
         }
 
         $this->audit->log('job_started', 'JobExecution', $execution->id, [], [
