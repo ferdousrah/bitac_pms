@@ -1,4 +1,5 @@
 import { Link, router } from '@inertiajs/react';
+import CustomerLayout from '@/Layouts/CustomerLayout';
 
 const STATUS_BADGE: Record<string, string> = {
     draft:              'badge-slate',
@@ -20,33 +21,8 @@ const STAT_CARDS = [
 
 export default function CustomerDashboard({ customer, stats, recentOrders, recentInvoices }: any) {
     return (
-        <div className="min-h-screen bg-surface-50">
-            {/* Top Nav */}
-            <nav className="bg-white border-b border-surface-100 shadow-sm sticky top-0 z-30">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-md">
-                            <span className="font-bold text-sm">B</span>
-                        </div>
-                        <div>
-                            <p className="font-bold text-surface-900 text-sm leading-tight">BITAC Customer Portal</p>
-                            <p className="text-xs text-surface-400 leading-tight hidden sm:block">Project management</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-surface-700 hidden sm:inline">{customer?.name}</span>
-                        <button
-                            type="button"
-                            onClick={() => router.post('/customer/logout')}
-                            className="btn-ghost btn-xs"
-                        >
-                            <i className="fi fi-rr-sign-out-alt leading-none text-xs" /> Logout
-                        </button>
-                    </div>
-                </div>
-            </nav>
-
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-fade-in">
+        <CustomerLayout>
+            <div className="space-y-6 animate-fade-in">
                 {/* Welcome header */}
                 <div>
                     <h1 className="text-xl sm:text-2xl font-bold text-surface-900">Welcome, {customer?.contact_person ?? customer?.name}</h1>
@@ -222,6 +198,6 @@ export default function CustomerDashboard({ customer, stats, recentOrders, recen
                     </div>
                 </div>
             </div>
-        </div>
+        </CustomerLayout>
     );
 }
