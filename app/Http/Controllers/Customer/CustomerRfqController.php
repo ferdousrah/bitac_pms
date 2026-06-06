@@ -139,18 +139,22 @@ class CustomerRfqController extends Controller
             return $rfq;
         });
 
-        // Notify IED. The badge color signals it's a customer portal submission.
-        try {
-            NotifyService::toPermission(
-                'view rfqs',
-                'customer_rfq_submitted',
-                'New customer RFQ',
-                "{$customer->name} submitted an RFQ with " . count($validated['items']) . ' item(s)',
-                "/rfqs/{$rfq->id}",
-                'fi-rr-file-invoice',
-                'purple',
-            );
-        } catch (\Throwable $e) { /* silently skip */ }
+        // Notify everyone with the 'view rfqs' permission (IED inbox).
+        // NotifyService::toPermission internally tolerates a missing permission
+        // row and logs a warning. We don't wrap with a swallowing try/catch so
+        // any real failure surfaces in laravel.log.
+        $recipientCount = \App\Models\User::permission('view rfqs')->count();
+        \Log::info("Customer RFQ #{$rfq->id} submitted by {$customer->name} — fanning out to {$recipientCount} staff");
+
+        NotifyService::toPermission(
+            'view rfqs',
+            'customer_rfq_submitted',
+            'New customer RFQ',
+            "{$customer->name} submitted an RFQ with " . count($validated['items']) . ' item(s)',
+            "/rfqs/{$rfq->id}",
+            'fi-rr-file-invoice',
+            'purple',
+        );
 
         return redirect()->route('customer.rfqs.show', $rfq)
             ->with('success', 'RFQ submitted. BITAC IED will review and send you a quotation.');
