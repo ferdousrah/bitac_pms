@@ -207,10 +207,13 @@ export default function RFQShow({ rfq }: any) {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <a href={`/rfqs/${rfq.id}/pdf`}
-                                className="btn-outline btn-sm text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300">
-                                <i className="fi fi-rr-file-pdf text-xs leading-none" /> PDF
-                            </a>
+                            {/* PDF export temporarily hidden — re-enable when finalised. */}
+                            {false && (
+                                <a href={`/rfqs/${rfq.id}/pdf`}
+                                    className="btn-outline btn-sm text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300">
+                                    <i className="fi fi-rr-file-pdf text-xs leading-none" /> PDF
+                                </a>
+                            )}
                             {rfq.status === 'pending' && (
                                 <Link href={`/quotations/create?rfq_id=${rfq.id}`} className="btn-success btn-sm">
                                     <i className="fi fi-rr-file-invoice text-xs leading-none" />

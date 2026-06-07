@@ -212,14 +212,17 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                             <i className="fi fi-rr-eye text-sm leading-none" /> View
                                                         </Link>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openRfqPdf(rfq)}
-                                                            title="Preview PDF (download available inside)"
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
-                                                        >
-                                                            <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
-                                                        </button>
+                                                        {/* PDF preview temporarily hidden — re-enable when the export is finalised. */}
+                                                        {false && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openRfqPdf(rfq)}
+                                                                title="Preview PDF (download available inside)"
+                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                                            >
+                                                                <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
+                                                            </button>
+                                                        )}
                                                         {!rfq.has_quotation && rfq.status === 'pending' && (
                                                             <Link href={`/quotations/create?rfq_id=${rfq.id}`} title="Prepare quotation for this RFQ"
                                                                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
