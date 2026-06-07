@@ -124,6 +124,9 @@ class GatePassController extends Controller
             'prefilled_items'  => $prefilledItems,
             'pass'             => null,
             'basePath'         => $this->basePath(),
+            // Condition note presets managed under Master Data → Gate Pass Notes.
+            'condition_notes'  => \App\Models\GatePassConditionNote::active()
+                ->orderBy('display_order')->orderBy('label')->pluck('label')->values(),
         ]);
     }
 
@@ -137,6 +140,7 @@ class GatePassController extends Controller
             'rfq_id'                   => 'nullable|exists:rfqs,id',
             'direction'                => 'required|in:in,out',
             'pass_date'                => 'required|date',
+            'party_name'               => 'nullable|string|max:200',
             'customer_rep_name'        => 'nullable|string|max:120',
             'customer_rep_phone'       => 'nullable|string|max:40',
             'customer_rep_id_number'   => 'nullable|string|max:60',
@@ -157,6 +161,7 @@ class GatePassController extends Controller
                 'pass_no'                 => GatePass::generatePassNo($validated['direction']),
                 'direction'               => $validated['direction'],
                 'pass_date'               => $validated['pass_date'],
+                'party_name'              => $validated['party_name'] ?? null,
                 'customer_rep_name'       => $validated['customer_rep_name'] ?? null,
                 'customer_rep_phone'      => $validated['customer_rep_phone'] ?? null,
                 'customer_rep_id_number'  => $validated['customer_rep_id_number'] ?? null,
@@ -206,6 +211,7 @@ class GatePassController extends Controller
                 'rfq_customer'           => $gatePass->rfq?->customer?->name,
                 'rfq_customer_ref'       => $gatePass->rfq?->customer_ref_no,
                 'pass_date'              => $gatePass->pass_date?->format('d/m/Y'),
+                'party_name'             => $gatePass->party_name,
                 'customer_rep_name'      => $gatePass->customer_rep_name,
                 'customer_rep_phone'     => $gatePass->customer_rep_phone,
                 'customer_rep_id_number' => $gatePass->customer_rep_id_number,
@@ -275,6 +281,7 @@ class GatePassController extends Controller
             .     '<div><b>RFQ:</b> ' . $esc($rfqLabel) . '</div>'
             .   '</td>'
             .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
+            .     '<div><b>Party Name:</b> ' . $esc($gatePass->party_name ?? '—') . '</div>'
             .     '<div><b>Customer Rep:</b> ' . $esc($gatePass->customer_rep_name ?? '—') . '</div>'
             .     '<div><b>Phone:</b> ' . $esc($gatePass->customer_rep_phone ?? '—') . '</div>'
             .     '<div><b>ID No / Vehicle:</b> ' . $esc($gatePass->customer_rep_id_number ?? '') . ($gatePass->vehicle_no ? ' / ' . $esc($gatePass->vehicle_no) : '') . '</div>'

@@ -234,7 +234,7 @@ export default function QuotationShow({
     };
 
     return (
-        <AppLayout header={`Quotation #${quotation.id}`}>
+        <AppLayout header={`${quotation.version > 1 ? `Re-Quotation (${quotation.version})` : 'Quotation'} #${quotation.id}`}>
             <div className="space-y-6 animate-fade-in">
 
                 {/* ── Revision chain banner ──────────────────────────── */}
@@ -276,10 +276,9 @@ export default function QuotationShow({
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <h2 className="text-lg font-bold text-surface-900">Quotation #{quotation.id}</h2>
-                                        <span className="inline-flex items-center px-2 py-0.5 bg-surface-100 text-surface-500 rounded-lg text-xs font-medium" title="Revision chain version">
-                                            v{quotation.version}
-                                        </span>
+                                        <h2 className="text-lg font-bold text-surface-900">
+                                            {quotation.version > 1 ? `Re-Quotation (${quotation.version})` : 'Quotation'} #{quotation.id}
+                                        </h2>
                                         {currentRevisionNo !== null && (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-bold font-mono" title={`Change revision ${currentRevisionNo}`}>
                                                 rev {currentRevisionNo}

@@ -588,6 +588,10 @@ Route::middleware(['auth'])->group(function () {
             ->names('admin.material-categories')
             ->parameters(['material-categories' => 'materialCategory'])
             ->except(['show']);
+        Route::resource('gate-pass-condition-notes', \App\Http\Controllers\Admin\GatePassConditionNoteController::class)
+            ->names('admin.gate-pass-condition-notes')
+            ->parameters(['gate-pass-condition-notes' => 'gatePassConditionNote'])
+            ->except(['show']);
         Route::resource('operations', MachiningOperationController::class)
             ->middleware('permission:manage operations-master')
             ->names('admin.operations')

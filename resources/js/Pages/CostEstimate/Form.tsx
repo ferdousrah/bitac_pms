@@ -664,6 +664,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                     </tr>
                                 ))}
                             </tbody>
+                            <SubtotalFooter total={totals.material} />
                         </table>
                     </CostSection>
 
@@ -683,12 +684,13 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                             onOperationChange={onOperationChange}
                             onRemove={removeLine}
                             lineAmount={lineAmount}
+                            total={totals.machining}
                         />
                     </CostSection>
 
-                    {/* ── C. Surface Treatment Cost ────────────────── */}
+                    {/* ── C. Heat Treatment Cost ──────────────────── */}
                     <CostSection
-                        title="C. Surface Treatment Cost"
+                        title="C. Heat Treatment Cost"
                         icon="fi-rr-shine"
                         color="purple"
                         total={totals.surface}
@@ -702,6 +704,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                             onOperationChange={onOperationChange}
                             onRemove={removeLine}
                             lineAmount={lineAmount}
+                            total={totals.surface}
                         />
                     </CostSection>
 
@@ -805,6 +808,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                     </tr>
                                 ))}
                             </tbody>
+                            <SubtotalFooter total={totals.other} />
                         </table>
                     </CostSection>
 
@@ -819,7 +823,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                 <div className="space-y-2 text-sm">
                                     <SumRow label="A. Material Cost"          value={totals.material} />
                                     <SumRow label="B. Machining Cost"          value={totals.machining} />
-                                    <SumRow label="C. Surface Treatment Cost" value={totals.surface} />
+                                    <SumRow label="C. Heat Treatment Cost"    value={totals.surface} />
                                     <SumRow label="D. Other Parts"             value={totals.other} />
                                     <div className="border-t-2 border-dashed border-surface-200 pt-2">
                                         <SumRow label="E. Net Cost (A+B+C+D)" value={totals.net} bold />
@@ -943,13 +947,9 @@ function CostSection({ title, icon, color, total, onAdd, children }: any) {
                     </div>
                     <h3 className="text-sm font-bold text-surface-900">{title}</h3>
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs text-surface-500">Subtotal:</span>
-                    <span className="font-mono text-sm font-bold text-surface-900">{`৳${total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
-                    <button type="button" onClick={onAdd} className="btn-outline btn-xs">
-                        <i className="fi fi-rr-plus text-xs leading-none" /> Add Row
-                    </button>
-                </div>
+                <button type="button" onClick={onAdd} className="btn-outline btn-xs">
+                    <i className="fi fi-rr-plus text-xs leading-none" /> Add Row
+                </button>
             </div>
             <div className="card-body p-0 overflow-x-auto">
                 {children}
@@ -958,7 +958,25 @@ function CostSection({ title, icon, color, total, onAdd, children }: any) {
     );
 }
 
-function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationChange, onRemove, lineAmount }: any) {
+/** Reusable subtotal footer row — matches the 7-column layout used by both
+ *  Material and Operation tables (# · main · qty · unit · rate · amount · ×). */
+function SubtotalFooter({ total }: { total: number }) {
+    return (
+        <tfoot>
+            <tr className="border-t-2 border-surface-200 bg-surface-50/60">
+                <td colSpan={5} className="px-3 py-3 text-right">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-surface-500">Subtotal</span>
+                </td>
+                <td className="px-3 py-3 text-right font-mono text-base font-bold text-surface-900">
+                    ৳{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </td>
+                <td></td>
+            </tr>
+        </tfoot>
+    );
+}
+
+function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationChange, onRemove, lineAmount, total }: any) {
     return (
         <table className="premium-table w-full" style={{ tableLayout: 'fixed' }}>
             <colgroup>
@@ -1033,6 +1051,7 @@ function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationCh
                     </tr>
                 ))}
             </tbody>
+            <SubtotalFooter total={total ?? 0} />
         </table>
     );
 }

@@ -172,7 +172,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                         {[
                             { letter: 'A', title: 'Material Cost',     total: estimate.material_cost,  lines: sectionLines('material') },
                             { letter: 'B', title: 'Machining Cost',    total: estimate.machining_cost, lines: sectionLines('machining') },
-                            { letter: 'C', title: 'Surface Treatment', total: estimate.surface_cost,   lines: sectionLines('surface') },
+                            { letter: 'C', title: 'Heat Treatment',    total: estimate.surface_cost,   lines: sectionLines('surface') },
                             { letter: 'D', title: 'Other Parts',       total: estimate.other_cost,     lines: sectionLines('other') },
                         ]
                             .filter(s => s.lines.length > 0)
@@ -200,7 +200,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                 {[
                                     { label: 'Material',          value: estimate.material_cost,  letter: 'A', linesKey: 'material'  },
                                     { label: 'Machining',         value: estimate.machining_cost, letter: 'B', linesKey: 'machining' },
-                                    { label: 'Surface Treatment', value: estimate.surface_cost,   letter: 'C', linesKey: 'surface'   },
+                                    { label: 'Heat Treatment',    value: estimate.surface_cost,   letter: 'C', linesKey: 'surface'   },
                                     { label: 'Other Parts',       value: estimate.other_cost,     letter: 'D', linesKey: 'other'     },
                                 ]
                                     .filter(s => sectionLines(s.linesKey).length > 0)
@@ -231,6 +231,13 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] font-semibold text-surface-400">{estimate.vat_pct}%</span>
                                         <span className="font-mono text-surface-800 tabular-nums">+ {fmt(estimate.vat_amount)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                    <span className="text-surface-600">Tax</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-semibold text-surface-400">{estimate.tax_pct ?? 0}%</span>
+                                        <span className="font-mono text-surface-800 tabular-nums">+ {fmt(estimate.tax_amount ?? 0)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -583,7 +590,7 @@ function SectionCard({ letter, title, total, lines }: any) {
 
     return (
         <div className="card overflow-hidden">
-            {/* Compact header — uniform neutral styling, no per-section accent color */}
+            {/* Compact header — title only; subtotal moved to a tfoot row below. */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-surface-100 bg-surface-50/40">
                 <div className="flex items-center gap-2.5">
                     <span className="inline-flex w-6 h-6 rounded-md bg-surface-200 text-surface-700 items-center justify-center font-bold text-[11px]">
@@ -592,7 +599,6 @@ function SectionCard({ letter, title, total, lines }: any) {
                     <h3 className="text-sm font-bold text-surface-900">{title}</h3>
                     <span className="text-[11px] text-surface-400 font-medium">· {lines.length} {lines.length === 1 ? 'item' : 'items'}</span>
                 </div>
-                <div className="font-mono text-sm font-bold text-surface-900 tabular-nums">{fmt(total)}</div>
             </div>
 
             {/* Lines table */}
@@ -620,6 +626,15 @@ function SectionCard({ letter, title, total, lines }: any) {
                             </tr>
                         ))}
                     </tbody>
+                    {/* Subtotal row — column-aligned with Amount */}
+                    <tfoot>
+                        <tr className="border-t-2 border-surface-200 bg-surface-50/60">
+                            <td colSpan={5} className="px-4 py-3 text-right">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-surface-500">Subtotal</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-base font-bold text-surface-900 tabular-nums">{fmt(total)}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>

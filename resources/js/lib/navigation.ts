@@ -119,6 +119,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Material Categories', href: '/admin/material-categories', icon: 'fi-rr-tags', permission: 'manage materials-master' },
                 { label: 'Operations',     href: '/admin/operations',     icon: 'fi-rr-tools',                permission: 'manage operations-master' },
                 { label: 'Job Categories', href: '/admin/job-categories', icon: 'fi-rr-tags',                 permission: 'manage materials-master' },
+                { label: 'Gate Pass Notes', href: '/admin/gate-pass-condition-notes', icon: 'fi-rr-shield' },
                 { label: 'Portfolio',      href: '/admin/portfolio',      icon: 'fi-rr-images',               permission: 'manage portfolio' },
             ],
         },

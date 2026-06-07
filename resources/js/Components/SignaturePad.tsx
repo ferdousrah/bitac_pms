@@ -24,31 +24,45 @@ interface Props {
 }
 
 const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad(
-    { width = 520, height = 140, className = '' },
+    { width, height = 140, className = '' },
     ref
 ) {
+    const wrapperRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const drawingRef = useRef(false);
     const lastRef = useRef<{ x: number; y: number } | null>(null);
     const hasStrokeRef = useRef(false);
 
-    // Scale for HiDPI screens so strokes look crisp.
+    // Resize canvas to fit its parent + reset HiDPI scaling.
+    // If `width` prop is given, use that; otherwise measure the wrapper so
+    // the pad fills its container and never overflows.
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            ctx.scale(dpr, dpr);
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#0f172a';
-            ctx.lineWidth = 1.8;
-        }
+        const setup = () => {
+            const canvas = canvasRef.current;
+            const wrapper = wrapperRef.current;
+            if (!canvas || !wrapper) return;
+            const targetW = width ?? wrapper.clientWidth;
+            if (!targetW) return;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = targetW * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = `${targetW}px`;
+            canvas.style.height = `${height}px`;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.scale(dpr, dpr);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1.8;
+            }
+            hasStrokeRef.current = false; // resize wipes the canvas
+        };
+        setup();
+        if (width != null) return; // fixed-width mode — no resize listener
+        const ro = new ResizeObserver(setup);
+        if (wrapperRef.current) ro.observe(wrapperRef.current);
+        return () => ro.disconnect();
     }, [width, height]);
 
     const getPos = (e: MouseEvent | TouchEvent): { x: number; y: number } => {
@@ -100,17 +114,19 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
     }));
 
     return (
-        <canvas
-            ref={canvasRef}
-            className={`border border-dashed border-surface-300 rounded-lg bg-white cursor-crosshair touch-none ${className}`}
-            onMouseDown={start}
-            onMouseMove={move}
-            onMouseUp={end}
-            onMouseLeave={end}
-            onTouchStart={start}
-            onTouchMove={move}
-            onTouchEnd={end}
-        />
+        <div ref={wrapperRef} className={`w-full ${className}`}>
+            <canvas
+                ref={canvasRef}
+                className="block w-full border border-dashed border-surface-300 rounded-lg bg-white cursor-crosshair touch-none"
+                onMouseDown={start}
+                onMouseMove={move}
+                onMouseUp={end}
+                onMouseLeave={end}
+                onTouchStart={start}
+                onTouchMove={move}
+                onTouchEnd={end}
+            />
+        </div>
     );
 });
 

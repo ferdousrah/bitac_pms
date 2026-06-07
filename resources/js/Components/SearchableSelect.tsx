@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface SearchOption {
     value: string | number;
@@ -11,27 +12,22 @@ interface Props {
     onChange: (value: string | number | '') => void;
     options: SearchOption[];
     placeholder?: string;
-    /** Optional placeholder when nothing matches the search */
     emptyText?: string;
     disabled?: boolean;
-    /** Required field flag (adds invisible required input for form submission) */
     required?: boolean;
-    /** ID of the underlying hidden input — pass for accessibility / label-htmlFor pairing */
     id?: string;
-    /** Optional `name` attribute on the hidden input — useful for non-controlled forms */
     name?: string;
-    /** Style the trigger differently (e.g. small) */
     size?: 'sm' | 'md';
-    /** Allow clearing the selection — defaults to true */
     clearable?: boolean;
-    /** className override for the trigger button */
     className?: string;
 }
 
 /**
  * Dependency-free searchable select dropdown.
- * Filters options client-side by label + sublabel (case-insensitive).
- * Keyboard: ↑↓ to navigate, Enter to select, Esc to close, type to search.
+ * The panel is rendered via React Portal into document.body, so it can never
+ * be clipped or cause scrollbars on any ancestor with overflow:hidden/auto
+ * (table cells, cards, modals, etc.). Position is calculated from the
+ * trigger's bounding rect every time the panel opens.
  */
 export default function SearchableSelect({
     value,
@@ -50,7 +46,11 @@ export default function SearchableSelect({
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [highlight, setHighlight] = useState(0);
+    const [pos, setPos] = useState<{ top: number; left: number; width: number; dropUp: boolean } | null>(null);
+
     const rootRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -68,14 +68,46 @@ export default function SearchableSelect({
         });
     }, [options, search]);
 
-    // Close on outside click
+    // Compute panel position from trigger rect
+    const computePosition = () => {
+        const rect = triggerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const PANEL_MAX_HEIGHT = 320;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const dropUp = spaceBelow < PANEL_MAX_HEIGHT && spaceAbove > spaceBelow;
+        setPos({
+            top: dropUp ? rect.top - 6 : rect.bottom + 6,
+            left: rect.left,
+            width: rect.width,
+            dropUp,
+        });
+    };
+
+    // Close on outside click — include both trigger root and panel
     useEffect(() => {
         if (!open) return;
         const onDown = (e: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+            const t = e.target as Node;
+            if (rootRef.current?.contains(t)) return;
+            if (panelRef.current?.contains(t)) return;
+            setOpen(false);
         };
         document.addEventListener('mousedown', onDown);
         return () => document.removeEventListener('mousedown', onDown);
+    }, [open]);
+
+    // Recompute position when opening + on scroll/resize while open
+    useLayoutEffect(() => {
+        if (!open) return;
+        computePosition();
+        const onScrollOrResize = () => computePosition();
+        window.addEventListener('scroll', onScrollOrResize, true);
+        window.addEventListener('resize', onScrollOrResize);
+        return () => {
+            window.removeEventListener('scroll', onScrollOrResize, true);
+            window.removeEventListener('resize', onScrollOrResize);
+        };
     }, [open]);
 
     // Focus search when opening
@@ -85,6 +117,7 @@ export default function SearchableSelect({
             requestAnimationFrame(() => searchRef.current?.focus());
         } else {
             setSearch('');
+            setPos(null);
         }
     }, [open]);
 
@@ -122,8 +155,9 @@ export default function SearchableSelect({
                      ${open ? 'border-brand-400 ring-2 ring-brand-100' : ''}`;
 
     return (
-        <div ref={rootRef} className={`relative ${className}`}>
+        <div ref={rootRef} className={className}>
             <button
+                ref={triggerRef}
                 type="button"
                 id={id}
                 disabled={disabled}
@@ -157,19 +191,44 @@ export default function SearchableSelect({
             {/* Hidden input — keeps native form submission working when used outside Inertia */}
             {name && <input type="hidden" name={name} value={value} required={required} />}
 
-            {open && (
-                <div className="absolute z-50 mt-1.5 w-full bg-white border border-surface-200 rounded-xl shadow-premium-lg overflow-hidden animate-fade-in">
-                    <div className="border-b border-surface-100 px-2.5 py-2 flex items-center gap-2 bg-surface-50/50">
-                        <i className="fi fi-rr-search text-xs text-surface-400 leading-none" />
-                        <input
-                            ref={searchRef}
-                            type="text"
-                            value={search}
-                            onChange={e => { setSearch(e.target.value); setHighlight(0); }}
-                            onKeyDown={handleKey}
-                            placeholder="Type to search…"
-                            className="flex-1 bg-transparent outline-none text-sm text-surface-900 placeholder:text-surface-400"
-                        />
+            {/* Portal-rendered panel — escapes any ancestor overflow:hidden / scroll */}
+            {open && pos && typeof document !== 'undefined' && createPortal(
+                <div
+                    ref={panelRef}
+                    style={{
+                        position: 'fixed',
+                        top: pos.dropUp ? undefined : pos.top,
+                        bottom: pos.dropUp ? window.innerHeight - pos.top : undefined,
+                        left: pos.left,
+                        width: pos.width,
+                        zIndex: 9999,
+                    }}
+                    className="bg-white border border-surface-200 rounded-xl shadow-premium-lg overflow-hidden animate-fade-in"
+                >
+                    <div className="p-2 border-b border-surface-100">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-50 border border-surface-100">
+                            <i className="fi fi-rr-search text-xs text-surface-400 leading-none" />
+                            <input
+                                ref={searchRef}
+                                type="text"
+                                value={search}
+                                onChange={e => { setSearch(e.target.value); setHighlight(0); }}
+                                onKeyDown={handleKey}
+                                placeholder="Type to search…"
+                                className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:border-0 text-sm text-surface-900 placeholder:text-surface-400 p-0"
+                                style={{ boxShadow: 'none' }}
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearch(''); searchRef.current?.focus(); }}
+                                    className="text-surface-400 hover:text-surface-700 transition-colors"
+                                    aria-label="Clear search"
+                                >
+                                    <i className="fi fi-rr-cross-small text-xs leading-none" />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div ref={listRef} className="max-h-64 overflow-y-auto py-1">
@@ -201,7 +260,8 @@ export default function SearchableSelect({
                             })
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

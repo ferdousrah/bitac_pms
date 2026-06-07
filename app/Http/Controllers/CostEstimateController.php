@@ -858,7 +858,7 @@ class CostEstimateController extends Controller
         $sections = [
             'material'  => ['label' => 'A. Material Cost',          'lines' => []],
             'machining' => ['label' => 'B. Machining Cost',         'lines' => []],
-            'surface'   => ['label' => 'C. Surface Treatment Cost', 'lines' => []],
+            'surface'   => ['label' => 'C. Heat Treatment Cost',    'lines' => []],
             'other'     => ['label' => 'D. Other Parts',            'lines' => []],
         ];
         foreach ($e->lines as $line) {
@@ -878,10 +878,9 @@ class CostEstimateController extends Controller
                 . '<col style="width: 14%;" /><col style="width: 16%;" />'
                 . '</colgroup>';
 
-            // Section header row (bold, no color)
+            // Section header row — title only, subtotal moved to the bottom.
             $sectionsHtml .= '<tr>';
-            $sectionsHtml .=   '<td colspan="5" style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt; font-weight: bold; color: #000;">' . $esc($sec['label']) . '</td>';
-            $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; font-weight: bold; color: #000; text-align: right; white-space: nowrap;">' . $fmt($sectionTotal) . '</td>';
+            $sectionsHtml .=   '<td colspan="6" style="border: 0.75pt solid #000; padding: 4pt 8pt; font-size: 10pt; font-weight: bold; color: #000;">' . $esc($sec['label']) . '</td>';
             $sectionsHtml .= '</tr>';
 
             // Column-headers row
@@ -905,6 +904,13 @@ class CostEstimateController extends Controller
                 $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap; font-weight: bold;">' . $fmt($line->amount) . '</td>';
                 $sectionsHtml .= '</tr>';
             }
+
+            // Section subtotal row at the bottom — aligned under the Amount column.
+            $sectionsHtml .= '<tr>';
+            $sectionsHtml .=   '<td colspan="5" style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt; text-align: right; font-weight: bold; color: #000;">Subtotal</td>';
+            $sectionsHtml .=   '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: right; white-space: nowrap; font-weight: bold; color: #000;">' . $fmt($sectionTotal) . '</td>';
+            $sectionsHtml .= '</tr>';
+
             $sectionsHtml .= '</table>';
         }
 
@@ -914,10 +920,8 @@ class CostEstimateController extends Controller
             ['Net Cost',                                    $e->net_cost,        false],
             ["Overhead ({$e->overhead_pct}%)",              $e->overhead_amount, false],
             ["VAT ({$e->vat_pct}%)",                        $e->vat_amount,      false],
+            ["Tax ({$e->tax_pct}%)",                        $e->tax_amount ?? 0, false],
         ];
-        if (((float) ($e->tax_amount ?? 0)) > 0) {
-            $rows[] = ["Tax ({$e->tax_pct}%)",              $e->tax_amount,      false];
-        }
         $rows = array_merge($rows, [
             ['Total (per unit, incl. VAT & Tax)',           $e->total,           true],
             ['Times Multiplier',                            $e->times_multiplier,false],

@@ -1034,10 +1034,15 @@ class QuotationController extends Controller
             . '</table>';
 
         // ─────────────────────────────────────────────────────────────────────
-        // Title — centered পুনঃদরপত্র / (QUOTATION).
+        // Title — দরপত্র / (QUOTATION). For revisions (version > 1) show
+        // "পুনঃদরপত্র (n) / (RE-QUOTATION (n))" so the customer sees this is
+        // a revised version, not the original.
+        $isRevision = $quotation->version > 1;
+        $bnTitle    = $isRevision ? "পুনঃ দরপত্র ({$quotation->version})" : 'দরপত্র';
+        $enTitle    = $isRevision ? "(RE-QUOTATION ({$quotation->version}))" : '(QUOTATION)';
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 14pt; color: #000;">দরপত্র</div>'
-            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(QUOTATION)</div>'
+            . '<div class="bn" style="font-family: siyamrupali; font-size: 14pt; color: #000;">' . $bnTitle . '</div>'
+            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">' . $enTitle . '</div>'
             . '</div>';
 
         // ─────────────────────────────────────────────────────────────────────

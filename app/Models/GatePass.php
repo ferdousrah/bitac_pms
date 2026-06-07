@@ -11,7 +11,7 @@ class GatePass extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'rfq_id', 'pass_no', 'direction',
+        'center_id', 'rfq_id', 'pass_no', 'direction', 'party_name',
         'customer_rep_name', 'customer_rep_phone', 'customer_rep_id_number', 'vehicle_no',
         'pass_date', 'notes',
         'issued_by', 'issued_at', 'issuer_signature_path',

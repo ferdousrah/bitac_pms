@@ -19,6 +19,7 @@ interface Pass {
     rfq_customer: string | null;
     rfq_customer_ref: string | null;
     pass_date: string | null;
+    party_name: string | null;
     customer_rep_name: string | null;
     customer_rep_phone: string | null;
     customer_rep_id_number: string | null;
@@ -94,8 +95,12 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
                         <h3 className="text-sm font-bold text-surface-900">Customer Representative</h3>
                     </div>
                     <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="sm:col-span-2">
+                            <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Party Name</div>
+                            <div className="text-surface-900 font-semibold">{pass.party_name ?? '—'}</div>
+                        </div>
                         <div>
-                            <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Name</div>
+                            <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Representative Name</div>
                             <div className="text-surface-900">{pass.customer_rep_name ?? '—'}</div>
                         </div>
                         <div>

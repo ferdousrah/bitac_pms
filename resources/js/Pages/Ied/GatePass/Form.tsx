@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useRef } from 'react';
 import SignaturePad, { SignaturePadHandle } from '@/Components/SignaturePad';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 interface PrefilledItem {
     rfq_item_id: number;
@@ -25,13 +26,15 @@ interface Item {
     condition_note: string;
 }
 
-export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false }: any) {
+export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [] }: any) {
     const isIn = direction === 'in';
+    const conditionOptions = (condition_notes ?? []).map((l: string) => ({ value: l, label: l }));
 
     const { data, setData, post, processing, errors } = useForm<any>({
         rfq_id:                 rfq?.id ?? '',
         direction,
         pass_date:              new Date().toISOString().slice(0, 10),
+        party_name:             rfq?.customer?.name ?? '',
         customer_rep_name:      '',
         customer_rep_phone:     '',
         customer_rep_id_number: '',
@@ -107,8 +110,19 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                             <p className="text-xs text-surface-400 mt-0.5">Whoever is physically bringing / collecting the sample at the gate.</p>
                         </div>
                         <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="form-group sm:col-span-2">
+                                <label className="form-label">Party Name <span className="form-label-optional">company / organisation</span></label>
+                                <input
+                                    type="text"
+                                    value={data.party_name}
+                                    onChange={e => setData('party_name', e.target.value)}
+                                    className="form-input"
+                                    placeholder="e.g. ACI Motors Ltd., Bangladesh Railway"
+                                />
+                                {errors.party_name && <p className="form-error">{errors.party_name as any}</p>}
+                            </div>
                             <div className="form-group">
-                                <label className="form-label">Name <span className="text-red-500">*</span></label>
+                                <label className="form-label">Representative Name <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
                                     value={data.customer_rep_name}
@@ -184,9 +198,9 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                 </thead>
                                 <tbody className="divide-y divide-surface-50">
                                     {(data.items as Item[]).map((item, idx) => (
-                                        <tr key={idx}>
-                                            <td className="px-4 py-2 text-xs text-surface-400 font-mono align-top pt-3">{idx + 1}</td>
-                                            <td className="px-3 py-2">
+                                        <tr key={idx} className="align-middle">
+                                            <td className="px-4 py-3 text-xs text-surface-400 font-mono align-middle text-center">{idx + 1}</td>
+                                            <td className="px-3 py-3 align-middle">
                                                 <textarea
                                                     value={item.description}
                                                     onChange={e => updateItem(idx, { description: e.target.value })}
@@ -196,7 +210,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                                     required
                                                 />
                                             </td>
-                                            <td className="px-3 py-2 align-top">
+                                            <td className="px-3 py-3 align-middle">
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -207,7 +221,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                                     required
                                                 />
                                             </td>
-                                            <td className="px-3 py-2 align-top">
+                                            <td className="px-3 py-3 align-middle">
                                                 <input
                                                     type="text"
                                                     value={item.unit}
@@ -216,16 +230,17 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                                     placeholder="pcs"
                                                 />
                                             </td>
-                                            <td className="px-3 py-2">
-                                                <input
-                                                    type="text"
+                                            <td className="px-3 py-3 align-middle">
+                                                <SearchableSelect
+                                                    size="sm"
                                                     value={item.condition_note}
-                                                    onChange={e => updateItem(idx, { condition_note: e.target.value })}
-                                                    className="form-input text-sm"
-                                                    placeholder={isIn ? 'e.g. Visibly worn, minor crack' : 'e.g. Re-machined, polished'}
+                                                    onChange={(v) => updateItem(idx, { condition_note: String(v ?? '') })}
+                                                    options={conditionOptions}
+                                                    placeholder="Select condition…"
+                                                    emptyText="No matching notes — add via Master Data → Gate Pass Notes"
                                                 />
                                             </td>
-                                            <td className="px-2 py-2 align-top">
+                                            <td className="px-2 py-3 align-middle">
                                                 <button
                                                     type="button"
                                                     onClick={() => removeItem(idx)}
@@ -264,9 +279,14 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                 <p className="text-xs text-surface-400 mt-0.5">Sign as the IED officer issuing this pass. Embedded on the printed copy.</p>
                             </div>
                             <div className="card-body">
-                                <SignaturePad ref={padRef} width={520} height={120} className="w-full" />
-                                <div className="flex items-center justify-end mt-2">
-                                    <button type="button" onClick={() => padRef.current?.clear()} className="text-[11px] text-red-600 hover:text-red-700 font-semibold flex items-center gap-1">
+                                <div className="relative">
+                                    <SignaturePad ref={padRef} height={120} />
+                                    <button
+                                        type="button"
+                                        onClick={() => padRef.current?.clear()}
+                                        className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/90 backdrop-blur text-[10px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 shadow-sm border border-surface-200"
+                                        title="Clear signature"
+                                    >
                                         <i className="fi fi-rr-eraser text-[10px] leading-none" /> Clear
                                     </button>
                                 </div>
