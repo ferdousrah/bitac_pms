@@ -87,8 +87,42 @@ class CustomerDocumentController extends Controller
             })
             ->values();
 
+        // Standalone gate passes — gate passes attached to this customer's
+        // RFQs that don't (yet) have a Work Order, OR that aren't tied to any
+        // RFQ but linked via a complaint. The Documents page would miss these
+        // because it's grouped by Work Order.
+        $woRfqIds = \App\Models\WorkOrder::where('customer_id', $customer->id)
+            ->whereNotNull('rfq_id')->pluck('rfq_id')->all();
+
+        // Match either: directly-linked customer (new flow), OR via RFQ
+        // (legacy + still supported). Then exclude passes whose RFQ already
+        // has a WO so they aren't double-counted in JobCard.
+        $standaloneGatePasses = \App\Models\GatePass::query()
+            ->where(function ($q) use ($customer) {
+                $q->where('customer_id', $customer->id)
+                  ->orWhereHas('rfq', fn ($q) => $q->where('customer_id', $customer->id));
+            })
+            ->where(function ($q) use ($woRfqIds) {
+                $q->whereNull('rfq_id')->orWhereNotIn('rfq_id', $woRfqIds);
+            })
+            ->with('rfq:id,customer_ref_no')
+            ->latest('id')
+            ->get()
+            ->map(fn ($gp) => [
+                'id'              => $gp->id,
+                'pass_no'         => $gp->pass_no,
+                'direction'       => $gp->direction,
+                'status'          => $gp->status,
+                'pass_date'       => $gp->pass_date?->format('d M Y'),
+                'issued_at'       => $gp->issued_at?->format('d M Y'),
+                'rfq_id'          => $gp->rfq_id,
+                'party_name'      => $gp->party_name,
+                'customer_ref_no' => $gp->rfq?->customer_ref_no,
+            ])->values();
+
         return Inertia::render('Customer/Documents/Index', [
-            'workOrders' => $workOrders,
+            'workOrders'           => $workOrders,
+            'standaloneGatePasses' => $standaloneGatePasses,
         ]);
     }
 
@@ -108,12 +142,22 @@ class CustomerDocumentController extends Controller
             ->pdf(request(), $quotation);
     }
 
-    public function challan(DeliveryOrder $delivery)
+    public function challan(\Illuminate\Http\Request $request, DeliveryOrder $delivery)
     {
         $customer = auth('customer')->user();
         abort_unless($delivery->workOrder?->customer_id === $customer->id, 403);
 
         $bytes = app(DeliveryChallanService::class)->generatePdf($delivery);
+
+        // base64 mode bypasses download-manager extensions (IDM/FDM) that
+        // hijack application/pdf responses — used by the PdfPopupModal.
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'data'     => base64_encode($bytes),
+                'filename' => $delivery->challan_number . '.pdf',
+            ]);
+        }
+
         return response($bytes, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $delivery->challan_number . '.pdf"',
@@ -142,8 +186,9 @@ class CustomerDocumentController extends Controller
         $customer = auth('customer')->user();
         if (!$customer) abort(401, 'Not authenticated.');
 
-        // Ownership: either the gate pass is linked to one of the customer's
-        // complaints (legacy path) OR the underlying RFQ belongs to them.
+        // Ownership: direct customer link (new flow), OR via RFQ, OR via a
+        // linked complaint. Any one is enough.
+        $ownedDirect = $gatePass->customer_id === $customer->id;
         $ownedViaComplaint = \App\Models\CustomerComplaint::where('linked_gate_pass_id', $gatePass->id)
             ->where('customer_id', $customer->id)
             ->exists();
@@ -152,7 +197,7 @@ class CustomerDocumentController extends Controller
                 ->where('customer_id', $customer->id)
                 ->exists()
             : false;
-        abort_unless($ownedViaComplaint || $ownedViaRfq, 403, 'This gate pass does not belong to your account.');
+        abort_unless($ownedDirect || $ownedViaComplaint || $ownedViaRfq, 403, 'This gate pass does not belong to your account.');
 
         // Forward through to the staff PDF generator with preview=1 OR
         // preview=base64 (JSON, used by the PdfPopupModal to bypass download
@@ -167,12 +212,20 @@ class CustomerDocumentController extends Controller
         return app(\App\Http\Controllers\Ied\GatePassController::class)->pdf($fakeRequest, $gatePass);
     }
 
-    public function invoicePdf(Invoice $invoice)
+    public function invoicePdf(\Illuminate\Http\Request $request, Invoice $invoice)
     {
         $customer = auth('customer')->user();
         abort_unless($invoice->customer_id === $customer->id, 403);
 
         $bytes = app(InvoiceService::class)->generatePdf($invoice);
+
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'data'     => base64_encode($bytes),
+                'filename' => $invoice->invoice_number . '.pdf',
+            ]);
+        }
+
         return response($bytes, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $invoice->invoice_number . '.pdf"',

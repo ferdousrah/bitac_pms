@@ -259,17 +259,19 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/',               [GatePassController::class, 'store'])->name('store');
         Route::get('/{gatePass}',      [GatePassController::class, 'show'])->name('show');
         Route::get('/{gatePass}/pdf',  [GatePassController::class, 'pdf'])->name('pdf');
-        Route::post('/{gatePass}/cancel', [GatePassController::class, 'cancel'])->name('cancel');
+        Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
+        Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
     });
 
     // ─── PCD Gate-Out (production team issues these for sample / finished items leaving the floor) ───
     Route::prefix('pcd/gate-passes')->middleware('permission:view pcd')->name('pcd.gate-passes.')->group(function () {
-        Route::get('/',                   [GatePassController::class, 'index'])->name('index');
-        Route::get('/create',             [GatePassController::class, 'create'])->name('create');
-        Route::post('/',                  [GatePassController::class, 'store'])->name('store');
-        Route::get('/{gatePass}',         [GatePassController::class, 'show'])->name('show');
-        Route::get('/{gatePass}/pdf',     [GatePassController::class, 'pdf'])->name('pdf');
-        Route::post('/{gatePass}/cancel', [GatePassController::class, 'cancel'])->name('cancel');
+        Route::get('/',                     [GatePassController::class, 'index'])->name('index');
+        Route::get('/create',               [GatePassController::class, 'create'])->name('create');
+        Route::post('/',                    [GatePassController::class, 'store'])->name('store');
+        Route::get('/{gatePass}',           [GatePassController::class, 'show'])->name('show');
+        Route::get('/{gatePass}/pdf',       [GatePassController::class, 'pdf'])->name('pdf');
+        Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
+        Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
     });
 
     // Pending Approvals

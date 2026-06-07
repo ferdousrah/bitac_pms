@@ -140,9 +140,31 @@ class CustomerNotifyService
 
     // ── Gate Pass ──────────────────────────────────────────────────
 
+    public static function gatePassCompleted($gatePass): void
+    {
+        $customer = $gatePass->customer ?? $gatePass->rfq?->customer;
+        if (! $customer) return;
+        $isIn = $gatePass->direction === 'in';
+        $title = $isIn ? 'Item received at BITAC' : 'Item dispatched from BITAC';
+        $msg   = $isIn
+            ? "We've received the item against Pass #{$gatePass->pass_no}. Production / inspection will follow."
+            : "Your item has left BITAC under Pass #{$gatePass->pass_no}.";
+        self::send(
+            $customer,
+            'gate_pass_completed',
+            $title,
+            $msg,
+            '/customer/documents',
+            $isIn ? 'fi-rr-sign-in-alt' : 'fi-rr-sign-out-alt',
+            'green',
+        );
+    }
+
     public static function gatePassIssued($gatePass): void
     {
-        $customer = $gatePass->rfq?->customer;
+        // Prefer the direct customer link (from the gate pass form's customer
+        // picker). Fall back to the linked RFQ's customer for legacy passes.
+        $customer = $gatePass->customer ?? $gatePass->rfq?->customer;
         if (! $customer) return;
         $direction = $gatePass->direction === 'in' ? 'Gate-In' : 'Gate-Out';
         self::send(

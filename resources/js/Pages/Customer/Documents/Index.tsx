@@ -17,15 +17,17 @@ const STATUS_BADGE: Record<string, string> = {
     cancelled: 'badge-red',
 };
 
-export default function CustomerDocumentsIndex({ workOrders }: any) {
+export default function CustomerDocumentsIndex({ workOrders, standaloneGatePasses = [] }: any) {
     const [pdf, setPdf] = useState<PdfTarget | null>(null);
     const openPdf = (t: PdfTarget) => setPdf(t);
+
+    const hasAnything = workOrders.length > 0 || standaloneGatePasses.length > 0;
 
     return (
         <CustomerLayout title="Documents">
             <p className="text-sm text-surface-500 -mt-3">All documents for your orders in one place — quotation, delivery challan, inspection certificate, invoice, and gate passes.</p>
 
-            {workOrders.length === 0 ? (
+            {!hasAnything ? (
                 <div className="card">
                     <div className="empty-state">
                         <div className="empty-state-icon"><i className="fi fi-rr-folder-open" /></div>
@@ -35,6 +37,60 @@ export default function CustomerDocumentsIndex({ workOrders }: any) {
                 </div>
             ) : (
                 <div className="space-y-4">
+                    {/* Gate passes that aren't tied to a Work Order yet (e.g.
+                        sample drop-off against a fresh RFQ). Customer needs to
+                        be able to print/show these at BITAC's gate. */}
+                    {standaloneGatePasses.length > 0 && (
+                        <div className="card overflow-hidden">
+                            <div className="card-header bg-rose-50/40 border-rose-100">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                                        <i className="fi fi-rr-shield text-sm leading-none" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-surface-900">Gate Passes</h3>
+                                        <p className="text-[11px] text-surface-500 mt-0.5">Print and show these at BITAC's gate when bringing or collecting items.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="card-body p-0 divide-y divide-surface-100">
+                                {standaloneGatePasses.map((gp: any) => (
+                                    <div key={gp.id}
+                                        onClick={() => openPdf({
+                                            url: `/customer/documents/gate-pass/${gp.id}?preview=base64`,
+                                            title: `${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} Pass ${gp.pass_no}`,
+                                            subtitle: gp.customer_ref_no ? `Ref: ${gp.customer_ref_no}` : `RFQ #${gp.rfq_id}`,
+                                        })}
+                                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surface-50/70 transition-colors"
+                                    >
+                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0
+                                            ${gp.direction === 'in' ? 'bg-indigo-50 text-indigo-600' : 'bg-purple-50 text-purple-600'}`}>
+                                            <i className={`fi ${gp.direction === 'in' ? 'fi-rr-sign-in-alt' : 'fi-rr-sign-out-alt'} text-sm leading-none`} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-mono text-xs font-bold text-surface-900">{gp.pass_no}</span>
+                                                <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-surface-100 text-surface-600">
+                                                    {gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'}
+                                                </span>
+                                            </div>
+                                            <div className="text-[10px] text-surface-400 mt-0.5">
+                                                {gp.pass_date ?? gp.issued_at} · RFQ #{gp.rfq_id}
+                                                {gp.customer_ref_no && <span> · Ref: {gp.customer_ref_no}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-rose-50 text-rose-700 text-[10px] font-bold">
+                                                <i className="fi fi-rr-file-pdf text-[9px] leading-none" /> PDF
+                                            </span>
+                                            <i className="fi fi-rr-arrow-right text-[10px] text-surface-300 leading-none" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {workOrders.map((wo: any) => (
                         <JobCard key={wo.id} wo={wo} onPreview={openPdf} />
                     ))}
@@ -92,7 +148,7 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                     {wo.quotation && (
                         <DocLink
                             onClick={() => onPreview({
-                                url: `/customer/documents/quotation/${wo.quotation.id}`,
+                                url: `/customer/documents/quotation/${wo.quotation.id}?preview=base64`,
                                 title: `Quotation ${wo.quotation.quotation_no}`,
                                 subtitle: jobLabel,
                             })}
@@ -114,7 +170,7 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                         <DocLink
                             key={c.id}
                             onClick={() => onPreview({
-                                url: `/customer/documents/challan/${c.id}`,
+                                url: `/customer/documents/challan/${c.id}?preview=base64`,
                                 title: `Delivery Challan ${c.challan_number}`,
                                 subtitle: jobLabel,
                             })}
@@ -138,7 +194,7 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                         <DocLink
                             key={i.id}
                             onClick={() => onPreview({
-                                url: `/customer/documents/inspection/${i.id}`,
+                                url: `/customer/documents/inspection/${i.id}?preview=base64`,
                                 title: `Inspection Certificate IC-${String(i.id).padStart(5, '0')}`,
                                 subtitle: jobLabel,
                             })}
@@ -162,7 +218,7 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                         <DocLink
                             key={inv.id}
                             onClick={() => onPreview({
-                                url: `/customer/invoices/${inv.id}/pdf`,
+                                url: `/customer/invoices/${inv.id}/pdf?preview=base64`,
                                 title: `Invoice ${inv.invoice_number}`,
                                 subtitle: jobLabel,
                             })}
@@ -186,7 +242,7 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                         <DocLink
                             key={gp.id}
                             onClick={() => onPreview({
-                                url: `/customer/documents/gate-pass/${gp.id}`,
+                                url: `/customer/documents/gate-pass/${gp.id}?preview=base64`,
                                 title: `${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} Pass ${gp.pass_no}`,
                                 subtitle: jobLabel,
                             })}

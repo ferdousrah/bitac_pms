@@ -26,14 +26,20 @@ interface Item {
     condition_note: string;
 }
 
-export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [] }: any) {
+export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [], customers = [] }: any) {
     const isIn = direction === 'in';
     const conditionOptions = (condition_notes ?? []).map((l: string) => ({ value: l, label: l }));
+    const customerOptions = (customers ?? []).map((c: any) => ({
+        value: c.id,
+        label: c.name,
+        sublabel: c.contact_person ?? undefined,
+    }));
 
     const { data, setData, post, processing, errors } = useForm<any>({
         rfq_id:                 rfq?.id ?? '',
         direction,
         pass_date:              new Date().toISOString().slice(0, 10),
+        customer_id:            rfq?.customer?.id ?? '',
         party_name:             rfq?.customer?.name ?? '',
         customer_rep_name:      '',
         customer_rep_phone:     '',
@@ -111,13 +117,43 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                         </div>
                         <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="form-group sm:col-span-2">
-                                <label className="form-label">Party Name <span className="form-label-optional">company / organisation</span></label>
+                                <label className="form-label">
+                                    Party / Customer <span className="form-label-optional">pick from registered customers — links pass to their portal</span>
+                                </label>
+                                <SearchableSelect
+                                    value={data.customer_id}
+                                    onChange={(v) => {
+                                        setData('customer_id', v as any);
+                                        const c = customers.find((c: any) => String(c.id) === String(v));
+                                        if (c) setData('party_name', c.name);
+                                    }}
+                                    options={customerOptions}
+                                    placeholder="Search customer…"
+                                    emptyText="No matching customer — use the override field below"
+                                />
+                                {data.customer_id ? (
+                                    <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
+                                        <i className="fi fi-rr-check-circle leading-none text-[10px]" />
+                                        This pass will appear on the selected customer's portal.
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                                        <i className="fi fi-rr-info leading-none text-[10px]" />
+                                        Without a customer link, the pass won't surface on any customer portal — only the override name below will appear on the printed copy.
+                                    </p>
+                                )}
+                                {errors.customer_id && <p className="form-error">{errors.customer_id as any}</p>}
+                            </div>
+                            <div className="form-group sm:col-span-2">
+                                <label className="form-label">
+                                    Party Name Override <span className="form-label-optional">free text — used on the printed pass</span>
+                                </label>
                                 <input
                                     type="text"
                                     value={data.party_name}
                                     onChange={e => setData('party_name', e.target.value)}
                                     className="form-input"
-                                    placeholder="e.g. ACI Motors Ltd., Bangladesh Railway"
+                                    placeholder="e.g. ACI Motors Ltd., or visiting vendor name"
                                 />
                                 {errors.party_name && <p className="form-error">{errors.party_name as any}</p>}
                             </div>

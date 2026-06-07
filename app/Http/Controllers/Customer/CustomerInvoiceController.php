@@ -101,12 +101,22 @@ class CustomerInvoiceController extends Controller
         ]);
     }
 
-    public function pdf(Invoice $invoice)
+    public function pdf(\Illuminate\Http\Request $request, Invoice $invoice)
     {
         $customer = auth('customer')->user();
         abort_unless($invoice->customer_id === $customer->id, 403);
 
         $bytes = $this->service->generatePdf($invoice);
+
+        // base64 mode bypasses download-manager extensions (IDM/FDM) that
+        // hijack application/pdf responses — used by the PdfPopupModal.
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'data'     => base64_encode($bytes),
+                'filename' => $invoice->invoice_number . '.pdf',
+            ]);
+        }
+
         return response($bytes, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $invoice->invoice_number . '.pdf"',

@@ -25,9 +25,15 @@ interface Pass {
     customer_rep_id_number: string | null;
     vehicle_no: string | null;
     notes: string | null;
-    status: 'draft' | 'issued' | 'cancelled';
+    status: 'draft' | 'issued' | 'completed' | 'cancelled';
     issued_by: string | null;
     issued_at: string | null;
+    completed_at: string | null;
+    completed_by: string | null;
+    completion_remarks: string | null;
+    cancelled_at: string | null;
+    cancelled_by: string | null;
+    cancellation_reason: string | null;
     items: Item[];
     pdf_url: string;
 }
@@ -42,8 +48,15 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
     const isActive = pass.status === 'issued';
 
     const cancel = () => {
-        if (!confirm(`Cancel Gate Pass ${pass.pass_no}? This cannot be undone.`)) return;
-        router.post(`${basePath}/${pass.id}/cancel`);
+        const reason = prompt(`Cancel Gate Pass ${pass.pass_no}?\n\nOptional reason:`, '');
+        if (reason === null) return; // Cancel button on prompt
+        router.post(`${basePath}/${pass.id}/cancel`, { cancellation_reason: reason });
+    };
+
+    const complete = () => {
+        const remarks = prompt(`Mark Gate Pass ${pass.pass_no} as completed?\n\nThis confirms the items have physically crossed the gate.\n\nOptional remarks:`, '');
+        if (remarks === null) return;
+        router.post(`${basePath}/${pass.id}/complete`, { completion_remarks: remarks });
     };
 
     return (
@@ -65,7 +78,12 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
                                         }`}>
                                             {isIn ? 'Gate-In' : 'Gate-Out'}
                                         </span>
-                                        <span className={`badge ${pass.status === 'issued' ? 'badge-green' : pass.status === 'cancelled' ? 'badge-red' : 'badge-slate'} capitalize`}>
+                                        <span className={`badge capitalize ${
+                                            pass.status === 'issued' ? 'badge-blue'
+                                            : pass.status === 'completed' ? 'badge-green'
+                                            : pass.status === 'cancelled' ? 'badge-red'
+                                            : 'badge-slate'
+                                        }`}>
                                             {pass.status}
                                         </span>
                                     </div>
@@ -164,14 +182,71 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
 
                 {isActive && (
                     <div className="card">
-                        <div className="card-body flex items-center justify-between gap-3 flex-wrap">
-                            <div>
-                                <h4 className="text-sm font-bold text-surface-900">Pass actions</h4>
-                                <p className="text-xs text-surface-500 mt-0.5">Cancel this pass if it was issued in error. The PDF will remain accessible but marked cancelled.</p>
-                            </div>
+                        <div className="card-header">
+                            <h4 className="text-sm font-bold text-surface-900">Pass actions</h4>
+                            <p className="text-xs text-surface-500 mt-0.5">
+                                Mark completed once items have physically crossed the gate. Cancel if issued in error.
+                            </p>
+                        </div>
+                        <div className="card-body flex flex-wrap items-center gap-2">
+                            <button onClick={complete} className="btn-success btn-sm">
+                                <i className="fi fi-rr-check-circle text-xs leading-none" /> Mark Completed
+                            </button>
                             <button onClick={cancel} className="btn-danger btn-sm">
                                 <i className="fi fi-rr-cross-circle text-xs leading-none" /> Cancel pass
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Completion details — shown when status='completed' */}
+                {pass.status === 'completed' && (
+                    <div className="card border-emerald-200 bg-emerald-50/40">
+                        <div className="card-body">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                    <i className="fi fi-rr-check-circle text-base leading-none" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-sm font-bold text-emerald-800">Pass Completed</h4>
+                                    <p className="text-xs text-emerald-700/80 mt-0.5">
+                                        Closed by {pass.completed_by ?? '—'} on {pass.completed_at}
+                                    </p>
+                                    {pass.completion_remarks && (
+                                        <p className="text-xs text-surface-700 mt-2 whitespace-pre-line bg-white/60 border border-emerald-100 rounded-lg px-3 py-2">
+                                            <span className="font-bold text-surface-500 text-[10px] uppercase tracking-wider block mb-0.5">Remarks</span>
+                                            {pass.completion_remarks}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Cancellation details — shown when status='cancelled' */}
+                {pass.status === 'cancelled' && (
+                    <div className="card border-rose-200 bg-rose-50/40">
+                        <div className="card-body">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                                    <i className="fi fi-rr-cross-circle text-base leading-none" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-sm font-bold text-rose-800">Pass Cancelled</h4>
+                                    {pass.cancelled_at && (
+                                        <p className="text-xs text-rose-700/80 mt-0.5">
+                                            Cancelled by {pass.cancelled_by ?? '—'} on {pass.cancelled_at}
+                                        </p>
+                                    )}
+                                    {pass.cancellation_reason && (
+                                        <p className="text-xs text-surface-700 mt-2 whitespace-pre-line bg-white/60 border border-rose-100 rounded-lg px-3 py-2">
+                                            <span className="font-bold text-surface-500 text-[10px] uppercase tracking-wider block mb-0.5">Reason</span>
+                                            {pass.cancellation_reason}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

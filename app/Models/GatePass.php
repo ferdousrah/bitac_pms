@@ -11,7 +11,9 @@ class GatePass extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'rfq_id', 'pass_no', 'direction', 'party_name',
+        'center_id', 'rfq_id', 'customer_id', 'pass_no', 'direction', 'party_name',
+        'completed_at', 'completed_by', 'completion_remarks',
+        'cancelled_at', 'cancelled_by', 'cancellation_reason',
         'customer_rep_name', 'customer_rep_phone', 'customer_rep_id_number', 'vehicle_no',
         'pass_date', 'notes',
         'issued_by', 'issued_at', 'issuer_signature_path',
@@ -21,15 +23,20 @@ class GatePass extends Model
     protected function casts(): array
     {
         return [
-            'pass_date' => 'date',
-            'issued_at' => 'datetime',
+            'pass_date'    => 'date',
+            'issued_at'    => 'datetime',
+            'completed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
-    public function rfq()       { return $this->belongsTo(Rfq::class); }
-    public function items()     { return $this->hasMany(GatePassItem::class)->orderBy('sort_order'); }
-    public function issuedBy()  { return $this->belongsTo(User::class, 'issued_by'); }
-    public function center()    { return $this->belongsTo(Center::class); }
+    public function rfq()         { return $this->belongsTo(Rfq::class); }
+    public function customer()    { return $this->belongsTo(Customer::class); }
+    public function items()       { return $this->hasMany(GatePassItem::class)->orderBy('sort_order'); }
+    public function issuedBy()    { return $this->belongsTo(User::class, 'issued_by'); }
+    public function completedBy() { return $this->belongsTo(User::class, 'completed_by'); }
+    public function cancelledBy() { return $this->belongsTo(User::class, 'cancelled_by'); }
+    public function center()      { return $this->belongsTo(Center::class); }
 
     /**
      * Auto-generate next pass number — prefix depends on direction.

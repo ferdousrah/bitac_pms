@@ -127,6 +127,12 @@ class GatePassController extends Controller
             // Condition note presets managed under Master Data → Gate Pass Notes.
             'condition_notes'  => \App\Models\GatePassConditionNote::active()
                 ->orderBy('display_order')->orderBy('label')->pluck('label')->values(),
+            // Customer picker — selecting a registered customer here links the
+            // gate pass via customer_id so it appears on their portal. Leaving
+            // it blank still allows a free-text party name (for vendors, etc.)
+            // but the pass won't surface on any customer portal.
+            'customers'        => \App\Models\Customer::where('is_active', true)
+                ->orderBy('name')->get(['id', 'name', 'contact_person']),
         ]);
     }
 
@@ -140,6 +146,7 @@ class GatePassController extends Controller
             'rfq_id'                   => 'nullable|exists:rfqs,id',
             'direction'                => 'required|in:in,out',
             'pass_date'                => 'required|date',
+            'customer_id'              => 'nullable|exists:customers,id',
             'party_name'               => 'nullable|string|max:200',
             'customer_rep_name'        => 'nullable|string|max:120',
             'customer_rep_phone'       => 'nullable|string|max:40',
@@ -161,6 +168,7 @@ class GatePassController extends Controller
                 'pass_no'                 => GatePass::generatePassNo($validated['direction']),
                 'direction'               => $validated['direction'],
                 'pass_date'               => $validated['pass_date'],
+                'customer_id'             => $validated['customer_id'] ?? null,
                 'party_name'              => $validated['party_name'] ?? null,
                 'customer_rep_name'       => $validated['customer_rep_name'] ?? null,
                 'customer_rep_phone'      => $validated['customer_rep_phone'] ?? null,
@@ -192,7 +200,7 @@ class GatePassController extends Controller
         });
 
         // Customer-portal: tell the customer their gate pass is ready to print.
-        \App\Services\CustomerNotifyService::gatePassIssued($pass->fresh('rfq.customer'));
+        \App\Services\CustomerNotifyService::gatePassIssued($pass->fresh(['customer', 'rfq.customer']));
 
         return redirect()->route("{$this->routePrefix()}.show", $pass)
             ->with('success', "Gate Pass {$pass->pass_no} issued.");
@@ -220,6 +228,12 @@ class GatePassController extends Controller
                 'status'                 => $gatePass->status,
                 'issued_by'              => $gatePass->issuedBy?->name,
                 'issued_at'              => $gatePass->issued_at?->format('d M Y, H:i'),
+                'completed_at'           => $gatePass->completed_at?->format('d M Y, H:i'),
+                'completed_by'           => $gatePass->completedBy?->name,
+                'completion_remarks'     => $gatePass->completion_remarks,
+                'cancelled_at'           => $gatePass->cancelled_at?->format('d M Y, H:i'),
+                'cancelled_by'           => $gatePass->cancelledBy?->name,
+                'cancellation_reason'    => $gatePass->cancellation_reason,
                 'items'                  => $gatePass->items->map(fn($i) => [
                     'id'             => $i->id,
                     'description'    => $i->description,
@@ -236,8 +250,42 @@ class GatePassController extends Controller
     public function cancel(Request $request, GatePass $gatePass)
     {
         abort_unless($gatePass->status === 'issued', 422, 'Only issued passes can be cancelled.');
-        $gatePass->update(['status' => 'cancelled']);
+        $validated = $request->validate([
+            'cancellation_reason' => 'nullable|string|max:500',
+        ]);
+        $gatePass->update([
+            'status'              => 'cancelled',
+            'cancelled_at'        => now(),
+            'cancelled_by'        => auth()->id(),
+            'cancellation_reason' => $validated['cancellation_reason'] ?? null,
+        ]);
         return back()->with('success', "Gate Pass {$gatePass->pass_no} cancelled.");
+    }
+
+    /**
+     * Mark the gate pass as completed — items have physically crossed the
+     * gate and the pass is now closed. Terminal state. Optional remarks
+     * record any observation by the verifier (e.g. "Item received in
+     * damaged condition").
+     */
+    public function complete(Request $request, GatePass $gatePass)
+    {
+        abort_unless($gatePass->status === 'issued', 422, 'Only issued passes can be completed.');
+        $validated = $request->validate([
+            'completion_remarks' => 'nullable|string|max:1000',
+        ]);
+        $gatePass->update([
+            'status'             => 'completed',
+            'completed_at'       => now(),
+            'completed_by'       => auth()->id(),
+            'completion_remarks' => $validated['completion_remarks'] ?? null,
+        ]);
+
+        // Customer notification — closes the loop ("your sample has been
+        // received" / "your goods have left BITAC").
+        \App\Services\CustomerNotifyService::gatePassCompleted($gatePass->fresh(['customer', 'rfq.customer']));
+
+        return back()->with('success', "Gate Pass {$gatePass->pass_no} marked as completed.");
     }
 
     public function pdf(Request $request, GatePass $gatePass)
