@@ -20,27 +20,27 @@ export default function CustomerComplaintsIndex({ complaints }: any) {
     const rows = complaints?.data ?? [];
 
     return (
-        <CustomerLayout title="Feedback / Compliment">
+        <CustomerLayout title="Feedback">
             <div className="flex items-center justify-end">
                 <Link href="/customer/complaints/create" className="btn-primary btn-sm">
-                    <i className="fi fi-rr-plus text-xs leading-none" /> New Feedback/Compliment
+                    <i className="fi fi-rr-plus text-xs leading-none" /> New Feedback
                 </Link>
             </div>
 
             <div className="card">
                 <div className="card-header">
-                    <h2 className="text-sm font-semibold text-surface-800">All Feedback &amp; Compliments</h2>
-                    <p className="text-xs text-surface-400 mt-0.5">Track status of your feedback and compliments</p>
+                    <h2 className="text-sm font-semibold text-surface-800">All Feedback</h2>
+                    <p className="text-xs text-surface-400 mt-0.5">Track status of your submitted feedback</p>
                 </div>
                 <div className="card-body p-0">
                     {rows.length === 0 ? (
                         <div className="empty-state">
                             <div className="empty-state-icon"><i className="fi fi-rr-comment-alt" /></div>
                             <p className="empty-state-title">No submissions yet</p>
-                            <p className="empty-state-text">Share feedback, raise an issue, or compliment any of your orders.</p>
+                            <p className="empty-state-text">Share feedback or raise an issue about any of your orders.</p>
                             <div className="mt-4">
                                 <Link href="/customer/complaints/create" className="btn-primary btn-sm">
-                                    <i className="fi fi-rr-plus text-xs leading-none" /> Submit Feedback/Compliment
+                                    <i className="fi fi-rr-plus text-xs leading-none" /> Submit Feedback
                                 </Link>
                             </div>
                         </div>

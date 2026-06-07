@@ -16,7 +16,7 @@ const NAV_ITEMS: { href: string; label: string; icon: string; external?: boolean
     { href: '/customer/work-orders',  label: 'My Orders',                icon: 'fi-rr-clipboard-list' },
     { href: '/customer/invoices',     label: 'Invoices',                 icon: 'fi-rr-receipt' },
     { href: '/customer/documents',    label: 'Documents',                icon: 'fi-rr-folder-open' },
-    { href: '/customer/complaints',   label: 'Feedback/Compliment',      icon: 'fi-rr-comment-alt' },
+    { href: '/customer/complaints',   label: 'Feedback',      icon: 'fi-rr-comment-alt' },
     { href: '/portfolio',             label: 'Our Work',                 icon: 'fi-rr-briefcase',          external: true },
 ];
 

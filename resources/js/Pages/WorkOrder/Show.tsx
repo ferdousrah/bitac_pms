@@ -27,7 +27,7 @@ const stepStatusBadge: Record<string, string> = {
     completed: 'badge-green',
 };
 
-export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo }: any) {
+export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate }: any) {
     const transition = (status: string) => {
         if (confirm(`Transition to "${status.replace(/_/g, ' ')}"?`)) {
             router.post(`/work-orders/${workOrder.id}/transition`, { status });
@@ -346,6 +346,66 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo }
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Customer Completion Certificate — appears once customer has issued one */}
+                        {completion_certificate && (
+                            <div className="card animate-slide-up border-indigo-200 bg-indigo-50/30">
+                                <div className="card-header flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                                            <i className="fi fi-rr-diploma text-sm leading-none" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-indigo-900">Completion Certificate (Customer-Issued)</h3>
+                                            <p className="text-[11px] text-indigo-700/80 mt-0.5">
+                                                <span className="font-mono font-bold">{completion_certificate.certificate_number}</span>
+                                                {' '}· {completion_certificate.mode === 'self_issued' ? 'Self-issued (digitally signed)' : 'Uploaded letterhead'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <a href={`/ied/completion-certificates/${completion_certificate.id}/preview`}
+                                            target="_blank" rel="noreferrer"
+                                            className="btn-outline btn-xs">
+                                            <i className="fi fi-rr-eye text-[10px] leading-none" /> View
+                                        </a>
+                                        <a href={`/ied/completion-certificates/${completion_certificate.id}/download`}
+                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+                                            <i className="fi fi-rr-download text-[10px] leading-none" /> Download
+                                        </a>
+                                    </div>
+                                </div>
+                                <div className="card-body">
+                                    <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                                        <div>
+                                            <dt className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Issued By</dt>
+                                            <dd className="text-surface-900 mt-0.5">{completion_certificate.issued_by_name}</dd>
+                                            {completion_certificate.issued_by_designation && (
+                                                <dd className="text-xs text-surface-500">{completion_certificate.issued_by_designation}</dd>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <dt className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Issued Date</dt>
+                                            <dd className="text-surface-900 mt-0.5">{completion_certificate.issued_date}</dd>
+                                        </div>
+                                        {completion_certificate.rating && (
+                                            <div>
+                                                <dt className="text-[10px] font-bold text-surface-400 uppercase tracking-wider">Satisfaction</dt>
+                                                <dd className="text-amber-500 text-lg leading-none mt-0.5">
+                                                    {'★'.repeat(completion_certificate.rating)}<span className="text-surface-200">{'★'.repeat(5 - completion_certificate.rating)}</span>
+                                                </dd>
+                                            </div>
+                                        )}
+                                    </dl>
+                                    {completion_certificate.remarks && (
+                                        <div className="mt-3 bg-white/70 border border-indigo-100 rounded-lg px-3 py-2">
+                                            <div className="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-0.5">Remarks</div>
+                                            <p className="text-sm text-surface-700 whitespace-pre-line italic">{completion_certificate.remarks}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

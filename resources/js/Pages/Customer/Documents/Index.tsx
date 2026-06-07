@@ -110,7 +110,7 @@ export default function CustomerDocumentsIndex({ workOrders, standaloneGatePasse
 
 function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void }) {
     const gatePasses = wo.gate_passes ?? [];
-    const docCount = (wo.quotation ? 1 : 0) + wo.challans.length + wo.inspections.length + wo.invoices.length + gatePasses.length;
+    const docCount = (wo.quotation ? 1 : 0) + wo.challans.length + wo.inspections.length + wo.invoices.length + gatePasses.length + (wo.completion_certificate ? 1 : 0);
     const jobLabel = `Job #${wo.job_number ?? '—'}`;
 
     return (
@@ -228,6 +228,28 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                             ext="PDF"
                         />
                     ))}
+                </DocSection>
+
+                {/* Completion Certificate (customer-issued) */}
+                <DocSection
+                    title="Completion Certificate"
+                    icon="fi-rr-diploma"
+                    color="indigo"
+                    empty={!wo.completion_certificate}
+                    emptyText="Not yet issued"
+                >
+                    {wo.completion_certificate && (
+                        <DocLink
+                            onClick={() => onPreview({
+                                url: `/customer/documents/completion-certificate/${wo.completion_certificate.id}?preview=base64`,
+                                title: `Completion Certificate ${wo.completion_certificate.certificate_number}`,
+                                subtitle: jobLabel,
+                            })}
+                            label={wo.completion_certificate.certificate_number}
+                            sub={`${wo.completion_certificate.mode === 'self_issued' ? 'Self-issued' : 'Uploaded'} · ${wo.completion_certificate.issued_date}`}
+                            ext={wo.completion_certificate.mode === 'self_issued' ? 'PDF' : 'FILE'}
+                        />
+                    )}
                 </DocSection>
 
                 {/* Gate Passes */}

@@ -32,14 +32,14 @@ export default function IedComplaintShow({ complaint, candidateSections = [], as
     const hasResponse = !!complaint.response;
 
     return (
-        <AppLayout header={`Feedback / Compliment — ${complaint.reference_number}`}>
+        <AppLayout header={`Feedback — ${complaint.reference_number}`}>
             <div className="space-y-6 animate-fade-in max-w-5xl">
                 {/* Header */}
                 <div className="card">
                     <div className="card-body">
                         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                             <div className="min-w-0">
-                                <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">Feedback / Compliment</div>
+                                <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">Feedback</div>
                                 <h2 className="text-xl font-bold font-mono text-rose-600 mt-1">{complaint.reference_number}</h2>
                                 <p className="text-surface-800 text-base font-semibold mt-2">{complaint.subject}</p>
                                 <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-surface-500">

@@ -67,7 +67,22 @@ class CustomerDocumentController extends Controller
                         'result'          => $q->result,
                         'inspected_at'    => $q->inspected_at?->format('d M Y'),
                     ])->values(),
-                    'invoices'    => $wo->invoices->map(fn($i) => [
+                    'completion_certificate' => \App\Models\CompletionCertificate::where('work_order_id', $wo->id)
+                    ->where('customer_id', $customer->id)
+                    ->first()
+                    ? (function () use ($wo, $customer) {
+                        $c = \App\Models\CompletionCertificate::where('work_order_id', $wo->id)
+                            ->where('customer_id', $customer->id)->first();
+                        return [
+                            'id'                 => $c->id,
+                            'certificate_number' => $c->certificate_number,
+                            'mode'               => $c->mode,
+                            'issued_date'        => $c->issued_date?->format('d M Y'),
+                            'rating'             => $c->rating,
+                        ];
+                    })()
+                    : null,
+                'invoices'    => $wo->invoices->map(fn($i) => [
                         'id'             => $i->id,
                         'invoice_number' => $i->invoice_number,
                         'total_amount'   => (float) $i->total_amount,

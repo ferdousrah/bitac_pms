@@ -263,6 +263,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
     });
 
+    // ─── IED Completion Certificates inbox + download ───
+    Route::prefix('ied/completion-certificates')->name('ied.completion-certificates.')->group(function () {
+        Route::get('/',                            [\App\Http\Controllers\CompletionCertificateController::class, 'index'])->name('index');
+        Route::get('/{certificate}/download',      [\App\Http\Controllers\CompletionCertificateController::class, 'download'])->name('download');
+        Route::get('/{certificate}/preview',       [\App\Http\Controllers\CompletionCertificateController::class, 'preview'])->name('preview');
+    });
+
     // ─── PCD Gate-Out (production team issues these for sample / finished items leaving the floor) ───
     Route::prefix('pcd/gate-passes')->middleware('permission:view pcd')->name('pcd.gate-passes.')->group(function () {
         Route::get('/',                     [GatePassController::class, 'index'])->name('index');
@@ -673,4 +680,8 @@ Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('custo
     Route::get('/documents/challan/{delivery}',        [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'challan'])->name('documents.challan');
     Route::get('/documents/inspection/{inspection}',   [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'inspectionCert'])->name('documents.inspection');
     Route::get('/documents/gate-pass/{gatePass}',      [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'gatePass'])->name('documents.gate-pass');
+
+    // Completion certificates — customer issues after WO delivered.
+    Route::post('/work-orders/{workOrder}/completion-certificate',  [\App\Http\Controllers\Customer\CustomerCompletionCertificateController::class, 'store'])->name('work-orders.completion-certificate.store');
+    Route::get('/documents/completion-certificate/{certificate}',   [\App\Http\Controllers\Customer\CustomerCompletionCertificateController::class, 'show'])->name('documents.completion-certificate');
 });

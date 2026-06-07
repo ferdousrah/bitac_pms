@@ -110,6 +110,25 @@ class CustomerWorkOrderController extends Controller
                     'invoice_number' => $invoice->invoice_number,
                     'total_amount'   => $invoice->total_amount,
                 ] : null,
+                // Completion certificate — issuable once delivered. If one
+                // already exists we surface it so the customer can re-submit
+                // or just see what they sent.
+                'can_issue_completion_certificate' => $workOrder->status === 'delivered',
+                'completion_certificate' => (function () use ($workOrder, $customer) {
+                    $cert = \App\Models\CompletionCertificate::where('work_order_id', $workOrder->id)
+                        ->where('customer_id', $customer->id)->first();
+                    return $cert ? [
+                        'id'                    => $cert->id,
+                        'certificate_number'    => $cert->certificate_number,
+                        'mode'                  => $cert->mode,
+                        'issued_by_name'        => $cert->issued_by_name,
+                        'issued_by_designation' => $cert->issued_by_designation,
+                        'issued_date'           => $cert->issued_date?->format('d M Y'),
+                        'rating'                => $cert->rating,
+                        'remarks'               => $cert->remarks,
+                        'created_at'            => $cert->created_at->format('d M Y, h:i A'),
+                    ] : null;
+                })(),
             ],
         ]);
     }

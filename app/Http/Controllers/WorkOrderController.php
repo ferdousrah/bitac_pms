@@ -133,7 +133,21 @@ class WorkOrderController extends Controller
             ->values()
             ->toArray();
 
+        $completionCert = \App\Models\CompletionCertificate::where('work_order_id', $workOrder->id)->first();
+
         return Inertia::render('WorkOrder/Show', [
+            'completion_certificate' => $completionCert ? [
+                'id'                    => $completionCert->id,
+                'certificate_number'    => $completionCert->certificate_number,
+                'mode'                  => $completionCert->mode,
+                'issued_by_name'        => $completionCert->issued_by_name,
+                'issued_by_designation' => $completionCert->issued_by_designation,
+                'issued_date'           => $completionCert->issued_date?->format('d M Y'),
+                'rating'                => $completionCert->rating,
+                'remarks'               => $completionCert->remarks,
+                'file_url'              => $completionCert->file_url,
+                'created_at'            => $completionCert->created_at->format('d M Y, h:i A'),
+            ] : null,
             'workOrder' => [
                 'id'           => $workOrder->id,
                 'wo_number'    => $workOrder->wo_number,

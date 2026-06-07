@@ -1,5 +1,6 @@
 import { Link, useForm, usePage } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
+import CompletionCertificateModal from '@/Components/Customer/CompletionCertificateModal';
 
 const STATUS_BADGE: Record<string, string> = {
     draft:              'badge-slate',
@@ -26,6 +27,7 @@ export default function CustomerWorkOrderShow({ workOrder }: any) {
     const currentIdx = stageOrder.indexOf(workOrder.status);
     const { flash } = (usePage().props ?? {}) as any;
     const [showModal, setShowModal] = useState(false);
+    const [showCertModal, setShowCertModal] = useState(false);
 
     const erForm = useForm({ reason: '', needed_by: '', work_order_item_id: '' as string });
 
@@ -366,6 +368,53 @@ export default function CustomerWorkOrderShow({ workOrder }: any) {
                     </div>
                 )}
 
+                {/* Completion Certificate — appears once delivered */}
+                {workOrder.can_issue_completion_certificate && (
+                    <div className="card animate-slide-up border-indigo-200 bg-indigo-50/40">
+                        <div className="card-body">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                                    <i className="fi fi-rr-diploma text-lg leading-none" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-sm font-bold text-indigo-900">
+                                        {workOrder.completion_certificate ? 'Completion Certificate Submitted' : 'Issue Completion Certificate'}
+                                    </h3>
+                                    {workOrder.completion_certificate ? (
+                                        <div className="text-xs text-indigo-700/90 mt-1">
+                                            <span className="font-mono font-bold">{workOrder.completion_certificate.certificate_number}</span>
+                                            {' '}· issued by {workOrder.completion_certificate.issued_by_name}
+                                            {' '}on {workOrder.completion_certificate.issued_date}
+                                            {workOrder.completion_certificate.rating && (
+                                                <span className="ml-2 text-amber-500">
+                                                    {'★'.repeat(workOrder.completion_certificate.rating)}{'☆'.repeat(5 - workOrder.completion_certificate.rating)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-indigo-700/80 mt-1">
+                                            Formally acknowledge that BITAC has satisfactorily completed this job. You can either upload a cert signed on your letterhead, or fill it in-portal.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                    {workOrder.completion_certificate && (
+                                        <a href={`/customer/documents/completion-certificate/${workOrder.completion_certificate.id}`}
+                                           target="_blank" rel="noreferrer"
+                                           className="btn-outline btn-sm">
+                                            <i className="fi fi-rr-eye text-xs leading-none" /> View
+                                        </a>
+                                    )}
+                                    <button onClick={() => setShowCertModal(true)} className="btn-primary btn-sm">
+                                        <i className={`fi ${workOrder.completion_certificate ? 'fi-rr-pencil' : 'fi-rr-diploma'} text-xs leading-none`} />
+                                        {workOrder.completion_certificate ? 'Replace' : 'Issue Certificate'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Gate Passes */}
                 {workOrder.gate_passes && workOrder.gate_passes.length > 0 && (
                     <div className="card animate-slide-up">
@@ -435,6 +484,14 @@ export default function CustomerWorkOrderShow({ workOrder }: any) {
                     </div>
                 )}
             </div>
+
+            {/* Completion Certificate Modal */}
+            <CompletionCertificateModal
+                open={showCertModal}
+                onClose={() => setShowCertModal(false)}
+                workOrder={{ id: workOrder.id, wo_number: workOrder.wo_number, product: workOrder.product }}
+                existing={workOrder.completion_certificate}
+            />
 
             {/* Emergency Request Modal */}
             {showModal && (

@@ -30,13 +30,13 @@ export default function CustomerComplaintShow({ complaint }: any) {
     const [showGatePdf, setShowGatePdf] = useState(false);
 
     return (
-        <CustomerLayout backHref="/customer/complaints" backLabel="All Feedback/Compliments" width="narrow">
+        <CustomerLayout backHref="/customer/complaints" backLabel="All Feedback" width="narrow">
             {/* Header */}
             <div className="card">
                 <div className="card-body">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="min-w-0">
-                            <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">Feedback / Compliment</div>
+                            <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">Feedback</div>
                             <h2 className="text-xl font-bold font-mono text-rose-600 mt-1">{complaint.reference_number}</h2>
                             <p className="text-surface-800 text-base font-semibold mt-2">{complaint.subject}</p>
                             <div className="flex items-center gap-3 mt-2 text-xs text-surface-500 flex-wrap">
@@ -180,10 +180,10 @@ export default function CustomerComplaintShow({ complaint }: any) {
 
             <div className="flex items-center gap-3">
                 <Link href="/customer/complaints" className="btn-outline btn-sm">
-                    <i className="fi fi-rr-arrow-left text-xs leading-none" /> All Feedback/Compliments
+                    <i className="fi fi-rr-arrow-left text-xs leading-none" /> All Feedback
                 </Link>
                 <Link href="/customer/complaints/create" className="btn-ghost btn-sm">
-                    <i className="fi fi-rr-plus text-xs leading-none" /> New Feedback/Compliment
+                    <i className="fi fi-rr-plus text-xs leading-none" /> New Feedback
                 </Link>
             </div>
 

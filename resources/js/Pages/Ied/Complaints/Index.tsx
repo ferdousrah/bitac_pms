@@ -38,7 +38,7 @@ export default function IedComplaintsIndex({ complaints, stats, filters }: any) 
     const rows = complaints?.data ?? [];
 
     return (
-        <AppLayout header="Customer Feedback / Compliments">
+        <AppLayout header="Customer Feedback">
             <div className="space-y-6 animate-fade-in">
                 {/* Stat tiles */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -52,8 +52,8 @@ export default function IedComplaintsIndex({ complaints, stats, filters }: any) 
                 <div className="card">
                     <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
-                            <h2 className="text-sm font-bold text-surface-900">Feedback / Compliment Inbox</h2>
-                            <p className="text-xs text-surface-400 mt-0.5">Customer-filed feedback / compliments awaiting IED response</p>
+                            <h2 className="text-sm font-bold text-surface-900">Feedback Inbox</h2>
+                            <p className="text-xs text-surface-400 mt-0.5">Customer-filed feedback awaiting IED response</p>
                         </div>
                         <form onSubmit={submit} className="flex items-center gap-2 flex-wrap">
                             <input

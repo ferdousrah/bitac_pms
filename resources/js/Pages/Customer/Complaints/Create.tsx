@@ -27,7 +27,7 @@ export default function CustomerComplaintCreate({ workOrders, preselectedWo }: a
     const totalQty   = selectedWo?.quantity;
 
     return (
-        <CustomerLayout backHref="/customer/complaints" backLabel="All Feedback/Compliments" title="New Feedback / Compliment" width="narrow">
+        <CustomerLayout backHref="/customer/complaints" backLabel="All Feedback" title="New Feedback" width="narrow">
             <form onSubmit={submit} className="card">
                 <div className="card-body space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -124,7 +124,7 @@ export default function CustomerComplaintCreate({ workOrders, preselectedWo }: a
                         {form.processing ? (
                             <><i className="fi fi-rr-spinner animate-spin text-sm" /> Submitting...</>
                         ) : (
-                            <><i className="fi fi-rr-paper-plane text-sm" /> Submit Feedback/Compliment</>
+                            <><i className="fi fi-rr-paper-plane text-sm" /> Submit Feedback</>
                         )}
                     </button>
                 </div>
