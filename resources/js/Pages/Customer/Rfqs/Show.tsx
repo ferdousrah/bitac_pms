@@ -61,11 +61,12 @@ export default function CustomerRfqShow({ rfq }: any) {
                                 v{rfq.latest_quotation.version} · BDT {Number(rfq.latest_quotation.total_amount).toLocaleString('en-IN')} · {rfq.latest_quotation.created_at}
                             </div>
                         </div>
-                        <Link href={`/customer/documents/quotation/${rfq.latest_quotation.id}`}
+                        <a href={`/customer/documents/quotation/${rfq.latest_quotation.id}`}
                             target="_blank"
+                            rel="noreferrer noopener"
                             className="btn-primary btn-sm shrink-0">
                             <i className="fi fi-rr-file-pdf text-xs" /> View PDF
-                        </Link>
+                        </a>
                     </div>
                 </div>
             )}
