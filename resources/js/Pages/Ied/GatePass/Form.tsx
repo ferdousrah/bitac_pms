@@ -77,7 +77,9 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
         e.preventDefault();
         const sig = padRef.current?.toDataURL() ?? null;
         setData('signature', sig);
-        setTimeout(() => post(basePath), 0);
+        // setData is async — defer the post by a frame so the form payload
+        // actually includes the just-captured signature data URL.
+        requestAnimationFrame(() => post(basePath));
     };
 
     return (

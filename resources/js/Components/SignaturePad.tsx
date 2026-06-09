@@ -33,9 +33,11 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
     const lastRef = useRef<{ x: number; y: number } | null>(null);
     const hasStrokeRef = useRef(false);
 
-    // Resize canvas to fit its parent + reset HiDPI scaling.
-    // If `width` prop is given, use that; otherwise measure the wrapper so
-    // the pad fills its container and never overflows.
+    // Resize canvas to fit its parent + preserve any existing strokes on
+    // resize. Setting canvas.width clears the canvas, so we capture the
+    // current pixels first and re-draw them after resizing. Without this
+    // any layout shift between drawing and submitting silently wiped the
+    // user's signature.
     useEffect(() => {
         const setup = () => {
             const canvas = canvasRef.current;
@@ -44,8 +46,18 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
             const targetW = width ?? wrapper.clientWidth;
             if (!targetW) return;
             const dpr = window.devicePixelRatio || 1;
-            canvas.width = targetW * dpr;
-            canvas.height = height * dpr;
+            const newW = targetW * dpr;
+            const newH = height * dpr;
+            // Skip if dimensions haven't actually changed — prevents
+            // ResizeObserver's first synchronous fire from re-initialising
+            // and losing the saved drawing.
+            if (canvas.width === newW && canvas.height === newH) return;
+
+            // Snapshot current strokes (if any) so we can restore.
+            const prev = (canvas.width > 0 && canvas.height > 0) ? canvas.toDataURL('image/png') : null;
+
+            canvas.width = newW;
+            canvas.height = newH;
             canvas.style.width = `${targetW}px`;
             canvas.style.height = `${height}px`;
             const ctx = canvas.getContext('2d');
@@ -56,7 +68,13 @@ const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad
                 ctx.strokeStyle = '#0f172a';
                 ctx.lineWidth = 1.8;
             }
-            hasStrokeRef.current = false; // resize wipes the canvas
+            // Restore prior strokes — only when we had real ink (preserves
+            // hasStrokeRef state implicitly because nothing wiped it).
+            if (prev && hasStrokeRef.current && ctx) {
+                const img = new Image();
+                img.onload = () => ctx.drawImage(img, 0, 0, targetW, height);
+                img.src = prev;
+            }
         };
         setup();
         if (width != null) return; // fixed-width mode — no resize listener
