@@ -33,6 +33,7 @@ class SyncPermissionsSeeder extends Seeder
                 'create quotation-revision', 'submit quotation-to-customer',
                 'manage complaints',
                 'view completion-certificates', 'manage completion-certificates',
+                'view consultancy-requests', 'manage consultancy-requests',
                 'manage emergency-requests',
             ],
 

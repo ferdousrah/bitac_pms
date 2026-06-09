@@ -110,6 +110,11 @@ Route::get('/dashboard/live', [LiveDashboardController::class, 'index'])
 Route::get('/portfolio',         [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
 Route::get('/portfolio/{slug}',  [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
 
+// Public consultancy / student-assistance request form — no auth required.
+Route::get('/consultancy/request',          [\App\Http\Controllers\Public\ConsultancyRequestController::class, 'showForm'])->name('public.consultancy.form');
+Route::post('/consultancy/request',         [\App\Http\Controllers\Public\ConsultancyRequestController::class, 'store'])->name('public.consultancy.store');
+Route::get('/consultancy/request/success',  [\App\Http\Controllers\Public\ConsultancyRequestController::class, 'success'])->name('public.consultancy.success');
+
 // ======================================================================
 // Staff Routes (authenticated)
 // ======================================================================
@@ -261,6 +266,18 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{gatePass}/pdf',  [GatePassController::class, 'pdf'])->name('pdf');
         Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
+    });
+
+    // ─── IED Consultancy Requests inbox + report ───
+    Route::prefix('ied/consultancy-requests')->middleware('permission:view consultancy-requests')->name('ied.consultancy-requests.')->group(function () {
+        Route::get('/',                                       [\App\Http\Controllers\ConsultancyRequestController::class, 'index'])->name('index');
+        Route::get('/report',                                 [\App\Http\Controllers\ConsultancyRequestController::class, 'report'])->name('report');
+        Route::get('/report/export',                          [\App\Http\Controllers\ConsultancyRequestController::class, 'exportReport'])->name('report.export');
+        Route::get('/{consultancyRequest}',                   [\App\Http\Controllers\ConsultancyRequestController::class, 'show'])->name('show');
+        Route::post('/{consultancyRequest}/accept',           [\App\Http\Controllers\ConsultancyRequestController::class, 'accept'])->name('accept');
+        Route::post('/{consultancyRequest}/reject',           [\App\Http\Controllers\ConsultancyRequestController::class, 'reject'])->name('reject');
+        Route::post('/{consultancyRequest}/complete',         [\App\Http\Controllers\ConsultancyRequestController::class, 'complete'])->name('complete');
+        Route::get('/{consultancyRequest}/attachment',        [\App\Http\Controllers\ConsultancyRequestController::class, 'downloadAttachment'])->name('attachment');
     });
 
     // ─── IED Completion Certificates inbox + download ───
