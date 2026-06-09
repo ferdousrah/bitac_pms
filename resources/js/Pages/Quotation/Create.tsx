@@ -243,7 +243,7 @@ export default function QuotationCreate({
                             </div>
                             <p className="text-[11px] text-surface-400 flex items-center gap-1.5">
                                 <i className="fi fi-rr-info text-[10px] leading-none" />
-                                Unit prices are VAT-inclusive — total is shown as <span className="font-semibold text-surface-600">Total (Including VAT &amp; TAX)</span>, matching BITAC's official quotation format.
+                                Unit prices are VAT-inclusive. Subtotal, VAT and Tax are shown separately on the quotation.
                             </p>
                         </div>
                     </div>

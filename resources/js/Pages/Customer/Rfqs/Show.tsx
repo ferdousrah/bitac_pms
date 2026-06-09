@@ -49,27 +49,55 @@ export default function CustomerRfqShow({ rfq }: any) {
             </div>
 
             {/* Quotation link if exists */}
-            {rfq.latest_quotation && (
-                <div className="card border-emerald-200 bg-emerald-50/40">
-                    <div className="card-body flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-md shrink-0">
-                            <i className="fi fi-rr-receipt text-base leading-none" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-emerald-800">BITAC has sent you a quotation</div>
-                            <div className="text-xs text-emerald-700/80 mt-0.5">
-                                v{rfq.latest_quotation.version} · BDT {Number(rfq.latest_quotation.total_amount).toLocaleString('en-IN')} · {rfq.latest_quotation.created_at}
+            {rfq.latest_quotation && (() => {
+                const q = rfq.latest_quotation;
+                const fmt = (n: number) => Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const vat = Number(q.vat_amount ?? 0);
+                const tax = Number(q.tax_amount ?? 0);
+                const total = Number(q.total_amount ?? 0);
+                const subtotal = total - vat - tax;
+                return (
+                    <div className="card border-emerald-200 bg-emerald-50/40">
+                        <div className="card-body">
+                            <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-md shrink-0">
+                                    <i className="fi fi-rr-receipt text-base leading-none" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold text-emerald-800">BITAC has sent you a quotation</div>
+                                    <div className="text-xs text-emerald-700/80 mt-0.5">v{q.version} · {q.created_at}</div>
+                                </div>
+                                <a href={`/customer/documents/quotation/${q.id}`}
+                                    target="_blank" rel="noreferrer noopener"
+                                    className="btn-primary btn-sm shrink-0">
+                                    <i className="fi fi-rr-file-pdf text-xs" /> View PDF
+                                </a>
+                            </div>
+                            {/* Breakdown */}
+                            <div className="mt-4 pt-3 border-t border-emerald-200/60">
+                                <div className="max-w-sm ml-auto space-y-1 text-xs">
+                                    <div className="flex items-center justify-between text-emerald-800/80">
+                                        <span>Subtotal</span>
+                                        <span className="font-mono tabular-nums">৳{fmt(subtotal)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-emerald-800/80">
+                                        <span>VAT <span className="text-[10px] text-emerald-600/70">({q.vat_rate}%)</span></span>
+                                        <span className="font-mono tabular-nums">+ ৳{fmt(vat)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-emerald-800/80">
+                                        <span>Tax <span className="text-[10px] text-emerald-600/70">({q.tax_rate}%)</span></span>
+                                        <span className="font-mono tabular-nums">+ ৳{fmt(tax)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-2 border-t border-emerald-300/40 mt-1.5">
+                                        <span className="text-sm font-bold text-emerald-900">Grand Total</span>
+                                        <span className="text-base font-bold font-mono text-emerald-900 tabular-nums">৳{fmt(total)}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <a href={`/customer/documents/quotation/${rfq.latest_quotation.id}`}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="btn-primary btn-sm shrink-0">
-                            <i className="fi fi-rr-file-pdf text-xs" /> View PDF
-                        </a>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* Notes */}
             {rfq.notes && (

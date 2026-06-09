@@ -542,6 +542,8 @@ class QuotationController extends Controller
                 'discount'        => $quotation->discount,
                 'vat_rate'        => $quotation->vat_rate,
                 'vat_amount'      => $quotation->vat_amount,
+                'tax_rate'        => $quotation->tax_rate,
+                'tax_amount'      => $quotation->tax_amount,
                 'total_amount'    => $quotation->total_amount,
                 'validity_days'   => $quotation->validity_days,
                 'notes'           => $quotation->notes,
@@ -806,6 +808,8 @@ class QuotationController extends Controller
                 'discount'            => $quotation->discount,
                 'vat_rate'            => $quotation->vat_rate,
                 'vat_amount'          => $quotation->vat_amount,
+                'tax_rate'            => $quotation->tax_rate,
+                'tax_amount'          => $quotation->tax_amount,
                 'total_amount'        => $quotation->total_amount,
                 'validity_days'       => $quotation->validity_days,
                 'notes'               => $quotation->notes,
@@ -1109,12 +1113,26 @@ class QuotationController extends Controller
             }
         }
 
-        // Bottom row INSIDE the items table: only "Total (Including VAT & TAX)" + amount.
-        // The "মোট টাকাঃ <words>" line is rendered as a separate paragraph below the table.
-        $itemsHtml .= '<tr>';
-        $itemsHtml .=   '<td colspan="5" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; text-align: right; vertical-align: middle; font-weight: bold;">Total (Including VAT &amp; TAX)</td>';
-        $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; font-weight: bold; white-space: nowrap;">' . $fmt($total) . '</td>';
-        $itemsHtml .= '</tr>';
+        // Bottom rows INSIDE the items table — Subtotal, VAT, Tax, Grand Total
+        // shown separately so the customer sees the tax break-up clearly.
+        $vatAmount = (float) ($quotation->vat_amount ?? 0);
+        $taxAmount = (float) ($quotation->tax_amount ?? 0);
+        $vatRate   = (float) ($quotation->vat_rate ?? 0);
+        $taxRate   = (float) ($quotation->tax_rate ?? 0);
+        $subtotal  = (float) $total - $vatAmount - $taxAmount;
+
+        $sumRow = function (string $label, string $value, bool $bold = false) {
+            $w = $bold ? 'font-weight: bold;' : '';
+            return '<tr>'
+                .   '<td colspan="5" style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt; text-align: right; vertical-align: middle; ' . $w . '">' . $label . '</td>'
+                .   '<td style="border: 0.75pt solid #000; padding: 5pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap; ' . $w . '">' . $value . '</td>'
+                . '</tr>';
+        };
+
+        $itemsHtml .= $sumRow('Subtotal',                                        $fmt($subtotal));
+        $itemsHtml .= $sumRow('VAT (' . rtrim(rtrim(number_format($vatRate, 2, '.', ''), '0'), '.') . '%)', $fmt($vatAmount));
+        $itemsHtml .= $sumRow('Tax (' . rtrim(rtrim(number_format($taxRate, 2, '.', ''), '0'), '.') . '%)', $fmt($taxAmount));
+        $itemsHtml .= $sumRow('Grand Total', $fmt($total), true);
         $itemsHtml .= '</table>';
 
         // Amount in words — sits just below the items table, left-aligned.

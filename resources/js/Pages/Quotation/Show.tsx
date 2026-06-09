@@ -374,20 +374,35 @@ export default function QuotationShow({
                                 </div>
                             )}
 
-                            {/* Totals footer — BITAC convention: single VAT-inclusive total */}
+                            {/* Totals footer — VAT and Tax shown separately. */}
                             <div className="border-t border-surface-100 px-5 py-4 bg-surface-50/30">
-                                <div className="max-w-md ml-auto space-y-2 text-sm">
-                                    <div className="flex items-center justify-between pt-1">
-                                        <div>
-                                            <span className="text-base font-bold text-surface-900">Total (Including VAT &amp; TAX)</span>
-                                            {Number(quotation.vat_amount) > 0 && (
-                                                <div className="text-[10px] text-surface-400 mt-0.5">
-                                                    includes {fmt(quotation.vat_amount)} VAT @ {quotation.vat_rate}%
+                                <div className="max-w-md ml-auto space-y-1.5 text-sm">
+                                    {(() => {
+                                        const vat   = Number(quotation.vat_amount ?? 0);
+                                        const tax   = Number(quotation.tax_amount ?? 0);
+                                        const total = Number(quotation.total_amount ?? 0);
+                                        const subtotal = total - vat - tax;
+                                        return (
+                                            <>
+                                                <div className="flex items-center justify-between text-surface-600">
+                                                    <span>Subtotal</span>
+                                                    <span className="font-mono tabular-nums">{fmt(subtotal)}</span>
                                                 </div>
-                                            )}
-                                        </div>
-                                        <span className="text-xl font-bold font-mono text-surface-900 tabular-nums">{fmt(quotation.total_amount)}</span>
-                                    </div>
+                                                <div className="flex items-center justify-between text-surface-600">
+                                                    <span>VAT <span className="text-[10px] text-surface-400">({quotation.vat_rate}%)</span></span>
+                                                    <span className="font-mono tabular-nums">+ {fmt(vat)}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-surface-600">
+                                                    <span>Tax <span className="text-[10px] text-surface-400">({quotation.tax_rate}%)</span></span>
+                                                    <span className="font-mono tabular-nums">+ {fmt(tax)}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between pt-2 border-t border-surface-200 mt-2">
+                                                    <span className="text-base font-bold text-surface-900">Grand Total</span>
+                                                    <span className="text-xl font-bold font-mono text-surface-900 tabular-nums">{fmt(total)}</span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -732,7 +747,7 @@ export default function QuotationShow({
                                     <div className="pt-3 border-t border-surface-100">
                                         <dt className="text-xs text-surface-400 font-medium">Line Items</dt>
                                         <dd className="text-sm text-surface-700 mt-0.5">
-                                            {quotation.line_items.length} item{quotation.line_items.length === 1 ? '' : 's'} · {fmt(quotation.total_amount)} BDT (incl. VAT &amp; TAX)
+                                            {quotation.line_items.length} item{quotation.line_items.length === 1 ? '' : 's'} · {fmt(quotation.total_amount)} BDT (Grand Total)
                                         </dd>
                                     </div>
                                 )}
