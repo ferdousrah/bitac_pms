@@ -1151,12 +1151,16 @@ class QuotationController extends Controller
         $signerCenter     = $signer?->center?->name ?: 'বিটাক, ঢাকা।';     // English center name with fallback
         $signerEmail      = $signer?->email ?? $center?->email ?? '';
         $signerPhone      = $signer?->phone ?: $center?->phone_bn ?: $center?->phone ?: '';
-        // Prefer the signature captured on THIS approval (per-decision audit).
-        // Fall back to the approver's stored profile signature when not present.
-        $sigPath     = $finalApproval?->signatureAbsolutePath()
-                     ?? $signer?->signatureAbsolutePath();
+        // Only show a signature image when the quotation has actually been
+        // approved — `$finalApproval` is non-null only after sign-off. For
+        // unapproved/pending quotations we deliberately do NOT fall back to
+        // the preparer's profile signature, otherwise an unapproved PDF
+        // would look as if it had been signed.
+        $sigPath = $finalApproval
+            ? ($finalApproval->signatureAbsolutePath() ?? $finalApproval->approver?->signatureAbsolutePath())
+            : null;
 
-        // Signature image — if uploaded for the signer, render it; otherwise leave blank space.
+        // Signature image — only render if approval exists; otherwise leave blank space.
         $signatureImg = $sigPath
             ? '<img src="' . $sigPath . '" style="height: 50pt; max-width: 160pt;" alt="signature" />'
             : '<div style="height: 36pt;"></div>';
