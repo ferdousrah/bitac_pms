@@ -264,7 +264,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ─── IED Completion Certificates inbox + download ───
-    Route::prefix('ied/completion-certificates')->name('ied.completion-certificates.')->group(function () {
+    Route::prefix('ied/completion-certificates')->middleware('permission:view completion-certificates')->name('ied.completion-certificates.')->group(function () {
         Route::get('/',                            [\App\Http\Controllers\CompletionCertificateController::class, 'index'])->name('index');
         Route::get('/{certificate}/download',      [\App\Http\Controllers\CompletionCertificateController::class, 'download'])->name('download');
         Route::get('/{certificate}/preview',       [\App\Http\Controllers\CompletionCertificateController::class, 'preview'])->name('preview');
@@ -598,6 +598,7 @@ Route::middleware(['auth'])->group(function () {
             ->parameters(['material-categories' => 'materialCategory'])
             ->except(['show']);
         Route::resource('gate-pass-condition-notes', \App\Http\Controllers\Admin\GatePassConditionNoteController::class)
+            ->middleware('permission:manage gate-pass-notes')
             ->names('admin.gate-pass-condition-notes')
             ->parameters(['gate-pass-condition-notes' => 'gatePassConditionNote'])
             ->except(['show']);
