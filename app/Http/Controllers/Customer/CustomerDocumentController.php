@@ -42,7 +42,7 @@ class CustomerDocumentController extends Controller
             ])
             ->latest('id')
             ->get()
-            ->map(function ($wo) {
+            ->map(function ($wo) use ($customer) {
                 return [
                     'id'          => $wo->id,
                     'wo_number'   => $wo->wo_number,
