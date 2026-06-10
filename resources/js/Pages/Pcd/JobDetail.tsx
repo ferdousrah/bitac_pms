@@ -409,9 +409,17 @@ export default function JobDetail({ job, checklist }: Props) {
                                         <div className="text-[11px] text-surface-600 font-mono mt-0.5">PO No.: {job.customer_po_no}</div>
                                     )}
                                 </div>
-                                <a href={customerPo.url} target="_blank" rel="noreferrer" className="btn-outline btn-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => setPdfPopup({
+                                        open: true,
+                                        url: customerPo.url,
+                                        title: customerPo.filename,
+                                        subtitle: job.customer_po_no ? `PO ${job.customer_po_no}` : 'Customer PO / Work Order Copy',
+                                    })}
+                                    className="btn-outline btn-sm">
                                     <i className="fi fi-rr-eye text-xs leading-none" /> Open
-                                </a>
+                                </button>
                                 <a href={customerPo.url} download={customerPo.filename} className="btn-primary btn-sm">
                                     <i className="fi fi-rr-download text-xs leading-none" /> Download
                                 </a>
