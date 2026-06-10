@@ -56,7 +56,16 @@ class WorkOrderSectionController extends Controller
                 'notes'      => $s->notes,
                 'qc_notes'   => $s->qc_notes,
             ]),
-            'available_sections' => Section::active()->shops()->orderBy('display_order')
+            // Available palette = production shops + QC (so QC can be inserted
+            // as an explicit routing stop). Other functional sections (IED,
+            // PCD, Stores) are intentionally excluded — they aren't shop
+            // floors.
+            'available_sections' => Section::active()
+                ->where(function ($q) {
+                    $q->where('type', 'production_shop')
+                      ->orWhere('code', 'QC');
+                })
+                ->orderBy('display_order')
                 ->get(['id', 'name', 'code', 'name_bn']),
         ]);
     }
