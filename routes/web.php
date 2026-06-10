@@ -268,6 +268,18 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
     });
 
+    // ─── IED Service Demand Log + Report ───
+    Route::prefix('ied/service-demand')->middleware('permission:view service-demand')->name('ied.service-demand.')->group(function () {
+        Route::get('/',                          [\App\Http\Controllers\ServiceDemandController::class, 'index'])->name('index');
+        Route::get('/create',                    [\App\Http\Controllers\ServiceDemandController::class, 'create'])->name('create');
+        Route::post('/',                         [\App\Http\Controllers\ServiceDemandController::class, 'store'])->name('store');
+        Route::get('/report',                    [\App\Http\Controllers\ServiceDemandController::class, 'report'])->name('report');
+        Route::get('/report/export',             [\App\Http\Controllers\ServiceDemandController::class, 'exportReport'])->name('report.export');
+        Route::get('/{serviceDemand}/edit',      [\App\Http\Controllers\ServiceDemandController::class, 'edit'])->name('edit');
+        Route::put('/{serviceDemand}',           [\App\Http\Controllers\ServiceDemandController::class, 'update'])->name('update');
+        Route::delete('/{serviceDemand}',        [\App\Http\Controllers\ServiceDemandController::class, 'destroy'])->name('destroy');
+    });
+
     // ─── IED Consultancy Requests inbox + report ───
     Route::prefix('ied/consultancy-requests')->middleware('permission:view consultancy-requests')->name('ied.consultancy-requests.')->group(function () {
         Route::get('/',                                       [\App\Http\Controllers\ConsultancyRequestController::class, 'index'])->name('index');

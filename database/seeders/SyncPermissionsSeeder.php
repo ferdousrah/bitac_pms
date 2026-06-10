@@ -34,6 +34,7 @@ class SyncPermissionsSeeder extends Seeder
                 'manage complaints',
                 'view completion-certificates', 'manage completion-certificates',
                 'view consultancy-requests', 'manage consultancy-requests',
+                'view service-demand', 'manage service-demand',
                 'manage emergency-requests',
             ],
 
