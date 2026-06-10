@@ -1,5 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
+import PdfPopupModal from '@/Components/PdfPopupModal';
+import { useState } from 'react';
 
 const statusBadge: Record<string, string> = {
     pending: 'badge-slate',
@@ -8,6 +10,7 @@ const statusBadge: Record<string, string> = {
 };
 
 export default function OperationSheetShow({ sheet }: any) {
+    const [pdfOpen, setPdfOpen] = useState(false);
     const steps = sheet.steps ?? [];
     const totalHours = steps.reduce(
         (acc: number, s: any) => acc + Number(s.estimated_hours || 0),
@@ -51,15 +54,14 @@ export default function OperationSheetShow({ sheet }: any) {
                                     <i className="fi fi-rr-edit text-xs leading-none" />
                                     Edit
                                 </Link>
-                                <a
-                                    href={`/operation-sheets/${sheet.id}/pdf`}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                <button
+                                    type="button"
+                                    onClick={() => setPdfOpen(true)}
                                     className="btn-danger btn-sm"
                                 >
                                     <i className="fi fi-rr-file-pdf text-xs leading-none" />
-                                    Download PDF
-                                </a>
+                                    View PDF
+                                </button>
                                 {sheet.qr_code && (
                                     <a
                                         href={`data:image/svg+xml;base64,${sheet.qr_code}`}
@@ -259,6 +261,14 @@ export default function OperationSheetShow({ sheet }: any) {
                     )}
                 </div>
             </div>
+
+            <PdfPopupModal
+                open={pdfOpen}
+                pdfUrl={pdfOpen ? `/operation-sheets/${sheet.id}/pdf?preview=base64` : null}
+                title={`Operation Sheet ${sheet.sheet_number}`}
+                subtitle={sheet.work_order?.wo_number ?? sheet.work_order_wo_number}
+                onClose={() => setPdfOpen(false)}
+            />
         </AppLayout>
     );
 }

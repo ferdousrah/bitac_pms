@@ -18,9 +18,9 @@
         </dl>
     </div>
     <div>
-        @if($qrCode)
+        @if(!empty($qrCode))
         <div class="qr-block">
-            <img src="data:image/png;base64,{{ $qrCode }}" alt="QR">
+            <img src="data:image/svg+xml;base64,{{ $qrCode }}" alt="QR">
             <div class="qr-label">Scan to view on mobile</div>
         </div>
         @endif

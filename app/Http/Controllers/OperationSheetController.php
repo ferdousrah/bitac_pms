@@ -317,9 +317,25 @@ class OperationSheetController extends Controller
         ]);
     }
 
-    public function pdf(OperationSheet $sheet)
+    public function pdf(\Illuminate\Http\Request $request, OperationSheet $sheet)
     {
-        return $this->service->generatePdf($sheet)->download("operation-sheet-{$sheet->sheet_number}.pdf");
+        $pdf = $this->service->generatePdf($sheet);
+        $filename = "operation-sheet-{$sheet->sheet_number}.pdf";
+
+        // base64 mode bypasses download-manager extensions (IDM/FDM) — used
+        // by the PdfPopupModal to render inline without a forced download.
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'data'     => base64_encode($pdf->output()),
+                'filename' => $filename,
+            ]);
+        }
+
+        // Inline preview when ?preview=1 (modal fallback / new-tab open),
+        // otherwise force download.
+        return $request->query('preview')
+            ? $pdf->stream($filename)
+            : $pdf->download($filename);
     }
 
     public function qr(OperationSheet $sheet)

@@ -23,7 +23,22 @@ class OperationSheetService
     public function generatePdf(OperationSheet $sheet): mixed
     {
         $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre', 'approvedBy']);
-        return Pdf::loadView('pdf.operation_sheet', ['sheet' => $sheet])
+
+        // QR image for the PDF — base64-encoded SVG (DomPDF handles svg+xml).
+        // Gracefully degrade to null if generation fails (e.g. imagick missing).
+        $qrCode = null;
+        try {
+            if ($sheet->qr_code) {
+                $qrCode = $this->generateQrImage($sheet->qr_code);
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Operation sheet QR generation failed', ['error' => $e->getMessage()]);
+        }
+
+        return Pdf::loadView('pdf.operation_sheet', [
+                    'sheet'  => $sheet,
+                    'qrCode' => $qrCode,
+                ])
                   ->setPaper('a4', 'portrait');
     }
 
