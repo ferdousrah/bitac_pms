@@ -91,8 +91,7 @@ class InvoiceService
 
         // ── Title ──────────────────────────────────────────────────
         $titleBlock = '<div style="text-align: center; margin-bottom: 12pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">কর চালান</div>'
-            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt; font-weight: bold;">(TAX INVOICE)</div>'
+            . '<div style="font-size: 13pt; color: #000; font-weight: bold;">INVOICE</div>'
             . '</div>';
 
         // ── Billed To / Invoice meta blocks ───────────────────────

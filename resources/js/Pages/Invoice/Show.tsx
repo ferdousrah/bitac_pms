@@ -178,6 +178,12 @@ export default function InvoiceShow({ invoice }: any) {
                                     {formatAmount(invoice.vat_amount)}
                                 </span>
                             </div>
+                            <div className="flex justify-between py-2 border-b border-surface-100">
+                                <span className="text-surface-600">Tax ({invoice.tax_rate ?? 0}%)</span>
+                                <span className="font-mono text-surface-900">
+                                    {formatAmount(invoice.tax_amount ?? 0)}
+                                </span>
+                            </div>
                             <div className="flex justify-between py-3 mt-1 font-bold text-base border-t-2 border-surface-200">
                                 <span className="text-surface-900">Total</span>
                                 <span className="font-mono text-surface-900">

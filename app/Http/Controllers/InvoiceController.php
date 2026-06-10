@@ -80,6 +80,8 @@ class InvoiceController extends Controller
                 'discount'          => $invoice->discount ?? 0,
                 'vat_rate'          => $invoice->vat_rate,
                 'vat_amount'        => $invoice->vat_amount,
+                'tax_rate'          => $invoice->tax_rate,
+                'tax_amount'        => $invoice->tax_amount,
                 'total_amount'      => $invoice->total_amount,
                 'status'            => $invoice->status,
                 'issued_date'       => $invoice->issued_at?->format('d M Y'),

@@ -1,6 +1,6 @@
 @extends('pdf.layout')
 
-@section('doc_title', 'TAX INVOICE')
+@section('doc_title', 'INVOICE')
 @section('doc_number', $invoice->invoice_number)
 @section('doc_date', 'Date: ' . \Carbon\Carbon::parse($invoice->issued_date)->format('d M Y'))
 
