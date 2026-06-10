@@ -246,7 +246,7 @@ function SortableStepCard({
 
                         {/* Machine */}
                         <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
-                            <label className="form-label">Machine *</label>
+                            <label className="form-label">Machine <span className="form-label-optional">optional</span></label>
                             <select
                                 value={step.machine_id}
                                 onChange={(e) =>
@@ -254,7 +254,6 @@ function SortableStepCard({
                                 }
                                 className="form-select"
                                 disabled={!sectionKey}
-                                required
                             >
                                 <option value="">
                                     {sectionKey
@@ -271,7 +270,7 @@ function SortableStepCard({
 
                         {/* Operator */}
                         <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
-                            <label className="form-label">Operator *</label>
+                            <label className="form-label">Operator <span className="form-label-optional">optional</span></label>
                             <select
                                 value={step.operator_id}
                                 onChange={(e) =>
@@ -279,7 +278,6 @@ function SortableStepCard({
                                 }
                                 className="form-select"
                                 disabled={!sectionKey}
-                                required
                             >
                                 <option value="">
                                     {sectionKey
