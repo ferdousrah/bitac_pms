@@ -198,16 +198,21 @@ export function filterNav(userPerms: string[], isSuperAdmin: boolean) {
 export function flatGroups(
     userPerms: string[],
     isSuperAdmin: boolean,
-    productionSections: Array<{ id: number; name: string; code: string }> = [],
+    productionSections: Array<{ id: number; name: string; code: string; pending_count?: number }> = [],
 ): NavGroup[] {
     // Build a copy of mainGroups with per-section items injected into Production
     // BEFORE filtering, so the Production group isn't dropped for being empty.
-    const sectionItems: NavItem[] = productionSections.map(s => ({
-        label: s.name,
-        href: `/production/queue?section=${s.id}`,
-        icon: 'fi-rr-tools',
-        permission: 'view production',
-    }));
+    const sectionItems: NavItem[] = productionSections.map(s => {
+        const count = s.pending_count ?? 0;
+        return {
+            // Count appended to the label so it renders inline without
+            // needing a separate badge slot in the layout.
+            label: count > 0 ? `${s.name} (${count})` : s.name,
+            href: `/production/queue?section=${s.id}`,
+            icon: 'fi-rr-tools',
+            permission: 'view production',
+        };
+    });
 
     const expandedMain = mainGroups.map(g =>
         g.label === 'Production'

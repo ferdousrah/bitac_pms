@@ -92,7 +92,24 @@ class HandleInertiaRequests extends Middleware
                 if (!$isSuperAdmin && $user->section_id) {
                     $q->where('id', $user->section_id);
                 }
-                return $q->get(['id', 'name', 'code'])->toArray();
+                $sections = $q->get(['id', 'name', 'code']);
+
+                // Tally pending operation steps per section so the sidebar can
+                // surface a count badge — "still to be picked up on the floor".
+                $pendingBySection = \App\Models\OperationStep::query()
+                    ->whereIn('section_id', $sections->pluck('id'))
+                    ->where('status', 'pending')
+                    ->selectRaw('section_id, COUNT(*) as cnt')
+                    ->groupBy('section_id')
+                    ->pluck('cnt', 'section_id')
+                    ->all();
+
+                return $sections->map(fn ($s) => [
+                    'id'            => $s->id,
+                    'name'          => $s->name,
+                    'code'          => $s->code,
+                    'pending_count' => (int) ($pendingBySection[$s->id] ?? 0),
+                ])->toArray();
             },
             'appSettings' => function () {
                 $s = app(SettingService::class);
