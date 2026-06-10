@@ -319,23 +319,166 @@ class OperationSheetController extends Controller
 
     public function pdf(\Illuminate\Http\Request $request, OperationSheet $sheet)
     {
-        $pdf = $this->service->generatePdf($sheet);
+        $sheet->load([
+            'workOrder.product', 'workOrder.customer',
+            'steps.machine.workCentre', 'steps.machine.section',
+            'steps.operator', 'approvedBy.center',
+        ]);
+
+        $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $fmt = fn($v) => $v === null || $v === '' ? '—' : number_format((float) $v, 2);
+
+        $sheetNo   = $esc($sheet->sheet_number);
+        $woNumber  = $esc($sheet->workOrder?->wo_number ?? '—');
+        $product   = $esc($sheet->workOrder?->product?->name ?? '—');
+        $customer  = $esc($sheet->workOrder?->customer?->name ?? '—');
+        $quantity  = $sheet->workOrder?->quantity ?? 0;
+        $dueDate   = $sheet->workOrder?->due_date?->format('d/m/Y') ?? '—';
+        $issuedAt  = $sheet->created_at?->format('d/m/Y') ?? '';
+
+        // Memo block — sheet no left, date right
+        $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
+            . '<tr>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $sheetNo . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issuedAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            . '</tr>'
+            . '</table>';
+
+        // Centered title — কাজের তালিকা / (OPERATION SHEET)
+        $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
+            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">কাজের তালিকা</div>'
+            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(OPERATION SHEET)</div>'
+            . '</div>';
+
+        // Job header block — two columns
+        $headerBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt; border-collapse: collapse; border: 0.75pt solid #000;">'
+            . '<tr>'
+            .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
+            .     '<div><b>WO No:</b> ' . $woNumber . '</div>'
+            .     '<div><b>Product:</b> ' . $product . '</div>'
+            .     '<div><b>Quantity:</b> ' . $esc($fmt($quantity)) . ' pcs</div>'
+            .   '</td>'
+            .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
+            .     '<div><b>Customer:</b> ' . $customer . '</div>'
+            .     '<div><b>Due Date:</b> ' . $esc($dueDate) . '</div>'
+            .     '<div><b>Total Steps:</b> ' . $sheet->steps->count() . ' · <b>Est. Hours:</b> ' . $esc($fmt((float) $sheet->steps->sum('estimated_hours'))) . '</div>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        // Operation Steps table
+        $stepsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-top: 4pt; table-layout: fixed;">';
+        $stepsHtml .= '<colgroup>'
+            . '<col style="width: 5%;" />'
+            . '<col style="width: 22%;" />'
+            . '<col style="width: 16%;" />'
+            . '<col style="width: 14%;" />'
+            . '<col style="width: 15%;" />'
+            . '<col style="width: 8%;" />'
+            . '<col style="width: 20%;" />'
+            . '</colgroup>';
+        $stepsHtml .= '<tr>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Seq</th>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Operation</th>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Machine</th>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Work Centre</th>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Operator</th>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Est. Hrs</th>';
+        $stepsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Sign-off</th>';
+        $stepsHtml .= '</tr>';
+
+        if ($sheet->steps->isEmpty()) {
+            $stepsHtml .= '<tr><td colspan="7" style="border: 0.75pt solid #000; padding: 10pt; text-align: center; font-style: italic; font-size: 10pt;">No steps defined</td></tr>';
+        } else {
+            foreach ($sheet->steps as $i => $step) {
+                $sl = str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
+                $stepsHtml .= '<tr>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $sl . '</td>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 10pt; font-weight: bold; vertical-align: top;">'
+                              . $esc($step->operation_name)
+                              . ($step->instructions ? '<div style="font-size: 8.5pt; color: #4b5563; font-weight: normal; margin-top: 2pt; line-height: 1.3;">' . nl2br($esc($step->instructions), false) . '</div>' : '')
+                              . '</td>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 9pt; vertical-align: top;">' . $esc($step->machine?->name ?? '—') . '</td>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 9pt; vertical-align: top;">' . $esc($step->machine?->workCentre?->name ?? '—') . '</td>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 9pt; vertical-align: top;">' . $esc($step->operator?->name ?? '—') . '</td>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($step->estimated_hours) . '</td>';
+                $stepsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 9pt; color: #94a3b8; font-style: italic; vertical-align: top;">Date &amp; sign</td>';
+                $stepsHtml .= '</tr>';
+            }
+        }
+        $stepsHtml .= '</table>';
+
+        // QR code (optional, top-right of the steps area)
+        $qrBlock = '';
+        try {
+            if ($sheet->qr_code) {
+                $qrBase64 = $this->service->generateQrImage($sheet->qr_code);
+                $qrBlock = '<div style="text-align: right; margin-top: 8pt; font-size: 8.5pt; color: #4b5563;">'
+                    . '<img src="data:image/svg+xml;base64,' . $qrBase64 . '" style="height: 64pt; width: 64pt;" alt="QR">'
+                    . '<div style="margin-top: 2pt;">Scan to view on mobile</div>'
+                    . '</div>';
+            }
+        } catch (\Throwable $e) { /* graceful skip */ }
+
+        // ─── Signature block — Prepared / Approved ───
+        $preparer    = $sheet->approvedBy ?? auth()->user();
+        $preparerSig = $preparer?->signatureAbsolutePath();
+        $preparerName   = $esc($preparer?->name ?? '—');
+        $preparerTitle  = $esc($preparer?->designation ?? '');
+        $preparerCenter = $esc($preparer?->center?->name ?? '');
+        $preparerPhone  = $esc($preparer?->phone ?? '');
+        $preparerEmail  = $esc($preparer?->email ?? '');
+
+        $sigImg = $preparerSig
+            ? '<img src="' . $preparerSig . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
+            : '<div style="height: 40pt;"></div>';
+
+        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
+            . '<tr>'
+            .   '<td width="55%" style="vertical-align: bottom; text-align: left;">'
+            .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Prepared / Approved By</div>'
+            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
+            .     ($preparerTitle  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>'  : '')
+            .     ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
+            .     ($preparerPhone  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
+            .     ($preparerEmail  !== '' ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>'  : '')
+            .   '</td>'
+            .   '<td width="10%"></td>'
+            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
+            .     '<div style="height: 40pt;"></div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Section In-Charge</div>'
+            .     '<div style="font-size: 9pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Signature &amp; date</div>'
+            .   '</td>'
+            . '</tr>'
+            . '</table>';
+
+        $bodyHtml = <<<HTML
+        {$memoBlock}
+        {$titleBlock}
+        {$headerBlock}
+        {$stepsHtml}
+        {$qrBlock}
+        {$signatureBlock}
+HTML;
+
+        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Operation Sheet {$sheet->sheet_number}");
         $filename = "operation-sheet-{$sheet->sheet_number}.pdf";
 
-        // base64 mode bypasses download-manager extensions (IDM/FDM) — used
-        // by the PdfPopupModal to render inline without a forced download.
         if ($request->query('preview') === 'base64') {
             return response()->json([
-                'data'     => base64_encode($pdf->output()),
                 'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
             ]);
         }
 
-        // Inline preview when ?preview=1 (modal fallback / new-tab open),
-        // otherwise force download.
-        return $request->query('preview')
-            ? $pdf->stream($filename)
-            : $pdf->download($filename);
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
     }
 
     public function qr(OperationSheet $sheet)
