@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const statusBadge: Record<string, string> = {
     pending: 'badge-amber',
@@ -15,6 +16,9 @@ const statusBadge: Record<string, string> = {
 export default function DeliveryIndex({ deliveries, filters }: any) {
     const list = deliveries?.data ?? [];
     const [search, setSearch] = useState(filters?.search ?? '');
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
+        open: false, url: null, title: '',
+    });
 
     const applyFilters = (ov: Record<string, string> = {}) => {
         router.get('/delivery', { search: ov.search ?? search, status: ov.status ?? filters?.status ?? '' }, { preserveState: true, replace: true });
@@ -139,6 +143,18 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                         <i className="fi fi-rr-eye text-sm leading-none" /> View
                                                     </Link>
+                                                    <button
+                                                        type="button"
+                                                        title="Preview Challan PDF"
+                                                        onClick={() => setPdfPopup({
+                                                            open: true,
+                                                            url: `/delivery/${d.id}/pdf?preview=base64`,
+                                                            title: `Challan ${d.challan_number}`,
+                                                            subtitle: d.work_order_number,
+                                                        })}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                        <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
+                                                    </button>
                                                     {d.status !== 'delivered' && (
                                                         <Link href={`/delivery/${d.id}/complete`} title="Mark delivery as complete"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
@@ -222,6 +238,14 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                     )}
                 </div>
             </div>
+
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.open ? pdfPopup.url : null}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup(s => ({ ...s, open: false }))}
+            />
         </AppLayout>
     );
 }

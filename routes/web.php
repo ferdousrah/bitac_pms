@@ -553,6 +553,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('create', [DeliveryController::class, 'create'])->name('delivery.create');
         Route::post('/', [DeliveryController::class, 'store'])->name('delivery.store');
         Route::get('{delivery}', [DeliveryController::class, 'show'])->name('delivery.show');
+        Route::get('{delivery}/pdf', [DeliveryController::class, 'pdf'])->name('delivery.pdf');
         Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->name('delivery.complete');
     });
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DeliveryOrder;
 use App\Models\ProofOfDelivery;
 use App\Models\WorkOrder;
+use App\Services\DeliveryChallanService;
 use App\Services\InvoiceService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -142,6 +143,33 @@ class DeliveryController extends Controller
                 'status'             => $delivery->status,
                 'work_order_id'      => $delivery->work_order_id,
             ],
+        ]);
+    }
+
+    /**
+     * Stream the BITAC-letterhead Delivery Challan PDF. Supports
+     *   ?preview=base64 — JSON-wrapped base64 (used by PdfPopupModal so
+     *                     IDM/FDM extensions don't hijack the download)
+     *   ?preview=1     — inline preview in new tab
+     *   (none)         — force download
+     */
+    public function pdf(Request $request, DeliveryOrder $delivery)
+    {
+        $bytes    = app(DeliveryChallanService::class)->generatePdf($delivery);
+        $filename = "challan-{$delivery->challan_number}.pdf";
+
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
         ]);
     }
 
