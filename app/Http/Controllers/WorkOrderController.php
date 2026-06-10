@@ -222,7 +222,11 @@ class WorkOrderController extends Controller
                         'total'            => $total,
                         'estimated_hours'  => round($totalEstimated, 1),
                         'actual_hours'     => round($totalActual, 1),
-                        'efficiency'       => $totalEstimated > 0 ? round(($totalEstimated / max($totalActual, 0.1)) * 100) : null,
+                        // Only meaningful once actual hours have been logged. Otherwise
+                        // dividing by a tiny epsilon gave us absurd 19000% readings.
+                        'efficiency'       => ($totalEstimated > 0 && $totalActual > 0)
+                            ? round(($totalEstimated / $totalActual) * 100)
+                            : null,
                         'current_step'     => $current ? [
                             'sequence'       => $current->sequence,
                             'operation_name' => $current->operation_name,

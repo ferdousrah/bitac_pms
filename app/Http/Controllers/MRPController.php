@@ -13,19 +13,24 @@ class MRPController extends Controller
 
     public function show(WorkOrder $workOrder)
     {
-        $workOrder->load(['product', 'customer', 'bom.items.material', 'materialRequisitions']);
+        $workOrder->load(['product', 'customer', 'bom.items.material']);
 
-        $mrpItems = $workOrder->materialRequisitions->map(fn($m) => [
-            'id'             => $m->id,
-            'material_name'  => $m->material_name,
-            'material_code'  => $m->material_code ?? '',
-            'bom_qty'        => $m->bom_qty ?? $m->required_qty,
-            'required_qty'   => $m->required_qty,
-            'unit'           => $m->unit,
-            'available'      => $m->status !== 'shortage',
-            'stock_qty'      => $m->stock_qty ?? null,
-            'lead_time_days' => $m->lead_time_days ?? null,
-        ]);
+        // Run the calculation each time the page loads — it reads from BOM +
+        // IMS stock so values are always fresh. Cheap to recompute.
+        $mrp = $this->mrpService->calculate($workOrder);
+
+        $mrpItems = collect($mrp['materials'] ?? [])->map(fn ($m, $idx) => [
+            'id'             => $idx + 1,
+            'material_name'  => $m['material_name'],
+            'material_code'  => $m['material_code'] ?? '',
+            'required_qty'   => $m['required_qty'],
+            'available_qty'  => $m['available_qty'] ?? 0,
+            'shortage_qty'   => $m['shortage_qty'] ?? 0,
+            'unit'           => $m['unit'] ?? 'pcs',
+            'wastage_pct'    => $m['wastage_pct'] ?? 0,
+            'available'      => ! ($m['has_shortage'] ?? false),
+            'ims_status'     => $m['ims_status'] ?? 'unavailable',
+        ])->values();
 
         return Inertia::render('MRP/Show', [
             'workOrder' => [
@@ -36,8 +41,10 @@ class MRPController extends Controller
                 'quantity' => $workOrder->quantity,
             ],
             'mrpItems'     => $mrpItems,
+            'bomError'     => $mrp['error'] ?? null,
+            'bomVersion'   => $mrp['bom_version'] ?? null,
             'imsAvailable' => !empty(config('ims.base_url')),
-            'canRunMrp'    => auth()->user()->can('manage production'),
+            'canRunMrp'    => auth()->user()->can('manage production') || auth()->user()->can('run mrp'),
         ]);
     }
 

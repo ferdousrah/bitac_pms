@@ -1,7 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 
-export default function MRPShow({ workOrder, mrpItems, imsAvailable, canRunMrp }: any) {
+export default function MRPShow({ workOrder, mrpItems, imsAvailable, canRunMrp, bomError }: any) {
     const { post, processing } = useForm({});
 
     const items = mrpItems ?? [];
@@ -10,6 +10,24 @@ export default function MRPShow({ workOrder, mrpItems, imsAvailable, canRunMrp }
     return (
         <AppLayout header={`MRP — ${workOrder.wo_number}`}>
             <div className="max-w-5xl animate-fade-in space-y-6">
+
+                {bomError && (
+                    <div className="card border-amber-200 bg-amber-50/50">
+                        <div className="card-body flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                <i className="fi fi-rr-triangle-warning text-base leading-none" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-bold text-amber-900">MRP cannot run yet</h3>
+                                <p className="text-xs text-amber-700/90 mt-1">{bomError}</p>
+                                <p className="text-[11px] text-amber-700/70 mt-2">
+                                    Create a Bill of Materials (BOM) for this product to enable MRP. Until then, requisitions can still be created manually from PCD.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="card">
                     <div className="card-body">

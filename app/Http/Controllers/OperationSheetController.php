@@ -340,7 +340,7 @@ class OperationSheetController extends Controller
         // Memo block — sheet no left, date right
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $jobNumber . '</td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">জব নম্বরঃ</span> ' . $jobNumber . '</td>'
             .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issuedAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
