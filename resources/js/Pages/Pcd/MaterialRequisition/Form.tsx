@@ -57,6 +57,7 @@ interface Props {
     work_order: WorkOrderFull | null;
     work_orders: WorkOrderOption[];
     materials: MaterialOption[];
+    prefilled_items?: any[];
 }
 
 const emptyItem = (no: number): RequisitionItem => ({
@@ -71,8 +72,29 @@ const emptyItem = (no: number): RequisitionItem => ({
     remarks: '',
 });
 
-export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials }: Props) {
+export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items }: Props) {
     const isEdit = !!requisition?.id;
+
+    // Prefer existing items > prefilled items from cost estimate > 1 empty row.
+    const initialItems: RequisitionItem[] =
+        requisition?.items && requisition.items.length > 0
+            ? requisition.items
+            : (prefilled_items && prefilled_items.length > 0
+                ? prefilled_items.map((p: any) => ({
+                    ...emptyItem(0),
+                    material_id:  p.material_id ?? null,
+                    description:  p.description ?? '',
+                    unit:         p.unit ?? 'pcs',
+                    required_qty: p.required_qty ?? 0,
+                    stock_qty:    p.stock_qty ?? 0,
+                    issue_qty:    p.issue_qty ?? 0,
+                    remarks:      p.remarks ?? '',
+                }))
+                : [emptyItem(1)]);
+
+    const prefilledEstimateNo = (prefilled_items && prefilled_items.length > 0)
+        ? prefilled_items[0]?.estimate_no
+        : null;
 
     const { data, setData, post, put, processing, errors } = useForm<{
         work_order_id: number | string;
@@ -85,10 +107,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
         request_date: requisition?.request_date ?? new Date().toISOString().slice(0, 10),
         status: requisition?.status ?? 'draft',
         notes: requisition?.notes ?? '',
-        items:
-            requisition?.items && requisition.items.length > 0
-                ? requisition.items
-                : [emptyItem(1)],
+        items: initialItems,
     });
 
     const selectedWorkOrder = useMemo<WorkOrderFull | WorkOrderOption | null>(() => {
@@ -301,6 +320,22 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                             Add Row
                         </button>
                     </div>
+
+                    {/* Pre-fill source banner — appears when items were auto-loaded from the cost estimate */}
+                    {!isEdit && prefilledEstimateNo && (
+                        <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-start gap-2.5">
+                            <i className="fi fi-rr-check-circle text-emerald-600 text-sm leading-none mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-emerald-900">
+                                    Pre-filled from Cost Estimate <span className="font-mono">{prefilledEstimateNo}</span>
+                                </p>
+                                <p className="text-[11px] text-emerald-700/80 mt-0.5">
+                                    Materials are auto-populated from what was originally costed — quantities are scaled to this work order's job quantity.
+                                    Review and adjust before saving.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     <div className="card-body overflow-x-auto">
                         <table className="premium-table">
                             <thead>

@@ -44,9 +44,15 @@ class MaterialRequisitionController extends Controller
             ? WorkOrder::with('customer', 'rfq.items.product')->findOrFail($request->query('work_order_id'))
             : null;
 
+        // Pre-fill material lines from the cost estimate that drives this WO.
+        // Eliminates the chance of PCD picking a different material than what
+        // was actually costed and quoted.
+        $prefilledItems = $workOrder ? $this->materialLinesFromEstimate($workOrder) : [];
+
         return Inertia::render('Pcd/MaterialRequisition/Form', [
-            'requisition' => null,
-            'work_order'  => $workOrder ? $this->serializeWorkOrder($workOrder) : null,
+            'requisition'     => null,
+            'work_order'      => $workOrder ? $this->serializeWorkOrder($workOrder) : null,
+            'prefilled_items' => $prefilledItems,
             'work_orders' => WorkOrder::with('customer')
                 ->whereIn('status', ['pcd_pending', 'released_to_shops'])
                 ->orderByDesc('id')
@@ -59,6 +65,46 @@ class MaterialRequisitionController extends Controller
                 ]),
             'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'unit', 'rate_per_kg']),
         ]);
+    }
+
+    /**
+     * Pull material lines from the cost estimate tied to this work order.
+     * Lookup order: WO.quotation.id → CostEstimate.quotation_id, else
+     * WO.rfq_id → CostEstimate.rfq_id (latest). Returns rows shaped for the
+     * requisition form's items table — material_id, qty, unit, description.
+     */
+    private function materialLinesFromEstimate(WorkOrder $wo): array
+    {
+        $estimate = null;
+        if ($wo->quotation_id) {
+            $estimate = \App\Models\CostEstimate::where('quotation_id', $wo->quotation_id)
+                ->latest('id')->first();
+        }
+        if (!$estimate && $wo->rfq_id) {
+            $estimate = \App\Models\CostEstimate::where('rfq_id', $wo->rfq_id)
+                ->latest('id')->first();
+        }
+        if (!$estimate) return [];
+
+        $jobQty = max(1, (int) ($estimate->job_quantity ?: 1));
+
+        return $estimate->lines()
+            ->where('section', 'material')
+            ->with('material:id,name,unit')
+            ->get()
+            ->map(fn ($l) => [
+                'material_id'   => $l->material_id,
+                'material_name' => $l->material?->name ?? $l->description,
+                'description'   => $l->description,
+                'unit'          => $l->unit ?: ($l->material?->unit ?? 'pcs'),
+                // Scale per-piece estimate quantity by WO quantity so a 10-piece
+                // job pulls 10× the material the cost sheet assumes.
+                'required_qty'  => round(((float) $l->quantity) * (max(1, (int) $wo->quantity) / $jobQty), 3),
+                'stock_qty'     => 0,
+                'issue_qty'     => 0,
+                'remarks'       => null,
+                'estimate_no'   => $estimate->estimate_no,
+            ])->values()->toArray();
     }
 
     public function store(Request $request)
