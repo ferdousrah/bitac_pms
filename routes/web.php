@@ -512,6 +512,7 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:view schedule')->group(function () {
         Route::get('/schedule', [ScheduleController::class, 'index'])->name('schedule.index');
         Route::post('/schedule', [ScheduleController::class, 'store'])->name('schedule.store');
+        Route::post('/schedule/auto', [ScheduleController::class, 'autoSchedule'])->name('schedule.auto');
     });
 
     // Shop Floor

@@ -29,8 +29,13 @@ function GanttBar({ job, startHour, totalHours }: { job: any; startHour: number;
     );
 }
 
-export default function ScheduleIndex({ ganttData, dateRange, conflicts }: any) {
+export default function ScheduleIndex({ ganttData, dateRange, conflicts, unscheduledCount = 0, currentStart }: any) {
     const machines: string[] = ganttData ? Object.keys(ganttData) : [];
+
+    const runAutoSchedule = () => {
+        if (!confirm(`Auto-schedule ${unscheduledCount} pending operation step(s) starting ${dateRange?.label?.split(' – ')[0]}?\n\nThe system will fill each machine's shifts in WO order. You can adjust afterwards.`)) return;
+        router.post('/schedule/auto', { start: currentStart });
+    };
     const totalHours = 16; // 7am–11pm display window
     const hours = Array.from({ length: totalHours + 1 }, (_, i) => i + 7);
 
@@ -44,6 +49,11 @@ export default function ScheduleIndex({ ganttData, dateRange, conflicts }: any) 
                             <p className="text-xs text-surface-400 mt-0.5">Gantt view of jobs across machines and work centres</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
+                            {unscheduledCount > 0 && (
+                                <button onClick={runAutoSchedule} className="btn-primary btn-xs">
+                                    <i className="fi fi-rr-magic-wand text-xs leading-none" /> Auto-Schedule ({unscheduledCount})
+                                </button>
+                            )}
                             <button
                                 onClick={() => router.get('/schedule', { date: dateRange?.prev })}
                                 className="btn-outline btn-xs"
@@ -88,8 +98,19 @@ export default function ScheduleIndex({ ganttData, dateRange, conflicts }: any) 
                                 <div className="empty-state-icon">
                                     <i className="fi fi-rr-calendar" />
                                 </div>
-                                <div className="empty-state-title">No scheduled jobs</div>
-                                <div className="empty-state-text">No jobs are scheduled for this period.</div>
+                                <div className="empty-state-title">No scheduled jobs for this period</div>
+                                <div className="empty-state-text">
+                                    {unscheduledCount > 0
+                                        ? `${unscheduledCount} operation step(s) are awaiting scheduling. Click below to auto-schedule them.`
+                                        : 'There are no pending operation steps to schedule yet. Create an Operation Sheet with machine assignments first.'}
+                                </div>
+                                {unscheduledCount > 0 && (
+                                    <div className="mt-4">
+                                        <button onClick={runAutoSchedule} className="btn-primary btn-sm">
+                                            <i className="fi fi-rr-magic-wand text-xs leading-none" /> Auto-Schedule {unscheduledCount} Step{unscheduledCount !== 1 ? 's' : ''}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ) : (
