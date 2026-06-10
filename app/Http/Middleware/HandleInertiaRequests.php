@@ -94,15 +94,27 @@ class HandleInertiaRequests extends Middleware
                 }
                 $sections = $q->get(['id', 'name', 'code']);
 
-                // Tally pending operation steps per section so the sidebar can
-                // surface a count badge — "still to be picked up on the floor".
-                $pendingBySection = \App\Models\OperationStep::query()
-                    ->whereIn('section_id', $sections->pluck('id'))
-                    ->where('status', 'pending')
-                    ->selectRaw('section_id, COUNT(*) as cnt')
-                    ->groupBy('section_id')
-                    ->pluck('cnt', 'section_id')
-                    ->all();
+                // Tally only the CURRENT step per active WO — the section
+                // where the job is right now, not every step that's been
+                // queued. As work moves through the routing, the count
+                // shifts from one section to the next instead of double-
+                // counting every step on every shop's list.
+                $pendingBySection = [];
+                // Look at every operation sheet whose WO isn't already in a
+                // terminal state. The "current" step per sheet (the lowest-
+                // sequence step that isn't completed) is the one currently
+                // sitting in its section's queue.
+                $activeSheets = \App\Models\OperationSheet::query()
+                    ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'delivered', 'cancelled']))
+                    ->with(['steps' => fn ($q) => $q->orderBy('sequence')])
+                    ->get();
+
+                foreach ($activeSheets as $sheet) {
+                    $current = $sheet->steps->first(fn ($s) => $s->status !== 'completed');
+                    if ($current && $current->section_id) {
+                        $pendingBySection[$current->section_id] = ($pendingBySection[$current->section_id] ?? 0) + 1;
+                    }
+                }
 
                 return $sections->map(fn ($s) => [
                     'id'            => $s->id,
