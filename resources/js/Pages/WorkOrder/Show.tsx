@@ -313,7 +313,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                                 <span className={`badge ${qc.result === 'pass' ? 'badge-green' : 'badge-red'}`}>
                                                     {qc.result}
                                                 </span>
-                                                <Link href={`/qc/${qc.id}`} className="btn-ghost btn-xs">
+                                                <Link href={`/qc/inspection/${qc.id}`} className="btn-ghost btn-xs">
                                                     <i className="fi fi-rr-eye text-xs leading-none" /> View
                                                 </Link>
                                             </div>
