@@ -44,6 +44,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Completion Certificates', href: '/ied/completion-certificates', icon: 'fi-rr-diploma', permission: 'view completion-certificates' },
             { label: 'Consultancy Requests',    href: '/ied/consultancy-requests',    icon: 'fi-rr-graduation-cap', permission: 'view consultancy-requests' },
             { label: 'Service Demand Log',      href: '/ied/service-demand',          icon: 'fi-rr-chart-line-up',  permission: 'view service-demand' },
+            { label: 'Stakeholder Forms',       href: '/ied/stakeholder-forms',       icon: 'fi-rr-form',           permission: 'view stakeholder-forms' },
             { label: 'Emergency Requests', href: '/ied/emergency-requests', icon: 'fi-rr-siren-on', permission: 'manage rfqs', badgeKey: 'pending_emergency_requests' },
         ],
     },

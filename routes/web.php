@@ -110,6 +110,11 @@ Route::get('/dashboard/live', [LiveDashboardController::class, 'index'])
 Route::get('/portfolio',         [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
 Route::get('/portfolio/{slug}',  [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
 
+// Public stakeholder form fill — no auth, identified by token.
+Route::get('/stakeholder-form/{token}',             [\App\Http\Controllers\Public\StakeholderFormFillController::class, 'show'])->name('public.stakeholder-form.show');
+Route::post('/stakeholder-form/{token}',            [\App\Http\Controllers\Public\StakeholderFormFillController::class, 'store'])->name('public.stakeholder-form.store');
+Route::get('/stakeholder-form/{token}/success',     [\App\Http\Controllers\Public\StakeholderFormFillController::class, 'success'])->name('public.stakeholder-form.success');
+
 // Public consultancy / student-assistance request form — no auth required.
 Route::get('/consultancy/request',          [\App\Http\Controllers\Public\ConsultancyRequestController::class, 'showForm'])->name('public.consultancy.form');
 Route::post('/consultancy/request',         [\App\Http\Controllers\Public\ConsultancyRequestController::class, 'store'])->name('public.consultancy.store');
@@ -266,6 +271,38 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{gatePass}/pdf',  [GatePassController::class, 'pdf'])->name('pdf');
         Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
+    });
+
+    // ─── IED Stakeholder Forms ──────────────────────────────
+    Route::prefix('ied/stakeholder-forms')->middleware('permission:view stakeholder-forms')->name('ied.stakeholder-forms.')->group(function () {
+        Route::get('/',                              [\App\Http\Controllers\StakeholderFormController::class, 'index'])->name('index');
+        Route::get('/create',                        [\App\Http\Controllers\StakeholderFormController::class, 'create'])->name('create');
+        Route::post('/',                             [\App\Http\Controllers\StakeholderFormController::class, 'store'])->name('store');
+        Route::get('/{stakeholderForm}/edit',        [\App\Http\Controllers\StakeholderFormController::class, 'edit'])->name('edit');
+        Route::put('/{stakeholderForm}',             [\App\Http\Controllers\StakeholderFormController::class, 'update'])->name('update');
+        Route::put('/{stakeholderForm}/builder',     [\App\Http\Controllers\StakeholderFormController::class, 'saveBuilder'])->name('save-builder');
+        Route::post('/{stakeholderForm}/publish',    [\App\Http\Controllers\StakeholderFormController::class, 'publish'])->name('publish');
+        Route::post('/{stakeholderForm}/close',      [\App\Http\Controllers\StakeholderFormController::class, 'close'])->name('close');
+        Route::delete('/{stakeholderForm}',          [\App\Http\Controllers\StakeholderFormController::class, 'destroy'])->name('destroy');
+
+        Route::get('/{stakeholderForm}/distribute',  [\App\Http\Controllers\StakeholderFormController::class, 'distribute'])->name('distribute');
+        Route::post('/{stakeholderForm}/distribute', [\App\Http\Controllers\StakeholderFormController::class, 'sendInvites'])->name('send-invites');
+        Route::post('/{stakeholderForm}/remind',     [\App\Http\Controllers\StakeholderFormController::class, 'sendReminders'])->name('send-reminders');
+
+        Route::get('/{stakeholderForm}/responses',   [\App\Http\Controllers\StakeholderFormController::class, 'responses'])->name('responses');
+        Route::get('/{stakeholderForm}/ai-summary',  [\App\Http\Controllers\StakeholderFormController::class, 'aiSummary'])->name('ai-summary');
+        Route::get('/{stakeholderForm}/export',      [\App\Http\Controllers\StakeholderFormController::class, 'exportCsv'])->name('export-csv');
+    });
+
+    // ─── IED Stakeholder Directory ──────────────────────────
+    Route::prefix('ied/stakeholders')->middleware('permission:view stakeholder-forms')->name('ied.stakeholders.')->group(function () {
+        Route::get('/',                              [\App\Http\Controllers\StakeholderController::class, 'index'])->name('index');
+        Route::get('/create',                        [\App\Http\Controllers\StakeholderController::class, 'create'])->name('create');
+        Route::post('/',                             [\App\Http\Controllers\StakeholderController::class, 'store'])->name('store');
+        Route::get('/{stakeholder}/edit',            [\App\Http\Controllers\StakeholderController::class, 'edit'])->name('edit');
+        Route::put('/{stakeholder}',                 [\App\Http\Controllers\StakeholderController::class, 'update'])->name('update');
+        Route::delete('/{stakeholder}',              [\App\Http\Controllers\StakeholderController::class, 'destroy'])->name('destroy');
+        Route::post('/import',                       [\App\Http\Controllers\StakeholderController::class, 'bulkImport'])->name('import');
     });
 
     // ─── IED Service Demand Log + Report ───
