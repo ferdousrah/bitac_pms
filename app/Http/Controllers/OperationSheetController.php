@@ -329,6 +329,7 @@ class OperationSheetController extends Controller
         $fmt = fn($v) => $v === null || $v === '' ? '—' : number_format((float) $v, 2);
 
         $sheetNo   = $esc($sheet->sheet_number);
+        $jobNumber = $esc($sheet->workOrder?->job_number ?? $sheet->sheet_number);
         $woNumber  = $esc($sheet->workOrder?->wo_number ?? '—');
         $product   = $esc($sheet->workOrder?->product?->name ?? '—');
         $customer  = $esc($sheet->workOrder?->customer?->name ?? '—');
@@ -339,7 +340,7 @@ class OperationSheetController extends Controller
         // Memo block — sheet no left, date right
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $sheetNo . '</td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $jobNumber . '</td>'
             .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issuedAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
@@ -421,10 +422,9 @@ class OperationSheetController extends Controller
             ? '<img src="' . $preparerSig . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
             : '<div style="height: 40pt;"></div>';
 
-        // Prepared/Approved only — anchored to the right side (BITAC convention).
+        // Prepared/Approved — anchored to the left side per the user's preference.
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
-            .   '<td width="55%"></td>'
             .   '<td width="45%" style="vertical-align: bottom; text-align: left;">'
             .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Prepared / Approved By</div>'
@@ -434,6 +434,7 @@ class OperationSheetController extends Controller
             .     ($preparerPhone  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
             .     ($preparerEmail  !== '' ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>'  : '')
             .   '</td>'
+            .   '<td width="55%"></td>'
             . '</tr>'
             . '</table>';
 
