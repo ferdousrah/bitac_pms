@@ -80,8 +80,8 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
         requisition?.items && requisition.items.length > 0
             ? requisition.items
             : (prefilled_items && prefilled_items.length > 0
-                ? prefilled_items.map((p: any) => ({
-                    ...emptyItem(0),
+                ? prefilled_items.map((p: any, i: number) => ({
+                    ...emptyItem(i + 1),
                     material_id:  p.material_id ?? null,
                     description:  p.description ?? '',
                     unit:         p.unit ?? 'pcs',
