@@ -13,7 +13,9 @@ class MRPController extends Controller
 
     public function show(WorkOrder $workOrder)
     {
-        $workOrder->load(['product', 'customer', 'bom.items.material']);
+        // BomItem stores material info as flat columns (material_name,
+        // material_code) — no FK to Material, so we don't eager-load it.
+        $workOrder->load(['product', 'customer', 'bom.items']);
 
         // Run the calculation each time the page loads — it reads from BOM +
         // IMS stock so values are always fresh. Cheap to recompute.
