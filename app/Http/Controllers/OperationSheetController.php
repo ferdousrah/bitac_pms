@@ -408,19 +408,7 @@ class OperationSheetController extends Controller
         }
         $stepsHtml .= '</table>';
 
-        // QR code (optional, top-right of the steps area)
-        $qrBlock = '';
-        try {
-            if ($sheet->qr_code) {
-                $qrBase64 = $this->service->generateQrImage($sheet->qr_code);
-                $qrBlock = '<div style="text-align: right; margin-top: 8pt; font-size: 8.5pt; color: #4b5563;">'
-                    . '<img src="data:image/svg+xml;base64,' . $qrBase64 . '" style="height: 64pt; width: 64pt;" alt="QR">'
-                    . '<div style="margin-top: 2pt;">Scan to view on mobile</div>'
-                    . '</div>';
-            }
-        } catch (\Throwable $e) { /* graceful skip */ }
-
-        // ─── Signature block — Prepared / Approved ───
+        // ─── Signature block — Prepared / Approved only ───
         $preparer    = $sheet->approvedBy ?? auth()->user();
         $preparerSig = $preparer?->signatureAbsolutePath();
         $preparerName   = $esc($preparer?->name ?? '—');
@@ -433,9 +421,11 @@ class OperationSheetController extends Controller
             ? '<img src="' . $preparerSig . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
             : '<div style="height: 40pt;"></div>';
 
+        // Prepared/Approved only — anchored to the right side (BITAC convention).
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
-            .   '<td width="55%" style="vertical-align: bottom; text-align: left;">'
+            .   '<td width="55%"></td>'
+            .   '<td width="45%" style="vertical-align: bottom; text-align: left;">'
             .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Prepared / Approved By</div>'
             .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
@@ -443,12 +433,6 @@ class OperationSheetController extends Controller
             .     ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
             .     ($preparerPhone  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
             .     ($preparerEmail  !== '' ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>'  : '')
-            .   '</td>'
-            .   '<td width="10%"></td>'
-            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
-            .     '<div style="height: 40pt;"></div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Section In-Charge</div>'
-            .     '<div style="font-size: 9pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Signature &amp; date</div>'
             .   '</td>'
             . '</tr>'
             . '</table>';
@@ -458,7 +442,6 @@ class OperationSheetController extends Controller
         {$titleBlock}
         {$headerBlock}
         {$stepsHtml}
-        {$qrBlock}
         {$signatureBlock}
 HTML;
 
