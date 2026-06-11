@@ -60,6 +60,7 @@ class CustomerRfqController extends Controller
             'customer_ref_no'          => 'nullable|string|max:100',
             'required_by'              => 'nullable|date|after_or_equal:today',
             'notes'                    => 'nullable|string|max:1000',
+            'rfq_letter'               => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'items'                    => 'required|array|min:1',
             'items.*.job_description'  => 'nullable|string|max:500',
             'items.*.product_id'       => 'nullable|exists:products,id',
@@ -93,6 +94,12 @@ class CustomerRfqController extends Controller
                 'source'           => 'customer_portal',
                 'created_by'       => null,
             ]);
+
+            if ($request->hasFile('rfq_letter')) {
+                $rfq->update([
+                    'rfq_letter_path' => $request->file('rfq_letter')->store("rfq-letters/{$rfq->id}", 'public'),
+                ]);
+            }
 
             foreach ($validated['items'] as $idx => $item) {
                 $rfqItem = $rfq->items()->create([

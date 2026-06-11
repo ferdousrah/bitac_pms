@@ -41,11 +41,13 @@ export default function CustomerRfqCreate({ products = [] }: any) {
         customer_ref_no: string;
         required_by: string;
         notes: string;
+        rfq_letter: File | null;
         items: Item[];
     }>({
         customer_ref_no: '',
         required_by: '',
         notes: '',
+        rfq_letter: null,
         items: [emptyItem()],
     });
 
@@ -113,7 +115,7 @@ export default function CustomerRfqCreate({ products = [] }: any) {
                     <div className="card-body space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="form-group">
-                                <label className="form-label">Your Ref / PO No. <span className="form-label-optional">optional</span></label>
+                                <label className="form-label">Your Ref No. <span className="form-label-optional">optional</span></label>
                                 <input type="text" value={data.customer_ref_no}
                                     onChange={e => setData('customer_ref_no', e.target.value)}
                                     placeholder="e.g. PO-2026-123"
@@ -134,6 +136,31 @@ export default function CustomerRfqCreate({ products = [] }: any) {
                                 rows={2}
                                 placeholder="Anything BITAC should know — urgency, payment, delivery preferences, etc."
                                 className="form-textarea" />
+                        </div>
+
+                        {/* RFQ Letter upload */}
+                        <div className="form-group">
+                            <label className="form-label">RFQ Letter <span className="form-label-optional">optional · official RFQ document on your letterhead</span></label>
+                            <input type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                onChange={e => setData('rfq_letter', e.target.files?.[0] ?? null)}
+                                className="block w-full text-sm text-surface-500
+                                    file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0
+                                    file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700
+                                    hover:file:bg-brand-100 file:cursor-pointer" />
+                            <p className="text-[10px] text-surface-400 mt-1">PDF / JPG / PNG / DOC / DOCX. Max 10 MB.</p>
+                            {data.rfq_letter && (
+                                <div className="mt-2 inline-flex items-center justify-between gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <i className="fi fi-rr-check text-[10px] leading-none" /> {data.rfq_letter.name}
+                                    </span>
+                                    <button type="button" onClick={() => setData('rfq_letter', null)}
+                                        className="text-emerald-600 hover:text-rose-600">
+                                        <i className="fi fi-rr-cross-small text-xs leading-none" />
+                                    </button>
+                                </div>
+                            )}
+                            {(errors as any).rfq_letter && <p className="form-error">{(errors as any).rfq_letter}</p>}
                         </div>
                     </div>
                 </div>
