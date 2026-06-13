@@ -10,7 +10,7 @@ class Rfq extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'customer_id', 'job_category_id', 'required_by', 'notes', 'rfq_letter_path',
+        'center_id', 'customer_id', 'job_category_id', 'required_by', 'notes', 'rfq_letter_path', 'rfq_letter_title',
         'customer_ref_no', 'job_type',
         'status', 'source', 'created_by', 'reference_type', 'drawing_path', 'sample_received', 'sample_description',
     ];

@@ -97,7 +97,11 @@ class CustomerRfqController extends Controller
 
             if ($request->hasFile('rfq_letter')) {
                 $rfq->update([
-                    'rfq_letter_path' => $request->file('rfq_letter')->store("rfq-letters/{$rfq->id}", 'public'),
+                    'rfq_letter_path'  => $request->file('rfq_letter')->store("rfq-letters/{$rfq->id}", 'public'),
+                    // Customer side auto-titles every uploaded letter as
+                    // "RFQ letter" — keeps the field searchable on the staff
+                    // side without making the customer type something.
+                    'rfq_letter_title' => 'RFQ letter',
                 ]);
             }
 
