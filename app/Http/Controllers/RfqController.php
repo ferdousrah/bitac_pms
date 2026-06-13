@@ -39,10 +39,15 @@ class RfqController extends Controller
             $query->where('customer_id', $customerId);
         }
 
+        // Filter by job type (regular / rnd)
+        if ($jobType = $request->input('job_type')) {
+            $query->where('job_type', $jobType);
+        }
+
         // Sorting
         $sort = $request->input('sort', 'id');
         $dir  = $request->input('dir', 'desc');
-        $allowed = ['id', 'customer_id', 'required_by', 'status', 'created_at'];
+        $allowed = ['id', 'customer_id', 'required_by', 'status', 'created_at', 'job_type'];
         if (in_array($sort, $allowed)) {
             $query->orderBy($sort, $dir === 'asc' ? 'asc' : 'desc');
         } else {
@@ -75,6 +80,7 @@ class RfqController extends Controller
                 'search'      => $request->input('search', ''),
                 'status'      => $request->input('status', ''),
                 'customer_id' => $request->input('customer_id', ''),
+                'job_type'    => $request->input('job_type', ''),
                 'sort'        => $sort,
                 'dir'         => $dir,
             ],
@@ -100,6 +106,8 @@ class RfqController extends Controller
             'job_type'           => 'nullable|in:regular,rnd',
             'required_by'        => 'nullable|date',
             'notes'              => 'nullable|string|max:1000',
+            'rfq_letter'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'rfq_letter_title'   => 'nullable|string|max:200',
             'items'              => 'required|array|min:1',
             'items.*.job_description' => 'nullable|string|max:500',
             'items.*.product_id'      => 'nullable|exists:products,id',
@@ -140,6 +148,13 @@ class RfqController extends Controller
                 'created_by'         => auth()->id(),
                 'status'             => 'pending',
             ]);
+
+            if ($request->hasFile('rfq_letter')) {
+                $rfq->update([
+                    'rfq_letter_path'  => $request->file('rfq_letter')->store("rfq-letters/{$rfq->id}", 'public'),
+                    'rfq_letter_title' => trim($validated['rfq_letter_title'] ?? '') ?: 'RFQ letter',
+                ]);
+            }
 
             foreach ($validated['items'] as $idx => $item) {
                 $rfqItem = $rfq->items()->create([
@@ -202,7 +217,7 @@ class RfqController extends Controller
 
     public function show(Rfq $rfq)
     {
-        $rfq->load(['customer', 'items.product', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
+        $rfq->load(['customer', 'jobCategory', 'items.product', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
 
         return Inertia::render('RFQ/Show', [
             'rfq' => [
@@ -212,7 +227,18 @@ class RfqController extends Controller
                 'created_by'         => $rfq->createdBy?->name,
                 'customer'           => ['name' => $rfq->customer?->name ?? ''],
                 'customer_ref_no'    => $rfq->customer_ref_no,
+                'job_category'       => $rfq->jobCategory ? [
+                    'id'   => $rfq->jobCategory->id,
+                    'name' => $rfq->jobCategory->name,
+                    'code' => $rfq->jobCategory->code,
+                ] : null,
                 'job_type'           => $rfq->job_type ?? 'regular',
+                // Stream the letter through the controller (not the direct
+                // /storage/... URL) so the popup modal's base64 mode works
+                // and IDM/FDM extensions don't intercept the response.
+                'rfq_letter_url'     => $rfq->rfq_letter_path ? route('rfqs.letter', $rfq) : null,
+                'rfq_letter_title'   => $rfq->rfq_letter_title,
+                'rfq_letter_ext'     => $rfq->rfq_letter_path ? strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION)) : null,
                 'gate_passes'        => $rfq->gatePasses->map(fn($gp) => [
                     'id'         => $gp->id,
                     'pass_no'    => $gp->pass_no,
@@ -281,6 +307,9 @@ class RfqController extends Controller
                 'job_type'           => $rfq->job_type ?? 'regular',
                 'required_by'        => $rfq->required_by?->format('Y-m-d'),
                 'notes'              => $rfq->notes,
+                'rfq_letter_url'     => $rfq->rfq_letter_path ? route('rfqs.letter', $rfq) : null,
+                'rfq_letter_title'   => $rfq->rfq_letter_title,
+                'rfq_letter_ext'     => $rfq->rfq_letter_path ? strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION)) : null,
                 'items'              => $rfq->items->map(fn($i) => [
                     'product_id'         => $i->product_id,
                     'job_description'    => $i->job_description,
@@ -319,6 +348,9 @@ class RfqController extends Controller
             'job_type'           => 'nullable|in:regular,rnd',
             'required_by'        => 'nullable|date',
             'notes'              => 'nullable|string|max:1000',
+            'rfq_letter'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'rfq_letter_title'   => 'nullable|string|max:200',
+            'remove_rfq_letter'  => 'nullable|boolean',
             'items'              => 'required|array|min:1',
             'items.*.job_description' => 'nullable|string|max:500',
             'items.*.product_id'      => 'nullable|exists:products,id',
@@ -350,6 +382,27 @@ class RfqController extends Controller
                 'required_by'        => $validated['required_by'] ?? null,
                 'notes'              => $validated['notes'] ?? null,
             ]);
+
+            // RFQ letter: replace, remove, or just rename
+            if ($request->hasFile('rfq_letter')) {
+                if ($rfq->rfq_letter_path) {
+                    Storage::disk('public')->delete($rfq->rfq_letter_path);
+                }
+                $rfq->update([
+                    'rfq_letter_path'  => $request->file('rfq_letter')->store("rfq-letters/{$rfq->id}", 'public'),
+                    'rfq_letter_title' => trim($validated['rfq_letter_title'] ?? '') ?: 'RFQ letter',
+                ]);
+            } elseif ($request->boolean('remove_rfq_letter')) {
+                if ($rfq->rfq_letter_path) {
+                    Storage::disk('public')->delete($rfq->rfq_letter_path);
+                }
+                $rfq->update(['rfq_letter_path' => null, 'rfq_letter_title' => null]);
+            } elseif ($rfq->rfq_letter_path && array_key_exists('rfq_letter_title', $validated)) {
+                // Just renaming the existing letter
+                $rfq->update([
+                    'rfq_letter_title' => trim($validated['rfq_letter_title'] ?? '') ?: 'RFQ letter',
+                ]);
+            }
 
             // Collect gallery-referenced file paths so we don't delete the shared file
             $keepPaths = [];
@@ -411,6 +464,49 @@ class RfqController extends Controller
     {
         $rfq->delete();
         return redirect()->route('rfqs.index')->with('success', 'RFQ deleted.');
+    }
+
+    /**
+     * Stream the customer-uploaded RFQ letter through a controller route so
+     * the PdfPopupModal's XHR-with-base64 trick works (IDM/FDM only intercept
+     * top-level navigation + application/pdf responses).
+     *
+     *   ?preview=base64 → JSON { data, filename }
+     *   ?preview=1      → inline PDF (new tab fallback)
+     *   (none)          → force download
+     */
+    public function letter(Request $request, Rfq $rfq)
+    {
+        abort_unless($rfq->rfq_letter_path, 404, 'No letter attached to this RFQ.');
+        abort_unless(\Storage::disk('public')->exists($rfq->rfq_letter_path), 404, 'Letter file missing on disk.');
+
+        $bytes    = \Storage::disk('public')->get($rfq->rfq_letter_path);
+        $ext      = strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION));
+        $title    = $rfq->rfq_letter_title ?: 'RFQ letter';
+        $filename = preg_replace('/[^A-Za-z0-9 _\-]/', '_', $title) . '.' . $ext;
+        $mime     = match ($ext) {
+            'pdf'         => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png'         => 'image/png',
+            'doc'         => 'application/msword',
+            'docx'        => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            default       => 'application/octet-stream',
+        };
+
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'data'     => base64_encode($bytes),
+                'mime'     => $mime,
+            ]);
+        }
+
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
     }
 
     public function exportPdf(Request $request, Rfq $rfq)

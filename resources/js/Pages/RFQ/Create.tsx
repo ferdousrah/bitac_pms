@@ -137,14 +137,20 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
     };
 
     const { data, setData, post, errors, processing, transform } = useForm({
-        customer_id:      rfq?.customer_id ?? '',
-        job_category_id:  rfq?.job_category_id ?? '',
-        customer_ref_no:  rfq?.customer_ref_no ?? '',
-        job_type:         (rfq?.job_type ?? 'regular') as 'regular' | 'rnd',
-        required_by:      rfq?.required_by ?? '',
-        notes:            rfq?.notes ?? '',
-        items:            initialItems,
+        customer_id:        rfq?.customer_id ?? '',
+        job_category_id:    rfq?.job_category_id ?? '',
+        customer_ref_no:    rfq?.customer_ref_no ?? '',
+        job_type:           (rfq?.job_type ?? 'regular') as 'regular' | 'rnd',
+        required_by:        rfq?.required_by ?? '',
+        notes:              rfq?.notes ?? '',
+        rfq_letter:         null as File | null,
+        rfq_letter_title:   rfq?.rfq_letter_title ?? '',
+        remove_rfq_letter:  false,
+        items:              initialItems,
     });
+
+    const existingLetterUrl: string | null = rfq?.rfq_letter_url ?? null;
+    const existingLetterExt: string | null = rfq?.rfq_letter_ext ?? null;
 
     function setItemField<K extends keyof Item>(index: number, field: K, value: Item[K]) {
         const updated = data.items.map((it, i) => i === index ? { ...it, [field]: value } : it);
@@ -314,6 +320,98 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                     onChange={e => setData('notes', e.target.value)}
                                     placeholder="Special requirements, urgency..."
                                     className="form-input" />
+                            </div>
+
+                            {/* ── Customer's RFQ Letter (optional) ── */}
+                            <div className="form-group">
+                                <label className="form-label">
+                                    Customer's RFQ Letter <span className="form-label-optional">(optional)</span>
+                                </label>
+
+                                {existingLetterUrl && !data.rfq_letter && !data.remove_rfq_letter && (
+                                    <div className="flex items-center gap-3 px-3 py-2.5 mb-2 rounded-lg border border-surface-200 bg-surface-50/60">
+                                        <div className="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                                            <i className={`fi ${existingLetterExt === 'pdf' ? 'fi-rr-file-pdf' : 'fi-rr-document'} text-base leading-none`} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-semibold text-surface-900 truncate">
+                                                {data.rfq_letter_title || 'RFQ letter'}
+                                            </div>
+                                            <div className="text-[10px] text-surface-400 uppercase tracking-wider mt-0.5">
+                                                Currently attached · {existingLetterExt}
+                                            </div>
+                                        </div>
+                                        <a
+                                            href={existingLetterUrl + (existingLetterUrl.includes('?') ? '&' : '?') + 'preview=1'}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-[11px] font-semibold text-brand-600 hover:underline shrink-0"
+                                        >
+                                            View
+                                        </a>
+                                        <button
+                                            type="button"
+                                            onClick={() => setData('remove_rfq_letter', true)}
+                                            className="text-[11px] font-semibold text-rose-600 hover:underline shrink-0"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                )}
+
+                                {existingLetterUrl && data.remove_rfq_letter && !data.rfq_letter && (
+                                    <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg border border-rose-200 bg-rose-50/60 text-[11px] text-rose-700">
+                                        <span><i className="fi fi-rr-trash text-[10px] leading-none mr-1" /> Existing letter will be removed on save.</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setData('remove_rfq_letter', false)}
+                                            className="font-semibold hover:underline"
+                                        >
+                                            Undo
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={data.rfq_letter_title}
+                                            onChange={e => setData('rfq_letter_title', e.target.value)}
+                                            placeholder="Letter title (e.g. RFQ letter, PO copy)"
+                                            className="form-input"
+                                        />
+                                        {errors.rfq_letter_title && <p className="form-error">{errors.rfq_letter_title}</p>}
+                                    </div>
+                                    <div>
+                                        <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                            onChange={e => {
+                                                const f = e.target.files?.[0] ?? null;
+                                                setData('rfq_letter', f);
+                                                if (f) setData('remove_rfq_letter', false);
+                                            }}
+                                            className="block w-full text-xs text-surface-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:text-xs file:font-semibold hover:file:bg-brand-100"
+                                        />
+                                        {data.rfq_letter && (
+                                            <p className="form-hint mt-1 text-brand-600">
+                                                Selected: <strong>{data.rfq_letter.name}</strong>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setData('rfq_letter', null)}
+                                                    className="ml-2 text-[10px] text-rose-600 hover:underline"
+                                                >
+                                                    clear
+                                                </button>
+                                            </p>
+                                        )}
+                                        {errors.rfq_letter && <p className="form-error">{errors.rfq_letter}</p>}
+                                    </div>
+                                </div>
+                                <p className="form-hint">
+                                    Attach the customer's signed RFQ/PO letter. PDF, JPG, PNG, DOC up to 10 MB.
+                                </p>
                             </div>
                         </div>
                     </div>

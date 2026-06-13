@@ -237,6 +237,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('rfqs/{rfq}/pdf', [RfqController::class, 'exportPdf'])
         ->middleware('permission:view rfqs')
         ->name('rfqs.pdf');
+    Route::get('rfqs/{rfq}/letter', [RfqController::class, 'letter'])
+        ->middleware('permission:view rfqs')
+        ->name('rfqs.letter');
 
     // ─── IED Customer Complaint Inbox ─────────────────────────────────
     Route::prefix('ied/complaints')->middleware('permission:manage complaints')->name('ied.complaints.')->group(function () {

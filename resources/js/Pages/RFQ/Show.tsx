@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 import { useState } from 'react';
 import FilePreviewModal, { PreviewableFile } from '@/Components/FilePicker/FilePreviewModal';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const statusBadge: Record<string, string> = {
     pending:  'badge-amber',
@@ -161,6 +162,7 @@ export default function RFQShow({ rfq }: any) {
     const [lightboxFiles, setLightboxFiles] = useState<PreviewableFile[]>([]);
     const [lightboxIndex, setLightboxIndex] = useState(0);
     const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [letterPdfOpen, setLetterPdfOpen] = useState(false);
 
     const openLightbox = (files: any[], index: number) => {
         const previewableFiles: PreviewableFile[] = files.map((f: any) => ({
@@ -201,8 +203,27 @@ export default function RFQShow({ rfq }: any) {
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-surface-400 mt-0.5">
-                                    Received {rfq.created_at} &nbsp;·&nbsp; by {rfq.created_by}
+                                <p className="text-xs text-surface-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                    <span>Received {rfq.created_at}</span>
+                                    {rfq.created_by ? (
+                                        <>
+                                            <span>·</span>
+                                            <span>by <span className="font-semibold text-surface-600">{rfq.created_by}</span></span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span>·</span>
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100 text-[9px] font-semibold uppercase tracking-wide">
+                                                <i className="fi fi-rr-building text-[8px] leading-none" /> via Customer Portal
+                                            </span>
+                                        </>
+                                    )}
+                                    {rfq.customer?.name && (
+                                        <>
+                                            <span>·</span>
+                                            <span>from <span className="font-semibold text-surface-700">{rfq.customer.name}</span></span>
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -354,9 +375,15 @@ export default function RFQShow({ rfq }: any) {
                             </div>
                             <div className="card-body">
                                 {(rfq.gate_passes ?? []).length === 0 ? (
-                                    <p className="text-xs text-surface-400 italic text-center py-4">
-                                        No gate passes issued yet. Issue one when the customer brings or collects a physical sample.
-                                    </p>
+                                    <div className="flex flex-col items-center justify-center py-6 px-4 rounded-xl bg-surface-50/60 border border-dashed border-surface-200">
+                                        <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-surface-400 mb-2">
+                                            <i className="fi fi-rr-shield-check text-base leading-none" />
+                                        </div>
+                                        <div className="text-xs font-semibold text-surface-600">No gate passes issued yet</div>
+                                        <div className="text-[11px] text-surface-400 mt-1 text-center max-w-xs">
+                                            Issue one when the customer brings or collects a physical sample.
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="space-y-2">
                                         {(rfq.gate_passes ?? []).map((gp: any) => {
@@ -495,64 +522,134 @@ export default function RFQShow({ rfq }: any) {
                             </div>
                         )}
 
-                        <div className="card animate-slide-up">
-                            <div className="card-header">
-                                <h3 className="text-sm font-bold text-surface-900">Quick Info</h3>
-                            </div>
-                            <div className="card-body space-y-4">
-                                <div>
-                                    <dt className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Customer</dt>
-                                    <dd className="text-sm font-semibold text-surface-900 mt-1">{rfq.customer?.name}</dd>
-                                    {rfq.customer_ref_no && (
-                                        <dd className="text-xs text-surface-500 mt-0.5">
-                                            Ref: <span className="font-mono font-semibold">{rfq.customer_ref_no}</span>
-                                        </dd>
-                                    )}
+                        <div className="card animate-slide-up overflow-hidden">
+                            {/* Header strip: customer is the hero */}
+                            <div className="px-5 py-4 bg-gradient-to-br from-brand-50/40 via-white to-brand-50/20 border-b border-surface-100">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-white shadow-sm ring-1 ring-brand-100 flex items-center justify-center text-brand-600 shrink-0">
+                                        <i className="fi fi-rr-building text-base leading-none" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Customer</div>
+                                        <div className="text-sm font-bold text-surface-900 mt-0.5 truncate">{rfq.customer?.name}</div>
+                                        {rfq.customer_ref_no && (
+                                            <div className="text-[11px] text-surface-500 mt-0.5">
+                                                Ref <span className="font-mono font-semibold text-surface-700">{rfq.customer_ref_no}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+                            </div>
 
-                                <div className="border-t border-surface-100 pt-3">
-                                    <dt className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Status</dt>
-                                    <dd className="mt-1.5">
-                                        <span className={`badge ${statusBadge[rfq.status] ?? 'badge-slate'}`}>
-                                            {rfq.status}
-                                        </span>
+                            {/* Compact 2-col fact grid — no rule-lines between rows */}
+                            <div className="grid grid-cols-2 gap-y-3 gap-x-4 px-5 py-4">
+                                <div>
+                                    <dt className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Status</dt>
+                                    <dd className="mt-1">
+                                        <span className={`badge ${statusBadge[rfq.status] ?? 'badge-slate'} capitalize`}>{rfq.status}</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Job Type</dt>
+                                    <dd className="mt-1">
+                                        {rfq.job_type === 'rnd' ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold uppercase tracking-wider">
+                                                <i className="fi fi-rr-lab text-[9px] leading-none" /> R&amp;D
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
+                                                <i className="fi fi-rr-tools text-[9px] leading-none" /> Regular
+                                            </span>
+                                        )}
                                     </dd>
                                 </div>
 
-                                {rfq.required_by && (
-                                    <div className="border-t border-surface-100 pt-3">
-                                        <dt className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Required By</dt>
-                                        <dd className="text-sm text-surface-700 mt-1 flex items-center gap-1.5">
-                                            <i className="fi fi-rr-calendar text-surface-400 text-xs leading-none" />
+                                {rfq.required_by ? (
+                                    <div>
+                                        <dt className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Required By</dt>
+                                        <dd className="text-xs font-semibold text-surface-700 mt-1 flex items-center gap-1.5">
+                                            <i className="fi fi-rr-calendar text-surface-400 text-[11px] leading-none" />
                                             {rfq.required_by}
                                         </dd>
                                     </div>
-                                )}
+                                ) : <div />}
 
-                                <div className="border-t border-surface-100 pt-3">
-                                    <dt className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Items</dt>
-                                    <dd className="text-sm font-semibold text-surface-700 mt-1">
-                                        {rfq.items?.length ?? 0} item(s)
+                                <div>
+                                    <dt className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Received</dt>
+                                    <dd className="text-xs font-semibold text-surface-700 mt-1 flex items-center gap-1.5">
+                                        <i className="fi fi-rr-clock text-surface-400 text-[11px] leading-none" />
+                                        {rfq.created_at}
                                     </dd>
+                                    {rfq.created_by && (
+                                        <dd className="text-[10px] text-surface-400 mt-0.5 truncate" title={rfq.created_by}>by {rfq.created_by}</dd>
+                                    )}
                                 </div>
 
-                                {rfq.notes && (
-                                    <div className="border-t border-surface-100 pt-3">
-                                        <dt className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Notes</dt>
-                                        <dd className="text-sm text-surface-600 mt-1">{rfq.notes}</dd>
+                                {rfq.job_category && (
+                                    <div className="col-span-2">
+                                        <dt className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Job Category</dt>
+                                        <dd className="text-xs font-semibold text-surface-700 mt-1 flex items-center gap-1.5">
+                                            <i className="fi fi-rr-tags text-surface-400 text-[11px] leading-none" />
+                                            {rfq.job_category.name}
+                                            {rfq.job_category.code && (
+                                                <span className="font-mono text-[10px] text-surface-400">({rfq.job_category.code})</span>
+                                            )}
+                                        </dd>
                                     </div>
                                 )}
 
-                                <div className="border-t border-surface-100 pt-3">
-                                    <dt className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Received</dt>
-                                    <dd className="text-sm text-surface-600 mt-1">{rfq.created_at}</dd>
-                                    <dd className="text-xs text-surface-400 mt-0.5">by {rfq.created_by}</dd>
-                                </div>
+                                {rfq.notes && (
+                                    <div className="col-span-2 mt-1 px-3 py-2 rounded-lg bg-amber-50/40 border border-amber-100/80">
+                                        <dt className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                                            <i className="fi fi-rr-comment-alt text-[10px] leading-none" /> Internal Note
+                                        </dt>
+                                        <dd className="text-xs text-surface-700 mt-1 leading-relaxed whitespace-pre-line">{rfq.notes}</dd>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* RFQ Letter — full-width clickable card at the bottom */}
+                            {rfq.rfq_letter_url && (
+                                <div className="px-5 pb-4 -mt-1">
+                                    <dt className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider mb-1.5">Customer's RFQ Letter</dt>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (rfq.rfq_letter_ext === 'pdf') {
+                                                setLetterPdfOpen(true);
+                                            } else {
+                                                window.open(rfq.rfq_letter_url, '_blank', 'noreferrer');
+                                            }
+                                        }}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-rose-300 hover:bg-rose-50/40 transition-colors text-left group"
+                                        title="Open attachment"
+                                    >
+                                        <div className="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                                            <i className={`fi ${rfq.rfq_letter_ext === 'pdf' ? 'fi-rr-file-pdf' : 'fi-rr-document'} text-base leading-none`} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-semibold text-surface-900 truncate">{rfq.rfq_letter_title ?? 'RFQ letter'}</div>
+                                            <div className="text-[10px] text-surface-400 uppercase tracking-wider mt-0.5">{rfq.rfq_letter_ext}</div>
+                                        </div>
+                                        <i className="fi fi-rr-arrow-up-right-from-square text-[10px] text-surface-400 group-hover:text-rose-600 leading-none shrink-0" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* RFQ Letter PDF popup */}
+            <PdfPopupModal
+                open={letterPdfOpen}
+                pdfUrl={letterPdfOpen && rfq.rfq_letter_url
+                    ? `${rfq.rfq_letter_url}${rfq.rfq_letter_url.includes('?') ? '&' : '?'}preview=base64`
+                    : null}
+                title={rfq.rfq_letter_title ?? 'RFQ letter'}
+                subtitle={`RFQ #${rfq.id} · ${rfq.customer?.name ?? ''}`}
+                onClose={() => setLetterPdfOpen(false)}
+            />
 
             {/* Lightbox */}
             <FilePreviewModal

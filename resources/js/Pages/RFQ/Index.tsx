@@ -13,11 +13,16 @@ const statusConfig: Record<string, { badge: string; icon: string; label: string 
 export default function RFQIndex({ rfqs, filters, customers }: any) {
     const [search, setSearch] = useState(filters?.search ?? '');
     const applyFilters = (ov: Record<string, string> = {}) => {
-        router.get('/rfqs', { search: ov.search ?? search, status: ov.status ?? filters?.status ?? '', customer_id: ov.customer_id ?? filters?.customer_id ?? '' }, { preserveState: true, replace: true });
+        router.get('/rfqs', {
+            search:      ov.search      ?? search,
+            status:      ov.status      ?? filters?.status      ?? '',
+            customer_id: ov.customer_id ?? filters?.customer_id ?? '',
+            job_type:    ov.job_type    ?? filters?.job_type    ?? '',
+        }, { preserveState: true, replace: true });
     };
     const handleSearch = (e: React.FormEvent) => { e.preventDefault(); applyFilters(); };
     const clearFilters = () => { setSearch(''); router.get('/rfqs', {}, { preserveState: true, replace: true }); };
-    const hasFilters = search || filters?.status || filters?.customer_id;
+    const hasFilters = search || filters?.status || filters?.customer_id || filters?.job_type;
 
     // PDF popup state
     const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
@@ -41,50 +46,52 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
         <AppLayout header="RFQ — Request for Quotation">
             <div className="space-y-6 animate-fade-in">
 
-                {/* Page header */}
-                <div className="page-header">
+                {/* Page header with inline KPI strip */}
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                     <div>
                         <h1 className="page-title">Request for Quotations</h1>
                         <p className="page-subtitle">Manage incoming job requests from customers</p>
                     </div>
-                    <Link href="/rfqs/create" className="btn-primary">
-                        <i className="fi fi-rr-plus text-xs leading-none" /> New RFQ
-                    </Link>
-                </div>
-
-                {/* Quick stat chips */}
-                <div className="flex flex-wrap gap-3">
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-surface-200 shadow-sm">
-                        <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center">
-                            <i className="fi fi-rr-document text-brand-600 text-sm leading-none" />
-                        </div>
-                        <div>
-                            <div className="text-lg font-bold text-surface-900 leading-none tabular-nums">{total}</div>
-                            <div className="text-[10px] text-surface-500 uppercase tracking-wider font-semibold">Total</div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-amber-200 shadow-sm">
-                        <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                            <i className="fi fi-rr-clock text-amber-600 text-sm leading-none" />
-                        </div>
-                        <div>
-                            <div className="text-lg font-bold text-amber-700 leading-none tabular-nums">{pendingCount}</div>
-                            <div className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold">Pending</div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-blue-200 shadow-sm">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                            <i className="fi fi-rr-check text-blue-600 text-sm leading-none" />
-                        </div>
-                        <div>
-                            <div className="text-lg font-bold text-blue-700 leading-none tabular-nums">{quotedCount}</div>
-                            <div className="text-[10px] text-blue-600 uppercase tracking-wider font-semibold">Quoted</div>
-                        </div>
+                    <div className="flex items-center gap-2">
+                        <Link href="/rfqs/create" className="btn-primary">
+                            <i className="fi fi-rr-plus text-xs leading-none" /> New RFQ
+                        </Link>
                     </div>
                 </div>
 
-                {/* Main card */}
-                <div className="card transition-all duration-300 hover:shadow-premium-lg">
+                {/* Main card with integrated KPI rail */}
+                <div className="card transition-all duration-300 hover:shadow-premium-lg overflow-hidden">
+                    {/* KPI rail — three equal cells, no floating chips */}
+                    <div className="grid grid-cols-3 divide-x divide-surface-100 border-b border-surface-100 bg-gradient-to-r from-surface-50/40 via-white to-surface-50/40">
+                        <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5">
+                            <div className="w-9 h-9 rounded-xl bg-brand-50 ring-1 ring-brand-100/60 flex items-center justify-center shrink-0">
+                                <i className="fi fi-rr-document text-brand-600 text-sm leading-none" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[10px] text-surface-500 uppercase tracking-wider font-semibold">Total RFQs</div>
+                                <div className="text-xl font-bold text-surface-900 leading-tight tabular-nums">{total}</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5">
+                            <div className="w-9 h-9 rounded-xl bg-amber-50 ring-1 ring-amber-100/80 flex items-center justify-center shrink-0">
+                                <i className="fi fi-rr-clock text-amber-600 text-sm leading-none" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[10px] text-amber-700 uppercase tracking-wider font-semibold">Pending Review</div>
+                                <div className="text-xl font-bold text-surface-900 leading-tight tabular-nums">{pendingCount}</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5">
+                            <div className="w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100/80 flex items-center justify-center shrink-0">
+                                <i className="fi fi-rr-check text-blue-600 text-sm leading-none" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[10px] text-blue-700 uppercase tracking-wider font-semibold">Quoted</div>
+                                <div className="text-xl font-bold text-surface-900 leading-tight tabular-nums">{quotedCount}</div>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Search + Filters */}
                     <div className="px-4 sm:px-5 py-3.5 border-b border-surface-100">
                         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2.5">
@@ -100,6 +107,12 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                 <option value="pending">⏳ Pending</option>
                                 <option value="quoted">✅ Quoted</option>
                                 <option value="rejected">❌ Rejected</option>
+                            </select>
+                            <select value={filters?.job_type ?? ''} onChange={e => applyFilters({ job_type: e.target.value })}
+                                className="form-select !py-2 text-sm w-full sm:w-36">
+                                <option value="">All Job Types</option>
+                                <option value="regular">🛠 Regular</option>
+                                <option value="rnd">🧪 R&amp;D</option>
                             </select>
                             <select value={filters?.customer_id ?? ''} onChange={e => applyFilters({ customer_id: e.target.value })}
                                 className="form-select !py-2 text-sm w-full sm:w-44">
@@ -119,12 +132,13 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                             <table className="premium-table">
                                 <thead>
                                     <tr>
-                                        <SortableHeader label="RFQ #" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
+                                        <SortableHeader label="RFQ #" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-24" />
+                                        <th className="w-32">Ref No.</th>
                                         <SortableHeader label="Customer" column="customer_id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} />
                                         <th>Job Items</th>
                                         <SortableHeader label="Required By" column="required_by" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
                                         <SortableHeader label="Status" column="status" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
-                                        <SortableHeader label="Received" column="created_at" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-36" />
+                                        <SortableHeader label="Job Type" column="job_type" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
                                         <th className="w-32 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -142,17 +156,15 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                                     R&amp;D
                                                                 </span>
                                                             )}
-                                                            {rfq.source === 'customer_portal' && (
-                                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 text-[9px] font-bold uppercase tracking-wider"
-                                                                    title="Submitted via customer portal">
-                                                                    <i className="fi fi-rr-building text-[8px] leading-none" /> Customer
-                                                                </span>
-                                                            )}
                                                         </div>
-                                                        {rfq.customer_ref_no && (
-                                                            <div className="text-[10px] text-surface-400 mt-0.5 font-mono">{rfq.customer_ref_no}</div>
-                                                        )}
                                                     </Link>
+                                                </td>
+                                                <td>
+                                                    {rfq.customer_ref_no ? (
+                                                        <span className="font-mono text-[11px] font-semibold text-surface-700">{rfq.customer_ref_no}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-surface-300">—</span>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <div className="min-w-0">
@@ -171,18 +183,25 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <div className="space-y-1">
-                                                        {rfq.items_summary?.slice(0, 2).map((item: any, i: number) => (
-                                                            <div key={i} className="flex items-center gap-1.5 text-xs">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
-                                                                <span className="text-surface-700 truncate max-w-[180px]">{item.description}</span>
-                                                                <span className="text-surface-400 shrink-0">×{item.quantity} {item.unit}</span>
-                                                            </div>
-                                                        ))}
-                                                        {rfq.item_count > 2 && (
-                                                            <div className="text-[10px] text-brand-600 font-semibold pl-3">+{rfq.item_count - 2} more items</div>
-                                                        )}
-                                                    </div>
+                                                    {rfq.items_summary?.length ? (
+                                                        <div className="space-y-1">
+                                                            {rfq.items_summary.slice(0, 2).map((item: any, i: number) => (
+                                                                <div key={i} className="flex items-center gap-1.5 text-xs">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
+                                                                    <span className="text-surface-700 truncate max-w-[180px]">{item.description}</span>
+                                                                    <span className="text-surface-400 shrink-0">×{item.quantity} {item.unit}</span>
+                                                                </div>
+                                                            ))}
+                                                            {rfq.item_count > 2 && (
+                                                                <div className="text-[10px] text-brand-600 font-semibold pl-3">+{rfq.item_count - 2} more items</div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-50 border border-dashed border-surface-200 text-[11px] text-surface-400 italic">
+                                                            <i className="fi fi-rr-info text-[10px] leading-none" />
+                                                            Item details pending
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     {rfq.required_by ? (
@@ -201,10 +220,15 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <div className="text-xs">
-                                                        <div className="text-surface-700 font-medium">{rfq.created_by}</div>
-                                                        <div className="text-surface-400 text-[10px] mt-0.5">{rfq.created_at}</div>
-                                                    </div>
+                                                    {rfq.job_type === 'rnd' ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold uppercase tracking-wider">
+                                                            <i className="fi fi-rr-lab text-[9px] leading-none" /> R&amp;D
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
+                                                            <i className="fi fi-rr-tools text-[9px] leading-none" /> Regular
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <div className="flex items-center justify-end gap-1.5">
