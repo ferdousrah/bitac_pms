@@ -201,6 +201,44 @@ class PcdInboxController extends Controller
      * outcome turns out uncertain and the PCD officer decides to drop it
      * before more resources are consumed. Reason is mandatory for audit.
      */
+    /**
+     * PCD officer assigns the job number for this Work Order. The number is
+     * theirs to choose — they may have their own internal sequence or follow
+     * a customer-specific convention. The same number is stamped on the WO
+     * and on every WO item so downstream documents (op sheet, MRP, challan)
+     * read consistently.
+     *
+     * Once set, the number can be edited until production starts, after
+     * which it locks (downstream documents reference it).
+     */
+    public function setJobNumber(Request $request, WorkOrder $workOrder)
+    {
+        abort_unless(
+            in_array($workOrder->status, ['pcd_pending'], true),
+            422,
+            'Job number can only be set while the work order is in PCD planning.'
+        );
+
+        $validated = $request->validate([
+            'job_number' => [
+                'required', 'string', 'max:50',
+                // Reject if another WO already uses this number (excluding the current one).
+                \Illuminate\Validation\Rule::unique('work_orders', 'job_number')->ignore($workOrder->id),
+            ],
+        ], [
+            'job_number.unique' => 'This job number is already used on another work order.',
+        ]);
+
+        $jobNumber = trim($validated['job_number']);
+
+        \DB::transaction(function () use ($workOrder, $jobNumber) {
+            $workOrder->update(['job_number' => $jobNumber]);
+            $workOrder->items()->whereNull('job_number')->update(['job_number' => $jobNumber]);
+        });
+
+        return back()->with('success', "Job number set to {$jobNumber}.");
+    }
+
     public function cancel(Request $request, WorkOrder $workOrder)
     {
         if (in_array($workOrder->status, ['delivered', 'cancelled'])) {

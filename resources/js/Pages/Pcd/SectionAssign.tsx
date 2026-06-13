@@ -163,13 +163,16 @@ export default function SectionAssign({
     assigned_sections,
     available_sections,
 }: Props) {
-    const { data, setData, put, processing, errors } = useForm<{ sections: SectionRow[] }>({
+    const { data, setData, put, processing, errors } = useForm<{ sections: SectionRow[]; job_number: string }>({
         sections: assigned_sections.map((s) => ({
             section_id: s.section_id,
             notes: s.notes ?? '',
             section: s.section,
             status: s.status,
         })),
+        // PCD officer enters their own job number on this form. Pre-fills if
+        // already saved so re-edits don't blank it out.
+        job_number: String(work_order.job_number ?? ''),
     });
 
     const sensors = useSensors(
@@ -226,11 +229,17 @@ export default function SectionAssign({
                     {/* Top metadata row — mirrors the paper form's job# / date split */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 border-b border-surface-200">
                         <div className="px-6 py-3 border-r border-surface-200">
-                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Job Number</div>
-                            <div className="text-xl font-bold font-mono text-surface-900 mt-0.5">
-                                {work_order.job_number ?? '—'}
-                            </div>
-                            <div className="text-[11px] text-surface-500 mt-0.5 font-mono">{work_order.wo_number}</div>
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold mb-1">Job Number <span className="text-rose-500">*</span></div>
+                            <input
+                                type="text"
+                                value={data.job_number}
+                                onChange={e => setData('job_number', e.target.value)}
+                                placeholder="e.g. J-2026-0042"
+                                required
+                                className="w-full text-xl font-bold font-mono text-surface-900 bg-transparent border-b-2 border-dashed border-surface-300 focus:border-brand-500 focus:outline-none py-1 -mb-0.5"
+                            />
+                            {(errors as any).job_number && <p className="form-error">{(errors as any).job_number}</p>}
+                            <div className="text-[11px] text-surface-500 mt-1 font-mono">{work_order.wo_number}</div>
                         </div>
                         <div className="px-6 py-3 text-right">
                             <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Date</div>

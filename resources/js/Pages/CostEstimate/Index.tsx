@@ -115,6 +115,8 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                             <table className="premium-table">
                                 <thead>
                                     <tr>
+                                        <th className="w-12 text-center">Sl</th>
+                                        <th className="w-32">Ref. No.</th>
                                         <SortableHeader label="Estimate #" column="estimate_no" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/cost-estimates" filters={filters} className="w-36" />
                                         <SortableHeader label="Job / Customer" column="job_name" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/cost-estimates" filters={filters} />
                                         <SortableHeader label="Group" column="pricing_group" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/cost-estimates" filters={filters} className="w-20 text-center" />
@@ -125,11 +127,21 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((e: any) => {
+                                    {rows.map((e: any, idx: number) => {
                                         const st = STATUS[e.status] ?? STATUS.draft;
                                         const gc = GROUP_COLOR[e.pricing_group] ?? GROUP_COLOR.A;
+                                        // Serial = page-aware (handles pagination).
+                                        const sl = ((estimates.from ?? 1) + idx);
                                         return (
                                             <tr key={e.id} className="group">
+                                                <td className="text-center text-surface-500 font-mono text-xs tabular-nums">{sl}</td>
+                                                <td>
+                                                    {e.customer_ref_no ? (
+                                                        <span className="font-mono text-xs font-semibold text-surface-700">{e.customer_ref_no}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-surface-300">—</span>
+                                                    )}
+                                                </td>
                                                 <td>
                                                     <Link href={`/cost-estimates/${e.id}`} className="block">
                                                         <div className="flex items-center gap-1.5">

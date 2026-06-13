@@ -9,7 +9,7 @@ class WorkOrderFile extends Model
 {
     protected $fillable = [
         'work_order_id', 'uploaded_by', 'kind',
-        'stored_path', 'original_name', 'mime_type', 'size_bytes', 'description',
+        'stored_path', 'original_name', 'title', 'mime_type', 'size_bytes', 'description',
     ];
 
     protected $appends = ['url', 'human_size', 'extension'];

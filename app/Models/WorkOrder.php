@@ -36,6 +36,9 @@ class WorkOrder extends Model
     {
         return match($this->status) {
             'draft'              => 'Draft',
+            'ied_pending'        => 'Awaiting IED Acceptance',
+            'pcd_pending'        => 'In Production Planning',
+            'released_to_shops'  => 'Released to Shops',
             'approved'           => 'Approved',
             'in_production'      => 'In Production',
             'qc_hold'            => 'QC Hold',
@@ -51,6 +54,9 @@ class WorkOrder extends Model
     {
         return match($this->status) {
             'draft'              => 'gray',
+            'ied_pending'        => 'amber',
+            'pcd_pending'        => 'blue',
+            'released_to_shops'  => 'indigo',
             'approved'           => 'blue',
             'in_production'      => 'yellow',
             'qc_hold'            => 'orange',

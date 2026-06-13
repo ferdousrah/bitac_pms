@@ -38,7 +38,7 @@ interface OperationSheet {
 
 interface Job {
     id: number;
-    job_number: number;
+    job_number: string | number | null;
     wo_number: string;
     job_type?: string;
     customer: string;
@@ -252,10 +252,12 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold text-surface-900">
-                            PCD Job #{job.job_number}
+                            {job.job_number ? `PCD Job #${job.job_number}` : `Work Order ${job.wo_number}`}
                         </h1>
                         <p className="text-sm text-surface-500">
-                            Process the 3-step PCD workflow to release this job
+                            {job.job_number
+                                ? 'Process the 3-step PCD workflow to release this job'
+                                : 'Set a job number to begin the PCD workflow'}
                         </p>
                     </div>
                 </div>
@@ -273,8 +275,14 @@ export default function JobDetail({ job, checklist }: Props) {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
                                         <h2 className="text-2xl font-bold text-surface-900">
-                                            Job #{job.job_number}
+                                            {job.job_number ? `Job #${job.job_number}` : job.wo_number}
                                         </h2>
+                                        {!job.job_number && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
+                                                <i className="fi fi-rr-bolt text-[9px]" />
+                                                Job # not assigned
+                                            </span>
+                                        )}
                                         <JobTypeBadge type={job.job_type} />
                                         <span className={statusBadgeClass(job.status)}>
                                             {job.status}

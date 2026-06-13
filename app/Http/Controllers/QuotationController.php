@@ -154,8 +154,25 @@ class QuotationController extends Controller
      */
     public function edit(Quotation $quotation)
     {
-        abort_unless(in_array($quotation->status, ['draft']), 422,
-            'Only draft quotations can be edited.');
+        // Drafts are always editable. For pending_approval, allow if the
+        // current user has a pending approval row (chain approver) OR has
+        // been forwarded to (out-of-chain reviewer). This lets approvers
+        // make small corrections without bouncing the doc back.
+        $user = auth()->user();
+        $hasPendingApprovalRole = $quotation->approvals()
+            ->where('status', 'pending')
+            ->where(function ($q) use ($user) {
+                $q->where('approver_id', $user->id)
+                  ->orWhere('forwarded_to_user_id', $user->id);
+            })
+            ->exists();
+
+        abort_unless(
+            $quotation->status === 'draft' ||
+            ($quotation->status === 'pending_approval' && $hasPendingApprovalRole),
+            422,
+            'This quotation cannot be edited at its current stage.'
+        );
 
         $quotation->load(['rfq.customer', 'rfq.items.product', 'items']);
 
@@ -189,12 +206,18 @@ class QuotationController extends Controller
                 'id'                => $quotation->id,
                 'version'           => $quotation->version,
                 'vat_rate'          => (float) $quotation->vat_rate,
+                'tax_rate'          => (float) ($quotation->tax_rate ?? 0),
                 'notes'             => $quotation->notes,
                 'memo_no'           => $quotation->memo_no,
+                'memo_date'         => $quotation->memo_date?->format('Y-m-d'),
                 'customer_ref_no'   => $quotation->customer_ref_no,
                 'customer_ref_date' => $quotation->customer_ref_date?->format('Y-m-d'),
                 'recipient_block'   => $quotation->recipient_block,
                 'terms'             => $quotation->terms ?? [],
+                'discount'          => (float) ($quotation->discount ?? 0),
+                'discount_type'     => $quotation->discount_type,
+                'forwarding_letter' => $quotation->forwarding_letter,
+                'forwarding_letter_subject' => $quotation->forwarding_letter_subject,
             ],
             'customers'             => Customer::where('is_active', true)->get(['id', 'name']),
             'vatRate'               => (float) $quotation->vat_rate,
@@ -212,8 +235,24 @@ class QuotationController extends Controller
      */
     public function update(Request $request, Quotation $quotation)
     {
-        abort_unless($quotation->status === 'draft', 422,
-            'Only draft quotations can be edited.');
+        // Same gate as edit(): drafts always editable; pending_approval
+        // editable when the current user has a pending approval row
+        // (chain approver or forwarded-to reviewer).
+        $user = auth()->user();
+        $hasPendingApprovalRole = $quotation->approvals()
+            ->where('status', 'pending')
+            ->where(function ($q) use ($user) {
+                $q->where('approver_id', $user->id)
+                  ->orWhere('forwarded_to_user_id', $user->id);
+            })
+            ->exists();
+
+        abort_unless(
+            $quotation->status === 'draft' ||
+            ($quotation->status === 'pending_approval' && $hasPendingApprovalRole),
+            422,
+            'This quotation cannot be edited at its current stage.'
+        );
 
         $validated = $request->validate([
             'vat_rate'                => 'required|numeric|min:0|max:100',
@@ -224,6 +263,7 @@ class QuotationController extends Controller
             'items.*.quantity'        => 'required|numeric|min:0',
             'items.*.unit_price'      => 'required|numeric|min:0',
             'memo_no'                 => 'nullable|string|max:80',
+            'memo_date'               => 'nullable|date',
             'customer_ref_no'         => 'nullable|string|max:100',
             'customer_ref_date'       => 'nullable|date',
             'recipient_block'         => 'nullable|string|max:1000',
@@ -233,6 +273,12 @@ class QuotationController extends Controller
             'attachments.*'           => 'file|max:20480', // 20 MB each
             'attachment_kinds'        => 'nullable|array',
             'attachment_kinds.*'      => 'nullable|in:supporting,annexure,spec,other',
+            // Discount + forwarding letter
+            'discount_type'           => 'nullable|in:percent,fixed',
+            'discount'                => 'nullable|numeric|min:0',
+            'tax_rate'                => 'nullable|numeric|min:0|max:100',
+            'forwarding_letter_subject' => 'nullable|string|max:255',
+            'forwarding_letter'       => 'nullable|string',
         ]);
 
         // Recompute totals — gross is what the line items add up to, embedded VAT extracted.
@@ -242,8 +288,20 @@ class QuotationController extends Controller
         }
         $vatRate   = (float) $validated['vat_rate'];
         $vatAmount = $vatRate > 0 ? round($grossTotal * $vatRate / (100 + $vatRate), 2) : 0.0;
-        $total     = round($grossTotal, 2);
         $subtotal  = round($grossTotal - $vatAmount, 2);
+
+        // Discount + tax (same rules as the create path)
+        $taxRate2 = (float) ($validated['tax_rate'] ?? 0);
+        $taxAmount2 = $taxRate2 > 0 ? round($subtotal * $taxRate2 / 100, 2) : 0.0;
+        $discountType2 = $validated['discount_type'] ?? null;
+        $discountInput2 = (float) ($validated['discount'] ?? 0);
+        $discountAmount2 = match ($discountType2) {
+            'percent' => round($grossTotal * $discountInput2 / 100, 2),
+            'fixed'   => round($discountInput2, 2),
+            default   => 0.0,
+        };
+        $discountAmount2 = min($discountAmount2, $grossTotal);
+        $total = round($grossTotal - $discountAmount2 + $taxAmount2, 2);
 
         $cleanTerms = collect($validated['terms'] ?? [])
             ->map(fn($t) => trim((string) $t))
@@ -251,19 +309,26 @@ class QuotationController extends Controller
             ->values()
             ->all();
 
-        \DB::transaction(function () use ($quotation, $validated, $subtotal, $vatRate, $vatAmount, $total, $cleanTerms) {
+        \DB::transaction(function () use ($quotation, $validated, $subtotal, $vatRate, $vatAmount, $total, $taxRate2, $taxAmount2, $discountAmount2, $discountType2, $cleanTerms) {
             $quotation->update([
                 'material_cost'     => $subtotal,
                 'vat_rate'          => $vatRate,
                 'vat_amount'        => $vatAmount,
+                'tax_rate'          => $taxRate2,
+                'tax_amount'        => $taxAmount2,
+                'discount'          => $discountAmount2,
+                'discount_type'     => $discountType2,
                 'total_amount'      => $total,
                 'validity_days'     => $validated['validity_days'] ?? $quotation->validity_days ?? 90,
                 'notes'             => $validated['notes'] ?? null,
                 'memo_no'           => $validated['memo_no'] ?? null,
+                'memo_date'         => $validated['memo_date'] ?? null,
                 'customer_ref_no'   => $validated['customer_ref_no'] ?? null,
                 'customer_ref_date' => $validated['customer_ref_date'] ?? null,
                 'recipient_block'   => $validated['recipient_block'] ?? null,
                 'terms'             => !empty($cleanTerms) ? $cleanTerms : null,
+                'forwarding_letter' => $validated['forwarding_letter'] ?? null,
+                'forwarding_letter_subject' => $validated['forwarding_letter_subject'] ?? null,
             ]);
 
             // Replace line items wholesale — drafts are throwaway, and diffing
@@ -326,11 +391,17 @@ class QuotationController extends Controller
             'attachment_kinds.*'      => 'nullable|in:supporting,annexure,spec,other',
             // BITAC letter header fields
             'memo_no'                 => 'nullable|string|max:80',
+            'memo_date'               => 'nullable|date',
             'customer_ref_no'         => 'nullable|string|max:100',
             'customer_ref_date'       => 'nullable|date',
             'recipient_block'         => 'nullable|string|max:1000',
             'terms'                   => 'nullable|array',
             'terms.*'                 => 'nullable|string|max:500',
+            // Discount + forwarding letter
+            'discount_type'           => 'nullable|in:percent,fixed',
+            'discount'                => 'nullable|numeric|min:0',
+            'forwarding_letter_subject' => 'nullable|string|max:255',
+            'forwarding_letter'       => 'nullable|string',
         ]);
 
         $rfq = Rfq::findOrFail($validated['rfq_id']);
@@ -351,7 +422,19 @@ class QuotationController extends Controller
         $taxRate   = (float) ($validated['tax_rate'] ?? 0);
         $subtotal  = round($grossTotal - $vatAmount, 2);
         $taxAmount = $taxRate > 0 ? round($subtotal * $taxRate / 100, 2) : 0.0;
-        $total     = round($grossTotal + $taxAmount, 2);
+
+        // Discount — applied on the gross before tax. Type can be 'percent' or 'fixed'.
+        $discountType = $validated['discount_type'] ?? null;
+        $discountInput = (float) ($validated['discount'] ?? 0);
+        $discountAmount = match ($discountType) {
+            'percent' => round($grossTotal * $discountInput / 100, 2),
+            'fixed'   => round($discountInput, 2),
+            default   => 0.0,
+        };
+        // Cap discount at gross — never produce a negative quote.
+        $discountAmount = min($discountAmount, $grossTotal);
+
+        $total = round($grossTotal - $discountAmount + $taxAmount, 2);
 
         $saveAsDraft = $request->boolean('save_as_draft');
 
@@ -371,7 +454,8 @@ class QuotationController extends Controller
             'labour_cost'    => 0,
             'overhead_cost'  => 0,
             'profit_margin'  => 0,
-            'discount'       => 0,
+            'discount'       => $discountAmount,
+            'discount_type'  => $discountType,
             'vat_rate'       => $vatRate,
             'vat_amount'     => $vatAmount,
             'tax_rate'       => $taxRate,
@@ -383,10 +467,13 @@ class QuotationController extends Controller
             'created_by'    => auth()->id(),
             // BITAC letter header
             'memo_no'           => $validated['memo_no'] ?? null,
+            'memo_date'         => $validated['memo_date'] ?? null,
             'customer_ref_no'   => $validated['customer_ref_no'] ?? null,
             'customer_ref_date' => $validated['customer_ref_date'] ?? null,
             'recipient_block'   => $validated['recipient_block'] ?? null,
             'terms'             => !empty($cleanTerms) ? $cleanTerms : null,
+            'forwarding_letter' => $validated['forwarding_letter'] ?? null,
+            'forwarding_letter_subject' => $validated['forwarding_letter_subject'] ?? null,
         ]);
 
         foreach ($validated['items'] as $item) {
@@ -444,8 +531,8 @@ class QuotationController extends Controller
             'items', 'files.uploadedBy',
             'rfq.items.product', 'rfq.items.drawings', 'rfq.items.samplePhotos',
             'rfq.items.costEstimates',
-            'rfq.customer', 'customer', 'createdBy',
-            'approvals.approver', 'workOrder',
+            'rfq.customer', 'customer', 'createdBy.center',
+            'approvals.approver.center', 'approvals.forwardedTo.center', 'workOrder',
             'customerResponses.recordedBy', 'parent', 'revisions',
         ]);
 
@@ -540,6 +627,7 @@ class QuotationController extends Controller
                 'overhead_cost'   => $quotation->overhead_cost,
                 'profit_margin'   => $quotation->profit_margin,
                 'discount'        => $quotation->discount,
+                'discount_type'   => $quotation->discount_type,
                 'vat_rate'        => $quotation->vat_rate,
                 'vat_amount'      => $quotation->vat_amount,
                 'tax_rate'        => $quotation->tax_rate,
@@ -549,19 +637,61 @@ class QuotationController extends Controller
                 'notes'           => $quotation->notes,
                 // BITAC letter header fields
                 'memo_no'           => $quotation->memo_no,
+                'memo_date'         => $quotation->memo_date?->format('Y-m-d'),
                 'customer_ref_no'   => $quotation->customer_ref_no,
                 'customer_ref_date' => $quotation->customer_ref_date?->format('d/m/Y'),
                 'recipient_block'   => $quotation->recipient_block,
                 'terms'             => $quotation->terms ?? [],
+                'forwarding_letter' => $quotation->forwarding_letter,
+                'forwarding_letter_subject' => $quotation->forwarding_letter_subject,
                 'created_by_name' => $quotation->createdBy->name ?? '',
+                // Full preparer block so the sidebar / chain can show contact
+                // details alongside the signature.
+                'created_by'      => $quotation->createdBy ? [
+                    'name'        => $quotation->createdBy->name,
+                    'designation' => $quotation->createdBy->designation,
+                    'center'      => $quotation->createdBy->center?->name,
+                    'email'       => $quotation->createdBy->email,
+                    'phone'       => $quotation->createdBy->phone,
+                    'signature_url' => $quotation->createdBy->signature_path
+                        ? \Storage::disk('public')->url($quotation->createdBy->signature_path)
+                        : null,
+                ] : null,
                 'created_at'      => $quotation->created_at->format('d M Y'),
-                'approvals'       => $quotation->approvals->sortBy('level')->map(fn($a) => [
-                    'id'       => $a->id,
-                    'level'    => $a->level,
-                    'decision' => $a->status === 'pending' ? null : $a->status,
-                    'approver' => ['name' => $a->approver?->name],
-                    'comments' => $a->remarks,
-                ])->values(),
+                'approvals'       => $quotation->approvals->sortBy('level')->map(function ($a) {
+                    $u = $a->approver;
+                    $f = $a->forwardedTo;
+                    // The signature shown on the chain is whichever was captured
+                    // for this approval row first, then the approver's saved one.
+                    $sigPath = $a->signature_path ?: $u?->signature_path;
+                    return [
+                        'id'       => $a->id,
+                        'level'    => $a->level,
+                        'decision' => $a->status === 'pending' ? null : $a->status,
+                        'comments' => $a->remarks,
+                        'acted_at' => $a->approved_at?->format('d M Y H:i'),
+                        'approver' => $u ? [
+                            'name'        => $u->name,
+                            'designation' => $u->designation,
+                            'center'      => $u->center?->name,
+                            'email'       => $u->email,
+                            'phone'       => $u->phone,
+                            'signature_url' => $sigPath ? \Storage::disk('public')->url($sigPath) : null,
+                        ] : null,
+                        'forwarded_to' => $f ? [
+                            'id'          => $f->id,
+                            'name'        => $f->name,
+                            'designation' => $f->designation,
+                            'center'      => $f->center?->name,
+                            'email'       => $f->email,
+                            'phone'       => $f->phone,
+                        ] : null,
+                        'forwarded_at'   => $a->forwarded_at?->format('d M Y H:i'),
+                        'forward_reason' => $a->forward_reason,
+                        // Whether the *current viewer* is the assigned forwarded approver
+                        'is_my_forward'  => $a->forwarded_to_user_id === auth()->id() && $a->status === 'pending',
+                    ];
+                })->values(),
                 'customer_responses' => $quotation->customerResponses->map(fn($r) => [
                     'id'              => $r->id,
                     'response_type'   => $r->response_type,
@@ -639,6 +769,15 @@ class QuotationController extends Controller
             'canRecordResponse'  => in_array($quotation->status, ['sent_to_customer', 'revision_requested']) && $user->can('convert quotations'),
             'canCreateRevision'  => $quotation->status === 'revision_requested' && $user->can('create quotation-revision'),
             'canConvert'         => in_array($quotation->status, ['approved', 'sent_to_customer', 'customer_accepted']) && $user->can('convert quotations') && !$quotation->workOrder,
+            // Users this approver can forward their pending row to — anyone
+            // with `approve quotations` who isn't already in the active chain
+            // and isn't the current user.
+            'forwardableUsers'   => $pendingApproval
+                ? \App\Models\User::permission('approve quotations')
+                    ->whereNotIn('id', $quotation->approvals()->pluck('approver_id')->push($user->id)->all())
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'designation'])
+                : [],
         ]);
     }
 
@@ -682,9 +821,15 @@ class QuotationController extends Controller
 
     public function approve(Request $request, Quotation $quotation)
     {
+        // Match either the original chain approver row OR a row that's been
+        // forwarded to the current user. Forwarded-approver action satisfies
+        // the original step.
         $approval = $quotation->approvals()
-            ->where('approver_id', auth()->id())
             ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->where('approver_id', auth()->id())
+                  ->orWhere('forwarded_to_user_id', auth()->id());
+            })
             ->first();
 
         if (!$approval) {
@@ -817,6 +962,7 @@ class QuotationController extends Controller
                 'created_by'          => $quotation->created_by, // keeps it with the original preparer
                 // BITAC letter header — copied so the preparer doesn't have to retype.
                 'memo_no'             => $quotation->memo_no,
+                'memo_date'           => $quotation->memo_date,
                 'customer_ref_no'     => $quotation->customer_ref_no,
                 'customer_ref_date'   => $quotation->customer_ref_date,
                 'recipient_block'     => $quotation->recipient_block,
@@ -865,8 +1011,11 @@ class QuotationController extends Controller
     public function reject(Request $request, Quotation $quotation)
     {
         $approval = $quotation->approvals()
-            ->where('approver_id', auth()->id())
             ->where('status', 'pending')
+            ->where(function ($q) {
+                $q->where('approver_id', auth()->id())
+                  ->orWhere('forwarded_to_user_id', auth()->id());
+            })
             ->first();
 
         if (!$approval) {
@@ -905,6 +1054,212 @@ class QuotationController extends Controller
         );
 
         return back()->with('success', 'Quotation rejected.');
+    }
+
+    /**
+     * Approver hands off their pending approval row to someone outside the
+     * configured chain. The forwarded-to user becomes able to approve/reject
+     * on behalf of the original approver, and their decision finalises the
+     * approval step (see approve() / reject() — they now match by either
+     * approver_id OR forwarded_to_user_id).
+     */
+    public function forwardApproval(Request $request, Quotation $quotation)
+    {
+        $validated = $request->validate([
+            'forwarded_to_user_id' => 'required|exists:users,id|different:current_user_sentinel',
+            'reason'               => 'nullable|string|max:1000',
+        ]);
+
+        $approval = $quotation->approvals()
+            ->where('approver_id', auth()->id())
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$approval) {
+            return back()->with('error', 'You have no pending approval row to forward on this quotation.');
+        }
+
+        if ((int) $validated['forwarded_to_user_id'] === (int) auth()->id()) {
+            return back()->with('error', 'You cannot forward to yourself.');
+        }
+
+        $approval->update([
+            'forwarded_to_user_id' => $validated['forwarded_to_user_id'],
+            'forwarded_at'         => now(),
+            'forward_reason'       => $validated['reason'] ?? null,
+        ]);
+
+        // Notify the forwarded-to user
+        try {
+            $target = \App\Models\User::find($validated['forwarded_to_user_id']);
+            if ($target) {
+                \App\Services\NotifyService::toUser(
+                    $target,
+                    'quotation_forwarded_for_approval',
+                    'Quotation approval forwarded to you',
+                    "{$quotation->createdBy?->name} via " . auth()->user()->name . " — Quotation #{$quotation->id}",
+                    "/quotations/{$quotation->id}",
+                    'fi-rr-share',
+                    'indigo',
+                );
+            }
+        } catch (\Throwable $e) {
+            // Notification failure is non-fatal
+            \Log::warning('Forward notify failed: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Approval forwarded. The forwarded approver can now act on this quotation.');
+    }
+
+    /**
+     * Generate the forwarding letter as a separate PDF. The letter is rendered
+     * inside the BITAC letterhead exactly like the quotation, so the customer
+     * receives two consistent documents.
+     */
+    public function exportForwardingLetterPdf(Request $request, Quotation $quotation)
+    {
+        $body = trim((string) $quotation->forwarding_letter);
+        abort_unless($body !== '', 404, 'No forwarding letter on this quotation.');
+
+        // Eager-load approvals so the signer block below can render the
+        // final approver's identity (signature, designation, center).
+        $quotation->load(['createdBy.center', 'approvals.approver.center']);
+
+        $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $subject = $esc($quotation->forwarding_letter_subject ?? 'Quotation — Forwarding Letter');
+        $recipient = nl2br($esc($quotation->recipient_block ?? ''));
+        // The body is rich HTML from the editor — sanitise to a safe allow-list
+        // so a copy-pasted <script> can never make it into the rendered PDF.
+        // Legacy plain-text letters still work: they're just escaped + nl2br'd
+        // when no HTML tags are detected.
+        $bodyHtml = (str_contains($body, '<') && str_contains($body, '>'))
+            ? $this->sanitizeLetterHtml($body)
+            : nl2br($esc($body));
+        $issued = ($quotation->memo_date ?? $quotation->created_at)->format('d/m/Y');
+        // Customer's own reference takes precedence (this is the no. the
+        // customer recognises); falls back to our memo no. so the slot is
+        // never blank when one of them exists.
+        $refNo = $esc($quotation->customer_ref_no ?: $quotation->memo_no ?: '');
+        $quotationLabel = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . ' v' . $quotation->version;
+
+        // Recipient block prefixed with "To," when present.
+        $recipientHtml = trim((string) $quotation->recipient_block) !== ''
+            ? '<div style="margin-bottom: 14pt; font-size: 11pt; color: #000;">'
+              . '<div style="font-weight: bold; margin-bottom: 2pt;">To,</div>'
+              . '<div style="line-height: 1.4;">' . $recipient . '</div>'
+              . '</div>'
+            : '';
+
+        // ─── Signer = the final approver in the chain (highest level).
+        // We pick the highest-level row regardless of its status so the
+        // letter always shows the *expected* signatory. The signature
+        // image is only embedded once that row has actually been
+        // approved (handled further down).
+        $finalApprovalRow = $quotation->approvals->sortByDesc('level')->first();
+        $isFinalApproved  = $finalApprovalRow && $finalApprovalRow->status === 'approved';
+        $signer = $finalApprovalRow?->approver ?? $quotation->createdBy;
+        $signerSigPath = $isFinalApproved
+            ? ($finalApprovalRow->signatureAbsolutePath() ?? $signer?->signatureAbsolutePath())
+            : null;
+
+        $signerName        = $esc($signer?->name ?? '');
+        $signerDesignation = $esc($signer?->designation ?? '');
+        // Center name comes from the signer's own center first, then the
+        // document's center, with a sensible default so the line never
+        // prints empty.
+        $signerCenterRaw   = $signer?->center?->name
+                          ?? \App\Models\Center::find(
+                                $quotation->center_id
+                                ?? session('active_center_id')
+                                ?? auth()->user()?->center_id
+                                ?? 1
+                             )?->name
+                          ?? 'BITAC, Dhaka';
+        $signerCenter      = $esc($signerCenterRaw);
+        $signerEmail       = $esc($signer?->email ?? '');
+        $signerPhone       = $esc($signer?->phone ?? '');
+
+        // Only embed the signature image after final approval — otherwise
+        // leave the slot blank for a handwritten signature.
+        $signatureImgHtml = ($isFinalApproved && $signerSigPath && is_file($signerSigPath))
+            ? '<img src="' . $signerSigPath . '" style="height: 36pt; max-width: 160pt;" alt="signature" />'
+            : '<div style="height: 36pt;"></div>';
+
+        // Contact line — only emit non-empty parts so we don't get stray bullets.
+        $contactParts = [];
+        if ($signerEmail !== '') $contactParts[] = 'Email: ' . $signerEmail;
+        if ($signerPhone !== '') $contactParts[] = 'Phone: ' . $signerPhone;
+        $contactLine = implode(' &nbsp;|&nbsp; ', $contactParts);
+
+        $html = <<<HTML
+<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">
+    <tr>
+        <td style="font-size: 11pt; color: #000;"><b>Ref No.</b> - {$refNo}</td>
+        <td style="font-size: 11pt; color: #000; text-align: right;"><b>Date:</b> {$issued}</td>
+    </tr>
+</table>
+<div style="text-align: center; margin-bottom: 14pt;">
+    <div style="font-size: 14pt; font-weight: bold; color: #000; letter-spacing: 1.5pt;">FORWARDING LETTER</div>
+</div>
+{$recipientHtml}
+<div style="margin-bottom: 6pt; font-size: 11.5pt; color: #000;"><b>Subject:</b> {$subject}</div>
+<div style="margin-top: 14pt; font-size: 11pt; color: #000; line-height: 1.65;">
+    {$bodyHtml}
+</div>
+<div style="margin-top: 28pt; font-size: 11pt; color: #000;">
+    <div style="margin-bottom: 4pt;">Best Regards,</div>
+    <div style="margin-top: 4pt;">{$signatureImgHtml}</div>
+    <div style="border-top: 0.75pt solid #000; width: 180pt; margin-top: 2pt;"></div>
+    <div style="margin-top: 4pt;"><b>{$signerName}</b></div>
+HTML;
+        if ($signerDesignation !== '') {
+            $html .= '<div style="font-size: 9.5pt; color: #4b5563;">' . $signerDesignation . '</div>';
+        }
+        if ($signerCenter !== '') {
+            $html .= '<div style="font-size: 9.5pt; color: #4b5563;">' . $signerCenter . '</div>';
+        }
+        if ($contactLine !== '') {
+            $html .= '<div style="font-size: 9pt; color: #6b7280; margin-top: 1pt;">' . $contactLine . '</div>';
+        }
+        $html .= '</div>';
+
+        $lang = $request->query('lang') === 'en' ? 'en' : 'bn';
+        $bytes = app(\App\Services\BitacLetterhead::class)->render($html, "Forwarding Letter {$quotationLabel}", null, $lang);
+        $filename = "forwarding-letter-{$quotationLabel}" . ($lang === 'en' ? '-EN' : '') . '.pdf';
+
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
+    }
+
+    /**
+     * Allow-list HTML sanitiser for the forwarding-letter rich-text body.
+     * Strips everything except the formatting tags the editor can emit, drops
+     * any `on*=` event handlers and `javascript:` URLs, and removes <script>
+     * blocks wholesale so paste-bombs can't smuggle code into the PDF.
+     */
+    private function sanitizeLetterHtml(string $html): string
+    {
+        // Hard-strip script/style blocks and all event handlers / javascript: URLs.
+        $html = preg_replace('#<\s*(script|style|iframe|object|embed)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $html);
+        $html = preg_replace('#\son[a-z]+\s*=\s*"[^"]*"#i', '', $html);
+        $html = preg_replace("#\son[a-z]+\s*=\s*'[^']*'#i", '', $html);
+        $html = preg_replace('#javascript\s*:#i', '', $html);
+
+        // Allow a small set of formatting tags — anything else is dropped.
+        $allowed = '<p><br><b><strong><i><em><u><s><strike><ul><ol><li><div><span>';
+        return strip_tags($html, $allowed);
     }
 
     /**
@@ -1019,42 +1374,45 @@ class QuotationController extends Controller
         $custRefNo  = $quotation->customer_ref_no ?? '';
         $custRefDt  = $quotation->customer_ref_date?->format('d/m/Y') ?? '';
         $recipient  = $quotation->recipient_block ?? '';
-        $issuedDate = $quotation->created_at->format('d/m/Y');
+        // Preparer-controlled memo date when present; falls back to created_at
+        // so older quotations (saved before this field existed) still print a
+        // date.
+        $issuedDate = ($quotation->memo_date ?? $quotation->created_at)->format('d/m/Y');
 
         // ─────────────────────────────────────────────────────────────────────
-        // Memo block — নং (left) + তারিখঃ (right).
-        // Always rendered so the document always carries a date stamp; the memo
-        // number column stays blank if the preparer didn't enter one.
+        // Memo block — English labels only ("Memo No.", "Date").
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
             .   '<td style="font-size: 11pt; color: #000;">'
-            .     '<span class="bn" style="font-family: siyamrupali;">নং -</span> '
+            .     '<b>Memo No.</b> - '
             .     '<span style="font-family: dejavusansmono;">' . $esc($memoNo) . '</span>'
             .   '</td>'
             .   '<td style="font-size: 11pt; color: #000; text-align: right;">'
-            .     '<span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issuedDate) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span>'
+            .     '<b>Date:</b> ' . $esc($issuedDate)
             .   '</td>'
             . '</tr>'
             . '</table>';
 
         // ─────────────────────────────────────────────────────────────────────
-        // Title — দরপত্র / (QUOTATION). For revisions (version > 1) show
-        // "পুনঃদরপত্র (n) / (RE-QUOTATION (n))" so the customer sees this is
-        // a revised version, not the original.
+        // Title — English-only. Revisions show "RE-QUOTATION (n)".
         $isRevision = $quotation->version > 1;
-        $bnTitle    = $isRevision ? "পুনঃ দরপত্র ({$quotation->version})" : 'দরপত্র';
-        $enTitle    = $isRevision ? "(RE-QUOTATION ({$quotation->version}))" : '(QUOTATION)';
+        $titleEn    = $isRevision ? "RE-QUOTATION ({$quotation->version})" : 'QUOTATION';
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 14pt; color: #000;">' . $bnTitle . '</div>'
-            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">' . $enTitle . '</div>'
+            . '<div style="font-size: 14pt; font-weight: bold; color: #000; letter-spacing: 1.5pt;">' . $titleEn . '</div>'
             . '</div>';
 
         // ─────────────────────────────────────────────────────────────────────
         // Recipient (left) + Customer Ref (right) — plain two-column block.
+        // "To," salutation is printed above the recipient address block as
+        // per BITAC official letter convention.
+        $recipientHtml = trim($recipient) !== ''
+            ? '<div style="font-size: 11pt; color: #000; font-weight: bold; margin-bottom: 2pt;">To,</div>'
+              . '<div style="font-size: 11pt; color: #000; line-height: 1.4;">' . nl2br($esc($recipient), false) . '</div>'
+            : '';
         $addressBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt;">'
             . '<tr>'
             .   '<td width="55%" style="vertical-align: top; padding-right: 12pt;">'
-            .     '<div style="font-size: 11pt; color: #000; line-height: 1.4;">' . nl2br($esc($recipient), false) . '</div>'
+            .     $recipientHtml
             .   '</td>'
             .   '<td width="45%" style="vertical-align: top; font-size: 11pt; color: #000;">';
         if ($custRefNo !== '') {
@@ -1080,20 +1438,14 @@ class QuotationController extends Controller
             . '<col style="width: 17%;" />'
             . '<col style="width: 21%;" />'
             . '</colgroup>';
-        // Header row
+        // Header row — English only
         $itemsHtml .= '<tr>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
-            . '<span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
-            . '<span class="bn" style="font-family: siyamrupali;">কাজের বিবরণ</span><br>(Description of Works)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
-            . '<span class="bn" style="font-family: siyamrupali;">পরিমান</span><br>(Quantity)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
-            . '<span class="bn" style="font-family: siyamrupali;">একক</span><br>(Unit)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
-            . '<span class="bn" style="font-family: siyamrupali;">একক দর</span><br>(Unit Price)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center; vertical-align: middle;">'
-            . '<span class="bn" style="font-family: siyamrupali;">মূল্য</span><br>(Total Price)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Sl. No</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Description of Works</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Quantity</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Unit</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Unit Price</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Total Price</th>';
         $itemsHtml .= '</tr>';
 
         if ($lineItems->isEmpty()) {
@@ -1119,7 +1471,9 @@ class QuotationController extends Controller
         $taxAmount = (float) ($quotation->tax_amount ?? 0);
         $vatRate   = (float) ($quotation->vat_rate ?? 0);
         $taxRate   = (float) ($quotation->tax_rate ?? 0);
-        $subtotal  = (float) $total - $vatAmount - $taxAmount;
+        $discAmount = (float) ($quotation->discount ?? 0);
+        $discType   = $quotation->discount_type ?? null;
+        $subtotal  = (float) $total - $vatAmount - $taxAmount + $discAmount;
 
         $sumRow = function (string $label, string $value, bool $bold = false) {
             $w = $bold ? 'font-weight: bold;' : '';
@@ -1129,15 +1483,24 @@ class QuotationController extends Controller
                 . '</tr>';
         };
 
-        $itemsHtml .= $sumRow('Subtotal',                                        $fmt($subtotal));
-        $itemsHtml .= $sumRow('VAT (' . rtrim(rtrim(number_format($vatRate, 2, '.', ''), '0'), '.') . '%)', $fmt($vatAmount));
-        $itemsHtml .= $sumRow('Tax (' . rtrim(rtrim(number_format($taxRate, 2, '.', ''), '0'), '.') . '%)', $fmt($taxAmount));
+        $itemsHtml .= $sumRow('Subtotal', $fmt($subtotal));
+        // VAT / Discount / Tax rows only render when they contribute something
+        // to the final figure — keeps the totals block tight on clean quotations.
+        if ($vatAmount > 0) {
+            $itemsHtml .= $sumRow('VAT (' . rtrim(rtrim(number_format($vatRate, 2, '.', ''), '0'), '.') . '%)', $fmt($vatAmount));
+        }
+        if ($discAmount > 0) {
+            $itemsHtml .= $sumRow('Discount', '− ' . $fmt($discAmount));
+        }
+        if ($taxAmount > 0) {
+            $itemsHtml .= $sumRow('Tax (' . rtrim(rtrim(number_format($taxRate, 2, '.', ''), '0'), '.') . '%)', $fmt($taxAmount));
+        }
         $itemsHtml .= $sumRow('Grand Total', $fmt($total), true);
         $itemsHtml .= '</table>';
 
         // Amount in words — sits just below the items table, left-aligned.
         $itemsHtml .= '<div style="margin-top: 6pt; font-size: 10pt; color: #000;">'
-            . '<span class="bn" style="font-family: siyamrupali;">মোট টাকাঃ</span> ' . $esc($totalWords)
+            . '<b>Amount in Words:</b> ' . $esc($totalWords)
             . '</div>';
 
         // ─────────────────────────────────────────────────────────────────────
@@ -1189,15 +1552,14 @@ class QuotationController extends Controller
             .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5;">'
             .     '<div>' . $signatureImg . '</div>'
             .     '<div>(' . $esc($signerName) . ')</div>'
-            .     '<div class="bn" style="font-family: siyamrupali;">' . $esc($signerDesignation) . '</div>'
-            .     '<div class="bn" style="font-family: siyamrupali;">' . $esc($signerCenter) . '</div>';
+            .     '<div>' . $esc($signerDesignation) . '</div>'
+            .     '<div>' . $esc($signerCenter) . '</div>';
         if ($signerEmail) {
-            $signatureBlock .= '<div style="margin-top: 2pt;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> '
+            $signatureBlock .= '<div style="margin-top: 2pt;"><b>Email:</b> '
                 . '<u>' . $esc($signerEmail) . '</u></div>';
         }
         if ($signerPhone) {
-            $signatureBlock .= '<div><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> '
-                . $esc($signerPhone) . '</div>';
+            $signatureBlock .= '<div><b>Phone:</b> ' . $esc($signerPhone) . '</div>';
         }
         $signatureBlock .= '</td>'
             . '</tr>'
@@ -1401,9 +1763,9 @@ HTML;
         $rfqItems  = $rfq?->items ?? collect();
         $firstItem = $rfqItems->first();
         $woNumber  = $this->workOrderService->generateWoNumber();
-        // Top-level WO job number — kept for backward compatibility; per-item
-        // job numbers are stamped below on each work_order_items row.
-        $jobNumber = \App\Services\JobNumberService::next();
+        // Job number is provisioned by PCD when IED forwards the WO. Leaving
+        // it null at creation prevents the IED stage from showing a number
+        // that hasn't actually been allocated yet.
 
         // Product model exposes boms()/firstBom; older code called ->activeBom which doesn't exist
         // on this codebase. Pick the latest BOM defensively.
@@ -1424,28 +1786,28 @@ HTML;
             'product_id'      => $firstItem?->product_id,
             'bom_id'          => $bomId,
             'wo_number'       => $woNumber,
-            'job_number'      => $jobNumber,
+            'job_number'      => null,
             'quantity'        => $rfqItems->sum('quantity') ?: 1,
-            'status'          => 'pcd_pending',
+            // Lands in the IED inbox first — an IED officer reviews and
+            // forwards to PCD. PCD handoff timestamps stay null until then.
+            'status'          => 'ied_pending',
             'priority'        => $request->input('priority', 'normal'),
             'due_date'        => $request->input('due_date'),
             'notes'           => $request->input('notes'),
             'customer_po_no'  => $request->input('customer_po_no') ?? $quotation->customer_po_no,
             'created_by'      => auth()->id(),
-            'pcd_handoff_at'  => now(),
-            'pcd_handoff_by'  => auth()->id(),
+            'pcd_handoff_at'  => null,
+            'pcd_handoff_by'  => null,
         ]);
 
         // ── Per-item rows (one work_order_items row per RFQ item) ─────────
-        // The first item reuses the top-level WO job_number so legacy code
-        // (which still reads WO.job_number) continues to point at a real item.
-        // Subsequent items get fresh job_numbers from the global sequence.
+        // Job numbers are stamped during IED → PCD handoff (see
+        // IedWorkOrderInboxController::accept). They start null here.
         $quotationItemMap = $quotation->items->values();
         foreach ($rfqItems->values() as $idx => $rItem) {
-            $itemJobNumber = $idx === 0 ? $jobNumber : \App\Services\JobNumberService::next();
             \App\Models\WorkOrderItem::create([
                 'work_order_id'     => $workOrder->id,
-                'job_number'        => $itemJobNumber,
+                'job_number'        => null,
                 'product_id'        => $rItem->product_id,
                 'rfq_item_id'       => $rItem->id,
                 'quotation_item_id' => $quotationItemMap[$idx]->id ?? null,
@@ -1475,34 +1837,20 @@ HTML;
 
         $quotation->update(['status' => 'converted']);
 
-        // Notify PCD officers — they're the next humans in the chain.
+        // Notify IED officers — they're the gate before PCD now.
         NotifyService::toPermission(
-            'view pcd-inbox',
-            'work_order_created',
-            'New Work Order — PCD action required',
-            "WO {$woNumber} from Quotation #{$quotation->id} ({$quotation->customer?->name}) is awaiting PCD setup.",
-            "/pcd/inbox/{$workOrder->id}",
-            'fi-rr-tools',
+            'view rfqs',
+            'work_order_pending_ied_review',
+            'New Work Order — IED review required',
+            "WO {$woNumber} from Quotation #{$quotation->id} ({$quotation->customer?->name}) is awaiting IED acceptance.",
+            "/ied/work-orders/{$workOrder->id}",
+            'fi-rr-paper-plane',
             'brand',
         );
 
-        // Redirect destination depends on who's doing the conversion:
-        //   - If they have PCD inbox access → land on the PCD checklist directly.
-        //   - Otherwise (IED officer) → stay on the quotation, since they don't
-        //     have permission to view the PCD inbox. They get a clear success
-        //     message instead so they know the WO was handed off to PCD.
-        $user = auth()->user();
-        $canSeePcd = $user && method_exists($user, 'can') && $user->can('view pcd-inbox');
-
-        if ($canSeePcd) {
-            return redirect()
-                ->route('pcd.inbox.show', $workOrder)
-                ->with('success', "Work Order {$woNumber} created. Continue with PCD setup below.");
-        }
-
         return redirect()
-            ->route('quotations.show', $quotation)
-            ->with('success', "Work Order {$woNumber} (Job #{$jobNumber}) created and handed off to PCD. The PCD team will set up Material Requisition, Work Order routing, and Operation Sheet from their inbox.");
+            ->route('ied.work-orders.show', $workOrder)
+            ->with('success', "Work Order {$woNumber} created and queued for IED review. A job number will be assigned when it's forwarded to PCD.");
     }
 
     // ─── Export: Excel ────────────────────────────────────────────────

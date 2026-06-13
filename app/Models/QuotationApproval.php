@@ -9,11 +9,20 @@ class QuotationApproval extends Model
     protected $fillable = [
         'quotation_id', 'approver_id', 'level', 'status', 'remarks',
         'signature_path', 'approved_at',
+        'forwarded_to_user_id', 'forwarded_at', 'forward_reason',
     ];
 
     protected function casts(): array
     {
-        return ['approved_at' => 'datetime'];
+        return [
+            'approved_at'  => 'datetime',
+            'forwarded_at' => 'datetime',
+        ];
+    }
+
+    public function forwardedTo()
+    {
+        return $this->belongsTo(User::class, 'forwarded_to_user_id');
     }
 
     /**

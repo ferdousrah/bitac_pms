@@ -2,6 +2,8 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo } from 'react';
 import QuotationTermsAI from '@/Components/QuotationTermsAI';
+import ForwardingLetterAI from '@/Components/ForwardingLetterAI';
+import RichTextEditor from '@/Components/RichTextEditor';
 import { useAiEnabled } from '@/lib/useAiEnabled';
 
 const fmt = (v: number) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,6 +51,11 @@ export default function QuotationCreate({
         save_as_draft:     false,
         // BITAC letter header
         memo_no:            existing?.memo_no ?? '',
+        memo_date:          existing?.memo_date ?? new Date().toISOString().slice(0, 10),
+        discount_type:      (existing?.discount_type ?? '') as '' | 'percent' | 'fixed',
+        discount:           String(existing?.discount ?? '0'),
+        forwarding_letter_subject: existing?.forwarding_letter_subject ?? '',
+        forwarding_letter:  existing?.forwarding_letter ?? '',
         customer_ref_no:    existing?.customer_ref_no ?? defaultCustomerRefNo ?? '',
         customer_ref_date:  existing?.customer_ref_date ?? defaultCustomerRefDate ?? '',
         recipient_block:    existing?.recipient_block ?? defaultRecipient ?? '',
@@ -114,9 +121,10 @@ export default function QuotationCreate({
     // so the line-item sum IS the grand total. We compute the embedded VAT
     // portion for display only (so the preparer can see the breakdown).
     // Tax (separate from VAT, e.g. AIT) is calculated on pre-VAT subtotal and ADDED on top.
-    const { grandTotal, embeddedVat, taxAmount, lineAmounts } = useMemo(() => {
+    const { grandTotal, embeddedVat, taxAmount, lineAmounts, discountAmount } = useMemo(() => {
         const vatRate = parseFloat(data.vat_rate) || 0;
         const taxRate = parseFloat(data.tax_rate) || 0;
+        const discInput = parseFloat(data.discount) || 0;
         const amounts = (data.items as LineItem[]).map((i) =>
             (parseFloat(String(i.quantity)) || 0) * (parseFloat(String(i.unit_price)) || 0)
         );
@@ -124,13 +132,18 @@ export default function QuotationCreate({
         const embedded = vatRate > 0 ? gross * vatRate / (100 + vatRate) : 0;
         const preVatSubtotal = gross - embedded;
         const tax = taxRate > 0 ? preVatSubtotal * taxRate / 100 : 0;
+        let discount = 0;
+        if (data.discount_type === 'percent') discount = gross * discInput / 100;
+        else if (data.discount_type === 'fixed') discount = discInput;
+        discount = Math.min(discount, gross);
         return {
-            grandTotal:  gross + tax,
+            grandTotal:  gross - discount + tax,
             embeddedVat: embedded,
             taxAmount:   tax,
             lineAmounts: amounts,
+            discountAmount: discount,
         };
-    }, [data.items, data.vat_rate, data.tax_rate]);
+    }, [data.items, data.vat_rate, data.tax_rate, data.discount, data.discount_type]);
 
     const submit = (e: FormEvent, asDraft = false) => {
         e.preventDefault();
@@ -188,7 +201,7 @@ export default function QuotationCreate({
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div className="form-group">
                                     <label className="form-label">
                                         <i className="fi fi-rr-document text-xs leading-none mr-1.5" />
@@ -202,6 +215,28 @@ export default function QuotationCreate({
                                         placeholder="36.06.2692.028.51.028(2).26.92"
                                     />
                                     {errors.memo_no && <p className="form-error">{errors.memo_no as any}</p>}
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <i className="fi fi-rr-calendar text-xs leading-none mr-1.5" />
+                                        Memo Date
+                                        <span className="ml-1 text-[9px] font-normal text-surface-400">(prints as Date)</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={data.memo_date}
+                                        onChange={e => setData('memo_date', e.target.value)}
+                                        className="form-input"
+                                    />
+                                    {data.memo_date && (
+                                        <p className="text-[10px] text-surface-500 mt-1 font-mono">
+                                            Prints as: {(() => {
+                                                const [y, m, d] = String(data.memo_date).split('-');
+                                                return `${d}/${m}/${y}`;
+                                            })()}
+                                        </p>
+                                    )}
+                                    {errors.memo_date && <p className="form-error">{errors.memo_date as any}</p>}
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">
@@ -389,6 +424,44 @@ export default function QuotationCreate({
                                 </div>
                             </div>
 
+                            {/* Discount input — type toggle + amount */}
+                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Discount Type <span className="form-label-optional">(optional)</span></label>
+                                    <div className="flex gap-1 bg-surface-100 p-1 rounded-xl">
+                                        <button type="button"
+                                            onClick={() => setData('discount_type', '')}
+                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${data.discount_type === '' ? 'bg-white text-surface-900 shadow-sm' : 'text-surface-500'}`}>
+                                            None
+                                        </button>
+                                        <button type="button"
+                                            onClick={() => setData('discount_type', 'percent')}
+                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${data.discount_type === 'percent' ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500'}`}>
+                                            %
+                                        </button>
+                                        <button type="button"
+                                            onClick={() => setData('discount_type', 'fixed')}
+                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${data.discount_type === 'fixed' ? 'bg-white text-brand-700 shadow-sm' : 'text-surface-500'}`}>
+                                            ৳ Fixed
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">
+                                        Discount {data.discount_type === 'percent' ? '(%)' : data.discount_type === 'fixed' ? '(৳)' : ''}
+                                    </label>
+                                    <input type="number" min={0} step="0.01"
+                                        value={data.discount}
+                                        onChange={e => setData('discount', e.target.value)}
+                                        disabled={!data.discount_type}
+                                        className="form-input font-mono disabled:bg-surface-50 disabled:text-surface-400"
+                                        placeholder="0" />
+                                    {data.discount_type && discountAmount > 0 && (
+                                        <p className="form-hint text-emerald-600 font-semibold">− ৳{fmt(discountAmount)}</p>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Totals */}
                             <div className="mt-6 rounded-2xl bg-gradient-to-br from-surface-900 to-surface-800 p-5 text-white">
                                 <div className="flex items-center gap-2 mb-4">
@@ -396,12 +469,18 @@ export default function QuotationCreate({
                                     <span className="text-xs font-semibold text-surface-300 uppercase tracking-wider">Quotation Totals</span>
                                 </div>
                                 <div className="space-y-2.5 text-sm">
-                                    {(embeddedVat > 0 || taxAmount > 0) && (
+                                    {(embeddedVat > 0 || taxAmount > 0 || discountAmount > 0) && (
                                         <div className="space-y-1 pb-2 border-b border-white/10">
                                             {embeddedVat > 0 && (
                                                 <div className="flex justify-between text-surface-300 text-xs">
                                                     <span>Embedded VAT @ {parseFloat(data.vat_rate) || 0}%</span>
                                                     <span className="font-mono tabular-nums">{fmt(embeddedVat)}</span>
+                                                </div>
+                                            )}
+                                            {discountAmount > 0 && (
+                                                <div className="flex justify-between text-emerald-300 text-xs">
+                                                    <span>Discount {data.discount_type === 'percent' ? `@ ${parseFloat(data.discount) || 0}%` : ''}</span>
+                                                    <span className="font-mono tabular-nums">− {fmt(discountAmount)}</span>
                                                 </div>
                                             )}
                                             {taxAmount > 0 && (
@@ -627,6 +706,62 @@ export default function QuotationCreate({
                                     />
                                 </div>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Forwarding Letter — printed as a separate PDF that goes
+                        alongside the quotation. Optional. */}
+                    <div className="card">
+                        <div className="card-header">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                    <i className="fi fi-rr-envelope text-indigo-500 text-sm leading-none" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-surface-900">Forwarding Letter <span className="text-[10px] font-normal text-surface-400">(optional)</span></h3>
+                                    <p className="text-xs text-surface-400">A separate cover letter that ships with the quotation PDF.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="card-body space-y-3">
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Subject</label>
+                                <input type="text"
+                                    value={data.forwarding_letter_subject}
+                                    onChange={e => setData('forwarding_letter_subject', e.target.value)}
+                                    placeholder="Quotation for ..."
+                                    className="form-input" />
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Body</label>
+                                <RichTextEditor
+                                    value={data.forwarding_letter}
+                                    onChange={(html) => setData('forwarding_letter', html)}
+                                    placeholder="Dear Sir/Madam, with reference to your RFQ … we are pleased to enclose our quotation for the captioned work."
+                                    minHeight="220px"
+                                />
+                                <p className="form-hint flex items-center gap-1 mt-2">
+                                    <i className="fi fi-rr-info text-[10px] leading-none" />
+                                    Letterhead, ref no, date and your signature are added automatically by the PDF generator.
+                                </p>
+
+                                {/* AI assist — Draft or Polish the letter body */}
+                                <div className="mt-3 p-2.5 rounded-xl bg-indigo-50/40 border border-indigo-100">
+                                    <ForwardingLetterAI
+                                        currentText={data.forwarding_letter}
+                                        onApplyText={(text) => setData('forwarding_letter', text)}
+                                        onApplySubject={(subject) => setData('forwarding_letter_subject', subject)}
+                                        context={{
+                                            rfq_id: data.rfq_id,
+                                            customer_ref_no: data.customer_ref_no,
+                                            subject: data.forwarding_letter_subject,
+                                            validity_days: data.validity_days,
+                                            vat_rate: data.vat_rate,
+                                            items: data.items,
+                                        }}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
 

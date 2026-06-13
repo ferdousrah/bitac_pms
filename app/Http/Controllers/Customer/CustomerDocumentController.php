@@ -157,6 +157,23 @@ class CustomerDocumentController extends Controller
             ->pdf(request(), $quotation);
     }
 
+    /**
+     * Customer-side download of the optional forwarding letter that ships
+     * alongside a quotation. Same ownership check as quotation().
+     */
+    public function quotationForwardingLetter(Quotation $quotation)
+    {
+        $customer = auth('customer')->user();
+        $quotation->load(['rfq', 'workOrder']);
+
+        $owned = ($quotation->workOrder?->customer_id === $customer->id)
+            || ($quotation->rfq?->customer_id === $customer->id);
+        abort_unless($owned, 403);
+
+        return app(\App\Http\Controllers\QuotationController::class)
+            ->exportForwardingLetterPdf(request(), $quotation);
+    }
+
     public function challan(\Illuminate\Http\Request $request, DeliveryOrder $delivery)
     {
         $customer = auth('customer')->user();

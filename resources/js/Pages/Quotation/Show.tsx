@@ -98,32 +98,103 @@ function ApprovalChain({ approvals }: { approvals: any[] }) {
     };
 
     return (
-        <div className="flex flex-wrap items-start gap-1">
+        <div className="space-y-3">
             {approvals.map((a: any, i: number) => {
                 const style = getStyle(a);
-                // Strip the "[Changes Requested]" prefix so it doesn't show in the comment.
                 const displayComment = isChangesRequested(a)
                     ? a.comments.replace(/^\[Changes Requested\]\s*/, '')
                     : a.comments;
+                const u = a.approver;
                 return (
-                    <div key={a.id} className="flex items-center gap-1">
-                        <div className={`border-2 rounded-xl px-4 py-3 text-center min-w-[7rem] ${style.ring}`}>
-                            <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-1">Level {a.level}</div>
-                            <div className="flex items-center justify-center gap-1.5 mb-1">
-                                <i className={`${style.icon} text-sm leading-none`} />
-                                <span className={`text-sm font-bold capitalize ${style.text}`}>{style.label}</span>
+                    <div key={a.id} className={`border-2 rounded-xl p-4 ${style.ring}`}>
+                        {/* Header row */}
+                        <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-surface-100">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-white/70 text-[10px] font-bold text-surface-700">
+                                    {a.level}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    <i className={`${style.icon} text-sm leading-none`} />
+                                    <span className={`text-xs font-bold capitalize ${style.text}`}>{style.label}</span>
+                                </div>
                             </div>
-                            {a.approver?.name && (
-                                <div className="text-xs text-surface-500 font-medium">{a.approver.name}</div>
-                            )}
-                            {displayComment && (
-                                <div className="text-xs text-surface-400 italic mt-1.5 border-t border-surface-100 pt-1.5">"{displayComment}"</div>
+                            {a.acted_at && (
+                                <span className="text-[10px] text-surface-400 font-mono shrink-0">{a.acted_at}</span>
                             )}
                         </div>
+
+                        {/* Approver identity block */}
+                        {u && (
+                            <div className="flex gap-3">
+                                {/* Signature panel */}
+                                <div className="shrink-0 w-28">
+                                    {u.signature_url ? (
+                                        <div className="rounded-lg bg-white border border-surface-200 p-2 h-14 flex items-center justify-center">
+                                            <img src={u.signature_url} alt="" className="max-h-10 max-w-full object-contain" />
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-lg bg-surface-50 border border-dashed border-surface-200 h-14 flex flex-col items-center justify-center text-[9px] text-surface-400">
+                                            <i className="fi fi-rr-pencil-paintbrush leading-none mb-0.5" />
+                                            no signature
+                                        </div>
+                                    )}
+                                    <div className="text-[9px] text-surface-400 uppercase tracking-wider text-center mt-1 font-semibold">Signature</div>
+                                </div>
+
+                                {/* Identity + contact */}
+                                <div className="flex-1 min-w-0 space-y-0.5">
+                                    <div className="text-sm font-bold text-surface-900 leading-tight">{u.name}</div>
+                                    {u.designation && (
+                                        <div className="text-[11px] text-surface-600 leading-tight">{u.designation}</div>
+                                    )}
+                                    {u.center && (
+                                        <div className="text-[11px] text-surface-500 leading-tight">{u.center}</div>
+                                    )}
+                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-1.5 text-[11px] text-surface-500">
+                                        {u.email && (
+                                            <a href={`mailto:${u.email}`} className="inline-flex items-center gap-1 hover:text-surface-800">
+                                                <i className="fi fi-rr-envelope text-[10px] leading-none" />
+                                                <span className="truncate max-w-[180px]">{u.email}</span>
+                                            </a>
+                                        )}
+                                        {u.phone && (
+                                            <a href={`tel:${u.phone}`} className="inline-flex items-center gap-1 hover:text-surface-800">
+                                                <i className="fi fi-rr-phone-call text-[10px] leading-none" />
+                                                {u.phone}
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Comment */}
+                        {displayComment && (
+                            <div className="mt-3 px-2.5 py-1.5 rounded-md bg-white/70 border border-surface-100 text-xs text-surface-600 italic">
+                                "{displayComment}"
+                            </div>
+                        )}
+
+                        {/* Forwarded-to badge */}
+                        {a.forwarded_to && (
+                            <div className="mt-3 px-2.5 py-2 rounded-md bg-indigo-50 border border-indigo-100 text-[11px] text-indigo-800">
+                                <div className="flex items-center gap-1 font-bold mb-0.5">
+                                    <i className="fi fi-rr-share text-[10px] leading-none" />
+                                    Forwarded to {a.forwarded_to.name}
+                                </div>
+                                {a.forwarded_to.designation && (
+                                    <div className="text-indigo-700">{a.forwarded_to.designation}{a.forwarded_to.center ? ` · ${a.forwarded_to.center}` : ''}</div>
+                                )}
+                                {a.forward_reason && (
+                                    <div className="text-indigo-600 italic mt-1">"{a.forward_reason}"</div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Down chevron between levels */}
                         {i < approvals.length - 1 && (
-                            <div className="flex items-center px-1">
-                                <div className={`w-6 h-0.5 rounded-full ${style.line}`} />
-                                <i className="fi fi-rr-angle-right text-surface-300 text-xs leading-none -ml-0.5" />
+                            <div className="flex justify-center mt-2">
+                                <i className="fi fi-rr-angle-down text-surface-300 text-base leading-none" />
                             </div>
                         )}
                     </div>
@@ -136,10 +207,12 @@ function ApprovalChain({ approvals }: { approvals: any[] }) {
 /* ─── Main ────────────────────────────────────────────────────────────── */
 export default function QuotationShow({
     quotation, revisions = [], rfqAttachments = [], comments = [], attachments = [],
-    sourceEstimates = [],
+    sourceEstimates = [], forwardableUsers = [],
     canSubmitForApproval, canApprove, canReject, canRequestChanges, canSendToCustomer, canConvert,
     canRecordResponse, canCreateRevision,
 }: any) {
+    const [forwardOpen, setForwardOpen] = useState(false);
+    const forwardForm = useForm<any>({ forwarded_to_user_id: '', reason: '' });
     const sendForm    = useForm({});
     const convertForm = useForm<any>({
         customer_po_no:   quotation.customer_po_no ?? '',
@@ -380,8 +453,9 @@ export default function QuotationShow({
                                     {(() => {
                                         const vat   = Number(quotation.vat_amount ?? 0);
                                         const tax   = Number(quotation.tax_amount ?? 0);
+                                        const disc  = Number(quotation.discount ?? 0);
                                         const total = Number(quotation.total_amount ?? 0);
-                                        const subtotal = total - vat - tax;
+                                        const subtotal = total - vat - tax + disc;
                                         return (
                                             <>
                                                 <div className="flex items-center justify-between text-surface-600">
@@ -392,6 +466,12 @@ export default function QuotationShow({
                                                     <span>VAT <span className="text-[10px] text-surface-400">({quotation.vat_rate}%)</span></span>
                                                     <span className="font-mono tabular-nums">+ {fmt(vat)}</span>
                                                 </div>
+                                                {disc > 0 && (
+                                                    <div className="flex items-center justify-between text-emerald-700">
+                                                        <span>Discount {quotation.discount_type === 'percent' ? '(%)' : '(৳)'}</span>
+                                                        <span className="font-mono tabular-nums">− {fmt(disc)}</span>
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center justify-between text-surface-600">
                                                     <span>Tax <span className="text-[10px] text-surface-400">({quotation.tax_rate}%)</span></span>
                                                     <span className="font-mono tabular-nums">+ {fmt(tax)}</span>
@@ -418,6 +498,7 @@ export default function QuotationShow({
                                     {quotation.recipient_block && (
                                         <div>
                                             <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400 mb-1.5">Recipient</div>
+                                            <div className="text-sm font-bold text-surface-800 mb-1">To,</div>
                                             <div className="text-sm text-surface-800 whitespace-pre-line leading-relaxed font-medium">
                                                 {quotation.recipient_block}
                                             </div>
@@ -485,9 +566,9 @@ export default function QuotationShow({
                                     </div>
                                 )}
 
-                                {/* Approve / Request Changes / Reject forms */}
+                                {/* Approve / Request Changes / Reject / Forward / Edit forms */}
                                 {(canApprove || canReject || canRequestChanges) && quotation.status === 'pending_approval' && (
-                                    <div className="mt-6 pt-5 border-t border-surface-100">
+                                    <div className="mt-6 pt-5 border-t border-surface-100 space-y-3">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             {canApprove && (
                                                 <button
@@ -516,6 +597,25 @@ export default function QuotationShow({
                                                     Reject
                                                 </button>
                                             )}
+                                        </div>
+                                        {/* Forward + Approver Edit row */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {canApprove && (
+                                                <button
+                                                    onClick={() => setForwardOpen(true)}
+                                                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-sm font-semibold transition-colors"
+                                                >
+                                                    <i className="fi fi-rr-share text-xs leading-none" />
+                                                    Forward to another reviewer
+                                                </button>
+                                            )}
+                                            <Link
+                                                href={`/quotations/${quotation.id}/edit`}
+                                                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-surface-100 hover:bg-surface-200 text-surface-700 border border-surface-200 text-sm font-semibold transition-colors"
+                                            >
+                                                <i className="fi fi-rr-pencil text-xs leading-none" />
+                                                Edit Quotation
+                                            </Link>
                                         </div>
                                     </div>
                                 )}
@@ -729,14 +829,67 @@ export default function QuotationShow({
                                 <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Details</h3>
                             </div>
                             <div className="card-body space-y-4">
-                                <div>
-                                    <dt className="text-xs text-surface-400 font-medium">Prepared By</dt>
-                                    <dd className="text-sm font-semibold text-surface-800 mt-0.5">{quotation.created_by_name}</dd>
+                                {/* Customer's Ref No. */}
+                                {quotation.customer_ref_no && (
+                                    <div>
+                                        <dt className="text-xs text-surface-400 font-medium">Customer Ref No.</dt>
+                                        <dd className="text-sm font-mono font-semibold text-surface-800 mt-0.5">{quotation.customer_ref_no}</dd>
+                                        {quotation.customer_ref_date && (
+                                            <div className="text-[11px] text-surface-400 mt-0.5">dated {quotation.customer_ref_date}</div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Memo No. */}
+                                {quotation.memo_no && (
+                                    <div>
+                                        <dt className="text-xs text-surface-400 font-medium">Memo No.</dt>
+                                        <dd className="text-sm font-mono font-semibold text-surface-800 mt-0.5 break-all">{quotation.memo_no}</dd>
+                                    </div>
+                                )}
+
+                                {/* Prepared By — full block with signature + contact */}
+                                <div className="pt-3 border-t border-surface-100">
+                                    <dt className="text-xs text-surface-400 font-medium mb-1.5">Prepared By</dt>
+                                    {quotation.created_by ? (
+                                        <div className="space-y-1">
+                                            {quotation.created_by.signature_url && (
+                                                <div className="rounded-lg bg-white border border-surface-200 p-2 h-12 flex items-center justify-center mb-1.5">
+                                                    <img src={quotation.created_by.signature_url} alt="" className="max-h-9 max-w-full object-contain" />
+                                                </div>
+                                            )}
+                                            <div className="text-sm font-bold text-surface-900">{quotation.created_by.name}</div>
+                                            {quotation.created_by.designation && (
+                                                <div className="text-[11px] text-surface-600">{quotation.created_by.designation}</div>
+                                            )}
+                                            {quotation.created_by.center && (
+                                                <div className="text-[11px] text-surface-500">{quotation.created_by.center}</div>
+                                            )}
+                                            <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 pt-1 text-[11px] text-surface-500">
+                                                {quotation.created_by.email && (
+                                                    <a href={`mailto:${quotation.created_by.email}`} className="inline-flex items-center gap-1 hover:text-surface-800">
+                                                        <i className="fi fi-rr-envelope text-[10px] leading-none" />
+                                                        <span className="truncate max-w-[140px]">{quotation.created_by.email}</span>
+                                                    </a>
+                                                )}
+                                                {quotation.created_by.phone && (
+                                                    <a href={`tel:${quotation.created_by.phone}`} className="inline-flex items-center gap-1 hover:text-surface-800">
+                                                        <i className="fi fi-rr-phone-call text-[10px] leading-none" />
+                                                        {quotation.created_by.phone}
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm font-semibold text-surface-800">{quotation.created_by_name}</div>
+                                    )}
                                 </div>
+
                                 <div>
                                     <dt className="text-xs text-surface-400 font-medium">Date</dt>
                                     <dd className="text-sm text-surface-700 mt-0.5">{quotation.created_at}</dd>
                                 </div>
+
                                 {quotation.notes && (
                                     <div>
                                         <dt className="text-xs text-surface-400 font-medium">Notes</dt>
@@ -771,6 +924,23 @@ export default function QuotationShow({
                                     <i className="fi fi-rr-file-pdf text-sm leading-none" />
                                     Preview / Download PDF
                                 </button>
+
+                                {/* Forwarding Letter PDF — only when one is written */}
+                                {quotation.forwarding_letter && quotation.forwarding_letter.trim().length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEstimatePdf({
+                                            open:     true,
+                                            url:      `/quotations/${quotation.id}/forwarding-letter/pdf?preview=base64`,
+                                            title:    `Forwarding Letter — Q-${String(quotation.id).padStart(5, '0')}`,
+                                            subtitle: quotation.forwarding_letter_subject ?? '',
+                                        })}
+                                        className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-sm font-semibold transition-colors"
+                                    >
+                                        <i className="fi fi-rr-envelope text-sm leading-none" />
+                                        Forwarding Letter PDF
+                                    </button>
+                                )}
 
                                 {/* Send to Customer */}
                                 {canSendToCustomer && (
@@ -1054,6 +1224,77 @@ export default function QuotationShow({
                                     </button>
                                     <button type="button" onClick={() => setShowResponseModal(false)} className="btn-outline">
                                         Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Forward Approval Modal */}
+            {forwardOpen && (
+                <>
+                    <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm" onClick={() => setForwardOpen(false)} />
+                    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-premium-lg border border-surface-100 w-full max-w-md animate-scale-in">
+                            <div className="px-5 py-4 border-b border-surface-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                        <i className="fi fi-rr-share text-indigo-600 leading-none" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-bold text-surface-900">Forward Approval</h3>
+                                        <p className="text-xs text-surface-500">Pick someone outside the configured chain.</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setForwardOpen(false)} className="btn-ghost btn-icon">
+                                    <i className="fi fi-rr-cross text-base leading-none" />
+                                </button>
+                            </div>
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    forwardForm.post(`/quotations/${quotation.id}/forward-approval`, {
+                                        preserveScroll: true,
+                                        onSuccess: () => { setForwardOpen(false); forwardForm.reset(); },
+                                    });
+                                }}
+                                className="p-5 space-y-4"
+                            >
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Forward to</label>
+                                    <select
+                                        value={forwardForm.data.forwarded_to_user_id}
+                                        onChange={e => forwardForm.setData('forwarded_to_user_id', e.target.value)}
+                                        className="form-select"
+                                        required
+                                    >
+                                        <option value="">— Select reviewer —</option>
+                                        {(forwardableUsers ?? []).map((u: any) => (
+                                            <option key={u.id} value={u.id}>{u.name}{u.designation ? ` · ${u.designation}` : ''}</option>
+                                        ))}
+                                    </select>
+                                    {forwardForm.errors.forwarded_to_user_id && <p className="form-error">{forwardForm.errors.forwarded_to_user_id as any}</p>}
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Reason <span className="form-label-optional">(optional)</span></label>
+                                    <textarea
+                                        value={forwardForm.data.reason}
+                                        onChange={e => forwardForm.setData('reason', e.target.value)}
+                                        rows={3}
+                                        placeholder="Why are you forwarding this?"
+                                        className="form-textarea text-sm"
+                                    />
+                                </div>
+                                <div className="rounded-lg bg-indigo-50/50 border border-indigo-100 p-3 text-[11px] text-indigo-800 flex gap-2">
+                                    <i className="fi fi-rr-info text-indigo-500 leading-none mt-0.5 shrink-0" />
+                                    <span>The forwarded reviewer can approve or reject on your behalf. Their decision completes your step.</span>
+                                </div>
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-100">
+                                    <button type="button" onClick={() => setForwardOpen(false)} className="btn-ghost btn-sm">Cancel</button>
+                                    <button type="submit" disabled={forwardForm.processing || !forwardForm.data.forwarded_to_user_id} className="btn-primary btn-sm">
+                                        {forwardForm.processing ? 'Forwarding…' : 'Forward'}
                                     </button>
                                 </div>
                             </form>

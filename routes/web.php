@@ -164,6 +164,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('ai-assist.approval-note');
         Route::post('/ai-assist/quotation-terms', [\App\Http\Controllers\AiAssistController::class, 'quotationTerms'])
             ->name('ai-assist.quotation-terms');
+        Route::post('/ai-assist/forwarding-letter', [\App\Http\Controllers\AiAssistController::class, 'forwardingLetter'])
+            ->name('ai-assist.forwarding-letter');
         Route::post('/ai-assist/comment-reply', [\App\Http\Controllers\AiAssistController::class, 'commentReply'])
             ->name('ai-assist.comment-reply');
         Route::post('/ai-assist/sample-description', [\App\Http\Controllers\AiAssistController::class, 'sampleDescription'])
@@ -258,6 +260,15 @@ Route::middleware(['auth'])->group(function () {
 
     // ─── IED Emergency Production Requests ───────────────────────────
     // Reviewers — same permission gate as RFQ management.
+    // ─── IED Work Order Acceptance Inbox — gate before PCD ────────────────────
+    Route::prefix('ied/work-orders')->middleware('permission:view rfqs')->name('ied.work-orders.')->group(function () {
+        Route::get('/',                       [\App\Http\Controllers\Ied\IedWorkOrderInboxController::class, 'index'])->name('index');
+        Route::get('/files/{file}',           [\App\Http\Controllers\Ied\IedWorkOrderInboxController::class, 'file'])->name('files.show');
+        Route::get('/{workOrder}',            [\App\Http\Controllers\Ied\IedWorkOrderInboxController::class, 'show'])->name('show');
+        Route::post('/{workOrder}/accept',    [\App\Http\Controllers\Ied\IedWorkOrderInboxController::class, 'accept'])->name('accept');
+        Route::post('/{workOrder}/reject',    [\App\Http\Controllers\Ied\IedWorkOrderInboxController::class, 'reject'])->name('reject');
+    });
+
     Route::prefix('ied/emergency-requests')->middleware('permission:manage rfqs')->name('ied.emergency-requests.')->group(function () {
         Route::get('/',                              [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'index'])->name('index');
         Route::get('/{emergencyRequest}',            [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'show'])->name('show');
@@ -406,6 +417,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/inbox', [PcdInboxController::class, 'index'])->name('inbox.index');
         Route::get('/inbox/{workOrder}', [PcdInboxController::class, 'show'])->name('inbox.show');
         Route::post('/inbox/{workOrder}/cancel', [PcdInboxController::class, 'cancel'])->name('inbox.cancel');
+        Route::post('/inbox/{workOrder}/job-number', [PcdInboxController::class, 'setJobNumber'])->name('inbox.set-job-number');
 
         // Material Requisitions
         Route::resource('material-requisitions', PcdMaterialRequisitionController::class);
@@ -442,6 +454,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('quotations.request-changes');
     Route::get('quotations/{quotation}/pdf', [QuotationController::class, 'pdf'])
         ->name('quotations.pdf');
+    // Forwarding letter as a separate PDF — same letterhead.
+    Route::get('quotations/{quotation}/forwarding-letter/pdf', [QuotationController::class, 'exportForwardingLetterPdf'])
+        ->name('quotations.forwarding-letter.pdf');
+    // Approver hands off their pending row to someone outside the chain.
+    Route::post('quotations/{quotation}/forward-approval', [QuotationController::class, 'forwardApproval'])
+        ->middleware('permission:approve quotations')
+        ->name('quotations.forward-approval');
     Route::post('quotations/{quotation}/send', [QuotationController::class, 'sendToCustomer'])
         ->middleware('permission:convert quotations')
         ->name('quotations.send');
@@ -730,6 +749,7 @@ Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('custo
     Route::post('/rfqs',                      [\App\Http\Controllers\Customer\CustomerRfqController::class, 'store'])->name('rfqs.store');
     Route::get('/rfqs/{rfq}',                 [\App\Http\Controllers\Customer\CustomerRfqController::class, 'show'])->name('rfqs.show');
     Route::post('/rfqs/{rfq}/cancel',         [\App\Http\Controllers\Customer\CustomerRfqController::class, 'cancel'])->name('rfqs.cancel');
+    Route::post('/rfqs/{rfq}/issue-work-order', [\App\Http\Controllers\Customer\CustomerRfqController::class, 'issueWorkOrder'])->name('rfqs.issue-work-order');
 
     Route::get('/work-orders', [CustomerWorkOrderController::class, 'index'])->name('work-orders.index');
     Route::get('/work-orders/{workOrder}', [CustomerWorkOrderController::class, 'show'])->name('work-orders.show');
@@ -749,6 +769,7 @@ Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('custo
 
     Route::get('/documents', [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'index'])->name('documents.index');
     Route::get('/documents/quotation/{quotation}',     [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'quotation'])->name('documents.quotation');
+    Route::get('/documents/quotation/{quotation}/forwarding-letter', [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'quotationForwardingLetter'])->name('documents.quotation.forwarding-letter');
     Route::get('/documents/challan/{delivery}',        [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'challan'])->name('documents.challan');
     Route::get('/documents/inspection/{inspection}',   [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'inspectionCert'])->name('documents.inspection');
     Route::get('/documents/gate-pass/{gatePass}',      [\App\Http\Controllers\Customer\CustomerDocumentController::class, 'gatePass'])->name('documents.gate-pass');

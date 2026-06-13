@@ -19,6 +19,8 @@ interface Props {
     entityId: number;
     comments: Comment[];
     title?: string;
+    /** When true, the thread starts minimised; the user can click the header to expand. */
+    defaultCollapsed?: boolean;
 }
 
 const KIND_BADGES: Record<string, { label: string; dot: string; text: string }> = {
@@ -27,7 +29,8 @@ const KIND_BADGES: Record<string, { label: string; dot: string; text: string }> 
     clarification: { label: 'Clarification', dot: 'bg-purple-400',  text: 'text-purple-700' },
 };
 
-export default function CommentThread({ entityType, entityId, comments = [], title = 'Discussion' }: Props) {
+export default function CommentThread({ entityType, entityId, comments = [], title = 'Discussion', defaultCollapsed = false }: Props) {
+    const [open, setOpen] = useState(!defaultCollapsed);
     const { auth } = usePage().props as any;
     const currentUserId: number | null = auth?.user?.id ?? null;
 
@@ -104,7 +107,12 @@ export default function CommentThread({ entityType, entityId, comments = [], tit
 
     return (
         <div className="card">
-            <div className="px-5 py-3 border-b border-surface-100 flex items-center justify-between">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-expanded={open}
+                className={`w-full px-5 py-3 flex items-center justify-between group text-left ${open ? 'border-b border-surface-100' : ''}`}
+            >
                 <div className="flex items-center gap-2">
                     <i className="fi fi-rr-comments text-surface-400 text-xs leading-none" />
                     <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">{title}</h3>
@@ -113,12 +121,13 @@ export default function CommentThread({ entityType, entityId, comments = [], tit
                             {comments.length}
                         </span>
                     )}
+                    {!open && comments.length === 0 && (
+                        <span className="text-[11px] text-surface-400 italic">No comments yet</span>
+                    )}
                 </div>
-                <span className="text-[10px] text-surface-400 italic">
-                    Preparer ↔ Approver conversation
-                </span>
-            </div>
-
+                <i className={`fi fi-rr-angle-down text-[10px] leading-none text-surface-400 transition-transform ${open ? 'rotate-180' : ''} group-hover:text-surface-600`} />
+            </button>
+            {open && (<>
             {/* Thread */}
             <div className="divide-y divide-surface-100">
                 {comments.length === 0 ? (
@@ -369,6 +378,7 @@ export default function CommentThread({ entityType, entityId, comments = [], tit
                     </div>
                 </div>
             </form>
+            </>)}
         </div>
     );
 }

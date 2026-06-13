@@ -68,10 +68,13 @@ class CostEstimateController extends Controller
                 'status'        => $e->status,
                 'created_by'    => $e->createdBy?->name ?? '—',
                 'created_at'    => $e->created_at->format('d M Y'),
-                'rfq_id'        => $e->rfq_id,
-                'rfq_item_id'   => $e->rfq_item_id,
-                'rfq_item_desc' => $e->rfqItem?->job_description,
-                'job_type'      => $e->rfq?->job_type ?? 'regular',
+                'rfq_id'         => $e->rfq_id,
+                'rfq_item_id'    => $e->rfq_item_id,
+                'rfq_item_desc'  => $e->rfqItem?->job_description,
+                // Customer's own reference (PO no., quote tag, etc.) entered on
+                // the originating RFQ. Surfaced as its own column on the index.
+                'customer_ref_no' => $e->rfq?->customer_ref_no,
+                'job_type'       => $e->rfq?->job_type ?? 'regular',
             ]);
 
         return Inertia::render('CostEstimate/Index', [
@@ -188,6 +191,19 @@ class CostEstimateController extends Controller
             'quotation', 'approvals.approver'
         );
 
+        // Customer-uploaded RFQ letter inherited from the parent RFQ. Streamed
+        // through the controller route so the PDF popup's base64 mode works
+        // and IDM/FDM doesn't intercept the response.
+        $rfqLetter = null;
+        if ($costEstimate->rfq && $costEstimate->rfq->rfq_letter_path) {
+            $rfqLetter = [
+                'url'       => route('rfqs.letter', $costEstimate->rfq),
+                'title'     => $costEstimate->rfq->rfq_letter_title ?: 'RFQ letter',
+                'extension' => strtolower(pathinfo($costEstimate->rfq->rfq_letter_path, PATHINFO_EXTENSION)),
+                'rfq_id'    => $costEstimate->rfq->id,
+            ];
+        }
+
         // RFQ attachments flow through to the cost estimate — same drawings and
         // sample photos the sales officer uploaded on the RFQ item.
         $rfqAttachments = [];
@@ -249,7 +265,10 @@ class CostEstimateController extends Controller
         $estimate['approvals'] = $costEstimate->approvals->map(fn($a) => [
             'id'       => $a->id,
             'level'    => $a->level,
-            'label'    => $a->label,
+            // "Approved By" reads awkwardly on a pending row — the workflow UI
+            // shows it as "Approver" instead. PDF/signature blocks keep the
+            // original label.
+            'label'    => $a->label === 'Approved By' ? 'Approver' : $a->label,
             'status'   => $a->status,
             'approver' => ['name' => $a->approver?->name],
             'remarks'  => $a->remarks,
@@ -280,6 +299,7 @@ class CostEstimateController extends Controller
             'estimate'        => $estimate,
             'revisions'       => $revisions,
             'rfqAttachments'  => $rfqAttachments,
+            'rfqLetter'       => $rfqLetter,
             'comments'        => $comments,
             'canSubmit'       => $costEstimate->approval_status === 'not_submitted'
                                 && $costEstimate->status === 'draft'
@@ -826,19 +846,21 @@ class CostEstimateController extends Controller
         $partNo      = $esc($e->part_no ?? '—');
         $actualSize  = $esc($e->actual_size ?? '—');
         $jobType     = ($e->rfq?->job_type ?? 'regular') === 'rnd' ? 'R&amp;D' : 'Regular';
+        // Customer's reference number from the originating RFQ — falls back to
+        // the estimate number when no RFQ ref was provided.
+        $refNo       = $esc($e->rfq?->customer_ref_no ?: $e->estimate_no);
 
-        // ─── Memo block — top-left estimate no, top-right date (BITAC letter style)
+        // ─── Memo block — top-left customer ref no, top-right date (English) ───
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $estimateNo . '</td>'
-            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($createdAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt; color: #000;"><b>Ref No.</b> - ' . $refNo . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><b>Date:</b> ' . $esc($createdAt) . '</td>'
             . '</tr>'
             . '</table>';
 
         // ─── Centered title ────────────────────────────────────────────
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">খরচ নির্ধারণ</div>'
-            . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(COST ESTIMATE)</div>'
+            . '<div style="font-size: 13pt; font-weight: bold; color: #000; letter-spacing: 1pt;">COST ESTIMATE</div>'
             . '</div>';
 
         // ─── Customer / Job info two-column block ──────────────────────
@@ -1031,8 +1053,12 @@ class CostEstimateController extends Controller
         {$signatureBlock}
 HTML;
 
-        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Cost Estimate {$e->estimate_no}");
-        $filename = "estimate-{$e->estimate_no}.pdf";
+        // Letterhead language: 'en' for foreign clients, 'bn' (default) for local.
+        // Pass via `?lang=en` query param. Validated inside the service too.
+        $lang = $request->query('lang') === 'en' ? 'en' : 'bn';
+
+        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Cost Estimate {$e->estimate_no}", null, $lang);
+        $filename = "estimate-{$e->estimate_no}" . ($lang === 'en' ? '-EN' : '') . '.pdf';
 
         // ?preview=base64 → JSON with base64 bytes (bypasses IDM/FDM).
         // ?preview=1      → inline PDF stream.

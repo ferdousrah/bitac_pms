@@ -73,14 +73,28 @@ class WorkOrderSectionController extends Controller
     public function update(Request $request, WorkOrder $workOrder)
     {
         $validated = $request->validate([
+            // Job number is set on this form — PCD's own internal number.
+            // Required + unique across the table (excluding this WO so re-saves
+            // don't false-positive against the existing row).
+            'job_number'            => [
+                'required', 'string', 'max:50',
+                \Illuminate\Validation\Rule::unique('work_orders', 'job_number')->ignore($workOrder->id),
+            ],
             'sections'              => 'required|array|min:1',
             'sections.*.section_id' => 'required|exists:sections,id',
             'sections.*.notes'      => 'nullable|string|max:255',
             'sections.*.qc_notes'   => 'nullable|string|max:500',
+        ], [
+            'job_number.unique' => 'This job number is already used on another work order.',
         ]);
 
         DB::transaction(function () use ($workOrder, $validated) {
-            // Wipe and recreate to preserve sequence
+            // Stamp the job number on the WO + back-fill any null item rows.
+            $jobNumber = trim($validated['job_number']);
+            $workOrder->update(['job_number' => $jobNumber]);
+            $workOrder->items()->whereNull('job_number')->update(['job_number' => $jobNumber]);
+
+            // Wipe and recreate sections to preserve sequence
             $workOrder->sections()->delete();
             foreach ($validated['sections'] as $idx => $row) {
                 $workOrder->sections()->create([

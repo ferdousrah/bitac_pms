@@ -21,6 +21,8 @@ interface Props {
     revisions: Revision[];
     title?: string;
     description?: string;
+    /** When true, the timeline starts minimised. */
+    defaultCollapsed?: boolean;
 }
 
 const COLOR_MAP: Record<string, { bg: string; ring: string; text: string; line: string; iconBg: string }> = {
@@ -36,8 +38,9 @@ const COLOR_MAP: Record<string, { bg: string; ring: string; text: string; line: 
 
 const fmt = (v: any) => v != null ? Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
 
-export default function RevisionTimeline({ revisions, title = 'Change History', description }: Props) {
+export default function RevisionTimeline({ revisions, title = 'Change History', description, defaultCollapsed = false }: Props) {
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [open, setOpen] = useState(!defaultCollapsed);
 
     if (!revisions || revisions.length === 0) {
         return (
@@ -57,16 +60,26 @@ export default function RevisionTimeline({ revisions, title = 'Change History', 
 
     return (
         <div className="card overflow-hidden">
-            <div className="px-5 py-3 border-b border-surface-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-expanded={open}
+                className={`w-full px-5 py-3 flex items-center justify-between gap-3 text-left group ${open ? 'border-b border-surface-100' : ''}`}
+            >
+                <div className="flex items-center gap-2 min-w-0">
+                    <i className="fi fi-rr-time-past text-surface-400 text-xs leading-none" />
                     <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">{title}</h3>
                     <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-bold">
                         {revisions.length} {revisions.length === 1 ? 'entry' : 'entries'}
                     </span>
                 </div>
-                <span className="text-[10px] font-mono font-bold text-surface-400">Latest: v{latestVersion}</span>
-            </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-mono font-bold text-surface-400">Latest: v{latestVersion}</span>
+                    <i className={`fi fi-rr-angle-down text-[10px] leading-none text-surface-400 transition-transform ${open ? 'rotate-180' : ''} group-hover:text-surface-600`} />
+                </div>
+            </button>
 
+            {open && (
             <div className="relative px-5 py-4 max-h-[640px] overflow-y-auto">
                 {revisions.map((rev, idx) => {
                     const colors = COLOR_MAP[rev.event_color] || COLOR_MAP.slate;
@@ -177,6 +190,7 @@ export default function RevisionTimeline({ revisions, title = 'Change History', 
                     );
                 })}
             </div>
+            )}
         </div>
     );
 }

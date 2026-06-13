@@ -267,6 +267,151 @@ PROMPT;
     /**
      * Prompt for customer-facing quotation Notes & Terms.
      */
+    /**
+     * Draft or polish a forwarding letter that accompanies a quotation PDF.
+     *
+     * Body:
+     *  - mode: 'suggest' | 'polish'
+     *  - text: string (current body — required for polish, optional for suggest)
+     *  - subject: string (optional — used as a hint)
+     *  - rfq_id: int (optional — for customer/job context)
+     *  - validity_days, vat_rate, items: same shape as quotationTerms()
+     */
+    public function forwardingLetter(Request $request)
+    {
+        $data = $request->validate([
+            'mode'                => 'required|in:suggest,polish',
+            'text'                => 'nullable|string|max:5000',
+            'subject'             => 'nullable|string|max:255',
+            'rfq_id'              => 'nullable|integer',
+            'customer_ref_no'     => 'nullable|string|max:200',
+            'validity_days'       => 'nullable|integer|min:1',
+            'vat_rate'            => 'nullable|numeric|min:0',
+            'items'               => 'nullable|array',
+            'items.*.description' => 'nullable|string',
+            'items.*.quantity'    => 'nullable|numeric',
+            'items.*.unit_price'  => 'nullable|numeric',
+        ]);
+
+        $rfq = $data['rfq_id'] ? \App\Models\Rfq::with('customer')->find($data['rfq_id']) : null;
+        $subtotal = 0.0;
+        $itemLines = [];
+        foreach ($data['items'] ?? [] as $i) {
+            $qty   = (float) ($i['quantity'] ?? 0);
+            $price = (float) ($i['unit_price'] ?? 0);
+            $subtotal += $qty * $price;
+            $itemLines[] = [
+                'description' => $i['description'] ?? '',
+                'quantity'    => $qty,
+                'unit_price'  => $price,
+                'amount'      => round($qty * $price, 2),
+            ];
+        }
+        $vatRate = (float) ($data['vat_rate'] ?? 15);
+        $total   = round($subtotal + ($subtotal * $vatRate / 100), 2);
+
+        // The form-passed customer_ref_no wins (preparer may have overridden it
+        // on the quotation), falling back to the RFQ's value. We deliberately
+        // do NOT pass our internal RFQ #id to the prompt — customers don't
+        // recognise it; they recognise the ref they themselves issued.
+        $customerRef = trim((string) ($data['customer_ref_no'] ?? '')) !== ''
+            ? $data['customer_ref_no']
+            : $rfq?->customer_ref_no;
+
+        $ctx = [
+            'customer'        => $rfq?->customer?->name,
+            'customer_ref_no' => $customerRef,
+            'subject'         => $data['subject'] ?? null,
+            'validity_days'   => $data['validity_days'] ?? 30,
+            'vat_rate'        => $vatRate,
+            'grand_total'     => $total,
+            'item_count'      => count($itemLines),
+            'items'           => array_slice($itemLines, 0, 6),
+        ];
+
+        $prompt = $this->buildForwardingLetterPrompt($data['mode'], $ctx, $data['text'] ?? '');
+
+        try {
+            $result = $this->gemini->chat([], $prompt, ['role' => 'staff', 'center' => 'All']);
+            $raw  = $result['response'] ?? '';
+            $json = $this->extractJson($raw);
+            if (!$json) {
+                return response()->json(['error' => 'Could not parse AI response', 'raw' => $raw], 500);
+            }
+            return response()->json($json);
+        } catch (\Throwable $e) {
+            \Log::warning('AI forwarding letter failed: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function buildForwardingLetterPrompt(string $mode, array $ctx, string $userText): string
+    {
+        $contextJson = json_encode($ctx, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        if ($mode === 'polish') {
+            return <<<PROMPT
+You are an AI assistant for BITAC (Bangladesh Industrial Technical Assistance Centre), an autonomous government body that prepares formal quotations for industrial B2B customers.
+
+Quotation context:
+{$contextJson}
+
+The preparer drafted this forwarding-letter body (the cover note that ships with the quotation PDF):
+"{$userText}"
+
+TASK: Polish it into a formal forwarding letter body, AND propose a matching subject line. Rules:
+- 3-5 short paragraphs, professional government letter register.
+- DO NOT include "Date:", "Ref:", recipient/address block, or a signature line — those are added by the PDF generator automatically.
+- DO start naturally (e.g. "With reference to..." or "Please find enclosed...").
+- When referencing the customer's incoming request, use ONLY the customer's own reference number (context.customer_ref_no). NEVER mention "RFQ #" or our internal RFQ id — customers don't recognise it.
+- Reference customer / total naturally when context provides them; do not invent numbers.
+- Keep the writer's intent — don't reword aggressively, just clean it up.
+- Keep language consistent with user input (English default, Bangla if user wrote Bangla).
+- Plain text only — use \\n for line breaks, no markdown.
+- Subject: short (under 80 chars), title-cased, references the work/customer at a glance.
+
+Return JSON ONLY:
+{
+  "polished": "the improved letter body as a single string with \\n line breaks",
+  "polished_subject": "a matching subject line under 80 characters",
+  "reasoning": "one short sentence on what was improved"
+}
+PROMPT;
+        }
+
+        // suggest mode
+        return <<<PROMPT
+You are an AI assistant for BITAC (Bangladesh Industrial Technical Assistance Centre), an autonomous government body that prepares formal quotations for industrial B2B customers.
+
+Quotation context:
+{$contextJson}
+
+TASK: Generate 3 distinct forwarding-letter drafts the preparer can use directly. Each draft is a cover note that ships alongside the quotation PDF and explains what's enclosed. Each draft has BOTH a subject line and a body.
+
+RULES:
+- Body: 3-5 short paragraphs each, professional government letter register.
+- DO NOT include "Date:", "Ref:", recipient/address block, or a signature line in the body — those are added by the PDF generator automatically.
+- DO start naturally (e.g. "With reference to your enquiry...").
+- When referencing the customer's incoming request, use ONLY the customer's own reference number (context.customer_ref_no). NEVER write "RFQ #" or any internal id — customers don't recognise it.
+- Each draft should differ in style/emphasis:
+  1. CONCISE  — minimal, just the essentials (2-3 short paragraphs).
+  2. STANDARD — balanced, mentions reference, scope summary, validity, next step.
+  3. WARM     — same content as Standard but a touch more relationship-oriented language while staying formal.
+- Reference actual numbers from context where natural ("with reference to your Ref. {customer_ref_no}", "Total ৳{grand_total}", "valid for {validity_days} days").
+- Plain text only — use \\n for line breaks, no markdown.
+- Subject: short (under 80 chars), title-cased, references the work/customer at a glance.
+
+Return JSON ONLY:
+{
+  "suggestions": [
+    {"label": "Concise",  "subject": "Short subject line", "text": "Full letter body with \\n line breaks"},
+    {"label": "Standard", "subject": "Short subject line", "text": "Full letter body with \\n line breaks"},
+    {"label": "Warm",     "subject": "Short subject line", "text": "Full letter body with \\n line breaks"}
+  ]
+}
+PROMPT;
+    }
+
     private function buildTermsPrompt(string $mode, array $ctx, string $userText): string
     {
         $contextJson = json_encode($ctx, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

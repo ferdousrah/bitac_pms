@@ -10,6 +10,7 @@ import { useAiEnabled } from '@/lib/useAiEnabled';
 import RfqAttachmentsPanel from '@/Components/RfqAttachmentsPanel';
 import CommentThread from '@/Components/CommentThread';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import CollapsibleCard from '@/Components/CollapsibleCard';
 
 const STATUS_BADGE: Record<string, string> = {
     draft:     'badge-slate',
@@ -27,7 +28,7 @@ const APPROVAL_STATUS: Record<string, { dot: string; text: string; label: string
 const fmt = (v: any) => Number(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (v: any) => Number(v ?? 0).toLocaleString('en-IN');
 
-export default function CostEstimateShow({ estimate, revisions = [], rfqAttachments = [], comments = [], canSubmit, canApprove, canReject }: any) {
+export default function CostEstimateShow({ estimate, revisions = [], rfqAttachments = [], rfqLetter = null, comments = [], canSubmit, canApprove, canReject }: any) {
     const currentVersion = revisions[0]?.revision_no ?? null;
     const sectionLines = (section: string) => estimate.lines.filter((l: any) => l.section === section);
 
@@ -137,17 +138,14 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                <button
-                                    type="button"
-                                    onClick={() => setPdfPopup({
+                                <PdfLanguagePicker
+                                    onPick={(lang) => setPdfPopup({
                                         open:     true,
-                                        url:      `/cost-estimates/${estimate.id}/pdf?preview=base64`,
-                                        title:    `Cost Estimate ${estimate.estimate_no}`,
+                                        url:      `/cost-estimates/${estimate.id}/pdf?preview=base64&lang=${lang}`,
+                                        title:    `Cost Estimate ${estimate.estimate_no}${lang === 'en' ? ' (English)' : ''}`,
                                         subtitle: `${estimate.job_name} · ${estimate.customer?.name ?? estimate.company_name ?? ''}`,
                                     })}
-                                    className="btn-outline btn-sm text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300">
-                                    <i className="fi fi-rr-file-pdf text-xs leading-none" /> PDF
-                                </button>
+                                />
                                 {estimate.status !== 'used' && (
                                     <button onClick={() => { setUseQuotationNote(''); setUseQuotationOpen(true); }} className="btn-success btn-sm">
                                         <i className="fi fi-rr-paper-plane text-xs leading-none" /> Use as Quotation
@@ -190,11 +188,13 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                     {/* Right: Sticky Sidebar */}
                     <div className="space-y-4">
                         {/* Cost Summary */}
-                        <div className="card sticky top-4 overflow-hidden">
-                            <div className="px-5 py-3 border-b border-surface-100">
-                                <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Cost Summary</h3>
-                            </div>
-
+                        <CollapsibleCard
+                            title="Cost Summary"
+                            icon="fi-rr-calculator"
+                            iconColor="brand"
+                            className="sticky top-4"
+                            summary={<span className="font-mono font-bold text-surface-900 tabular-nums">৳ {fmt(estimate.grand_total)}</span>}
+                        >
                             {/* Section subtotals — only show sections that contribute */}
                             <div className="px-5 py-3 space-y-2 text-sm">
                                 {[
@@ -273,7 +273,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </CollapsibleCard>
 
                     </div>
                 </div>
@@ -282,27 +282,29 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                     {/* Approval Workflow */}
                     {(estimate.approvals?.length > 0 || canSubmit) ? (
-                        <div className="card animate-slide-up lg:col-span-2">
-                            <div className="px-5 py-3 border-b border-surface-100 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Approval Workflow</h3>
-                                    {(() => {
-                                        const as_ = APPROVAL_STATUS[estimate.approval_status] ?? APPROVAL_STATUS.not_submitted;
-                                        return (
-                                            <span className="flex items-center gap-1.5 text-[11px]">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${as_.dot}`} />
-                                                <span className={`${as_.text} font-semibold`}>{as_.label}</span>
-                                            </span>
-                                        );
-                                    })()}
-                                </div>
-                                {canSubmit && (
-                                    <button onClick={() => router.post(`/cost-estimates/${estimate.id}/submit-approval`)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 transition-colors">
-                                        <i className="fi fi-rr-paper-plane text-[11px] leading-none" /> Submit
-                                    </button>
-                                )}
-                            </div>
+                        <CollapsibleCard
+                            title={<div className="flex items-center gap-2">
+                                <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Approval Workflow</h3>
+                                {(() => {
+                                    const as_ = APPROVAL_STATUS[estimate.approval_status] ?? APPROVAL_STATUS.not_submitted;
+                                    return (
+                                        <span className="flex items-center gap-1.5 text-[11px]">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${as_.dot}`} />
+                                            <span className={`${as_.text} font-semibold`}>{as_.label}</span>
+                                        </span>
+                                    );
+                                })()}
+                            </div>}
+                            icon="fi-rr-stamp"
+                            iconColor="amber"
+                            className="animate-slide-up lg:col-span-2"
+                            headerRight={canSubmit ? (
+                                <button onClick={(e) => { e.stopPropagation(); router.post(`/cost-estimates/${estimate.id}/submit-approval`); }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 transition-colors">
+                                    <i className="fi fi-rr-paper-plane text-[11px] leading-none" /> Submit
+                                </button>
+                            ) : null}
+                        >
                             <div className="px-5 py-4 space-y-2.5">
                                 {/* Prepared By */}
                                 <ApprovalRow
@@ -350,20 +352,22 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </CollapsibleCard>
                     ) : null}
 
                     {/* Notes */}
                     {estimate.notes ? (
-                        <div className={`card ${(estimate.approvals?.length > 0 || canSubmit) ? '' : 'lg:col-span-2'}`}>
-                            <div className="px-5 py-3 border-b border-surface-100 flex items-center gap-2">
-                                <i className="fi fi-rr-document text-surface-400 text-xs leading-none" />
-                                <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Notes</h3>
-                            </div>
+                        <CollapsibleCard
+                            title="Notes"
+                            icon="fi-rr-document"
+                            iconColor="slate"
+                            summary={<span className="text-surface-500 truncate">{String(estimate.notes).slice(0, 60)}{String(estimate.notes).length > 60 ? '…' : ''}</span>}
+                            className={(estimate.approvals?.length > 0 || canSubmit) ? '' : 'lg:col-span-2'}
+                        >
                             <div className="px-5 py-4 text-sm text-surface-700 whitespace-pre-wrap leading-relaxed">
                                 {estimate.notes}
                             </div>
-                        </div>
+                        </CollapsibleCard>
                     ) : (
                         /* Placeholder if no notes to keep grid aligned — invisible spacer on large screens */
                         (estimate.approvals?.length > 0 || canSubmit) && <div className="hidden lg:block" />
@@ -371,7 +375,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                 </div>
 
                 {/* ── RFQ Attachments (drawings + sample photos) ──────── */}
-                <RfqAttachmentsPanel attachments={rfqAttachments} title="RFQ Attachments" inheritedFrom="rfq" />
+                <RfqAttachmentsPanel attachments={rfqAttachments} letter={rfqLetter} title="RFQ Attachments" inheritedFrom="rfq" defaultCollapsed />
 
                 {/* ── Discussion thread ─────────────────────────────────── */}
                 <CommentThread
@@ -379,10 +383,11 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                     entityId={estimate.id}
                     comments={comments}
                     title="Discussion"
+                    defaultCollapsed
                 />
 
                 {/* ── Change History — full width ──────────────────────── */}
-                <RevisionTimeline revisions={revisions} title="Change History" />
+                <RevisionTimeline revisions={revisions} title="Change History" defaultCollapsed />
             </div>
 
             {/* Approval Action Modal */}
@@ -571,6 +576,69 @@ function UseAsQuotationModal({
     );
 }
 
+/* ─── PDF Language Picker (button + dropdown) ─────────────── */
+function PdfLanguagePicker({ onPick }: { onPick: (lang: 'bn' | 'en') => void }) {
+    const [open, setOpen] = useState(false);
+
+    // Close on outside click
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e: MouseEvent) => {
+            const t = e.target as HTMLElement;
+            if (!t.closest('[data-pdf-picker]')) setOpen(false);
+        };
+        window.addEventListener('mousedown', handler);
+        return () => window.removeEventListener('mousedown', handler);
+    }, [open]);
+
+    return (
+        <div className="relative inline-block" data-pdf-picker>
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="btn-outline btn-sm text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300"
+                aria-haspopup="menu"
+                aria-expanded={open}
+            >
+                <i className="fi fi-rr-file-pdf text-xs leading-none" />
+                PDF
+                <i className={`fi fi-rr-angle-down text-[9px] leading-none ml-1 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="absolute right-0 mt-1 w-56 rounded-xl border border-surface-200 bg-white shadow-premium-lg z-30 overflow-hidden animate-fade-in" role="menu">
+                    <div className="px-3 py-2 border-b border-surface-100 bg-surface-50/60">
+                        <div className="text-[10px] font-bold text-surface-500 uppercase tracking-wider">Letterhead Language</div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => { setOpen(false); onPick('bn'); }}
+                        className="w-full px-3 py-2.5 flex items-start gap-2.5 hover:bg-surface-50 text-left transition-colors"
+                        role="menuitem"
+                    >
+                        <span className="text-base leading-none mt-0.5">🇧🇩</span>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-surface-900">Bangla / Bilingual</div>
+                            <div className="text-[10px] text-surface-500 mt-0.5">Default — for local clients</div>
+                        </div>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setOpen(false); onPick('en'); }}
+                        className="w-full px-3 py-2.5 flex items-start gap-2.5 hover:bg-surface-50 text-left transition-colors border-t border-surface-100"
+                        role="menuitem"
+                    >
+                        <span className="text-base leading-none mt-0.5">🇬🇧</span>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-surface-900">English</div>
+                            <div className="text-[10px] text-surface-500 mt-0.5">For foreign clients</div>
+                        </div>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
 /* ─── Meta Item (document header) ──────────────────────────── */
 function MetaItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
     return (
@@ -595,18 +663,16 @@ function SectionCard({ letter, title, total, lines }: any) {
     if (!lines || lines.length === 0) return null;
 
     return (
-        <div className="card overflow-hidden">
-            {/* Compact header — title only; subtotal moved to a tfoot row below. */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-surface-100 bg-surface-50/40">
-                <div className="flex items-center gap-2.5">
-                    <span className="inline-flex w-6 h-6 rounded-md bg-surface-200 text-surface-700 items-center justify-center font-bold text-[11px]">
-                        {letter}
-                    </span>
-                    <h3 className="text-sm font-bold text-surface-900">{title}</h3>
-                    <span className="text-[11px] text-surface-400 font-medium">· {lines.length} {lines.length === 1 ? 'item' : 'items'}</span>
-                </div>
-            </div>
-
+        <CollapsibleCard
+            title={<h3 className="text-sm font-bold text-surface-900 flex items-center gap-2">
+                <span className="inline-flex w-6 h-6 rounded-md bg-surface-200 text-surface-700 items-center justify-center font-bold text-[11px]">
+                    {letter}
+                </span>
+                {title}
+                <span className="text-[11px] text-surface-400 font-medium">· {lines.length} {lines.length === 1 ? 'item' : 'items'}</span>
+            </h3>}
+            summary={<span className="font-mono font-bold tabular-nums text-surface-800">৳ {fmt(total)}</span>}
+        >
             {/* Lines table */}
             <div className="overflow-x-auto">
                 <table className="w-full">
@@ -643,7 +709,7 @@ function SectionCard({ letter, title, total, lines }: any) {
                     </tfoot>
                 </table>
             </div>
-        </div>
+        </CollapsibleCard>
     );
 }
 
