@@ -70,6 +70,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
         materials_size:   estimate?.materials_size ?? '',
         pricing_group:    estimate?.pricing_group ?? 'B',
         overhead_pct:     estimate?.overhead_pct ?? 25,
+        extra_cost:       estimate?.extra_cost ?? 0,
         vat_pct:          estimate?.vat_pct ?? 15,
         tax_pct:          estimate?.tax_pct ?? 0,
         times_multiplier: estimate?.times_multiplier ?? 1,
@@ -274,14 +275,15 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
         const other     = sectionTotal('other');
         const net       = material + machining + surface + other;
         const overhead  = net * ((parseFloat(data.overhead_pct) || 0) / 100);
-        const afterOH   = net + overhead;
+        const extra     = parseFloat(data.extra_cost) || 0;
+        const afterOH   = net + overhead + extra;
         const vat       = afterOH * ((parseFloat(data.vat_pct) || 0) / 100);
         const tax       = afterOH * ((parseFloat(data.tax_pct) || 0) / 100);
         const total     = afterOH + vat + tax;
         const withTimes = total * (parseFloat(data.times_multiplier) || 1);
         const grand     = withTimes * (parseInt(data.job_quantity) || 1);
-        return { material, machining, surface, other, net, overhead, afterOH, vat, tax, total: withTimes, grand };
-    }, [data.lines, data.overhead_pct, data.vat_pct, data.tax_pct, data.times_multiplier, data.job_quantity]);
+        return { material, machining, surface, other, net, overhead, extra, afterOH, vat, tax, total: withTimes, grand };
+    }, [data.lines, data.overhead_pct, data.extra_cost, data.vat_pct, data.tax_pct, data.times_multiplier, data.job_quantity]);
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
@@ -548,7 +550,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
 
                     {/* ── A. Material Cost ─────────────────────────── */}
                     <CostSection
-                        title="A. Material Cost"
+                        title="Material Cost"
                         icon="fi-rr-cube"
                         color="blue"
                         total={totals.material}
@@ -670,7 +672,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
 
                     {/* ── B. Machining Cost ────────────────────────── */}
                     <CostSection
-                        title="B. Machining Cost"
+                        title="Machining Cost"
                         icon="fi-rr-settings"
                         color="amber"
                         total={totals.machining}
@@ -690,7 +692,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
 
                     {/* ── C. Heat Treatment Cost ──────────────────── */}
                     <CostSection
-                        title="C. Heat Treatment Cost"
+                        title="Heat Treatment Cost"
                         icon="fi-rr-shine"
                         color="purple"
                         total={totals.surface}
@@ -710,7 +712,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
 
                     {/* ── D. Other Parts ───────────────────────────── */}
                     <CostSection
-                        title="D. Other Parts"
+                        title="Other Parts"
                         icon="fi-rr-box-alt"
                         color="green"
                         total={totals.other}
@@ -813,34 +815,41 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                     </CostSection>
 
                     {/* ── Totals card ──────────────────────────────── */}
-                    <div className="card border-2 border-brand-200">
+                    <div className="card border-2 border-brand-200 overflow-hidden">
                         <div className="card-header bg-brand-50/50">
                             <h3 className="text-sm font-bold text-surface-900">Cost Summary</h3>
                         </div>
-                        <div className="card-body space-y-2">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Subtotals */}
-                                <div className="space-y-2 text-sm">
-                                    <SumRow label="A. Material Cost"          value={totals.material} />
-                                    <SumRow label="B. Machining Cost"          value={totals.machining} />
-                                    <SumRow label="C. Heat Treatment Cost"    value={totals.surface} />
-                                    <SumRow label="D. Other Parts"             value={totals.other} />
+                        <div className="card-body !p-0">
+                            <div className="grid grid-cols-1 lg:grid-cols-2">
+                                {/* Subtotals — left column */}
+                                <div className="px-5 py-4 space-y-2 text-sm border-r border-surface-100">
+                                    <SumRow label="Material Cost"          value={totals.material} />
+                                    <SumRow label="Machining Cost"         value={totals.machining} />
+                                    <SumRow label="Heat Treatment Cost"    value={totals.surface} />
+                                    <SumRow label="Other Parts"            value={totals.other} />
                                     <div className="border-t-2 border-dashed border-surface-200 pt-2">
-                                        <SumRow label="E. Net Cost (A+B+C+D)" value={totals.net} bold />
+                                        <SumRow label="Net Cost" value={totals.net} bold />
                                     </div>
                                 </div>
 
-                                {/* Multipliers + Grand Total */}
-                                <div className="space-y-3">
+                                {/* Multipliers + Grand Total — right column (tinted) */}
+                                <div className="px-5 py-4 space-y-3 bg-gradient-to-br from-brand-50/30 via-amber-50/20 to-brand-50/10">
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         <div className="form-group">
-                                            <label className="form-label text-xs">F. Overhead %</label>
+                                            <label className="form-label text-xs">Overhead %</label>
                                             <input type="number" min="0" step="0.01" value={data.overhead_pct}
                                                 onChange={e => setData('overhead_pct', e.target.value)}
                                                 className="form-input text-xs py-1.5" />
                                         </div>
                                         <div className="form-group">
-                                            <label className="form-label text-xs">G. VAT %</label>
+                                            <label className="form-label text-xs">Other Cost <span className="form-label-optional">৳</span></label>
+                                            <input type="number" min="0" step="0.01" value={data.extra_cost}
+                                                onChange={e => setData('extra_cost', e.target.value)}
+                                                placeholder="0.00"
+                                                className="form-input text-xs py-1.5" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label text-xs">VAT %</label>
                                             <input type="number" min="0" step="0.01" value={data.vat_pct}
                                                 onChange={e => setData('vat_pct', e.target.value)}
                                                 className="form-input text-xs py-1.5" />
@@ -852,7 +861,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                                 className="form-input text-xs py-1.5" />
                                         </div>
                                         <div className="form-group">
-                                            <label className="form-label text-xs">H. Times (×) <span className="form-label-optional">precision</span></label>
+                                            <label className="form-label text-xs">Times (×) <span className="form-label-optional">precision</span></label>
                                             <input type="number" min="0" step="0.01" value={data.times_multiplier}
                                                 onChange={e => setData('times_multiplier', e.target.value)}
                                                 className="form-input text-xs py-1.5" />
@@ -870,6 +879,12 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                             <span>Overhead Amount</span>
                                             <span className="font-mono">{fmt(totals.overhead)}</span>
                                         </div>
+                                        {totals.extra > 0 && (
+                                            <div className="flex items-center justify-between text-xs mb-1 text-white/60">
+                                                <span>Other Cost</span>
+                                                <span className="font-mono">{fmt(totals.extra)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between text-xs mb-1 text-white/60">
                                             <span>VAT Amount</span>
                                             <span className="font-mono">{fmt(totals.vat)}</span>
@@ -881,11 +896,11 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between text-sm pt-2 mt-2 border-t border-white/10">
-                                            <span>I. Total (per piece × times)</span>
+                                            <span>Total (per piece × times)</span>
                                             <span className="font-mono font-semibold">{fmt(totals.total)}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-base pt-2 mt-2 border-t border-white/20">
-                                            <span className="font-bold">J. Grand Total</span>
+                                            <span className="font-bold">Grand Total</span>
                                             <span className="font-mono font-bold text-2xl text-brand-400">{fmt(totals.grand)}</span>
                                         </div>
                                     </div>

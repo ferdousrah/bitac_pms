@@ -15,7 +15,7 @@ class CostEstimate extends Model
         'company_name', 'job_name', 'part_no', 'actual_size', 'materials_size',
         'pricing_group', 'overhead_pct', 'vat_pct', 'tax_pct', 'times_multiplier', 'job_quantity',
         'material_cost', 'machining_cost', 'surface_cost', 'other_cost',
-        'net_cost', 'overhead_amount', 'vat_amount', 'tax_amount', 'total', 'grand_total',
+        'net_cost', 'overhead_amount', 'extra_cost', 'vat_amount', 'tax_amount', 'total', 'grand_total',
         'status', 'notes', 'created_by',
     ];
 
@@ -32,6 +32,7 @@ class CostEstimate extends Model
             'other_cost'        => 'decimal:2',
             'net_cost'          => 'decimal:2',
             'overhead_amount'   => 'decimal:2',
+            'extra_cost'        => 'decimal:2',
             'vat_amount'        => 'decimal:2',
             'tax_amount'        => 'decimal:2',
             'total'             => 'decimal:2',
@@ -66,7 +67,9 @@ class CostEstimate extends Model
 
         $netCost   = $material + $machining + $surface + $other;
         $overhead  = $netCost * ((float) $this->overhead_pct / 100);
-        $afterOH   = $netCost + $overhead;
+        $extra     = (float) ($this->extra_cost ?? 0);
+        // Flat "Other Cost" lump-sum is added on top of overhead, before VAT/Tax.
+        $afterOH   = $netCost + $overhead + $extra;
         $vat       = $afterOH * ((float) $this->vat_pct / 100);
         // Tax (e.g. AIT) — applied on the post-overhead pre-VAT subtotal, added separately.
         $tax       = $afterOH * ((float) ($this->tax_pct ?? 0) / 100);
@@ -81,6 +84,7 @@ class CostEstimate extends Model
             'other_cost'      => round($other, 2),
             'net_cost'        => round($netCost, 2),
             'overhead_amount' => round($overhead, 2),
+            'extra_cost'      => round($extra, 2),
             'vat_amount'      => round($vat, 2),
             'tax_amount'      => round($tax, 2),
             'total'           => round($withTimes, 2),

@@ -170,10 +170,10 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                     {/* Left: Sections — empty sections (0 lines) are hidden to reduce noise */}
                     <div className="lg:col-span-2 space-y-4">
                         {[
-                            { letter: 'A', title: 'Material Cost',     total: estimate.material_cost,  lines: sectionLines('material') },
-                            { letter: 'B', title: 'Machining Cost',    total: estimate.machining_cost, lines: sectionLines('machining') },
-                            { letter: 'C', title: 'Heat Treatment',    total: estimate.surface_cost,   lines: sectionLines('surface') },
-                            { letter: 'D', title: 'Other Parts',       total: estimate.other_cost,     lines: sectionLines('other') },
+                            { letter: 'I',   title: 'Material Cost',     total: estimate.material_cost,  lines: sectionLines('material') },
+                            { letter: 'II',  title: 'Machining Cost',    total: estimate.machining_cost, lines: sectionLines('machining') },
+                            { letter: 'III', title: 'Heat Treatment',    total: estimate.surface_cost,   lines: sectionLines('surface') },
+                            { letter: 'IV',  title: 'Other Parts',       total: estimate.other_cost,     lines: sectionLines('other') },
                         ]
                             .filter(s => s.lines.length > 0)
                             .map(s => (
@@ -198,10 +198,10 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                             {/* Section subtotals — only show sections that contribute */}
                             <div className="px-5 py-3 space-y-2 text-sm">
                                 {[
-                                    { label: 'Material',          value: estimate.material_cost,  letter: 'A', linesKey: 'material'  },
-                                    { label: 'Machining',         value: estimate.machining_cost, letter: 'B', linesKey: 'machining' },
-                                    { label: 'Heat Treatment',    value: estimate.surface_cost,   letter: 'C', linesKey: 'surface'   },
-                                    { label: 'Other Parts',       value: estimate.other_cost,     letter: 'D', linesKey: 'other'     },
+                                    { label: 'Material',          value: estimate.material_cost,  letter: 'I',   linesKey: 'material'  },
+                                    { label: 'Machining',         value: estimate.machining_cost, letter: 'II',  linesKey: 'machining' },
+                                    { label: 'Heat Treatment',    value: estimate.surface_cost,   letter: 'III', linesKey: 'surface'   },
+                                    { label: 'Other Parts',       value: estimate.other_cost,     letter: 'IV',  linesKey: 'other'     },
                                 ]
                                     .filter(s => sectionLines(s.linesKey).length > 0)
                                     .map(s => (
@@ -226,6 +226,12 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                         <span className="font-mono text-surface-800 tabular-nums">+ {fmt(estimate.overhead_amount)}</span>
                                     </div>
                                 </div>
+                                {Number(estimate.extra_cost ?? 0) > 0 && (
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-surface-600">Other Cost</span>
+                                        <span className="font-mono text-surface-800 tabular-nums">+ {fmt(estimate.extra_cost)}</span>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between text-xs">
                                     <span className="text-surface-600">VAT</span>
                                     <div className="flex items-center gap-2">
@@ -642,15 +648,10 @@ function SectionCard({ letter, title, total, lines }: any) {
 }
 
 /* ─── Summary Line ──────────────────────────────────────────── */
-function SummaryLine({ label, value, letter }: { label: string; value: number; letter: string }) {
+function SummaryLine({ label, value }: { label: string; value: number; letter?: string }) {
     return (
         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-surface-700">
-                <span className="inline-flex w-5 h-5 rounded bg-surface-100 text-surface-600 items-center justify-center text-[10px] font-bold">
-                    {letter}
-                </span>
-                <span>{label}</span>
-            </div>
+            <span className="text-sm text-surface-700">{label}</span>
             <span className="font-mono text-surface-900 tabular-nums">{fmt(value)}</span>
         </div>
     );

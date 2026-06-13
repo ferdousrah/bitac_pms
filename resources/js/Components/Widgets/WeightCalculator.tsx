@@ -7,14 +7,45 @@ interface Props {
     materials?: Array<{ id: number; name: string; density_kg_m3: number }>;
 }
 
-type Shape = 'rectangular' | 'square' | 'cylindrical' | 'cylindrical_hollow';
+type Shape =
+    | 'rectangular'
+    | 'square'
+    | 'sheet_plate'
+    | 'round_bar'
+    | 'hexagonal_bar'
+    | 'triangular_bar'
+    | 'round_tube'
+    | 'square_tube'
+    | 'rectangular_tube'
+    | 'angle'
+    | 'channel'
+    | 'i_beam'
+    | 't_section'
+    | 'ring';
+
 type Unit = 'mm' | 'cm' | 'm' | 'inch' | 'feet';
 
-const SHAPES: { value: Shape; label: string; icon: string }[] = [
-    { value: 'rectangular',        label: 'Rectangular', icon: 'fi-rr-square' },
-    { value: 'square',             label: 'Square',      icon: 'fi-rr-square-small' },
-    { value: 'cylindrical',        label: 'Cylinder',    icon: 'fi-rr-circle' },
-    { value: 'cylindrical_hollow', label: 'Hollow Tube', icon: 'fi-rr-bullseye-arrow' },
+type ShapeMeta = {
+    value: Shape;
+    label: string;
+    group: 'Solid' | 'Hollow / Section' | 'Plate';
+};
+
+const SHAPES: ShapeMeta[] = [
+    { value: 'round_bar',         label: 'Round Bar',        group: 'Solid' },
+    { value: 'square',            label: 'Square Bar',       group: 'Solid' },
+    { value: 'rectangular',       label: 'Rectangular Bar',  group: 'Solid' },
+    { value: 'hexagonal_bar',     label: 'Hexagonal Bar',    group: 'Solid' },
+    { value: 'triangular_bar',    label: 'Triangular Bar',   group: 'Solid' },
+    { value: 'round_tube',        label: 'Round Tube',       group: 'Hollow / Section' },
+    { value: 'square_tube',       label: 'Square Tube',      group: 'Hollow / Section' },
+    { value: 'rectangular_tube',  label: 'Rectangular Tube', group: 'Hollow / Section' },
+    { value: 'ring',              label: 'Ring / Washer',    group: 'Hollow / Section' },
+    { value: 'angle',             label: 'Angle (L)',        group: 'Hollow / Section' },
+    { value: 'channel',           label: 'Channel (C/U)',    group: 'Hollow / Section' },
+    { value: 'i_beam',            label: 'I-Beam (H)',       group: 'Hollow / Section' },
+    { value: 't_section',         label: 'T-Section',        group: 'Hollow / Section' },
+    { value: 'sheet_plate',       label: 'Sheet / Plate',    group: 'Plate' },
 ];
 
 const UNIT_TO_M: Record<Unit, number> = {
@@ -25,45 +56,128 @@ const UNIT_TO_M: Record<Unit, number> = {
     feet: 0.3048,
 };
 
+// Compact SVG illustrations per shape (24×24, brand stroke)
+function ShapeIcon({ shape, active }: { shape: Shape; active: boolean }) {
+    const stroke = active ? '#d97706' : '#94a3b8';
+    const fill   = active ? '#fef3c7' : '#f1f5f9';
+    const common = { strokeWidth: 1.5, fill, stroke };
+    switch (shape) {
+        case 'round_bar':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="8" {...common} /></svg>;
+        case 'square':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><rect x="5" y="5" width="14" height="14" {...common} /></svg>;
+        case 'rectangular':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="7" width="18" height="10" {...common} /></svg>;
+        case 'hexagonal_bar':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><polygon points="12,3 21,8 21,16 12,21 3,16 3,8" {...common} /></svg>;
+        case 'triangular_bar':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><polygon points="12,3 21,20 3,20" {...common} /></svg>;
+        case 'round_tube':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="8" {...common} /><circle cx="12" cy="12" r="4" fill="#fff" stroke={stroke} strokeWidth="1.5" /></svg>;
+        case 'square_tube':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="4" width="16" height="16" {...common} /><rect x="9" y="9" width="6" height="6" fill="#fff" stroke={stroke} strokeWidth="1.5" /></svg>;
+        case 'rectangular_tube':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="7" width="18" height="10" {...common} /><rect x="7" y="10" width="10" height="4" fill="#fff" stroke={stroke} strokeWidth="1.5" /></svg>;
+        case 'ring':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="9" {...common} /><circle cx="12" cy="12" r="5" fill="#fff" stroke={stroke} strokeWidth="1.5" /></svg>;
+        case 'angle':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><polygon points="4,4 8,4 8,16 20,16 20,20 4,20" {...common} /></svg>;
+        case 'channel':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><polygon points="4,4 20,4 20,8 8,8 8,16 20,16 20,20 4,20" {...common} /></svg>;
+        case 'i_beam':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><polygon points="4,4 20,4 20,8 14,8 14,16 20,16 20,20 4,20 4,16 10,16 10,8 4,8" {...common} /></svg>;
+        case 't_section':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><polygon points="3,4 21,4 21,9 14,9 14,20 10,20 10,9 3,9" {...common} /></svg>;
+        case 'sheet_plate':
+            return <svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="10" width="18" height="5" {...common} /></svg>;
+        default:
+            return null;
+    }
+}
+
 export default function WeightCalculator({ open, onClose, onApply, materials = [] }: Props) {
-    const [shape, setShape] = useState<Shape>('rectangular');
+    const [shape, setShape] = useState<Shape>('round_bar');
     const [unit, setUnit] = useState<Unit>('mm');
-    const [length, setLength] = useState('');
-    const [width, setWidth] = useState('');
-    const [height, setHeight] = useState('');
-    const [side, setSide] = useState('');
+    // Universal dimensions — different shapes use different subsets
+    const [length, setLength]   = useState(''); // bar length / sheet length
+    const [width, setWidth]     = useState(''); // rect width / flange width
+    const [height, setHeight]   = useState(''); // bar length OR cross-section height
+    const [side, setSide]       = useState(''); // square side / triangle side / hex across-flats
     const [diaOuter, setDiaOuter] = useState('');
     const [diaInner, setDiaInner] = useState('');
+    const [thickness, setThickness] = useState('');     // sheet / angle / leg thickness
+    const [webThk, setWebThk] = useState('');           // I-Beam, channel, T web
+    const [flangeThk, setFlangeThk] = useState('');     // I-Beam, channel, T flange
+    const [flangeWidth, setFlangeWidth] = useState(''); // I-Beam / channel / T flange width
+
     const [materialId, setMaterialId] = useState<number | ''>('');
     const [customDensity, setCustomDensity] = useState('');
     const [pieceCount, setPieceCount] = useState('1');
 
-    // Reset values when modal opens
     useEffect(() => {
         if (!open) return;
         setLength(''); setWidth(''); setHeight(''); setSide('');
         setDiaOuter(''); setDiaInner('');
+        setThickness(''); setWebThk(''); setFlangeThk(''); setFlangeWidth('');
     }, [open]);
 
     const m = (v: string) => (parseFloat(v) || 0) * UNIT_TO_M[unit];
 
+    /**
+     * Volume formulas — cross-section area × length, all converted to m³.
+     * For each shape we derive the cross-section area first, then multiply
+     * by the bar/section length (or by the plate thickness for sheets).
+     */
     let volumeM3 = 0;
-    if (shape === 'rectangular') {
-        volumeM3 = m(length) * m(width) * m(height);
-    } else if (shape === 'square') {
-        volumeM3 = m(side) * m(side) * m(height);
-    } else if (shape === 'cylindrical') {
-        const r = m(diaOuter) / 2;
-        volumeM3 = Math.PI * r * r * m(height);
-    } else if (shape === 'cylindrical_hollow') {
-        const ro = m(diaOuter) / 2;
-        const ri = m(diaInner) / 2;
-        volumeM3 = Math.PI * (ro * ro - ri * ri) * m(height);
+    {
+        const L = m(length);
+        const W = m(width);
+        const H = m(height);
+        const S = m(side);
+        const DO = m(diaOuter);
+        const DI = m(diaInner);
+        const T = m(thickness);
+        const WT = m(webThk);
+        const FT = m(flangeThk);
+        const FW = m(flangeWidth);
+
+        if (shape === 'rectangular')          volumeM3 = L * W * H;
+        else if (shape === 'square')          volumeM3 = S * S * H;
+        else if (shape === 'sheet_plate')     volumeM3 = L * W * T;
+        else if (shape === 'round_bar')       volumeM3 = Math.PI * (DO / 2) ** 2 * H;
+        else if (shape === 'hexagonal_bar')   volumeM3 = (Math.sqrt(3) / 2) * S * S * H;   // S = across-flats
+        else if (shape === 'triangular_bar')  volumeM3 = (Math.sqrt(3) / 4) * S * S * H;   // equilateral
+        else if (shape === 'round_tube')      volumeM3 = Math.PI * ((DO / 2) ** 2 - (DI / 2) ** 2) * H;
+        else if (shape === 'square_tube')     volumeM3 = (S * S - (S - 2 * T) ** 2) * H;
+        else if (shape === 'rectangular_tube') volumeM3 = (W * H - (W - 2 * T) * (H - 2 * T)) * L;
+        else if (shape === 'ring')            volumeM3 = Math.PI * ((DO / 2) ** 2 - (DI / 2) ** 2) * T;
+        else if (shape === 'angle') {
+            // L-section: 2 legs of equal thickness — area = (leg1 + leg2 − thk) × thk
+            const area = (W + H - T) * T;
+            volumeM3 = area * L;
+        }
+        else if (shape === 'channel') {
+            // C / U section — 2 flanges + 1 web
+            const area = 2 * (FW * FT) + (H - 2 * FT) * WT;
+            volumeM3 = area * L;
+        }
+        else if (shape === 'i_beam') {
+            // I / H — 2 flanges + 1 web
+            const area = 2 * (FW * FT) + (H - 2 * FT) * WT;
+            volumeM3 = area * L;
+        }
+        else if (shape === 't_section') {
+            // T — 1 flange + 1 web (stem)
+            const area = (FW * FT) + (H - FT) * WT;
+            volumeM3 = area * L;
+        }
     }
 
-    const selectedMaterial = materials.find(m => m.id === materialId);
-    const density = selectedMaterial?.density_kg_m3 ?? parseFloat(customDensity) ?? 0;
-    const weightPerPiece = volumeM3 * (density || 0);
+    const selectedMaterial = materials.find(mat => mat.id === materialId);
+    // Laravel returns `decimal` casts as strings in JSON. Coerce to a real
+    // number so downstream .toFixed() / arithmetic stays safe.
+    const density = Number(selectedMaterial?.density_kg_m3 ?? customDensity) || 0;
+    const weightPerPiece = volumeM3 * density;
     const pieces = parseInt(pieceCount) || 1;
     const totalWeight = weightPerPiece * pieces;
 
@@ -76,21 +190,23 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
 
     if (!open) return null;
 
+    const groups: Array<ShapeMeta['group']> = ['Solid', 'Hollow / Section', 'Plate'];
+
     return (
         <>
             <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
             <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-premium-lg border border-surface-100 w-full max-w-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+                <div className="bg-white rounded-2xl shadow-premium-lg border border-surface-100 w-full max-w-3xl animate-scale-in max-h-[92vh] overflow-y-auto">
 
                     {/* Header */}
-                    <div className="px-5 py-4 border-b border-surface-100 flex items-center justify-between bg-gradient-to-b from-blue-50 to-white">
-                        <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
-                                <i className="fi fi-rr-scale text-blue-600 text-base leading-none" />
+                    <div className="px-5 py-4 border-b border-surface-100 flex items-center justify-between bg-gradient-to-b from-amber-50 to-white">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 ring-1 ring-amber-200 flex items-center justify-center">
+                                <i className="fi fi-rr-scale text-amber-700 text-base leading-none" />
                             </div>
                             <div>
-                                <h3 className="text-base font-bold text-surface-900">Weight Calculator</h3>
-                                <p className="text-xs text-surface-500">Calculate raw material weight from dimensions</p>
+                                <h3 className="text-base font-bold text-surface-900">Metal Weight Calculator</h3>
+                                <p className="text-xs text-surface-500">Choose a profile, enter dimensions — works for bars, tubes, plates and structural sections.</p>
                             </div>
                         </div>
                         <button onClick={onClose} className="btn-ghost btn-icon">
@@ -98,22 +214,32 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                         </button>
                     </div>
 
-                    <div className="p-5 space-y-4">
-                        {/* Shape selector */}
+                    <div className="p-5 space-y-5">
+                        {/* Shape picker — grouped grid with SVG icons */}
                         <div className="form-group">
-                            <label className="form-label">Job Shape</label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                {SHAPES.map(s => (
-                                    <button key={s.value} type="button"
-                                        onClick={() => setShape(s.value)}
-                                        className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all ${
-                                            shape === s.value
-                                                ? 'border-brand-500 bg-brand-50 text-brand-700'
-                                                : 'border-surface-200 text-surface-600 hover:border-surface-300'
-                                        }`}>
-                                        <i className={`fi ${s.icon} text-lg leading-none`} />
-                                        <span className="text-[10px] font-semibold">{s.label}</span>
-                                    </button>
+                            <label className="form-label">Profile</label>
+                            <div className="space-y-3">
+                                {groups.map(g => (
+                                    <div key={g}>
+                                        <div className="text-[10px] font-bold text-surface-400 uppercase tracking-wider mb-1.5">{g}</div>
+                                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                                            {SHAPES.filter(s => s.group === g).map(s => (
+                                                <button key={s.value} type="button"
+                                                    onClick={() => setShape(s.value)}
+                                                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                                                        shape === s.value
+                                                            ? 'border-amber-500 bg-amber-50/60 shadow-sm'
+                                                            : 'border-surface-100 hover:border-surface-300 bg-white'
+                                                    }`}
+                                                >
+                                                    <ShapeIcon shape={s.value} active={shape === s.value} />
+                                                    <span className={`text-[10px] font-semibold leading-tight text-center ${shape === s.value ? 'text-amber-700' : 'text-surface-600'}`}>
+                                                        {s.label}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -127,7 +253,7 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                                         onClick={() => setUnit(u)}
                                         className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                             unit === u
-                                                ? 'bg-white text-brand-700 shadow-premium'
+                                                ? 'bg-white text-amber-700 shadow-premium'
                                                 : 'text-surface-500 hover:text-surface-700'
                                         }`}>
                                         {u.toUpperCase()}
@@ -136,34 +262,85 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                             </div>
                         </div>
 
-                        {/* Dimensions based on shape */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {shape === 'rectangular' && (
-                                <>
+                        {/* Dimensions — per shape */}
+                        <div className="form-group">
+                            <label className="form-label">Dimensions</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {shape === 'rectangular' && <>
                                     <DimInput label="Length" value={length} setValue={setLength} unit={unit} />
                                     <DimInput label="Width"  value={width}  setValue={setWidth}  unit={unit} />
                                     <DimInput label="Height" value={height} setValue={setHeight} unit={unit} />
-                                </>
-                            )}
-                            {shape === 'square' && (
-                                <>
-                                    <DimInput label="Side" value={side} setValue={setSide} unit={unit} />
-                                    <DimInput label="Height" value={height} setValue={setHeight} unit={unit} />
-                                </>
-                            )}
-                            {shape === 'cylindrical' && (
-                                <>
-                                    <DimInput label="Diameter" value={diaOuter} setValue={setDiaOuter} unit={unit} />
-                                    <DimInput label="Height (Length)" value={height} setValue={setHeight} unit={unit} />
-                                </>
-                            )}
-                            {shape === 'cylindrical_hollow' && (
-                                <>
+                                </>}
+                                {shape === 'square' && <>
+                                    <DimInput label="Side (A)" value={side} setValue={setSide} unit={unit} />
+                                    <DimInput label="Length"   value={height} setValue={setHeight} unit={unit} />
+                                </>}
+                                {shape === 'sheet_plate' && <>
+                                    <DimInput label="Length"    value={length} setValue={setLength} unit={unit} />
+                                    <DimInput label="Width"     value={width}  setValue={setWidth}  unit={unit} />
+                                    <DimInput label="Thickness" value={thickness} setValue={setThickness} unit={unit} />
+                                </>}
+                                {shape === 'round_bar' && <>
+                                    <DimInput label="Diameter (D)" value={diaOuter} setValue={setDiaOuter} unit={unit} />
+                                    <DimInput label="Length"        value={height} setValue={setHeight} unit={unit} />
+                                </>}
+                                {shape === 'hexagonal_bar' && <>
+                                    <DimInput label="Across Flats (F)" value={side} setValue={setSide} unit={unit} />
+                                    <DimInput label="Length"           value={height} setValue={setHeight} unit={unit} />
+                                </>}
+                                {shape === 'triangular_bar' && <>
+                                    <DimInput label="Side (A)" value={side} setValue={setSide} unit={unit} />
+                                    <DimInput label="Length"   value={height} setValue={setHeight} unit={unit} />
+                                </>}
+                                {shape === 'round_tube' && <>
                                     <DimInput label="Outer Dia (D)" value={diaOuter} setValue={setDiaOuter} unit={unit} />
                                     <DimInput label="Inner Dia (d)" value={diaInner} setValue={setDiaInner} unit={unit} />
-                                    <DimInput label="Height (Length)" value={height} setValue={setHeight} unit={unit} />
-                                </>
-                            )}
+                                    <DimInput label="Length"        value={height} setValue={setHeight} unit={unit} />
+                                </>}
+                                {shape === 'square_tube' && <>
+                                    <DimInput label="Side (A)"   value={side} setValue={setSide} unit={unit} />
+                                    <DimInput label="Wall Thk"   value={thickness} setValue={setThickness} unit={unit} />
+                                    <DimInput label="Length"     value={height} setValue={setHeight} unit={unit} />
+                                </>}
+                                {shape === 'rectangular_tube' && <>
+                                    <DimInput label="Outer W"    value={width}  setValue={setWidth}  unit={unit} />
+                                    <DimInput label="Outer H"    value={height} setValue={setHeight} unit={unit} />
+                                    <DimInput label="Wall Thk"   value={thickness} setValue={setThickness} unit={unit} />
+                                    <DimInput label="Length"     value={length} setValue={setLength} unit={unit} />
+                                </>}
+                                {shape === 'ring' && <>
+                                    <DimInput label="Outer Dia (D)" value={diaOuter} setValue={setDiaOuter} unit={unit} />
+                                    <DimInput label="Inner Dia (d)" value={diaInner} setValue={setDiaInner} unit={unit} />
+                                    <DimInput label="Thickness"     value={thickness} setValue={setThickness} unit={unit} />
+                                </>}
+                                {shape === 'angle' && <>
+                                    <DimInput label="Leg A"      value={width}  setValue={setWidth}  unit={unit} />
+                                    <DimInput label="Leg B"      value={height} setValue={setHeight} unit={unit} />
+                                    <DimInput label="Thickness"  value={thickness} setValue={setThickness} unit={unit} />
+                                    <DimInput label="Length"     value={length} setValue={setLength} unit={unit} />
+                                </>}
+                                {shape === 'channel' && <>
+                                    <DimInput label="Height (H)"     value={height} setValue={setHeight} unit={unit} />
+                                    <DimInput label="Flange Width"   value={flangeWidth} setValue={setFlangeWidth} unit={unit} />
+                                    <DimInput label="Web Thk"        value={webThk} setValue={setWebThk} unit={unit} />
+                                    <DimInput label="Flange Thk"     value={flangeThk} setValue={setFlangeThk} unit={unit} />
+                                    <DimInput label="Length"         value={length} setValue={setLength} unit={unit} />
+                                </>}
+                                {shape === 'i_beam' && <>
+                                    <DimInput label="Height (H)"     value={height} setValue={setHeight} unit={unit} />
+                                    <DimInput label="Flange Width"   value={flangeWidth} setValue={setFlangeWidth} unit={unit} />
+                                    <DimInput label="Web Thk"        value={webThk} setValue={setWebThk} unit={unit} />
+                                    <DimInput label="Flange Thk"     value={flangeThk} setValue={setFlangeThk} unit={unit} />
+                                    <DimInput label="Length"         value={length} setValue={setLength} unit={unit} />
+                                </>}
+                                {shape === 't_section' && <>
+                                    <DimInput label="Height (H)"     value={height} setValue={setHeight} unit={unit} />
+                                    <DimInput label="Flange Width"   value={flangeWidth} setValue={setFlangeWidth} unit={unit} />
+                                    <DimInput label="Web Thk"        value={webThk} setValue={setWebThk} unit={unit} />
+                                    <DimInput label="Flange Thk"     value={flangeThk} setValue={setFlangeThk} unit={unit} />
+                                    <DimInput label="Length"         value={length} setValue={setLength} unit={unit} />
+                                </>}
+                            </div>
                         </div>
 
                         {/* Material */}
@@ -172,8 +349,8 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                             <select value={materialId} onChange={e => { setMaterialId(e.target.value ? Number(e.target.value) : ''); setCustomDensity(''); }}
                                 className="form-select">
                                 <option value="">— Select material or enter custom density —</option>
-                                {materials.map(m => (
-                                    <option key={m.id} value={m.id}>{m.name} ({m.density_kg_m3} kg/m³)</option>
+                                {materials.map(mat => (
+                                    <option key={mat.id} value={mat.id}>{mat.name} ({Number(mat.density_kg_m3)} kg/m³)</option>
                                 ))}
                             </select>
                             {!materialId && (
@@ -193,7 +370,7 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                         </div>
 
                         {/* Result */}
-                        <div className="bg-gradient-to-br from-brand-50 to-amber-50 border border-brand-200 rounded-2xl p-5">
+                        <div className="bg-gradient-to-br from-amber-50 to-brand-50 border border-amber-200 rounded-2xl p-5">
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                                 <ResultBlock label="Volume" value={`${volumeM3.toFixed(6)}`} unit="m³" />
                                 <ResultBlock label="Density" value={`${(density || 0).toFixed(0)}`} unit="kg/m³" />
@@ -238,7 +415,7 @@ function ResultBlock({ label, value, unit, highlight }: { label: string; value: 
     return (
         <div>
             <div className="text-[10px] font-semibold text-surface-500 uppercase tracking-wider">{label}</div>
-            <div className={`font-mono font-bold mt-1 ${highlight ? 'text-2xl text-brand-700' : 'text-base text-surface-800'}`}>
+            <div className={`font-mono font-bold mt-1 ${highlight ? 'text-2xl text-amber-700' : 'text-base text-surface-800'}`}>
                 {value}
             </div>
             <div className="text-[10px] text-surface-400">{unit}</div>
