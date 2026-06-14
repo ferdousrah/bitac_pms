@@ -8,7 +8,7 @@ class WorkOrderItem extends Model
 {
     protected $fillable = [
         'work_order_id', 'job_number', 'product_id', 'rfq_item_id', 'quotation_item_id',
-        'description', 'quantity', 'unit', 'status', 'display_order', 'notes',
+        'description', 'quantity', 'unit', 'status', 'display_order', 'notes', 'ied_note', 'pcd_note',
     ];
 
     protected function casts(): array
@@ -23,6 +23,7 @@ class WorkOrderItem extends Model
     public function product()       { return $this->belongsTo(Product::class); }
     public function rfqItem()       { return $this->belongsTo(RfqItem::class); }
     public function quotationItem() { return $this->belongsTo(QuotationItem::class); }
+    public function operationSheet(){ return $this->hasOne(OperationSheet::class, 'work_order_item_id'); }
 
     public function getDisplayLabelAttribute(): string
     {

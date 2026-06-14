@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link } from '@inertiajs/react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import ProductionMessageThread from '@/Components/Production/ProductionMessageThread';
 import { useState } from 'react';
 
 const statusBadge: Record<string, string> = {
@@ -12,10 +13,6 @@ const statusBadge: Record<string, string> = {
 export default function OperationSheetShow({ sheet }: any) {
     const [pdfOpen, setPdfOpen] = useState(false);
     const steps = sheet.steps ?? [];
-    const totalHours = steps.reduce(
-        (acc: number, s: any) => acc + Number(s.estimated_hours || 0),
-        0,
-    );
 
     return (
         <AppLayout header={`Operation Sheet — ${sheet.sheet_number}`}>
@@ -36,7 +33,7 @@ export default function OperationSheetShow({ sheet }: any) {
                                         href={`/work-orders/${sheet.work_order_id}`}
                                         className="font-mono text-brand-600 hover:underline"
                                     >
-                                        {sheet.work_order?.wo_number}
+                                        Job# {sheet.work_order?.job_number ?? '—'}
                                     </Link>
                                     {' — '}
                                     {sheet.work_order?.product?.name}
@@ -123,10 +120,8 @@ export default function OperationSheetShow({ sheet }: any) {
                                             <th>Operation</th>
                                             <th>Machine</th>
                                             <th>Work Centre</th>
-                                            <th>Operator</th>
-                                            <th>Est. Hours</th>
                                             <th>Status</th>
-                                            <th>Instructions</th>
+                                            <th>Notes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -146,16 +141,6 @@ export default function OperationSheetShow({ sheet }: any) {
                                                 <td className="text-surface-600">
                                                     {step.machine?.work_centre?.name ?? '--'}
                                                 </td>
-                                                <td className="text-surface-600">
-                                                    {step.assignment?.operator?.name ?? (
-                                                        <span className="text-surface-400 italic">
-                                                            Unassigned
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="font-mono text-surface-700">
-                                                    {step.estimated_hours}h
-                                                </td>
                                                 <td>
                                                     <span
                                                         className={`badge ${
@@ -166,7 +151,7 @@ export default function OperationSheetShow({ sheet }: any) {
                                                     </span>
                                                 </td>
                                                 <td className="text-xs text-surface-500 max-w-xs">
-                                                    {step.instructions ?? '--'}
+                                                    {step.notes ?? '--'}
                                                 </td>
                                             </tr>
                                         ))}
@@ -204,30 +189,16 @@ export default function OperationSheetShow({ sheet }: any) {
                                             </span>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div>
-                                                <div className="text-surface-400">Work Centre</div>
-                                                <div className="text-surface-700">
-                                                    {step.machine?.work_centre?.name ?? '--'}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div className="text-surface-400">Operator</div>
-                                                <div className="text-surface-700">
-                                                    {step.assignment?.operator?.name ?? 'Unassigned'}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div className="text-surface-400">Est. Hours</div>
-                                                <div className="font-mono text-surface-700">
-                                                    {step.estimated_hours}h
-                                                </div>
+                                        <div className="text-xs">
+                                            <div className="text-surface-400">Work Centre</div>
+                                            <div className="text-surface-700">
+                                                {step.machine?.work_centre?.name ?? '--'}
                                             </div>
                                         </div>
 
-                                        {step.instructions && (
+                                        {step.notes && (
                                             <div className="text-xs text-surface-600 pt-2 border-t border-surface-50">
-                                                {step.instructions}
+                                                {step.notes}
                                             </div>
                                         )}
                                     </div>
@@ -235,15 +206,8 @@ export default function OperationSheetShow({ sheet }: any) {
                             </div>
 
                             {/* Footer summary */}
-                            <div className="px-6 py-3 border-t border-surface-100 bg-surface-50 flex flex-col sm:flex-row sm:justify-between gap-1 text-sm text-surface-500 rounded-b-2xl">
+                            <div className="px-6 py-3 border-t border-surface-100 bg-surface-50 flex text-sm text-surface-500 rounded-b-2xl">
                                 <span>{steps.length} steps</span>
-                                <span>
-                                    Total:{' '}
-                                    <span className="font-mono font-semibold text-surface-700">
-                                        {totalHours.toFixed(1)}h
-                                    </span>{' '}
-                                    estimated
-                                </span>
                             </div>
                         </>
                     ) : (
@@ -260,13 +224,21 @@ export default function OperationSheetShow({ sheet }: any) {
                         </div>
                     )}
                 </div>
+
+                {/* Production ↔ PCD query thread for this operation sheet */}
+                <ProductionMessageThread
+                    sheetId={sheet.id}
+                    viewerRole="pcd"
+                    title="Production Queries"
+                    subtitle="Questions from the shop floor — reply with clarifications, revised drawings, or material confirmation."
+                />
             </div>
 
             <PdfPopupModal
                 open={pdfOpen}
                 pdfUrl={pdfOpen ? `/operation-sheets/${sheet.id}/pdf?preview=base64` : null}
                 title={`Operation Sheet ${sheet.sheet_number}`}
-                subtitle={sheet.work_order?.wo_number ?? sheet.work_order_wo_number}
+                subtitle={`Job# ${sheet.work_order?.job_number ?? '—'}`}
                 onClose={() => setPdfOpen(false)}
             />
         </AppLayout>

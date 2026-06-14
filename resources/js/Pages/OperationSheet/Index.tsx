@@ -71,7 +71,6 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                         <th>Product</th>
                                         <th>Steps</th>
                                         <SortableHeader label="Created" column="created_at" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/operation-sheets" filters={filters} className="w-28" />
-                                        <th>Approved</th>
                                         <th className="w-24 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -85,29 +84,19 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                             </td>
                                             <td>
                                                 {s.work_order ? (
-                                                    <div>
-                                                        <div className="font-bold text-surface-900 text-sm">{s.work_order.job_number ?? '—'}</div>
-                                                        {s.work_order.wo_number && (
-                                                            <div className="text-[11px] text-surface-400 font-mono mt-0.5">{s.work_order.wo_number}</div>
-                                                        )}
+                                                    <div className="font-bold text-surface-900 text-sm">
+                                                        Job# {s.work_order.job_number ?? '—'}
                                                     </div>
                                                 ) : (
                                                     <span className="text-surface-300">—</span>
                                                 )}
                                             </td>
                                             <td className="text-surface-700">{s.work_order?.customer ?? '—'}</td>
-                                            <td className="text-surface-600">{s.work_order?.product ?? '—'}</td>
+                                            <td className="text-surface-600">{s.item?.description ?? s.work_order?.product ?? '—'}</td>
                                             <td>
                                                 <span className="badge badge-slate">{s.step_count} step{s.step_count !== 1 && 's'}</span>
                                             </td>
                                             <td className="text-xs text-surface-500">{s.created_at}</td>
-                                            <td>
-                                                {s.approved_at ? (
-                                                    <span className="badge badge-green">{s.approved_at}</span>
-                                                ) : (
-                                                    <span className="badge badge-amber">Pending</span>
-                                                )}
-                                            </td>
                                             <td>
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     <Link href={`/operation-sheets/${s.id}`} title="View operation sheet"
@@ -147,8 +136,7 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                             <span className="font-mono font-semibold text-brand-600 text-sm">{s.sheet_number}</span>
                                             {s.work_order && (
                                                 <div className="text-xs text-surface-600 mt-0.5">
-                                                    Job #<span className="font-bold text-surface-800">{s.work_order.job_number ?? '—'}</span>
-                                                    {s.work_order.wo_number && <span className="text-surface-400 ml-1.5 font-mono text-[10px]">{s.work_order.wo_number}</span>}
+                                                    Job# <span className="font-bold text-surface-800">{s.work_order.job_number ?? '—'}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -158,13 +146,8 @@ export default function OperationSheetIndex({ sheets, filters }: any) {
                                 {s.work_order?.customer && (
                                     <div className="text-sm text-surface-700">{s.work_order.customer}</div>
                                 )}
-                                <div className="flex items-center justify-between text-xs pt-2 border-t border-surface-100">
+                                <div className="flex items-center text-xs pt-2 border-t border-surface-100">
                                     <span className="text-surface-500">{s.created_at}</span>
-                                    {s.approved_at ? (
-                                        <span className="badge badge-green text-[10px]">Approved</span>
-                                    ) : (
-                                        <span className="badge badge-amber text-[10px]">Pending</span>
-                                    )}
                                 </div>
                             </Link>
                         )) : (

@@ -65,8 +65,18 @@ class JobCategoryController extends Controller
 
     private function validateInput(Request $request, ?int $id = null): array
     {
+        // Job categories are scoped per-center (HasCenter), so uniqueness
+        // should also be per-center — two centres can run a "Material" category
+        // independently without clashing on the global table.
+        $centerId = app()->bound('current_center_id') ? app('current_center_id') : null;
+
         return $request->validate([
-            'name'          => 'required|string|max:120|unique:job_categories,name' . ($id ? ",{$id}" : ''),
+            'name'          => [
+                'required', 'string', 'max:120',
+                \Illuminate\Validation\Rule::unique('job_categories', 'name')
+                    ->where(fn ($q) => $centerId ? $q->where('center_id', $centerId) : $q)
+                    ->ignore($id),
+            ],
             'code'          => 'nullable|string|max:32',
             'description'   => 'nullable|string|max:500',
             'display_order' => 'nullable|integer|min:0',

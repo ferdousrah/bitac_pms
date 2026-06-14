@@ -151,6 +151,14 @@ class CustomerDocumentController extends Controller
             || ($quotation->rfq?->customer_id === $customer->id);
         abort_unless($owned, 403);
 
+        // Only formally cleared quotations are downloadable by the customer.
+        // Drafts and in-approval rows are blocked.
+        abort_unless(
+            in_array($quotation->status, ['approved', 'sent_to_customer', 'customer_accepted', 'converted']),
+            403,
+            'This quotation is not yet available.'
+        );
+
         // Delegate to the staff controller's PDF method — it already streams
         // a customer-safe binary by default.
         return app(\App\Http\Controllers\QuotationController::class)
@@ -159,7 +167,7 @@ class CustomerDocumentController extends Controller
 
     /**
      * Customer-side download of the optional forwarding letter that ships
-     * alongside a quotation. Same ownership check as quotation().
+     * alongside a quotation. Same ownership + status gate as quotation().
      */
     public function quotationForwardingLetter(Quotation $quotation)
     {
@@ -169,6 +177,12 @@ class CustomerDocumentController extends Controller
         $owned = ($quotation->workOrder?->customer_id === $customer->id)
             || ($quotation->rfq?->customer_id === $customer->id);
         abort_unless($owned, 403);
+
+        abort_unless(
+            in_array($quotation->status, ['approved', 'sent_to_customer', 'customer_accepted', 'converted']),
+            403,
+            'This quotation is not yet available.'
+        );
 
         return app(\App\Http\Controllers\QuotationController::class)
             ->exportForwardingLetterPdf(request(), $quotation);

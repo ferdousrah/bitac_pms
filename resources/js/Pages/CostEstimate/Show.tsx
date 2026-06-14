@@ -193,6 +193,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                             icon="fi-rr-calculator"
                             iconColor="brand"
                             className="sticky top-4"
+                            defaultOpen
                             summary={<span className="font-mono font-bold text-surface-900 tabular-nums">৳ {fmt(estimate.grand_total)}</span>}
                         >
                             {/* Section subtotals — only show sections that contribute */}
@@ -295,6 +296,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                     );
                                 })()}
                             </div>}
+                            defaultOpen
                             icon="fi-rr-stamp"
                             iconColor="amber"
                             className="animate-slide-up lg:col-span-2"
@@ -361,6 +363,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                             title="Notes"
                             icon="fi-rr-document"
                             iconColor="slate"
+                            defaultOpen
                             summary={<span className="text-surface-500 truncate">{String(estimate.notes).slice(0, 60)}{String(estimate.notes).length > 60 ? '…' : ''}</span>}
                             className={(estimate.approvals?.length > 0 || canSubmit) ? '' : 'lg:col-span-2'}
                         >
@@ -375,7 +378,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                 </div>
 
                 {/* ── RFQ Attachments (drawings + sample photos) ──────── */}
-                <RfqAttachmentsPanel attachments={rfqAttachments} letter={rfqLetter} title="RFQ Attachments" inheritedFrom="rfq" defaultCollapsed />
+                <RfqAttachmentsPanel attachments={rfqAttachments} letter={rfqLetter} title="RFQ Attachments" inheritedFrom="rfq" />
 
                 {/* ── Discussion thread ─────────────────────────────────── */}
                 <CommentThread
@@ -383,11 +386,10 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                     entityId={estimate.id}
                     comments={comments}
                     title="Discussion"
-                    defaultCollapsed
                 />
 
                 {/* ── Change History — full width ──────────────────────── */}
-                <RevisionTimeline revisions={revisions} title="Change History" defaultCollapsed />
+                <RevisionTimeline revisions={revisions} title="Change History" />
             </div>
 
             {/* Approval Action Modal */}
@@ -672,6 +674,7 @@ function SectionCard({ letter, title, total, lines }: any) {
                 <span className="text-[11px] text-surface-400 font-medium">· {lines.length} {lines.length === 1 ? 'item' : 'items'}</span>
             </h3>}
             summary={<span className="font-mono font-bold tabular-nums text-surface-800">৳ {fmt(total)}</span>}
+            defaultOpen
         >
             {/* Lines table */}
             <div className="overflow-x-auto">

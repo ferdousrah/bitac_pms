@@ -108,7 +108,10 @@ export default function PcdInbox({ jobs, stats }: any) {
 
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className={`font-mono text-xs font-semibold ${isClosed ? 'line-through text-surface-500' : 'text-surface-700'}`}>{job.wo_number}</span>
+                                                        {/* Show the customer's PO number prominently — it's the
+                                                            reference the customer recognises. Fall back to the
+                                                            system WO number when no PO was supplied. */}
+                                                        <span className={`font-mono text-xs font-semibold ${isClosed ? 'line-through text-surface-500' : 'text-surface-700'}`}>{job.customer_po_no ?? job.wo_number}</span>
                                                         <JobTypeBadge type={job.job_type} size="xs" />
                                                         <span className={`badge ${STATUS_BADGE[job.status] ?? 'badge-slate'}`}>{job.status?.replace(/_/g, ' ')}</span>
                                                         {!isClosed && (
@@ -116,9 +119,6 @@ export default function PcdInbox({ jobs, stats }: any) {
                                                         )}
                                                     </div>
                                                     <h3 className={`text-sm font-semibold mt-1 ${isClosed ? 'text-surface-500' : 'text-surface-900'}`}>{job.customer}</h3>
-                                                    {job.customer_po_no && (
-                                                        <p className="text-xs text-surface-400 mt-0.5">PO: <span className="font-mono">{job.customer_po_no}</span></p>
-                                                    )}
                                                     {isClosed ? (
                                                         <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-rose-100/70 border border-rose-200 text-xs text-rose-800">
                                                             <div className="flex items-center gap-2 flex-wrap">

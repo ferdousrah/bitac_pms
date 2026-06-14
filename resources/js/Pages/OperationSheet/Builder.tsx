@@ -49,13 +49,6 @@ interface Machine {
     section_id: number | null;
 }
 
-interface Operator {
-    id: number;
-    name: string;
-    employee_id: string | number | null;
-    section_id: number | null;
-}
-
 interface Operation {
     id: number;
     name: string;
@@ -69,8 +62,6 @@ interface Step {
     operation_name: string;
     section_id: number | string;
     machine_id: number | string;
-    operator_id: number | string;
-    estimated_hours: string;
     weight_pct: string;
     tooling_notes: string;
 }
@@ -78,19 +69,30 @@ interface Step {
 interface ExistingSheet {
     id: number;
     sheet_number: string;
+    job_title?: string | null;
+    job_description?: string | null;
+    material?: string | null;
     steps: Array<Omit<Step, '_uid'> & { id?: number }>;
+}
+
+interface WorkOrderItemRef {
+    id: number;
+    description: string;
+    quantity: number;
+    unit: string;
+    sequence: number;
 }
 
 interface Props {
     workOrder: WorkOrder;
+    item?: WorkOrderItemRef | null;
     sections: Section[];
     machines: Machine[];
-    operators: Operator[];
     operations: Operation[];
     sheet?: ExistingSheet;
 }
 
-function makeEmptyStep(): Step {
+function makeEmptyStep(sectionId: number | string = ''): Step {
     return {
         _uid:
             typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -98,10 +100,8 @@ function makeEmptyStep(): Step {
                 : `s_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
         operation_id: null,
         operation_name: '',
-        section_id: '',
+        section_id: sectionId,
         machine_id: '',
-        operator_id: '',
-        estimated_hours: '',
         weight_pct: '',
         tooling_notes: '',
     };
@@ -110,23 +110,17 @@ function makeEmptyStep(): Step {
 function SortableStepCard({
     step,
     index,
-    sections,
-    orderedSections,
     groupedOperations,
     operationsById,
     machinesBySection,
-    operatorsBySection,
     onChange,
     onRemove,
 }: {
     step: Step;
     index: number;
-    sections: Section[];
-    orderedSections: Section[];
     groupedOperations: Record<string, Operation[]>;
     operationsById: Record<string, Operation>;
     machinesBySection: Record<string, Machine[]>;
-    operatorsBySection: Record<string, Operator[]>;
     onChange: (patch: Partial<Step>) => void;
     onRemove: () => void;
 }) {
@@ -139,9 +133,9 @@ function SortableStepCard({
         opacity: isDragging ? 0.5 : 1,
     };
 
+    // Section is now implicit from the group — machine list is scoped to it.
     const sectionKey = String(step.section_id || '');
     const availableMachines = sectionKey ? machinesBySection[sectionKey] ?? [] : [];
-    const availableOperators = sectionKey ? operatorsBySection[sectionKey] ?? [] : [];
 
     const handleOperationChange = (value: string) => {
         if (!value) {
@@ -153,11 +147,6 @@ function SortableStepCard({
             operation_id: Number(value),
             operation_name: op ? op.name : '',
         });
-    };
-
-    const handleSectionChange = (value: string) => {
-        // Changing section invalidates machine and operator
-        onChange({ section_id: value, machine_id: '', operator_id: '' });
     };
 
     return (
@@ -208,44 +197,8 @@ function SortableStepCard({
                             </select>
                         </div>
 
-                        {/* Section */}
-                        <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
-                            <label className="form-label">Section *</label>
-                            <select
-                                value={step.section_id}
-                                onChange={(e) => handleSectionChange(e.target.value)}
-                                className="form-select"
-                                required
-                            >
-                                <option value="">Select section...</option>
-                                {orderedSections.length > 0 && (
-                                    <optgroup label="Assigned to this job">
-                                        {orderedSections.map((s) => (
-                                            <option key={`a-${s.id}`} value={s.id}>
-                                                {s.name} ({s.code})
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                )}
-                                <optgroup label="All sections">
-                                    {sections
-                                        .filter(
-                                            (s) =>
-                                                !orderedSections.some(
-                                                    (o) => o.id === s.id,
-                                                ),
-                                        )
-                                        .map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.name} ({s.code})
-                                            </option>
-                                        ))}
-                                </optgroup>
-                            </select>
-                        </div>
-
                         {/* Machine */}
-                        <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
+                        <div className="form-group sm:col-span-2 lg:col-span-2 mb-0">
                             <label className="form-label">Machine <span className="form-label-optional">optional</span></label>
                             <select
                                 value={step.machine_id}
@@ -253,13 +206,8 @@ function SortableStepCard({
                                     onChange({ machine_id: e.target.value })
                                 }
                                 className="form-select"
-                                disabled={!sectionKey}
                             >
-                                <option value="">
-                                    {sectionKey
-                                        ? 'Select machine...'
-                                        : 'Pick a section first'}
-                                </option>
+                                <option value="">Select machine...</option>
                                 {availableMachines.map((m) => (
                                     <option key={m.id} value={m.id}>
                                         {m.name} ({m.code})
@@ -268,50 +216,9 @@ function SortableStepCard({
                             </select>
                         </div>
 
-                        {/* Operator */}
+                        {/* Weightage % — contribution to overall job progress */}
                         <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
-                            <label className="form-label">Operator <span className="form-label-optional">optional</span></label>
-                            <select
-                                value={step.operator_id}
-                                onChange={(e) =>
-                                    onChange({ operator_id: e.target.value })
-                                }
-                                className="form-select"
-                                disabled={!sectionKey}
-                            >
-                                <option value="">
-                                    {sectionKey
-                                        ? 'Select operator...'
-                                        : 'Pick a section first'}
-                                </option>
-                                {availableOperators.map((o) => (
-                                    <option key={o.id} value={o.id}>
-                                        {o.name}
-                                        {o.employee_id ? ` — ${o.employee_id}` : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Estimated hours */}
-                        <div className="form-group sm:col-span-1 lg:col-span-1 mb-0">
-                            <label className="form-label-optional">Est. Hours</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.1"
-                                value={step.estimated_hours}
-                                onChange={(e) =>
-                                    onChange({ estimated_hours: e.target.value })
-                                }
-                                className="form-input"
-                                placeholder="0.0"
-                            />
-                        </div>
-
-                        {/* Weight % — contribution to overall job progress */}
-                        <div className="form-group sm:col-span-1 lg:col-span-1 mb-0">
-                            <label className="form-label-optional">Weight %</label>
+                            <label className="form-label-optional">Weightage %</label>
                             <input
                                 type="number"
                                 min="0"
@@ -323,13 +230,13 @@ function SortableStepCard({
                                 }
                                 className="form-input"
                                 placeholder="0.0"
-                                title="This step's contribution to overall job progress. All step weights should sum to 100."
+                                title="This step's weightage in overall job progress. All step weightages should sum to 100."
                             />
                         </div>
 
-                        {/* Tooling notes */}
-                        <div className="form-group sm:col-span-2 lg:col-span-2 mb-0">
-                            <label className="form-label-optional">Tooling Notes</label>
+                        {/* Notes */}
+                        <div className="form-group sm:col-span-2 lg:col-span-6 mb-0">
+                            <label className="form-label-optional">Notes</label>
                             <input
                                 type="text"
                                 value={step.tooling_notes}
@@ -337,7 +244,7 @@ function SortableStepCard({
                                     onChange({ tooling_notes: e.target.value })
                                 }
                                 className="form-input"
-                                placeholder="Jigs, fixtures, tools..."
+                                placeholder="Jigs, fixtures, tools, remarks..."
                             />
                         </div>
                     </div>
@@ -358,9 +265,9 @@ function SortableStepCard({
 
 export default function OperationSheetBuilder({
     workOrder,
+    item,
     sections,
     machines,
-    operators,
     operations,
     sheet,
 }: Props) {
@@ -376,18 +283,25 @@ export default function OperationSheetBuilder({
             operation_name: s.operation_name ?? '',
             section_id: s.section_id ?? '',
             machine_id: s.machine_id ?? '',
-            operator_id: s.operator_id ?? '',
-            estimated_hours: String(s.estimated_hours ?? ''),
             weight_pct: String(s.weight_pct ?? ''),
             tooling_notes: s.tooling_notes ?? '',
         }))
-        : [makeEmptyStep()];
+        : [];
 
     const { data, setData, post, put, processing, errors } = useForm<{
         work_order_id: number;
+        work_order_item_id: number | null;
+        job_title: string;
+        job_description: string;
+        material: string;
         steps: Step[];
     }>({
         work_order_id: workOrder.id,
+        work_order_item_id: item ? item.id : null,
+        // Job Title inherits from item description on create; PCD can edit before saving.
+        job_title: sheet?.job_title ?? item?.description ?? '',
+        job_description: sheet?.job_description ?? '',
+        material: sheet?.material ?? '',
         steps: initialSteps,
     });
 
@@ -423,17 +337,6 @@ export default function OperationSheetBuilder({
         return map;
     }, [machines]);
 
-    const operatorsBySection = useMemo(() => {
-        const map: Record<string, Operator[]> = {};
-        for (const o of operators) {
-            if (o.section_id == null) continue;
-            const key = String(o.section_id);
-            if (!map[key]) map[key] = [];
-            map[key].push(o);
-        }
-        return map;
-    }, [operators]);
-
     const orderedSections = useMemo<Section[]>(() => {
         const assigned = workOrder.assigned_sections ?? [];
         if (assigned.length === 0) return [];
@@ -459,24 +362,9 @@ export default function OperationSheetBuilder({
         })));
     };
 
-    // Distribute 100% proportional to each step's estimated_hours. Falls back
-    // to equal distribution when hours aren't filled in.
-    const hoursBalance = () => {
-        const totalHours = data.steps.reduce((acc, s) => acc + (parseFloat(s.estimated_hours) || 0), 0);
-        if (totalHours <= 0) { equalBalance(); return; }
-        let allocated = 0;
-        const next = data.steps.map((s, i) => {
-            const h = parseFloat(s.estimated_hours) || 0;
-            const pct = i === data.steps.length - 1
-                ? +(100 - allocated).toFixed(2) // last step absorbs rounding
-                : +((h / totalHours) * 100).toFixed(2);
-            allocated += pct;
-            return { ...s, weight_pct: pct.toFixed(2) };
-        });
-        setData('steps', next);
-    };
-
-    const addStep = () => setData('steps', [...data.steps, makeEmptyStep()]);
+    // Add a row to a specific section group. Section is implicit — the new row
+    // inherits the group's section_id so the user never picks it.
+    const addStep = (sectionId: number | string = '') => setData('steps', [...data.steps, makeEmptyStep(sectionId)]);
 
     const removeStep = (uid: string) =>
         setData(
@@ -490,13 +378,28 @@ export default function OperationSheetBuilder({
             data.steps.map((s) => (s._uid === uid ? { ...s, ...patch } : s)),
         );
 
-    const handleDragEnd = (event: DragEndEvent) => {
+    // Reorder within a single section group. We map the section's local indices
+    // back to absolute indices in data.steps so the global array stays consistent.
+    const handleSectionDragEnd = (sectionId: number | string) => (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
-        const oldIndex = data.steps.findIndex((s) => s._uid === active.id);
-        const newIndex = data.steps.findIndex((s) => s._uid === over.id);
-        if (oldIndex === -1 || newIndex === -1) return;
-        setData('steps', arrayMove(data.steps, oldIndex, newIndex));
+        const groupUids = data.steps
+            .filter((s) => String(s.section_id) === String(sectionId))
+            .map((s) => s._uid);
+        const oldGroupIdx = groupUids.indexOf(String(active.id));
+        const newGroupIdx = groupUids.indexOf(String(over.id));
+        if (oldGroupIdx === -1 || newGroupIdx === -1) return;
+        const reorderedUids = arrayMove(groupUids, oldGroupIdx, newGroupIdx);
+
+        // Rebuild the absolute steps list: keep non-group rows in place, replace
+        // group rows in their original positions with the reordered ones.
+        let cursor = 0;
+        const next = data.steps.map((s) => {
+            if (String(s.section_id) !== String(sectionId)) return s;
+            const uid = reorderedUids[cursor++];
+            return data.steps.find((x) => x._uid === uid)!;
+        });
+        setData('steps', next);
     };
 
     const submit = (e: React.FormEvent) => {
@@ -509,7 +412,7 @@ export default function OperationSheetBuilder({
     };
 
     return (
-        <AppLayout header={`${isEdit ? 'Edit' : 'New'} Operation Sheet — ${workOrder.wo_number}`}>
+        <AppLayout header={`${isEdit ? 'Edit' : 'New'} Operation Sheet — Job# ${workOrder.job_number ?? '—'}`}>
             <div className="space-y-6 animate-fade-in">
                 {/* Header card */}
                 <div className="card">
@@ -522,14 +425,20 @@ export default function OperationSheetBuilder({
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-mono text-xs font-semibold text-surface-700">
-                                            {workOrder.wo_number}
+                                            Job# {workOrder.job_number ?? '—'}
                                         </span>
+                                        {item && (
+                                            <span className="badge badge-amber">
+                                                Item {item.sequence}
+                                            </span>
+                                        )}
                                         <span className="badge badge-blue">
-                                            Qty {workOrder.quantity}
+                                            Qty {item ? item.quantity : workOrder.quantity}
+                                            {item ? ` ${item.unit}` : ''}
                                         </span>
                                     </div>
                                     <h1 className="text-lg font-bold text-surface-900 mt-1 truncate">
-                                        {workOrder.product}
+                                        {item ? item.description : workOrder.product}
                                     </h1>
                                     <p className="text-xs text-surface-500 mt-0.5 truncate">
                                         Customer:{' '}
@@ -562,16 +471,90 @@ export default function OperationSheetBuilder({
                     </div>
                 </div>
 
+                {/* BITAC header fields — Job Title (defaults from item, editable),
+                    Job Description, Material. These print on the Operation Sheet PDF. */}
+                <div className="card">
+                    <div className="card-header">
+                        <h2 className="text-base font-bold text-surface-900">
+                            <i className="fi fi-rr-file-edit mr-2 text-brand-600" />
+                            Sheet Header
+                        </h2>
+                        <p className="text-xs text-surface-500 mt-0.5">
+                            These fields print at the top of the Operation Sheet PDF, matching the BITAC paper format.
+                        </p>
+                    </div>
+                    <div className="card-body">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="form-group mb-0 lg:col-span-2">
+                                <label className="form-label">
+                                    Job Title
+                                </label>
+                                <input
+                                    type="text"
+                                    value={data.job_title}
+                                    onChange={(e) => setData('job_title', e.target.value)}
+                                    className="form-input"
+                                    placeholder="e.g. Mfg. of Spur Gear, NT-21 & 16"
+                                />
+                                <p className="text-[11px] text-surface-400 mt-1">
+                                    Inherits from the item description. Edit if you want a different title on the printed sheet.
+                                </p>
+                                {errors.job_title && <div className="form-error">{errors.job_title}</div>}
+                            </div>
+
+                            <div className="form-group mb-0">
+                                <label className="form-label">
+                                    Job Description
+                                </label>
+                                <input
+                                    type="text"
+                                    value={data.job_description}
+                                    onChange={(e) => setData('job_description', e.target.value)}
+                                    className="form-input"
+                                    placeholder="e.g. As per Sample"
+                                />
+                                {errors.job_description && <div className="form-error">{errors.job_description}</div>}
+                            </div>
+
+                            <div className="form-group mb-0">
+                                <label className="form-label">
+                                    Material
+                                </label>
+                                <input
+                                    type="text"
+                                    value={data.material}
+                                    onChange={(e) => setData('material', e.target.value)}
+                                    className="form-input"
+                                    placeholder="e.g. EN-24"
+                                />
+                                {errors.material && <div className="form-error">{errors.material}</div>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Info alert */}
                 <div className="alert alert-info">
                     <i className="fi fi-rr-info text-sm leading-none" />
                     <div>
                         <div className="font-semibold">Building the operation sheet</div>
                         <div className="text-xs opacity-80 mt-0.5">
-                            Add operation steps in the order they should be performed. Each step needs a section, machine, and operator assigned. Use the drag handle to reorder steps.
+                            Sections come from the Work Order's Shop Routing. Inside each section, add the operations to perform — pick the operation, machine, est. hours, weight, and any notes. Drag to reorder within a section.
                         </div>
                     </div>
                 </div>
+
+                {orderedSections.length === 0 && (
+                    <div className="alert alert-warning">
+                        <i className="fi fi-rr-triangle-warning text-sm leading-none" />
+                        <div>
+                            <div className="font-semibold">No sections in the Work Order's Shop Routing</div>
+                            <div className="text-xs opacity-80 mt-0.5">
+                                Add sections in the Work Order's Routing step before building this operation sheet.
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {typeof errors.steps === 'string' && (
                     <div className="alert alert-warning">
@@ -580,81 +563,128 @@ export default function OperationSheetBuilder({
                     </div>
                 )}
 
-                {/* Steps */}
+                {/* Section-grouped steps. Each routing section from the WO becomes
+                    its own group; operations within a section can be reordered. */}
                 <form onSubmit={submit} className="space-y-4">
-                    <div className="card">
-                        <div className="card-header flex items-center justify-between">
-                            <div>
-                                <h2 className="text-base font-bold text-surface-900">
-                                    Operation Steps
-                                </h2>
-                                <p className="text-xs text-surface-400 mt-0.5">
-                                    {data.steps.length} step{data.steps.length === 1 ? '' : 's'} defined
-                                </p>
-                            </div>
-                            <span className="badge badge-blue">
-                                {data.steps.length} total
-                            </span>
-                        </div>
-
-                        <div className="card-body space-y-4">
-                            {data.steps.length === 0 ? (
-                                <div className="empty-state py-10">
-                                    <div className="empty-state-icon">
-                                        <i className="fi fi-rr-list-check" />
+                    {orderedSections.map((section, sectionIdx) => {
+                        const sectionSteps = data.steps.filter(
+                            (s) => String(s.section_id) === String(section.id),
+                        );
+                        return (
+                            <div key={section.id} className="card">
+                                <div className="card-header flex items-center justify-between">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                                            {sectionIdx + 1}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h2 className="text-base font-bold text-surface-900 truncate">
+                                                {section.name}
+                                            </h2>
+                                            <p className="text-[11px] text-surface-500 font-mono mt-0.5">
+                                                {section.code}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="empty-state-title">
-                                        No operation steps yet
-                                    </div>
-                                    <div className="empty-state-text">
-                                        Click the add button below to start building the sheet.
-                                    </div>
+                                    <span className="badge badge-blue shrink-0">
+                                        {sectionSteps.length} operation{sectionSteps.length === 1 ? '' : 's'}
+                                    </span>
                                 </div>
-                            ) : (
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragEnd={handleDragEnd}
-                                >
-                                    <SortableContext
-                                        items={data.steps.map((s) => s._uid)}
-                                        strategy={verticalListSortingStrategy}
+
+                                <div className="card-body space-y-3">
+                                    {sectionSteps.length === 0 ? (
+                                        <div className="text-center py-6 text-surface-400 text-xs">
+                                            No operations added for this section yet.
+                                        </div>
+                                    ) : (
+                                        <DndContext
+                                            sensors={sensors}
+                                            collisionDetection={closestCenter}
+                                            onDragEnd={handleSectionDragEnd(section.id)}
+                                        >
+                                            <SortableContext
+                                                items={sectionSteps.map((s) => s._uid)}
+                                                strategy={verticalListSortingStrategy}
+                                            >
+                                                <div className="space-y-3">
+                                                    {sectionSteps.map((step, i) => (
+                                                        <SortableStepCard
+                                                            key={step._uid}
+                                                            step={step}
+                                                            index={i}
+                                                            groupedOperations={groupedOperations}
+                                                            operationsById={operationsById}
+                                                            machinesBySection={machinesBySection}
+                                                            onChange={(patch) =>
+                                                                updateStep(step._uid, patch)
+                                                            }
+                                                            onRemove={() => removeStep(step._uid)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </SortableContext>
+                                        </DndContext>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={() => addStep(section.id)}
+                                        className="w-full py-3 border-2 border-dashed border-surface-200 rounded-2xl text-surface-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/30 text-xs font-medium transition-colors flex items-center justify-center gap-2"
                                     >
-                                        <div className="space-y-3">
-                                            {data.steps.map((step, i) => (
+                                        <i className="fi fi-rr-plus text-[10px] leading-none" />
+                                        Add Operation in {section.name}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {/* Orphan rows whose section is no longer in the WO routing — render
+                        as a fallback group so the data isn't lost during editing. */}
+                    {(() => {
+                        const orphans = data.steps.filter(
+                            (s) => !orderedSections.some((sec) => String(sec.id) === String(s.section_id)),
+                        );
+                        if (orphans.length === 0) return null;
+                        return (
+                            <div className="card border-amber-200">
+                                <div className="card-header flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-base font-bold text-amber-900">
+                                            Unassigned operations
+                                        </h2>
+                                        <p className="text-[11px] text-amber-700 mt-0.5">
+                                            These rows don't match any section in the current WO routing.
+                                        </p>
+                                    </div>
+                                    <span className="badge badge-amber">{orphans.length}</span>
+                                </div>
+                                <div className="card-body space-y-3">
+                                    <DndContext sensors={sensors} collisionDetection={closestCenter}>
+                                        <SortableContext
+                                            items={orphans.map((s) => s._uid)}
+                                            strategy={verticalListSortingStrategy}
+                                        >
+                                            {orphans.map((step, i) => (
                                                 <SortableStepCard
                                                     key={step._uid}
                                                     step={step}
                                                     index={i}
-                                                    sections={sections}
-                                                    orderedSections={orderedSections}
                                                     groupedOperations={groupedOperations}
                                                     operationsById={operationsById}
                                                     machinesBySection={machinesBySection}
-                                                    operatorsBySection={operatorsBySection}
-                                                    onChange={(patch) =>
-                                                        updateStep(step._uid, patch)
-                                                    }
+                                                    onChange={(patch) => updateStep(step._uid, patch)}
                                                     onRemove={() => removeStep(step._uid)}
                                                 />
                                             ))}
-                                        </div>
-                                    </SortableContext>
-                                </DndContext>
-                            )}
+                                        </SortableContext>
+                                    </DndContext>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
-                            <button
-                                type="button"
-                                onClick={addStep}
-                                className="w-full py-4 border-2 border-dashed border-surface-200 rounded-2xl text-surface-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/30 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                            >
-                                <i className="fi fi-rr-plus text-xs leading-none" />
-                                Add Step
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Weight summary — sum should be 100 for accurate job progress tracking */}
+                    {/* Weightage summary — sum should be 100 for accurate job progress tracking */}
                     {data.steps.length > 0 && (
                         <div className={`card border-2 ${
                             Math.abs(totalWeight - 100) < 0.01
@@ -674,15 +704,15 @@ export default function OperationSheetBuilder({
                                     } text-lg leading-none`} />
                                     <div>
                                         <div className="text-sm font-bold text-surface-900">
-                                            Total Weight: <span className="font-mono">{totalWeight.toFixed(2)}%</span>
+                                            Total Weightage: <span className="font-mono">{totalWeight.toFixed(2)}%</span>
                                             <span className="text-surface-400 font-normal"> / 100%</span>
                                         </div>
                                         <div className="text-[11px] text-surface-500 mt-0.5">
                                             {Math.abs(totalWeight - 100) < 0.01
                                                 ? '✓ Balanced — each step contributes to overall job progress.'
                                                 : totalWeight > 100
-                                                    ? 'Total exceeds 100%. Adjust step weights or use auto-balance.'
-                                                    : 'Weights should sum to 100% for accurate progress tracking.'}
+                                                    ? 'Total exceeds 100%. Adjust step weightages or use auto-balance.'
+                                                    : 'Weightages should sum to 100% for accurate progress tracking.'}
                                         </div>
                                     </div>
                                 </div>
@@ -695,15 +725,6 @@ export default function OperationSheetBuilder({
                                     >
                                         <i className="fi fi-rr-equality text-xs leading-none" />
                                         Equal Split
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={hoursBalance}
-                                        className="btn-outline btn-sm"
-                                        title="Distribute 100% proportional to estimated hours"
-                                    >
-                                        <i className="fi fi-rr-time-quarter-past text-xs leading-none" />
-                                        By Hours
                                     </button>
                                 </div>
                             </div>

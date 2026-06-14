@@ -22,21 +22,28 @@ class CustomerRfqController extends Controller
     {
         $customer = auth('customer')->user();
 
+        $customerVisibleStatuses = ['approved', 'sent_to_customer', 'customer_accepted', 'converted'];
+
         $rfqs = Rfq::where('customer_id', $customer->id)
-            ->with(['items.product', 'latestQuotation'])
+            ->with(['items.product', 'quotations'])
             ->latest('id')
             ->paginate(15)
-            ->through(fn ($r) => [
-                'id'              => $r->id,
-                'customer_ref_no' => $r->customer_ref_no,
-                'status'          => $r->status,
-                'item_count'      => $r->items->count(),
-                'items_summary'   => $r->items->take(3)->map(fn ($i) => $i->job_description ?? $i->product?->name ?? 'Item')->all(),
-                'required_by'     => $r->required_by?->format('d M Y'),
-                'created_at'      => $r->created_at->format('d M Y'),
-                'has_quotation'   => $r->latestQuotation !== null,
-                'quotation_id'    => $r->latestQuotation?->id,
-            ]);
+            ->through(function ($r) use ($customerVisibleStatuses) {
+                $visible = $r->quotations
+                    ->whereIn('status', $customerVisibleStatuses)
+                    ->sortByDesc('id')->first();
+                return [
+                    'id'              => $r->id,
+                    'customer_ref_no' => $r->customer_ref_no,
+                    'status'          => $r->status,
+                    'item_count'      => $r->items->count(),
+                    'items_summary'   => $r->items->take(3)->map(fn ($i) => $i->job_description ?? $i->product?->name ?? 'Item')->all(),
+                    'required_by'     => $r->required_by?->format('d M Y'),
+                    'created_at'      => $r->created_at->format('d M Y'),
+                    'has_quotation'   => $visible !== null,
+                    'quotation_id'    => $visible?->id,
+                ];
+            });
 
         return Inertia::render('Customer/Rfqs/Index', [
             'rfqs' => $rfqs,
@@ -178,9 +185,19 @@ class CustomerRfqController extends Controller
 
         $rfq->load(['items.product', 'items.drawings', 'items.samplePhotos', 'quotations', 'latestQuotation.workOrder']);
 
-        // Latest Work Order issued against this RFQ (via the quotation) — used
-        // by the customer-facing card so they can track production progress.
-        $workOrder = $rfq->latestQuotation?->workOrder;
+        // Customers only see a quotation once it's been formally cleared on the
+        // staff side — drafts and in-approval rows stay hidden.
+        $customerVisibleStatuses = ['approved', 'sent_to_customer', 'customer_accepted', 'converted'];
+        $visibleQuotation = $rfq->quotations
+            ->whereIn('status', $customerVisibleStatuses)
+            ->sortByDesc('id')
+            ->first();
+        if ($visibleQuotation) {
+            $visibleQuotation->load('workOrder');
+        }
+
+        // Latest Work Order issued against this RFQ (via the visible quotation).
+        $workOrder = $visibleQuotation?->workOrder;
 
         return Inertia::render('Customer/Rfqs/Show', [
             'rfq' => [
@@ -191,6 +208,14 @@ class CustomerRfqController extends Controller
                 'created_at'      => $rfq->created_at->format('d M Y, h:i A'),
                 'notes'           => $rfq->notes,
                 'can_cancel'      => $rfq->status === 'pending',
+                // Letter the customer themself uploaded with this RFQ. URL goes
+                // through the controller so the PDF popup's base64 mode works
+                // and IDM/FDM doesn't intercept.
+                'rfq_letter'      => $rfq->rfq_letter_path ? [
+                    'title'     => $rfq->rfq_letter_title ?: 'RFQ letter',
+                    'url'       => route('customer.rfqs.letter', $rfq),
+                    'extension' => strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION)),
+                ] : null,
                 'items'           => $rfq->items->map(fn ($i) => [
                     'id'               => $i->id,
                     'product'          => $i->product?->name,
@@ -211,22 +236,22 @@ class CustomerRfqController extends Controller
                         'filename' => $f->original_name,
                     ])->values(),
                 ])->values(),
-                'latest_quotation' => $rfq->latestQuotation ? [
-                    'id'           => $rfq->latestQuotation->id,
-                    'version'      => $rfq->latestQuotation->version,
-                    'total_amount' => (float) $rfq->latestQuotation->total_amount,
-                    'vat_rate'     => (float) $rfq->latestQuotation->vat_rate,
-                    'vat_amount'   => (float) $rfq->latestQuotation->vat_amount,
-                    'tax_rate'     => (float) $rfq->latestQuotation->tax_rate,
-                    'tax_amount'   => (float) $rfq->latestQuotation->tax_amount,
-                    'discount'     => (float) ($rfq->latestQuotation->discount ?? 0),
-                    'status'       => $rfq->latestQuotation->status,
-                    'created_at'   => $rfq->latestQuotation->created_at->format('d M Y'),
-                    'has_forwarding_letter' => !empty(trim((string) $rfq->latestQuotation->forwarding_letter)),
+                'latest_quotation' => $visibleQuotation ? [
+                    'id'           => $visibleQuotation->id,
+                    'version'      => $visibleQuotation->version,
+                    'total_amount' => (float) $visibleQuotation->total_amount,
+                    'vat_rate'     => (float) $visibleQuotation->vat_rate,
+                    'vat_amount'   => (float) $visibleQuotation->vat_amount,
+                    'tax_rate'     => (float) $visibleQuotation->tax_rate,
+                    'tax_amount'   => (float) $visibleQuotation->tax_amount,
+                    'discount'     => (float) ($visibleQuotation->discount ?? 0),
+                    'status'       => $visibleQuotation->status,
+                    'created_at'   => $visibleQuotation->created_at->format('d M Y'),
+                    'has_forwarding_letter' => !empty(trim((string) $visibleQuotation->forwarding_letter)),
                     // Whether the customer can self-issue a Work Order against
                     // this quotation. Mirrors the staff `convertToWorkOrder` gate.
-                    'can_issue_work_order' => in_array($rfq->latestQuotation->status, ['approved', 'sent_to_customer', 'customer_accepted'])
-                                            && $rfq->latestQuotation->workOrder === null,
+                    'can_issue_work_order' => in_array($visibleQuotation->status, ['approved', 'sent_to_customer', 'customer_accepted'])
+                                            && $visibleQuotation->workOrder === null,
                 ] : null,
                 'work_order' => $workOrder ? [
                     'id'           => $workOrder->id,
@@ -240,6 +265,53 @@ class CustomerRfqController extends Controller
                     'created_at'   => $workOrder->created_at->format('d M Y'),
                 ] : null,
             ],
+        ]);
+    }
+
+    /**
+     * Stream the customer's own RFQ letter (the file they uploaded with the
+     * request) through the controller so the PdfPopupModal's base64 mode
+     * works and IDM/FDM doesn't intercept the response.
+     *
+     *   ?preview=base64 → JSON { data, filename, mime }
+     *   ?preview=1      → inline binary
+     *   (none)          → force download
+     */
+    public function letter(Request $request, Rfq $rfq)
+    {
+        $customer = auth('customer')->user();
+        abort_unless($rfq->customer_id === $customer->id, 403);
+        abort_unless($rfq->rfq_letter_path, 404, 'No letter attached to this RFQ.');
+        abort_unless(\Storage::disk('public')->exists($rfq->rfq_letter_path), 404, 'Letter file missing on disk.');
+
+        $bytes = \Storage::disk('public')->get($rfq->rfq_letter_path);
+        $ext   = strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION));
+        $title = $rfq->rfq_letter_title ?: 'RFQ letter';
+        $safe  = preg_replace('/[^A-Za-z0-9 _\-]/', '_', $title);
+        $filename = $safe . ($ext ? ".{$ext}" : '');
+
+        $mime = match ($ext) {
+            'pdf'         => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png'         => 'image/png',
+            'doc'         => 'application/msword',
+            'docx'        => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            default       => 'application/octet-stream',
+        };
+
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'data'     => base64_encode($bytes),
+                'mime'     => $mime,
+            ]);
+        }
+
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
         ]);
     }
 

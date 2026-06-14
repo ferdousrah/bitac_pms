@@ -12,6 +12,7 @@ interface SectionLite {
 
 interface QueueJob {
     id: number;
+    row_key: string;
     sequence: number;
     status: string;
     started_at: string | null;
@@ -26,6 +27,18 @@ interface QueueJob {
         due_date: string | null;
         priority: string;
     };
+    // Per-item context — non-null when this row represents one item's work
+    // at the section. WO with N items at this section produces N queue rows.
+    item: {
+        id: number;
+        sequence: number;
+        description: string | null;
+        quantity: number;
+        unit: string;
+    } | null;
+    sheet_number: string | null;
+    steps_total: number | null;
+    steps_done: number | null;
     rework: {
         from_section: string;
         transferred_by: string;
@@ -150,7 +163,7 @@ export default function ProductionQueue({ section, jobs, available_sections, can
                         ) : (
                             <div className="divide-y divide-surface-100">
                                 {jobs.map((job) => (
-                                    <JobCard key={job.id} job={job} />
+                                    <JobCard key={job.row_key} job={job} />
                                 ))}
                             </div>
                         )}
@@ -166,15 +179,12 @@ function JobCard({ job }: { job: QueueJob }) {
     return (
         <div className={`px-5 py-4 ${job.status === 'rework' ? 'bg-rose-50/40' : ''}`}>
             <div className="flex items-start gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0 ${
-                    job.status === 'rework' ? 'bg-rose-500' : 'bg-gradient-to-br from-brand-400 to-brand-600'
-                }`}>
-                    {job.work_order.job_number ?? '#'}
-                </div>
-
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-semibold text-surface-700">{job.work_order.wo_number}</span>
+                        <span className="font-mono text-xs font-semibold text-surface-700">Job# {job.work_order.job_number ?? '—'}</span>
+                        {job.item && (
+                            <span className="badge badge-amber text-[10px]">Item {job.item.sequence}</span>
+                        )}
                         <JobTypeBadge type={job.work_order.job_type} size="xs" />
                         <span className={`badge ${STATUS_BADGE[job.status] ?? 'badge-slate'}`}>
                             {STATUS_LABEL[job.status] ?? job.status}
@@ -183,15 +193,33 @@ function JobCard({ job }: { job: QueueJob }) {
                             {job.work_order.priority}
                         </span>
                         <span className="text-[11px] text-surface-400">Step {job.sequence} of routing</span>
+                        {job.sheet_number && (
+                            <span className="text-[10px] font-mono text-surface-400">Sheet {job.sheet_number}</span>
+                        )}
                     </div>
 
                     <h3 className="text-sm font-semibold text-surface-900 mt-1">{job.work_order.customer}</h3>
-                    {job.work_order.product && (
+                    {/* When this row represents a specific item, show the item
+                        description + quantity rather than the WO-level product. */}
+                    {job.item ? (
+                        <p className="text-xs text-surface-700 mt-0.5 truncate">
+                            {job.item.description ?? '—'}
+                        </p>
+                    ) : job.work_order.product ? (
                         <p className="text-xs text-surface-500 mt-0.5">{job.work_order.product}</p>
-                    )}
+                    ) : null}
 
                     <div className="flex items-center gap-3 mt-2 text-xs text-surface-500">
-                        <span><i className="fi fi-rr-cube text-[10px]" /> qty {job.work_order.quantity}</span>
+                        <span>
+                            <i className="fi fi-rr-cube text-[10px]" />{' '}
+                            qty {job.item ? `${job.item.quantity} ${job.item.unit}` : job.work_order.quantity}
+                        </span>
+                        {job.steps_total != null && (
+                            <span>
+                                <i className="fi fi-rr-list-check text-[10px]" />{' '}
+                                {job.steps_done}/{job.steps_total} ops done
+                            </span>
+                        )}
                         {job.work_order.due_date && <span><i className="fi fi-rr-calendar text-[10px]" /> Due {job.work_order.due_date}</span>}
                         {job.started_at && <span className="text-surface-400">· started {job.started_at}</span>}
                     </div>
@@ -218,7 +246,12 @@ function JobCard({ job }: { job: QueueJob }) {
                 </div>
 
                 <div className="shrink-0">
-                    <Link href={`/production/wos/${job.id}`} className="btn-outline btn-sm">
+                    <Link
+                        href={job.item
+                            ? `/production/wos/${job.id}?item_id=${job.item.id}`
+                            : `/production/wos/${job.id}`}
+                        className="btn-outline btn-sm"
+                    >
                         <i className="fi fi-rr-arrow-right text-xs leading-none" />
                         Open
                     </Link>

@@ -123,17 +123,30 @@ class IedWorkOrderInboxController extends Controller
             'Only IED-pending work orders can be forwarded to PCD.');
 
         $validated = $request->validate([
-            'note' => 'nullable|string|max:1000',
+            'note'             => 'nullable|string|max:1000',
+            'item_notes'       => 'nullable|array',
+            'item_notes.*'     => 'nullable|string|max:1000',
         ]);
 
         $note = trim((string) ($validated['note'] ?? ''));
 
-        // Append the handoff note to the WO's notes (tagged so PCD can spot it
-        // at a glance) — preserves any customer-supplied notes already there.
+        // Append the overall handoff note to the WO's notes (tagged so PCD can
+        // spot it at a glance) — preserves any customer-supplied notes already
+        // there.
         $updatedNotes = $workOrder->notes;
         if ($note !== '') {
             $stamp = '[IED → PCD · ' . (auth()->user()?->name ?? 'IED') . ', ' . now()->format('d M Y') . '] ' . $note;
             $updatedNotes = trim(($updatedNotes ? $updatedNotes . "\n\n" : '') . $stamp);
+        }
+
+        // Persist per-item IED notes on the work_order_items rows.
+        $itemNotes = $validated['item_notes'] ?? [];
+        $itemNoteCount = 0;
+        foreach ($itemNotes as $itemId => $itemNote) {
+            $itemNote = trim((string) $itemNote);
+            if ($itemNote === '') continue;
+            $workOrder->items()->where('id', (int) $itemId)->update(['ied_note' => $itemNote]);
+            $itemNoteCount++;
         }
 
         // Job numbers are set by PCD manually once the WO lands in their
@@ -150,6 +163,9 @@ class IedWorkOrderInboxController extends Controller
         $pcdMessage = "WO {$workOrder->wo_number} ({$workOrder->customer?->name}) has been accepted by IED and is awaiting PCD setup.";
         if ($note !== '') {
             $pcdMessage .= "\n\nNote from IED: {$note}";
+        }
+        if ($itemNoteCount > 0) {
+            $pcdMessage .= "\n\n(+{$itemNoteCount} per-item note" . ($itemNoteCount === 1 ? '' : 's') . " attached.)";
         }
         NotifyService::toPermission(
             'view pcd-inbox',

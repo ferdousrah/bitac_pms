@@ -9,6 +9,7 @@ use App\Models\Operator;
 use App\Models\Section;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderItem;
 use App\Services\OperationSheetService;
 use App\Services\PcdReleaseService;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class OperationSheetController extends Controller
 
     public function index(Request $request)
     {
-        $query = OperationSheet::with(['workOrder.customer', 'workOrder.product', 'steps']);
+        $query = OperationSheet::with(['workOrder.customer', 'workOrder.product', 'workOrder.items', 'workOrderItem', 'steps']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -41,20 +42,31 @@ class OperationSheetController extends Controller
         }
 
         $sheets = $query->paginate(15)->withQueryString()
-            ->through(fn($s) => [
-                'id'           => $s->id,
-                'sheet_number' => $s->sheet_number,
-                'work_order'   => $s->workOrder ? [
-                    'id'         => $s->workOrder->id,
-                    'wo_number'  => $s->workOrder->wo_number,
-                    'job_number' => $s->workOrder->job_number,
-                    'customer'   => $s->workOrder->customer?->name,
-                    'product'    => $s->workOrder->product?->name,
-                ] : null,
-                'step_count'   => $s->steps->count(),
-                'created_at'   => $s->created_at->format('d M Y'),
-                'approved_at'  => $s->approved_at?->format('d M Y'),
-            ]);
+            ->through(function ($s) {
+                $itemSeq = null;
+                if ($s->workOrderItem && $s->workOrder) {
+                    $idx = $s->workOrder->items->search(fn ($i) => $i->id === $s->workOrderItem->id);
+                    $itemSeq = $idx !== false ? $idx + 1 : null;
+                }
+                return [
+                    'id'           => $s->id,
+                    'sheet_number' => $s->sheet_number,
+                    'work_order'   => $s->workOrder ? [
+                        'id'         => $s->workOrder->id,
+                        'wo_number'  => $s->workOrder->wo_number,
+                        'job_number' => $s->workOrder->job_number,
+                        'customer'   => $s->workOrder->customer?->name,
+                        'product'    => $s->workOrder->product?->name,
+                    ] : null,
+                    'item'         => $s->workOrderItem ? [
+                        'id'          => $s->workOrderItem->id,
+                        'sequence'    => $itemSeq,
+                        'description' => $s->workOrderItem->description,
+                    ] : null,
+                    'step_count'   => $s->steps->count(),
+                    'created_at'   => $s->created_at->format('d M Y'),
+                ];
+            });
 
         return Inertia::render('OperationSheet/Index', [
             'sheets' => $sheets,
@@ -66,12 +78,31 @@ class OperationSheetController extends Controller
         ]);
     }
 
-    public function create(WorkOrder $workOrder)
+    public function create(Request $request, WorkOrder $workOrder)
     {
-        $workOrder->load(['product', 'customer', 'sections.section']);
+        $workOrder->load(['product', 'customer', 'sections.section', 'items']);
 
-        // If sheet already exists, send the user to its edit screen
-        $existing = $workOrder->operationSheets()->first();
+        // Item-wise: caller must specify which WO item this sheet is for.
+        // If no item is selected (and the WO has items), bounce to JobDetail
+        // where the per-item creator surface lives.
+        $itemId = $request->integer('item_id') ?: null;
+        if (!$itemId && $workOrder->items->isNotEmpty()) {
+            return redirect()->route('pcd.inbox.show', $workOrder)
+                ->with('error', 'Pick an item to create its Operation Sheet.');
+        }
+
+        $item = $itemId
+            ? $workOrder->items->firstWhere('id', $itemId)
+            : null;
+
+        if ($itemId && !$item) {
+            abort(404, 'Item not found on this work order.');
+        }
+
+        // If a sheet for this WO+item combo already exists, jump to edit.
+        $existing = OperationSheet::where('work_order_id', $workOrder->id)
+            ->where('work_order_item_id', $itemId)
+            ->first();
         if ($existing) {
             return redirect()->route('operation-sheets.edit', $existing);
         }
@@ -84,13 +115,27 @@ class OperationSheetController extends Controller
                 'product'    => $workOrder->product->name ?? '',
                 'customer'   => $workOrder->customer?->name,
                 'quantity'   => $workOrder->quantity,
-                'assigned_sections' => $workOrder->sections->map(fn($s) => [
-                    'id'         => $s->section_id,
-                    'name'       => $s->section->name,
-                    'code'       => $s->section->code,
-                    'sequence'   => $s->sequence,
-                ]),
+                // Only production-shop sections appear in the Op Sheet builder.
+                // QC and other functional stops (IED/PCD/Stores) live in the WO
+                // routing for visibility but aren't "operations" the planner picks
+                // — QC inspections happen on the dedicated /qc page after production.
+                'assigned_sections' => $workOrder->sections
+                    ->filter(fn($s) => $s->section?->type === 'production_shop')
+                    ->values()
+                    ->map(fn($s) => [
+                        'id'         => $s->section_id,
+                        'name'       => $s->section->name,
+                        'code'       => $s->section->code,
+                        'sequence'   => $s->sequence,
+                    ]),
             ],
+            'item'       => $item ? [
+                'id'          => $item->id,
+                'description' => $item->description,
+                'quantity'    => (float) $item->quantity,
+                'unit'        => $item->unit ?? 'pcs',
+                'sequence'    => $workOrder->items->search(fn ($i) => $i->id === $item->id) + 1,
+            ] : null,
             'sections'   => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
             'machines'   => Machine::with('section')->get()
                 ->map(fn($m) => [
@@ -115,13 +160,22 @@ class OperationSheetController extends Controller
     {
         $validated = $request->validate([
             'work_order_id'           => 'required|exists:work_orders,id',
+            // Item-wise sheet — required when WO has items, optional for legacy
+            // WOs with no items table (rare; we still allow NULL there).
+            'work_order_item_id'      => 'nullable|exists:work_order_items,id',
+            // BITAC header fields — Job Title inherits from item description
+            // by default but PCD can override; Job Description + Material are
+            // free-form notes the planner fills in.
+            'job_title'               => 'nullable|string|max:250',
+            'job_description'         => 'nullable|string|max:5000',
+            'material'                => 'nullable|string|max:200',
             'steps'                   => 'required|array|min:1',
             'steps.*.operation_name'  => 'required|string',
             'steps.*.operation_id'    => 'nullable|exists:machining_operations,id',
             'steps.*.section_id'      => 'nullable|exists:sections,id',
             'steps.*.machine_id'      => 'nullable|exists:machines,id',
             'steps.*.operator_id'     => 'nullable|exists:operators,id',
-            'steps.*.estimated_hours' => 'required|numeric|min:0',
+            'steps.*.estimated_hours' => 'nullable|numeric|min:0',
             'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
             'steps.*.tooling_notes'   => 'nullable|string',
             'steps.*.qc_notes'        => 'nullable|string|max:500',
@@ -136,12 +190,44 @@ class OperationSheetController extends Controller
                 ->withInput();
         }
 
-        $workOrder   = WorkOrder::findOrFail($validated['work_order_id']);
-        $sheetNumber = $this->service->generateSheetNumber($workOrder);
+        $workOrder = WorkOrder::with('items')->findOrFail($validated['work_order_id']);
+        $itemId    = $validated['work_order_item_id'] ?? null;
+
+        // Reject if no item picked when the WO actually has items.
+        if (!$itemId && $workOrder->items->isNotEmpty()) {
+            return back()
+                ->withErrors(['work_order_item_id' => 'Select which item this operation sheet belongs to.'])
+                ->withInput();
+        }
+
+        // Reject duplicate sheet for the same WO+item combination.
+        $duplicate = OperationSheet::where('work_order_id', $workOrder->id)
+            ->where('work_order_item_id', $itemId)
+            ->exists();
+        if ($duplicate) {
+            return back()
+                ->withErrors(['work_order_item_id' => 'An operation sheet for this item already exists.'])
+                ->withInput();
+        }
+
+        $sheetNumber = $this->service->generateSheetNumber($workOrder, $itemId);
+
+        // Default Job Title from the item description if PCD didn't override it.
+        $item = $itemId ? $workOrder->items->firstWhere('id', $itemId) : null;
+        $jobTitle = trim((string) ($validated['job_title'] ?? '')) !== ''
+            ? $validated['job_title']
+            : ($item?->description ?? null);
 
         $sheet = $workOrder->operationSheets()->create([
-            'sheet_number' => $sheetNumber,
-            'qr_code'      => $workOrder->wo_number . '-' . $sheetNumber,
+            'work_order_item_id' => $itemId,
+            'sheet_number'       => $sheetNumber,
+            'job_title'          => $jobTitle,
+            'job_description'    => $validated['job_description'] ?? null,
+            'material'           => $validated['material'] ?? null,
+            // Whoever submits this form is the "Prepared By" on the printed sheet.
+            'created_by'         => auth()->id(),
+            // QR identifier keyed off Job number — WO numbers don't appear from op-sheet onward.
+            'qr_code'            => 'JOB-' . ($workOrder->job_number ?? $workOrder->id) . '-' . $sheetNumber,
         ]);
 
         foreach ($validated['steps'] as $index => $stepData) {
@@ -152,7 +238,7 @@ class OperationSheetController extends Controller
                 'section_id'       => $stepData['section_id'] ?? null,
                 'machine_id'       => $stepData['machine_id'] ?? null,
                 'operator_id'      => $stepData['operator_id'] ?? null,
-                'estimated_hours'  => $stepData['estimated_hours'],
+                'estimated_hours'  => $stepData['estimated_hours'] ?? 0,
                 'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
                 'tooling_notes'    => $stepData['tooling_notes'] ?? null,
                 'qc_notes'         => $stepData['qc_notes'] ?? null,
@@ -168,7 +254,7 @@ class OperationSheetController extends Controller
 
     public function edit(OperationSheet $sheet)
     {
-        $sheet->load(['workOrder.product', 'workOrder.customer', 'workOrder.sections.section', 'steps']);
+        $sheet->load(['workOrder.product', 'workOrder.customer', 'workOrder.sections.section', 'workOrder.items', 'workOrderItem', 'steps']);
 
         // Block editing once any step has started — production data is tied to step IDs.
         $hasStarted = $sheet->steps->contains(fn($s) => in_array($s->status, ['in_progress', 'completed']));
@@ -181,9 +267,12 @@ class OperationSheetController extends Controller
 
         return Inertia::render('OperationSheet/Builder', [
             'sheet' => [
-                'id'           => $sheet->id,
-                'sheet_number' => $sheet->sheet_number,
-                'steps'        => $sheet->steps->sortBy('sequence')->values()->map(fn($s) => [
+                'id'              => $sheet->id,
+                'sheet_number'    => $sheet->sheet_number,
+                'job_title'       => $sheet->job_title,
+                'job_description' => $sheet->job_description,
+                'material'        => $sheet->material,
+                'steps'           => $sheet->steps->sortBy('sequence')->values()->map(fn($s) => [
                     'id'              => $s->id,
                     'operation_id'    => $s->operation_id,
                     'operation_name'  => $s->operation_name,
@@ -202,13 +291,25 @@ class OperationSheetController extends Controller
                 'product'    => $workOrder->product->name ?? '',
                 'customer'   => $workOrder->customer?->name,
                 'quantity'   => $workOrder->quantity,
-                'assigned_sections' => $workOrder->sections->map(fn($s) => [
-                    'id'         => $s->section_id,
-                    'name'       => $s->section->name,
-                    'code'       => $s->section->code,
-                    'sequence'   => $s->sequence,
-                ]),
+                // Production shops only — QC and other functional stops are
+                // excluded from the Op Sheet (QC happens via /qc, separately).
+                'assigned_sections' => $workOrder->sections
+                    ->filter(fn($s) => $s->section?->type === 'production_shop')
+                    ->values()
+                    ->map(fn($s) => [
+                        'id'         => $s->section_id,
+                        'name'       => $s->section->name,
+                        'code'       => $s->section->code,
+                        'sequence'   => $s->sequence,
+                    ]),
             ],
+            'item' => $sheet->workOrderItem ? [
+                'id'          => $sheet->workOrderItem->id,
+                'description' => $sheet->workOrderItem->description,
+                'quantity'    => (float) $sheet->workOrderItem->quantity,
+                'unit'        => $sheet->workOrderItem->unit ?? 'pcs',
+                'sequence'    => $workOrder->items->search(fn ($i) => $i->id === $sheet->workOrderItem->id) + 1,
+            ] : null,
             'sections'   => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
             'machines'   => Machine::with('section')->get()
                 ->map(fn($m) => [
@@ -238,13 +339,16 @@ class OperationSheetController extends Controller
         }
 
         $validated = $request->validate([
+            'job_title'               => 'nullable|string|max:250',
+            'job_description'         => 'nullable|string|max:5000',
+            'material'                => 'nullable|string|max:200',
             'steps'                   => 'required|array|min:1',
             'steps.*.operation_name'  => 'required|string',
             'steps.*.operation_id'    => 'nullable|exists:machining_operations,id',
             'steps.*.section_id'      => 'nullable|exists:sections,id',
             'steps.*.machine_id'      => 'nullable|exists:machines,id',
             'steps.*.operator_id'     => 'nullable|exists:operators,id',
-            'steps.*.estimated_hours' => 'required|numeric|min:0',
+            'steps.*.estimated_hours' => 'nullable|numeric|min:0',
             'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
             'steps.*.tooling_notes'   => 'nullable|string',
         ]);
@@ -256,6 +360,13 @@ class OperationSheetController extends Controller
                 ->withInput();
         }
 
+        // Persist the BITAC header edits alongside the step refresh.
+        $sheet->update([
+            'job_title'       => $validated['job_title'] ?? $sheet->job_title,
+            'job_description' => $validated['job_description'] ?? null,
+            'material'        => $validated['material'] ?? null,
+        ]);
+
         // Wipe and recreate steps (safe because no step has started)
         $sheet->steps()->delete();
         foreach ($validated['steps'] as $index => $stepData) {
@@ -266,7 +377,7 @@ class OperationSheetController extends Controller
                 'section_id'       => $stepData['section_id'] ?? null,
                 'machine_id'       => $stepData['machine_id'] ?? null,
                 'operator_id'      => $stepData['operator_id'] ?? null,
-                'estimated_hours'  => $stepData['estimated_hours'],
+                'estimated_hours'  => $stepData['estimated_hours'] ?? 0,
                 'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
                 'tooling_notes'    => $stepData['tooling_notes'] ?? null,
                 'status'           => 'pending',
@@ -279,7 +390,7 @@ class OperationSheetController extends Controller
 
     public function show(OperationSheet $sheet)
     {
-        $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre', 'steps.operator']);
+        $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre']);
         $qrCode = $this->service->generateQrImage($sheet->qr_code);
 
         return Inertia::render('OperationSheet/Show', [
@@ -291,6 +402,7 @@ class OperationSheetController extends Controller
                 'work_order'   => [
                     'wo_number' => $sheet->workOrder->wo_number ?? '',
                     'quantity'  => $sheet->workOrder->quantity ?? '',
+                    'job_number'=> $sheet->workOrder->job_number,
                     'customer'  => ['name' => $sheet->workOrder->customer->name ?? ''],
                     'product'   => [
                         'name' => $sheet->workOrder->product->name ?? '',
@@ -302,22 +414,53 @@ class OperationSheetController extends Controller
                     'id'              => $s->id,
                     'sequence_number' => $s->sequence,
                     'operation_name'  => $s->operation_name,
-                    'machine'         => ['name' => $s->machine?->name ?? ''],
+                    'machine'         => [
+                        'name'        => $s->machine?->name ?? '',
+                        // Nest the work centre so the Show page can read
+                        // step.machine.work_centre.name (it was missing before).
+                        'work_centre' => $s->machine?->workCentre ? [
+                            'name' => $s->machine->workCentre->name,
+                        ] : null,
+                    ],
                     'estimated_hours' => $s->estimated_hours,
                     'weight_pct'      => (float) $s->weight_pct,
                     'status'          => $s->status,
-                    'instructions'    => $s->instructions,
-                    'tooling_notes'   => $s->tooling_notes,
+                    // tooling_notes is the actual column for the planner's notes
+                    // (the legacy 'instructions' field never existed). Surface it
+                    // under 'notes' so the UI label can read cleanly.
+                    'notes'           => $s->tooling_notes,
                     'qc_notes'        => $s->qc_notes,
-                    'assignment'      => $s->operator ? [
-                        'operator' => ['name' => $s->operator->name ?? ''],
-                    ] : null,
                 ]),
             ],
         ]);
     }
 
     public function pdf(\Illuminate\Http\Request $request, OperationSheet $sheet)
+    {
+        // BITAC paper format — delegated to the service so the same layout is
+        // reusable. Header rows use the new job_title / job_description / material
+        // fields; routing table uses ক্রঃ নং | কার্য বিন্যাস | সেকশন | মন্তব্য.
+        $bytes    = $this->service->generatePdf($sheet);
+        $filename = "operation-sheet-{$sheet->sheet_number}.pdf";
+
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
+    }
+
+    /** @deprecated kept temporarily so any external references don't break. */
+    private function legacyInlinePdfBuilder(\Illuminate\Http\Request $request, OperationSheet $sheet)
     {
         $sheet->load([
             'workOrder.product', 'workOrder.customer',

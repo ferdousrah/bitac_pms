@@ -12,7 +12,7 @@ class WorkOrder extends Model
     protected $fillable = [
         'center_id', 'wo_number', 'job_number', 'rfq_id', 'quotation_id', 'customer_id', 'product_id',
         'job_category_id',
-        'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'customer_po_no', 'created_by',
+        'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'department', 'customer_po_no', 'created_by', 'prepared_by',
         'pcd_handoff_at', 'pcd_handoff_by', 'released_to_shops_at', 'released_by',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
     ];
@@ -76,6 +76,8 @@ class WorkOrder extends Model
     public function quotation()    { return $this->belongsTo(Quotation::class); }
     public function bom()          { return $this->belongsTo(Bom::class); }
     public function createdBy()    { return $this->belongsTo(User::class, 'created_by'); }
+    public function preparedBy()   { return $this->belongsTo(User::class, 'prepared_by'); }
+    public function pcdHandoffBy() { return $this->belongsTo(User::class, 'pcd_handoff_by'); }
     public function cancelledBy()  { return $this->belongsTo(User::class, 'cancelled_by'); }
 
     public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }
@@ -108,7 +110,32 @@ class WorkOrder extends Model
 
     public function getHasOperationSheetAttribute(): bool
     {
-        return $this->operationSheets()->whereHas('steps')->exists();
+        // Item-wise gate: every item must have an operation sheet with at least
+        // one step. Legacy WOs without items table rows fall back to "any sheet".
+        $itemIds = $this->items()->pluck('id');
+        if ($itemIds->isEmpty()) {
+            return $this->operationSheets()->whereHas('steps')->exists();
+        }
+        $coveredItemIds = $this->operationSheets()
+            ->whereHas('steps')
+            ->whereNotNull('work_order_item_id')
+            ->pluck('work_order_item_id');
+        return $itemIds->diff($coveredItemIds)->isEmpty();
+    }
+
+    /**
+     * Item IDs that still need an operation sheet. Drives the JobDetail step 3
+     * per-item action list (one "Create Operation Sheet" entry per missing item).
+     */
+    public function itemsMissingOperationSheet(): \Illuminate\Support\Collection
+    {
+        $itemIds = $this->items()->pluck('id');
+        if ($itemIds->isEmpty()) return collect();
+        $coveredItemIds = $this->operationSheets()
+            ->whereHas('steps')
+            ->whereNotNull('work_order_item_id')
+            ->pluck('work_order_item_id');
+        return $itemIds->diff($coveredItemIds)->values();
     }
 
     public function getPcdProgressAttribute(): array
@@ -117,7 +144,10 @@ class WorkOrder extends Model
             'mr'         => $this->has_material_requisition,
             'sections'   => $this->has_section_assignment,
             'op_sheet'   => $this->has_operation_sheet,
-            'all_done'   => $this->has_material_requisition && $this->has_section_assignment && $this->has_operation_sheet,
+            // MR is optional — release only requires Section Assignment + Operation Sheets.
+            // PCD officer can still raise an MR later (e.g. when material runs out
+            // during production), but the job doesn't have to wait for it to ship.
+            'all_done'   => $this->has_section_assignment && $this->has_operation_sheet,
         ];
     }
 

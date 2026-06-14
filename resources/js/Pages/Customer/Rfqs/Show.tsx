@@ -242,6 +242,42 @@ export default function CustomerRfqShow({ rfq }: any) {
                 );
             })()}
 
+            {/* RFQ Letter — opens in the PDF popup the same way invoices do. */}
+            {rfq.rfq_letter && (
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="text-sm font-semibold text-surface-800">RFQ Letter</h3>
+                    </div>
+                    <div className="card-body">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (rfq.rfq_letter.extension === 'pdf') {
+                                    setPdfPopup({
+                                        open: true,
+                                        url: `${rfq.rfq_letter.url}?preview=base64`,
+                                        title: rfq.rfq_letter.title,
+                                        subtitle: `RFQ #${rfq.id}`,
+                                    });
+                                } else {
+                                    window.open(`${rfq.rfq_letter.url}?preview=1`, '_blank', 'noreferrer');
+                                }
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-brand-300 hover:bg-brand-50/40 transition-colors text-left group"
+                        >
+                            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                <i className={`fi ${rfq.rfq_letter.extension === 'pdf' ? 'fi-rr-file-pdf' : 'fi-rr-document'} text-base leading-none`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold text-surface-900 truncate">{rfq.rfq_letter.title}</div>
+                                <div className="text-[10px] text-surface-400 uppercase tracking-wider mt-0.5">{rfq.rfq_letter.extension}</div>
+                            </div>
+                            <i className="fi fi-rr-arrow-up-right-from-square text-[10px] text-surface-400 group-hover:text-brand-600 shrink-0" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Notes */}
             {rfq.notes && (
                 <div className="card">

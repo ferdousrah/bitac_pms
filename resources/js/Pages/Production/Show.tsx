@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
+import ProductionMessageThread from '@/Components/Production/ProductionMessageThread';
 
 /** Live ticking elapsed time between a startIso and now. Re-renders every second. */
 function LiveElapsed({ startIso }: { startIso: string }) {
@@ -104,10 +105,23 @@ interface EarlierSection {
     status: string;
 }
 
+interface OpItem {
+    item: {
+        id: number;
+        sequence: number;
+        description: string | null;
+        quantity: number;
+        unit: string;
+    } | null;
+    sheet_id: number | null;
+    sheet_number: string | null;
+    steps: OpStep[];
+}
+
 interface Props {
     wos: Wos;
     routing: RoutingStep[];
-    op_steps: OpStep[];
+    op_items: OpItem[];
     handoffs: Handoff[];
     rework_context: {
         from_section: string;
@@ -117,6 +131,16 @@ interface Props {
         files: HandoffFile[];
     } | null;
     earlier_sections: EarlierSection[];
+    // When opened from a queue item-row, scope the page to that item.
+    // siblings_count tells the operator how many other items also need work here.
+    scoped_item: {
+        id: number;
+        sequence: number;
+        description: string | null;
+        quantity: number;
+        unit: string;
+    } | null;
+    siblings_count: number;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -131,7 +155,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_steps, handoffs, rework_context, earlier_sections }: Props) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count }: Props) {
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
 
@@ -139,14 +163,20 @@ export default function ProductionShow({ wos, routing, op_steps, handoffs, rewor
     const canSendBack = ['ready', 'in_progress'].includes(wos.status) && earlier_sections.length > 0;
     const isReworkMode = wos.status === 'rework';
 
-    // Section can only be forwarded when every operation step here is closed.
-    const openSteps = op_steps.filter((s) => s.status !== 'completed' && s.status !== 'skipped');
-    const allStepsDone = op_steps.length === 0 || openSteps.length === 0;
-    const completedSteps = op_steps.filter((s) => s.status === 'completed').length;
-    const stepProgressPct = op_steps.length === 0 ? 0 : Math.round((completedSteps / op_steps.length) * 100);
+    // Section can only be forwarded when every operation step (across every
+    // item at this section) is closed. allSteps flattens across items.
+    const allSteps = op_items.flatMap((b) => b.steps);
+    const openSteps = allSteps.filter((s) => s.status !== 'completed' && s.status !== 'skipped');
+    const allStepsDone = allSteps.length === 0 || openSteps.length === 0;
+    const completedSteps = allSteps.filter((s) => s.status === 'completed').length;
+    const stepProgressPct = allSteps.length === 0 ? 0 : Math.round((completedSteps / allSteps.length) * 100);
 
     return (
-        <AppLayout header={`${wos.section.name} — Job #${wos.work_order.job_number}`}>
+        <AppLayout header={
+            scoped_item
+                ? `${wos.section.name} — Job# ${wos.work_order.job_number} · Item ${scoped_item.sequence}`
+                : `${wos.section.name} — Job# ${wos.work_order.job_number}`
+        }>
             <div className="space-y-6 animate-fade-in">
                 {/* Header */}
                 <div className="card">
@@ -160,20 +190,36 @@ export default function ProductionShow({ wos, routing, op_steps, handoffs, rewor
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                                        <h2 className="text-xl font-bold text-surface-900">Job #{wos.work_order.job_number}</h2>
+                                        <h2 className="text-xl font-bold text-surface-900">Job# {wos.work_order.job_number}</h2>
+                                        {scoped_item && (
+                                            <span className="badge badge-amber">Item {scoped_item.sequence}</span>
+                                        )}
                                         <JobTypeBadge type={wos.work_order.job_type} />
                                         <span className={`badge ${STATUS_BADGE[wos.status] ?? 'badge-slate'}`}>
                                             {STATUS_LABEL[wos.status] ?? wos.status}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-600">
-                                        <span><i className="fi fi-rr-document text-surface-400" /> {wos.work_order.wo_number}</span>
                                         <span><i className="fi fi-rr-building text-surface-400" /> {wos.work_order.customer}</span>
-                                        <span><i className="fi fi-rr-cube text-surface-400" /> qty {wos.work_order.quantity}</span>
+                                        <span>
+                                            <i className="fi fi-rr-cube text-surface-400" />{' '}
+                                            qty {scoped_item ? `${scoped_item.quantity} ${scoped_item.unit}` : wos.work_order.quantity}
+                                        </span>
                                         {wos.work_order.due_date && <span><i className="fi fi-rr-calendar text-surface-400" /> Due {wos.work_order.due_date}</span>}
                                     </div>
-                                    {wos.work_order.product && (
+                                    {/* Title row priority: scoped item description → WO product. */}
+                                    {scoped_item ? (
+                                        <p className="text-sm font-semibold text-surface-900 mt-1">{scoped_item.description ?? '—'}</p>
+                                    ) : wos.work_order.product ? (
                                         <p className="text-sm text-surface-700 mt-1">{wos.work_order.product}</p>
+                                    ) : null}
+                                    {/* When scoped, remind the operator that other items also need
+                                        to be closed at this section before the WHOLE section forwards. */}
+                                    {scoped_item && siblings_count > 0 && (
+                                        <p className="text-[11px] text-surface-500 mt-1.5">
+                                            <i className="fi fi-rr-info text-[10px] mr-1" />
+                                            {siblings_count} other item{siblings_count > 1 ? 's' : ''} at this section also need to be closed before the section can be forwarded.
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -281,8 +327,10 @@ export default function ProductionShow({ wos, routing, op_steps, handoffs, rewor
                     </div>
                 </div>
 
-                {/* This section's operation steps — operators close each one individually */}
-                {op_steps.length > 0 && (
+                {/* This section's operation steps — per item. Each WO item that
+                    has work at this section gets its own group so operators can
+                    see the part description and close steps per item. */}
+                {allSteps.length > 0 && (
                     <div className="card">
                         <div className="card-header flex items-start justify-between gap-3">
                             <div>
@@ -290,7 +338,7 @@ export default function ProductionShow({ wos, routing, op_steps, handoffs, rewor
                                 <p className="text-xs text-surface-400 mt-0.5">Close each operation as you finish it. Section forwards once all are done.</p>
                             </div>
                             <div className="text-right shrink-0">
-                                <div className="text-xs font-semibold text-surface-700">{completedSteps} of {op_steps.length} done</div>
+                                <div className="text-xs font-semibold text-surface-700">{completedSteps} of {allSteps.length} done</div>
                                 <div className="w-32 h-1.5 bg-surface-100 rounded-full mt-1 overflow-hidden">
                                     <div
                                         className={`h-full transition-all ${stepProgressPct === 100 ? 'bg-emerald-500' : 'bg-brand-500'}`}
@@ -301,12 +349,58 @@ export default function ProductionShow({ wos, routing, op_steps, handoffs, rewor
                             </div>
                         </div>
                         <div className="card-body p-0 divide-y divide-surface-100">
-                            {op_steps.map((s) => (
-                                <OpStepRow key={s.id} step={s} canAct={canAct} />
+                            {op_items.filter((b) => b.steps.length > 0).map((block, blockIdx) => (
+                                <div key={block.item?.id ?? `legacy-${blockIdx}`}>
+                                    <div className="px-5 py-2.5 bg-surface-50/70 border-b border-surface-100 flex items-center gap-2 flex-wrap">
+                                        {block.item ? (
+                                            <>
+                                                <span className="badge badge-amber text-[10px]">Item {block.item.sequence}</span>
+                                                <span className="text-sm font-semibold text-surface-900 truncate">
+                                                    {block.item.description ?? '—'}
+                                                </span>
+                                                <span className="text-[11px] text-surface-500">
+                                                    Qty {block.item.quantity} {block.item.unit}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="text-sm font-semibold text-surface-700">Shared (WO-level)</span>
+                                        )}
+                                        {block.sheet_number && (
+                                            <span className="text-[10px] font-mono text-surface-400 ml-auto">
+                                                Sheet {block.sheet_number}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {block.steps.map((s) => (
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} />
+                                    ))}
+                                </div>
                             ))}
                         </div>
                     </div>
                 )}
+
+                {/* Production ↔ PCD query threads — one per item's operation sheet.
+                    Operator can ask PCD about material, drawings, machine swap, etc. */}
+                {op_items
+                    .filter((b) => b.sheet_id != null)
+                    .map((block) => (
+                        <ProductionMessageThread
+                            key={`thread-${block.sheet_id}`}
+                            sheetId={block.sheet_id as number}
+                            viewerRole="production"
+                            title={
+                                block.item
+                                    ? `Queries for Item ${block.item.sequence} — Sheet ${block.sheet_number ?? ''}`
+                                    : `Queries — Sheet ${block.sheet_number ?? ''}`
+                            }
+                            subtitle={
+                                block.item
+                                    ? `${block.item.description ?? ''}`.slice(0, 120)
+                                    : 'Ask PCD if anything is unclear.'
+                            }
+                        />
+                    ))}
 
                 {/* Handoff history */}
                 <div className="card">

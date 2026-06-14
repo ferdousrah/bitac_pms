@@ -20,11 +20,14 @@ export default function QCResult({ inspection }: any) {
         router.post(`/qc/inspection/${inspection.id}/share`, {}, { preserveScroll: true });
     };
 
+    // Qty columns kept in DB for legacy back-compat — hide their stat cards
+    // unless this inspection actually has counts (older rows / external imports).
     const totalQty = (inspection.qty_passed ?? 0) + (inspection.qty_failed ?? 0);
     const passRate = totalQty > 0 ? Math.round((inspection.qty_passed / totalQty) * 100) : 0;
+    const showQtyStats = totalQty > 0;
 
     return (
-        <AppLayout header={`QC Result — ${inspection.wo_number}`}>
+        <AppLayout header={`QC Result — Job# ${inspection.job_number ?? '—'}`}>
             <div className="space-y-6 animate-fade-in">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Main content */}
@@ -33,11 +36,28 @@ export default function QCResult({ inspection }: any) {
                         <div className="card">
                             <div className="card-header flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                 <div>
-                                    <h2 className="text-base font-bold text-surface-900 font-mono">{inspection.wo_number}</h2>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-base font-bold text-surface-900 font-mono">Job# {inspection.job_number ?? '—'}</h2>
+                                        {inspection.item && (
+                                            <span className="badge badge-amber">Item {inspection.item.sequence}</span>
+                                        )}
+                                        {inspection.sheet_number && (
+                                            <span className="text-[10px] font-mono text-surface-400">Sheet {inspection.sheet_number}</span>
+                                        )}
+                                    </div>
+                                    {inspection.item ? (
+                                        <p className="text-xs text-surface-700 mt-1 font-medium">{inspection.item.description ?? '—'}</p>
+                                    ) : null}
                                     <p className="text-xs text-surface-500 mt-1">
-                                        {inspection.product}
+                                        {inspection.customer}
                                         <span className="mx-1 text-surface-300">|</span>
                                         {inspection.inspection_type?.replace(/_/g, ' ')} inspection
+                                        {inspection.item && (
+                                            <>
+                                                <span className="mx-1 text-surface-300">|</span>
+                                                qty {inspection.item.quantity} {inspection.item.unit}
+                                            </>
+                                        )}
                                     </p>
                                     <p className="text-[11px] text-surface-400 mt-1">
                                         <i className="fi fi-rr-user text-[10px] leading-none mr-1" />
@@ -48,25 +68,27 @@ export default function QCResult({ inspection }: any) {
                                     </p>
                                 </div>
                                 <span className={`badge ${resultBadge[inspection.result] ?? 'badge-slate'}`}>
-                                    {inspection.result?.toUpperCase()}
+                                    {inspection.result === 'pass' ? 'OK' : inspection.result === 'fail' ? 'NOT OK' : inspection.result === 'conditional' ? 'N/A' : inspection.result?.toUpperCase()}
                                 </span>
                             </div>
-                            <div className="card-body">
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="stat-card">
-                                        <div className="text-2xl font-bold text-emerald-600">{inspection.qty_passed}</div>
-                                        <div className="text-xs text-surface-500 mt-1">Passed</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div className="text-2xl font-bold text-rose-600">{inspection.qty_failed ?? 0}</div>
-                                        <div className="text-xs text-surface-500 mt-1">Failed</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div className="text-2xl font-bold text-surface-800">{passRate}%</div>
-                                        <div className="text-xs text-surface-500 mt-1">Pass Rate</div>
+                            {showQtyStats && (
+                                <div className="card-body">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="stat-card">
+                                            <div className="text-2xl font-bold text-emerald-600">{inspection.qty_passed}</div>
+                                            <div className="text-xs text-surface-500 mt-1">Passed</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="text-2xl font-bold text-rose-600">{inspection.qty_failed ?? 0}</div>
+                                            <div className="text-xs text-surface-500 mt-1">Failed</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="text-2xl font-bold text-surface-800">{passRate}%</div>
+                                            <div className="text-xs text-surface-500 mt-1">Pass Rate</div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Checklist */}
@@ -87,7 +109,7 @@ export default function QCResult({ inspection }: any) {
                                                     )}
                                                 </div>
                                                 <span className={`badge ${resultBadge[item.result] ?? 'badge-slate'}`}>
-                                                    {item.result}
+                                                    {item.result === 'pass' ? 'Ok' : item.result === 'fail' ? 'Not Ok' : item.result === 'na' ? 'N/A' : item.result}
                                                 </span>
                                             </div>
                                         ))}

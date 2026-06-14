@@ -94,25 +94,43 @@ class HandleInertiaRequests extends Middleware
                 }
                 $sections = $q->get(['id', 'name', 'code']);
 
-                // Tally only the CURRENT step per active WO — the section
-                // where the job is right now, not every step that's been
-                // queued. As work moves through the routing, the count
-                // shifts from one section to the next instead of double-
-                // counting every step on every shop's list.
-                $pendingBySection = [];
-                // Look at every operation sheet whose WO isn't already in a
-                // terminal state. The "current" step per sheet (the lowest-
-                // sequence step that isn't completed) is the one currently
-                // sitting in its section's queue.
-                $activeSheets = \App\Models\OperationSheet::query()
-                    ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'delivered', 'cancelled']))
-                    ->with(['steps' => fn ($q) => $q->orderBy('sequence')])
+                // Count exactly what the queue page would render — one row per
+                // (active WOS × item that still has open steps at that section).
+                // This stays in sync with ProductionController::queue(), so the
+                // sidebar badge can't get out of sync with the body anymore.
+                $activeStatuses = ['ready', 'in_progress', 'rework', 'awaiting_rework'];
+                $activeWoSections = \App\Models\WorkOrderSection::query()
+                    ->whereIn('status', $activeStatuses)
+                    ->with([
+                        'workOrder.items',
+                        'workOrder.operationSheets.steps',
+                    ])
                     ->get();
 
-                foreach ($activeSheets as $sheet) {
-                    $current = $sheet->steps->first(fn ($s) => $s->status !== 'completed');
-                    if ($current && $current->section_id) {
-                        $pendingBySection[$current->section_id] = ($pendingBySection[$current->section_id] ?? 0) + 1;
+                $pendingBySection = [];
+                foreach ($activeWoSections as $wos) {
+                    $wo        = $wos->workOrder;
+                    $sectionId = $wos->section_id;
+                    $itemRows  = 0;
+                    // Per-item routing: count items whose CURRENT pending step
+                    // (the lowest-sequence open step) lives at this section.
+                    foreach ($wo->items as $item) {
+                        $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+                        if (!$sheet) continue;
+                        $current = $sheet->steps
+                            ->sortBy('sequence')
+                            ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+                        if ($current && $current->section_id === $sectionId) $itemRows++;
+                    }
+                    // Legacy WO-wide sheets — current pending step at this section.
+                    foreach ($wo->operationSheets->whereNull('work_order_item_id') as $sheet) {
+                        $current = $sheet->steps
+                            ->sortBy('sequence')
+                            ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+                        if ($current && $current->section_id === $sectionId) $itemRows++;
+                    }
+                    if ($itemRows > 0) {
+                        $pendingBySection[$sectionId] = ($pendingBySection[$sectionId] ?? 0) + $itemRows;
                     }
                 }
 

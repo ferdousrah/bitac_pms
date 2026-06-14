@@ -8,7 +8,7 @@ class WorkOrderSection extends Model
 {
     protected $fillable = [
         'work_order_id', 'section_id', 'sequence', 'status',
-        'started_at', 'completed_at', 'completed_by', 'notes', 'qc_notes',
+        'started_at', 'completed_at', 'completed_by', 'notes', 'qc_notes', 'remarks',
     ];
 
     protected function casts(): array

@@ -269,6 +269,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{workOrder}/reject',    [\App\Http\Controllers\Ied\IedWorkOrderInboxController::class, 'reject'])->name('reject');
     });
 
+    // ─── IED Jobs — read-only browse of every WO past the IED gate ────────────
+    Route::prefix('ied/jobs')->middleware('permission:view rfqs')->name('ied.jobs.')->group(function () {
+        Route::get('/',            [\App\Http\Controllers\Ied\IedJobsController::class, 'index'])->name('index');
+        Route::get('/{workOrder}', [\App\Http\Controllers\Ied\IedJobsController::class, 'show'])->name('show');
+    });
+
     Route::prefix('ied/emergency-requests')->middleware('permission:manage rfqs')->name('ied.emergency-requests.')->group(function () {
         Route::get('/',                              [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'index'])->name('index');
         Route::get('/{emergencyRequest}',            [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'show'])->name('show');
@@ -416,6 +422,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('pcd')->middleware('permission:view pcd-inbox')->name('pcd.')->group(function () {
         Route::get('/inbox', [PcdInboxController::class, 'index'])->name('inbox.index');
         Route::get('/inbox/{workOrder}', [PcdInboxController::class, 'show'])->name('inbox.show');
+        Route::get('/inbox/files/{file}', [PcdInboxController::class, 'file'])->name('inbox.files.show');
         Route::post('/inbox/{workOrder}/cancel', [PcdInboxController::class, 'cancel'])->name('inbox.cancel');
         Route::post('/inbox/{workOrder}/job-number', [PcdInboxController::class, 'setJobNumber'])->name('inbox.set-job-number');
 
@@ -433,6 +440,7 @@ Route::middleware(['auth'])->group(function () {
         // Section assignment
         Route::get('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'edit'])->name('sections.edit');
         Route::put('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'update'])->name('sections.update');
+        Route::get('work-orders/{workOrder}/pdf',       [WorkOrderSectionController::class, 'pdf'])->name('work-orders.pdf');
     });
 
     // Quotations
@@ -504,7 +512,15 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{sheet}', [OperationSheetController::class, 'show'])->name('operation-sheets.show');
         Route::get('{sheet}/pdf', [OperationSheetController::class, 'pdf'])->name('operation-sheets.pdf');
         Route::get('{sheet}/qr', [OperationSheetController::class, 'qr'])->name('operation-sheets.qr');
+
+        // Production ↔ PCD query thread per operation sheet.
+        Route::get('{sheet}/messages',  [\App\Http\Controllers\ProductionMessageController::class, 'index'])->name('production-messages.index');
+        Route::post('{sheet}/messages', [\App\Http\Controllers\ProductionMessageController::class, 'store'])->name('production-messages.store');
     });
+
+    // Streamed message attachment download/preview.
+    Route::get('production-messages/files/{file}', [\App\Http\Controllers\ProductionMessageController::class, 'attachment'])
+        ->name('production-messages.attachment');
 
     // ─── Maintenance Requests (shop-floor → manager → technician flow) ───
     Route::prefix('maintenance-requests')->name('maintenance-requests.')->group(function () {
@@ -559,6 +575,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('inspection/{inspection}', [QcController::class, 'show'])->name('qc.show');
         Route::get('inspection/{inspection}/pdf', [QcController::class, 'pdf'])->name('qc.pdf');
         Route::post('inspection/{inspection}/share', [QcController::class, 'toggleShare'])->name('qc.share');
+        // Combined Job-level QC certificate (multi-item) — only renders when
+        // every operation sheet has a passing final inspection.
+        Route::get('work-orders/{workOrder}/certificate', [QcController::class, 'jobCertificate'])->name('qc.job-certificate');
     });
 
     // NCR
@@ -701,6 +720,11 @@ Route::middleware(['auth'])->group(function () {
             ->names('admin.job-categories')
             ->parameters(['job-categories' => 'jobCategory'])
             ->except(['show']);
+        Route::resource('qc-checkpoints', \App\Http\Controllers\Admin\QcCheckpointController::class)
+            ->middleware('permission:manage materials-master')
+            ->names('admin.qc-checkpoints')
+            ->parameters(['qc-checkpoints' => 'qcCheckpoint'])
+            ->except(['show']);
         Route::post('machines/{machine}/state', [MachineController::class, 'changeState'])
             ->middleware('permission:manage machines')
             ->name('admin.machines.state');
@@ -749,6 +773,7 @@ Route::middleware(['auth:customer', 'customer.password.changed'])->prefix('custo
     Route::post('/rfqs',                      [\App\Http\Controllers\Customer\CustomerRfqController::class, 'store'])->name('rfqs.store');
     Route::get('/rfqs/{rfq}',                 [\App\Http\Controllers\Customer\CustomerRfqController::class, 'show'])->name('rfqs.show');
     Route::post('/rfqs/{rfq}/cancel',         [\App\Http\Controllers\Customer\CustomerRfqController::class, 'cancel'])->name('rfqs.cancel');
+    Route::get('/rfqs/{rfq}/letter',          [\App\Http\Controllers\Customer\CustomerRfqController::class, 'letter'])->name('rfqs.letter');
     Route::post('/rfqs/{rfq}/issue-work-order', [\App\Http\Controllers\Customer\CustomerRfqController::class, 'issueWorkOrder'])->name('rfqs.issue-work-order');
 
     Route::get('/work-orders', [CustomerWorkOrderController::class, 'index'])->name('work-orders.index');

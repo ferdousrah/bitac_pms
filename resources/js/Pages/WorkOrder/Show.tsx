@@ -35,7 +35,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
     };
 
     return (
-        <AppLayout header={`Job — ${workOrder.wo_number}`}>
+        <AppLayout header={`Job# ${workOrder.job_number ?? '—'}`}>
             <div className="space-y-6 max-w-6xl animate-fade-in">
 
                 {/* Header Card */}
@@ -47,7 +47,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                             </div>
                             <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <h2 className="text-lg font-bold font-mono text-surface-900">{workOrder.wo_number}</h2>
+                                    <h2 className="text-lg font-bold font-mono text-surface-900">Job# {workOrder.job_number ?? '—'}</h2>
                                     <JobTypeBadge type={workOrder.job_type} />
                                     <span className={`badge ${statusBadge[workOrder.status] ?? 'badge-slate'}`}>
                                         {workOrder.status_label}
@@ -84,7 +84,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                     </div>
 
                     {/* Transition Buttons */}
-                    {(canApprove || (canTransitionTo && canTransitionTo.length > 0) || (workOrder.status === 'approved' && !workOrder.operation_sheet)) && (
+                    {(canApprove || (canTransitionTo && canTransitionTo.length > 0)) && (
                         <div className="card-body border-t border-surface-100 flex gap-2 flex-wrap">
                             {canApprove && workOrder.status === 'draft' && (
                                 <button
@@ -100,11 +100,6 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                     {s.replace(/_/g, ' ')}
                                 </button>
                             ))}
-                            {workOrder.status === 'approved' && !workOrder.operation_sheet && (
-                                <Link href={`/operation-sheets/create?work_order_id=${workOrder.id}`} className="btn-success btn-sm">
-                                    <i className="fi fi-rr-plus text-xs leading-none" /> Create Operation Sheet
-                                </Link>
-                            )}
                         </div>
                     )}
                 </div>
@@ -132,7 +127,11 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                             };
                             const stage = STAGE[workOrder.status] ?? { label: workOrder.status_label || workOrder.status, subtitle: '', iconBg: 'bg-slate-50 text-slate-600', icon: 'fi-rr-circle' };
                             const pct = workOrder.progress?.pct ?? 0;
-                            const current = workOrder.progress?.current_step;
+                            // Pick the current step from the first item that has one in flight —
+                            // gives the user a "where the job is right now" hint at the WO level.
+                            const current = (workOrder.item_operation_sheets ?? [])
+                                .map((row: any) => row.sheet?.progress?.current_step)
+                                .filter(Boolean)[0] ?? null;
 
                             const barColor =
                                 pct >= 100 ? 'bg-emerald-500' :
@@ -236,40 +235,89 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                             </div>
                         )}
 
-                        {/* Operation Sheet — Progress + Gantt Timeline */}
-                        {workOrder.operation_sheet && (
-                            <div className="space-y-4 animate-slide-up">
-                                {/* Header card */}
-                                <div className="card">
-                                    <div className="card-header flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-md">
-                                                <i className="fi fi-rr-document leading-none" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-sm font-bold text-surface-900">Operation Sheet & Progress</h3>
-                                                <p className="text-xs text-surface-400 mt-0.5">
-                                                    {workOrder.operation_sheet.steps?.length ?? 0} steps · Visual timeline
-                                                </p>
-                                            </div>
+                        {/* QC Certificate — available once every item has a passing final
+                            inspection (i.e. WO status reached qc_passed or beyond). */}
+                        {['qc_passed', 'ready_for_delivery', 'delivered'].includes(workOrder.status) && (
+                            <div className="card animate-slide-up border-emerald-200 bg-emerald-50/30">
+                                <div className="card-header flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                            <i className="fi fi-rr-shield-check text-lg leading-none" />
                                         </div>
-                                        <div className="flex gap-2">
-                                            <Link href={`/operation-sheets/${workOrder.operation_sheet.id}`}
-                                                title="View full operation sheet"
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 transition-colors">
-                                                <i className="fi fi-rr-eye text-sm leading-none" /> View Sheet
-                                            </Link>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-emerald-900">Job QC Certificate</h3>
+                                            <p className="text-xs text-emerald-700/80 mt-0.5">
+                                                Every item inspected and accepted. The combined certificate is ready for the customer.
+                                            </p>
                                         </div>
                                     </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <a
+                                            href={`/qc/work-orders/${workOrder.id}/certificate?preview=1`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="btn-outline btn-sm"
+                                        >
+                                            <i className="fi fi-rr-eye text-xs leading-none" /> Preview
+                                        </a>
+                                        <a
+                                            href={`/qc/work-orders/${workOrder.id}/certificate`}
+                                            className="btn-primary btn-sm"
+                                        >
+                                            <i className="fi fi-rr-file-download text-xs leading-none" /> Download PDF
+                                        </a>
+                                    </div>
                                 </div>
+                            </div>
+                        )}
 
-                                {/* Progress + Gantt */}
-                                {workOrder.progress && workOrder.operation_sheet.steps?.length > 0 && (
-                                    <ProgressGantt
-                                        steps={workOrder.operation_sheet.steps}
-                                        progress={workOrder.progress}
-                                    />
-                                )}
+                        {/* Per-item Operation Sheets — one card per item with its
+                            own progress + Gantt. Replaces the old single-sheet card. */}
+                        {workOrder.item_operation_sheets?.length > 0 && (
+                            <div className="space-y-6 animate-slide-up">
+                                {workOrder.item_operation_sheets.map(({ item, sheet }: any) => (
+                                    <div key={item.id} className="space-y-3">
+                                        <div className="card">
+                                            <div className="card-header flex items-center justify-between">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-md shrink-0 font-bold text-sm">
+                                                        {item.sequence}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h3 className="text-sm font-bold text-surface-900 truncate">
+                                                            Item {item.sequence}: {item.description ?? '—'}
+                                                        </h3>
+                                                        <p className="text-xs text-surface-400 mt-0.5">
+                                                            Qty {item.quantity} {item.unit}
+                                                            {sheet ? ` · Sheet ${sheet.sheet_number} · ${sheet.steps?.length ?? 0} step${sheet.steps?.length !== 1 ? 's' : ''}` : ' · No operation sheet yet'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2 shrink-0">
+                                                    {sheet ? (
+                                                        <Link href={`/operation-sheets/${sheet.id}`}
+                                                            title="View full operation sheet"
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 transition-colors">
+                                                            <i className="fi fi-rr-eye text-sm leading-none" /> View Sheet
+                                                        </Link>
+                                                    ) : (
+                                                        <Link href={`/operation-sheets/${workOrder.id}/create?item_id=${item.id}`}
+                                                            className="btn-primary btn-sm">
+                                                            <i className="fi fi-rr-plus text-xs leading-none" /> Create Sheet
+                                                        </Link>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {sheet?.progress && sheet.steps?.length > 0 && (
+                                            <ProgressGantt
+                                                steps={sheet.steps}
+                                                progress={sheet.progress}
+                                            />
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
 
@@ -476,7 +524,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                 <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Actions</h3>
                             </div>
                             <div className="card-body space-y-2">
-                                {workOrder.operation_sheet && (
+                                {workOrder.item_operation_sheets?.some((row: any) => row.sheet) && (
                                     <Link href={`/mrp/${workOrder.id}`} className="btn-outline btn-sm w-full justify-center">
                                         <i className="fi fi-rr-calculator text-xs leading-none" /> Run MRP
                                     </Link>

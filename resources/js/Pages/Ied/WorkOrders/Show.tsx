@@ -7,7 +7,11 @@ export default function IedWorkOrderShow({ workOrder }: any) {
     const wo = workOrder;
     const [acceptOpen, setAcceptOpen] = useState(false);
     const [rejectOpen, setRejectOpen] = useState(false);
-    const acceptForm = useForm({ note: '' });
+    const acceptForm = useForm<any>({
+        note: '',
+        // Map of work_order_item id → per-item note. Empty values are dropped server-side.
+        item_notes: {} as Record<number, string>,
+    });
     const rejectForm = useForm({ reason: '' });
     const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string }>({
         open: false, url: null, title: '',
@@ -215,7 +219,7 @@ export default function IedWorkOrderShow({ workOrder }: any) {
                 <>
                     <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm" onClick={() => !acceptForm.processing && setAcceptOpen(false)} />
                     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
                             <div className="px-5 py-4 border-b border-surface-100 bg-emerald-50/60 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -230,24 +234,67 @@ export default function IedWorkOrderShow({ workOrder }: any) {
                                     <i className="fi fi-rr-cross text-base leading-none" />
                                 </button>
                             </div>
-                            <form onSubmit={submitAccept} className="p-5 space-y-3">
-                                <div className="rounded-lg bg-emerald-50/60 border border-emerald-100 px-3 py-2.5 text-[11px] text-emerald-800 flex items-start gap-2">
-                                    <i className="fi fi-rr-info text-emerald-500 mt-0.5 shrink-0" />
-                                    <span>Add a short note for the PCD team — drawings to use, priority caveats, customer site contact, etc. The customer will also be notified that production planning has begun.</span>
+                            <form onSubmit={submitAccept} className="flex flex-col flex-1 min-h-0">
+                                <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                                    <div className="rounded-lg bg-emerald-50/60 border border-emerald-100 px-3 py-2.5 text-[11px] text-emerald-800 flex items-start gap-2">
+                                        <i className="fi fi-rr-info text-emerald-500 mt-0.5 shrink-0" />
+                                        <span>Add an overall note and/or item-wise notes for the PCD team. The customer will be notified that production planning has begun.</span>
+                                    </div>
+
+                                    {/* Overall note */}
+                                    <div className="form-group !mb-0">
+                                        <label className="form-label">Overall Note for PCD <span className="form-label-optional">(optional)</span></label>
+                                        <textarea
+                                            value={acceptForm.data.note}
+                                            onChange={e => acceptForm.setData('note', e.target.value)}
+                                            rows={3}
+                                            placeholder="e.g. Use Rev-B drawing for the entire job. Customer requested factory visit before shipping."
+                                            className="form-textarea text-sm"
+                                            autoFocus
+                                        />
+                                        {acceptForm.errors.note && <p className="form-error">{acceptForm.errors.note as any}</p>}
+                                    </div>
+
+                                    {/* Per-item notes */}
+                                    {(wo.items ?? []).length > 0 && (
+                                        <div>
+                                            <div className="flex items-baseline justify-between mb-2">
+                                                <label className="form-label !mb-0">Item-wise Notes <span className="form-label-optional">(optional)</span></label>
+                                                <span className="text-[10px] text-surface-400">{wo.items.length} item{wo.items.length === 1 ? '' : 's'}</span>
+                                            </div>
+                                            <div className="space-y-3">
+                                                {wo.items.map((it: any, idx: number) => (
+                                                    <div key={it.id} className="rounded-lg border border-surface-200 p-3 space-y-2 bg-surface-50/30">
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-white border border-surface-200 text-[10px] font-bold text-surface-700 shrink-0">
+                                                                {idx + 1}
+                                                            </span>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-xs font-semibold text-surface-900 leading-tight">{it.description}</div>
+                                                                {it.product && <div className="text-[10px] text-surface-500 mt-0.5">{it.product}</div>}
+                                                                <div className="text-[10px] text-surface-400 mt-0.5">
+                                                                    Qty {it.quantity} {it.unit}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <textarea
+                                                            value={acceptForm.data.item_notes?.[it.id] ?? ''}
+                                                            onChange={e => acceptForm.setData('item_notes', {
+                                                                ...(acceptForm.data.item_notes ?? {}),
+                                                                [it.id]: e.target.value,
+                                                            })}
+                                                            rows={2}
+                                                            placeholder="Note for this item (drawings, tolerances, sequence, sub-vendor, etc.)…"
+                                                            className="form-textarea text-xs"
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="form-group !mb-0">
-                                    <label className="form-label">Note for PCD <span className="form-label-optional">(optional)</span></label>
-                                    <textarea
-                                        value={acceptForm.data.note}
-                                        onChange={e => acceptForm.setData('note', e.target.value)}
-                                        rows={4}
-                                        placeholder="e.g. Use Rev-B drawing. Customer requested factory visit before shipping."
-                                        className="form-textarea text-sm"
-                                        autoFocus
-                                    />
-                                    {acceptForm.errors.note && <p className="form-error">{acceptForm.errors.note as any}</p>}
-                                </div>
-                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-100">
+
+                                <div className="px-5 py-3 border-t border-surface-100 bg-surface-50/40 flex items-center justify-end gap-2 shrink-0">
                                     <button type="button" onClick={() => setAcceptOpen(false)} disabled={acceptForm.processing} className="btn-ghost btn-sm">Cancel</button>
                                     <button
                                         type="submit"

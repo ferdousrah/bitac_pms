@@ -64,13 +64,17 @@ class PcdInboxController extends Controller
             'quotation.rfq.items.product',
             'quotation.rfq.items.drawings',
             'quotation.rfq.items.samplePhotos',
+            'quotation.rfq.gatePasses.items',
             'quotation.files.uploadedBy',
             'rfq.items.product',
             'rfq.items.drawings',
             'rfq.items.samplePhotos',
+            'rfq.gatePasses.items',
             'files.uploadedBy',
+            'items',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
+            'operationSheets.workOrderItem',
             'cancelledBy',
         ]);
 
@@ -78,6 +82,7 @@ class PcdInboxController extends Controller
         // Reach through the quotation as a fallback so Job Items always render.
         $rfq      = $workOrder->rfq      ?? $workOrder->quotation?->rfq;
         $rfqItems = $rfq?->items ?? collect();
+        $gatePasses = $rfq?->gatePasses ?? collect();
 
         $checklist = PcdReleaseService::checklistFor($workOrder);
 
@@ -102,10 +107,10 @@ class PcdInboxController extends Controller
             $allAttachments->push($this->serializeAttachment($f, 'quotation', null));
         }
 
-        // Work Order files (customer PO copy uploaded at conversion, in-progress docs).
-        foreach ($workOrder->files as $f) {
-            $allAttachments->push($this->serializeAttachment($f, 'work_order', null));
-        }
+        // Work Order files are intentionally NOT added here — the Customer
+        // Work Order surfaces in the Source Documents strip above, and Job
+        // Reference is meant to carry only the upstream RFQ/quotation context
+        // a PCD planner needs.
 
         return Inertia::render('Pcd/JobDetail', [
             'job' => [
@@ -122,18 +127,32 @@ class PcdInboxController extends Controller
                 'notes'               => $workOrder->notes,
                 'pcd_handoff_at'      => $workOrder->pcd_handoff_at?->format('d M Y, h:i A'),
                 'released_at'         => $workOrder->released_to_shops_at?->format('d M Y, h:i A'),
-                'rfq_items'           => $rfqItems->map(fn($i) => [
-                    'description' => $i->job_description ?? $i->product?->name ?? '—',
-                    'quantity'    => $i->quantity,
-                    'unit'        => $i->unit,
-                ])->values(),
-                // Upstream source documents — PCD officer can preview the original
-                // RFQ (IED form) and the approved Quotation letter as PDFs.
-                'rfq_source' => $rfq ? [
+                // Per-item IED handoff notes keyed by rfq_item_id — set when
+                // IED clicked "Accept & Forward to PCD" and typed a note per
+                // item. We attach them to each rfq_item below so PCD sees the
+                // guidance right next to the part description.
+                'rfq_items'           => (function () use ($workOrder, $rfqItems) {
+                    $iedNoteByRfqItem = $workOrder->items
+                        ->whereNotNull('rfq_item_id')
+                        ->mapWithKeys(fn ($i) => [$i->rfq_item_id => $i->ied_note])
+                        ->all();
+                    return $rfqItems->map(fn ($i) => [
+                        'description' => $i->job_description ?? $i->product?->name ?? '—',
+                        'quantity'    => $i->quantity,
+                        'unit'        => $i->unit,
+                        'ied_note'    => $iedNoteByRfqItem[$i->id] ?? null,
+                    ])->values();
+                })(),
+                // Upstream source documents — PCD officer can preview the
+                // customer's own uploaded RFQ Letter (not BITAC's generated
+                // PDF) and the approved Quotation letter as PDFs.
+                'rfq_source' => ($rfq && $rfq->rfq_letter_path) ? [
                     'id'           => $rfq->id,
                     'rfq_no'       => 'RFQ-' . str_pad($rfq->id, 5, '0', STR_PAD_LEFT),
                     'created_at'   => $rfq->created_at?->format('d M Y'),
-                    'pdf_url'      => "/rfqs/{$rfq->id}/pdf?preview=base64",
+                    'title'        => $rfq->rfq_letter_title ?: 'Customer RFQ Letter',
+                    'extension'    => strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION)),
+                    'pdf_url'      => route('rfqs.letter', $rfq->id) . '?preview=base64',
                     'view_url'     => "/rfqs/{$rfq->id}",
                 ] : null,
                 'quotation_source' => $workOrder->quotation ? [
@@ -145,10 +164,28 @@ class PcdInboxController extends Controller
                     'pdf_url'      => "/quotations/{$workOrder->quotation->id}/pdf?preview=base64",
                     'view_url'     => "/quotations/{$workOrder->quotation->id}",
                 ] : null,
+                // Gate passes attached to the parent RFQ — reference samples
+                // entering / leaving BITAC. Surfaced here so PCD knows about
+                // physical material that arrived (or is due to be returned).
+                'gate_passes'         => $gatePasses->map(fn ($gp) => [
+                    'id'             => $gp->id,
+                    'pass_no'        => $gp->pass_no,
+                    'direction'      => $gp->direction,
+                    'status'         => $gp->status,
+                    'pass_date'      => $gp->pass_date?->format('d M Y'),
+                    'party_name'     => $gp->party_name,
+                    'vehicle_no'     => $gp->vehicle_no,
+                    'item_count'     => $gp->items->count(),
+                    'items_summary'  => $gp->items->take(3)->map(fn ($i) => $i->description)->all(),
+                    'notes'          => $gp->notes,
+                    'view_url'       => "/ied/gate-passes/{$gp->id}",
+                ])->values(),
                 'attachments'         => $workOrder->files->map(fn($f) => [
                     'id'           => $f->id,
                     'kind'         => $f->kind,
-                    'url'          => $f->url,
+                    // Streamed through the controller so the PDF popup's base64
+                    // mode bypasses IDM/FDM intercept.
+                    'url'          => route('pcd.inbox.files.show', $f),
                     'filename'     => $f->original_name,
                     'extension'    => $f->extension,
                     'human_size'   => $f->human_size,
@@ -174,6 +211,27 @@ class PcdInboxController extends Controller
                     'status'    => $s->status,
                     'completed_at' => $s->completed_at?->format('d M Y'),
                 ]),
+                // Item-wise: one operation sheet per WO item. The list below pairs
+                // each WO item with its sheet (if any), so JobDetail can render
+                // a "create / view sheet" action per item.
+                'item_operation_sheets' => $workOrder->items->values()->map(function ($i, $idx) use ($workOrder) {
+                    $sheet = $workOrder->operationSheets->firstWhere('work_order_item_id', $i->id);
+                    return [
+                        'item' => [
+                            'id'          => $i->id,
+                            'sequence'    => $idx + 1,
+                            'description' => $i->description,
+                            'quantity'    => (float) $i->quantity,
+                            'unit'        => $i->unit ?? 'pcs',
+                        ],
+                        'sheet' => $sheet ? [
+                            'id'           => $sheet->id,
+                            'sheet_number' => $sheet->sheet_number,
+                            'step_count'   => $sheet->steps->count(),
+                        ] : null,
+                    ];
+                })->all(),
+                // Legacy single-sheet field — kept for back-compat with older JobDetail markup.
                 'operation_sheet' => $workOrder->operationSheets->first() ? [
                     'id'           => $workOrder->operationSheets->first()->id,
                     'sheet_number' => $workOrder->operationSheets->first()->sheet_number,
@@ -237,6 +295,51 @@ class PcdInboxController extends Controller
         });
 
         return back()->with('success', "Job number set to {$jobNumber}.");
+    }
+
+    /**
+     * Stream a work-order file through the controller so the PDF popup's
+     * base64 mode works and IDM/FDM extensions don't intercept it.
+     *
+     *   ?preview=base64 → JSON { data, filename, mime }
+     *   ?preview=1      → inline binary
+     *   (none)          → force download
+     */
+    public function file(Request $request, \App\Models\WorkOrderFile $file)
+    {
+        abort_unless($file->workOrder, 404);
+        abort_unless($file->stored_path && \Storage::disk('public')->exists($file->stored_path), 404, 'File missing on disk.');
+
+        $bytes = \Storage::disk('public')->get($file->stored_path);
+        $ext   = strtolower(pathinfo($file->original_name ?? '', PATHINFO_EXTENSION));
+        $title = $file->title ?: ($file->original_name ?: 'document');
+        $safe  = preg_replace('/[^A-Za-z0-9 _\-]/', '_', pathinfo($title, PATHINFO_FILENAME));
+        $filename = $safe . ($ext ? ".{$ext}" : '');
+
+        $mime = $file->mime_type ?: match ($ext) {
+            'pdf'         => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png'         => 'image/png',
+            'webp'        => 'image/webp',
+            'doc'         => 'application/msword',
+            'docx'        => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            default       => 'application/octet-stream',
+        };
+
+        if ($request->query('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'data'     => base64_encode($bytes),
+                'mime'     => $mime,
+            ]);
+        }
+
+        $disposition = $request->boolean('preview') ? 'inline' : 'attachment';
+        return response($bytes, 200, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
     }
 
     public function cancel(Request $request, WorkOrder $workOrder)

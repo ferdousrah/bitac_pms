@@ -54,6 +54,20 @@ interface Job {
     material_requisitions: MaterialRequisition[];
     sections: SectionEntry[];
     operation_sheet: OperationSheet | null;
+    item_operation_sheets: Array<{
+        item: {
+            id: number;
+            sequence: number;
+            description: string | null;
+            quantity: number;
+            unit: string;
+        };
+        sheet: {
+            id: number;
+            sheet_number: string;
+            step_count: number;
+        } | null;
+    }>;
     attachments: Array<{
         id: number;
         kind: string;
@@ -83,6 +97,8 @@ interface Job {
         id: number;
         rfq_no: string;
         created_at: string | null;
+        title?: string;
+        extension?: string;
         pdf_url: string;
         view_url: string;
     } | null;
@@ -107,6 +123,19 @@ interface Job {
             human_size: string | null;
         }>;
     } | null;
+    gate_passes?: Array<{
+        id: number;
+        pass_no: string;
+        direction: 'in' | 'out';
+        status: string;
+        pass_date: string | null;
+        party_name: string | null;
+        vehicle_no: string | null;
+        item_count: number;
+        items_summary: string[];
+        notes: string | null;
+        view_url: string;
+    }>;
 }
 
 interface ChecklistItem {
@@ -119,10 +148,15 @@ interface ChecklistSectionItem extends ChecklistItem {
     count: number;
 }
 
+interface ChecklistOpSheetItem extends ChecklistItem {
+    items_total: number;
+    items_covered: number;
+}
+
 interface Checklist {
     material_requisition: ChecklistItem;
     section_assign: ChecklistSectionItem;
-    operation_sheet: ChecklistItem;
+    operation_sheet: ChecklistOpSheetItem;
     all_done: boolean;
     released: boolean;
 }
@@ -189,9 +223,9 @@ export default function JobDetail({ job, checklist }: Props) {
         ? `/pcd/material-requisitions/${firstMrId}`
         : `/pcd/material-requisitions/create?work_order_id=${job.id}`;
     const sectionsHref = `/pcd/work-orders/${job.id}/sections`;
-    const opSheetHref = job.operation_sheet
-        ? `/operation-sheets/${job.operation_sheet.id}`
-        : `/operation-sheets/${job.id}/create`;
+    // Step 3 anchors to the item-wise operation-sheet panel below — each item
+    // gets its own "Create / View Sheet" action there.
+    const opSheetHref = '#operation-sheets';
 
     // PDF popup state — used by the Source Documents card to preview the
     // upstream RFQ and approved Quotation without leaving the PCD workflow.
@@ -204,18 +238,20 @@ export default function JobDetail({ job, checklist }: Props) {
     const [sourceDocsOpen, setSourceDocsOpen] = useState(false);
     const [jobItemsOpen, setJobItemsOpen] = useState(false);
     const [docsOpen, setDocsOpen] = useState(false);
+    const [gatePassesOpen, setGatePassesOpen] = useState(true);
 
     const steps = [
         {
             number: 1,
             key: 'material_requisition',
             done: checklist.material_requisition.done,
+            optional: true,
             label: checklist.material_requisition.label,
             icon: checklist.material_requisition.icon || 'fi-rr-box',
             href: mrHref,
             subtitle: checklist.material_requisition.done
                 ? `${job.material_requisitions.length} MR${job.material_requisitions.length > 1 ? 's' : ''} created`
-                : 'Not started',
+                : 'Optional — raise if needed',
         },
         {
             number: 2,
@@ -235,13 +271,16 @@ export default function JobDetail({ job, checklist }: Props) {
             label: checklist.operation_sheet.label,
             icon: checklist.operation_sheet.icon || 'fi-rr-document',
             href: opSheetHref,
-            subtitle: checklist.operation_sheet.done
-                ? `${job.operation_sheet?.step_count ?? 0} steps`
-                : 'Not created',
+            // Item-wise: show "X / N items" so PCD can see partial progress.
+            subtitle: checklist.operation_sheet.items_total > 0
+                ? `${checklist.operation_sheet.items_covered}/${checklist.operation_sheet.items_total} item${checklist.operation_sheet.items_total > 1 ? 's' : ''} done`
+                : (checklist.operation_sheet.done ? `${job.operation_sheet?.step_count ?? 0} steps` : 'Not created'),
         },
     ];
 
-    const pendingSteps = steps.filter((s) => !s.done).map((s) => s.label);
+    // Optional steps (like Material Requisition) don't count as "pending" —
+    // they don't block release, so they shouldn't appear in the warning banner.
+    const pendingSteps = steps.filter((s) => !s.done && !s.optional).map((s) => s.label);
 
     return (
         <AppLayout
@@ -275,8 +314,19 @@ export default function JobDetail({ job, checklist }: Props) {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
                                         <h2 className="text-2xl font-bold text-surface-900">
-                                            {job.job_number ? `Job #${job.job_number}` : job.wo_number}
+                                            {/* Header priority: PCD Job # → Customer PO → WO #. The
+                                                customer recognises their own PO, so it takes
+                                                precedence over the system WO number when no PCD
+                                                job number has been allocated yet. */}
+                                            {job.job_number
+                                                ? `Job #${job.job_number}`
+                                                : (job.customer_po_no ?? job.wo_number)}
                                         </h2>
+                                        {job.customer && (
+                                            <span className="text-sm text-surface-500">
+                                                by <span className="font-semibold text-surface-800">{job.customer}</span>
+                                            </span>
+                                        )}
                                         {!job.job_number && (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
                                                 <i className="fi fi-rr-bolt text-[9px]" />
@@ -289,30 +339,6 @@ export default function JobDetail({ job, checklist }: Props) {
                                         </span>
                                         <span className={priorityBadgeClass(job.priority)}>
                                             {job.priority}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-600">
-                                        <span className="flex items-center gap-1.5">
-                                            <i className="fi fi-rr-document text-surface-400" />
-                                            {job.wo_number}
-                                        </span>
-                                        <span className="flex items-center gap-1.5">
-                                            <i className="fi fi-rr-building text-surface-400" />
-                                            {job.customer}
-                                        </span>
-                                        {job.customer_po_no && (
-                                            <span className="flex items-center gap-1.5">
-                                                <i className="fi fi-rr-receipt text-surface-400" />
-                                                PO: {job.customer_po_no}
-                                            </span>
-                                        )}
-                                        <span className="flex items-center gap-1.5">
-                                            <i className="fi fi-rr-calendar text-surface-400" />
-                                            Due: {formatDate(job.due_date)}
-                                        </span>
-                                        <span className="flex items-center gap-1.5">
-                                            <i className="fi fi-rr-time-past text-surface-400" />
-                                            Handoff: {formatDateTime(job.pcd_handoff_at)}
                                         </span>
                                     </div>
                                 </div>
@@ -377,60 +403,21 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                 )}
 
-                {/* Customer PO / authorisation document — audit trail */}
+                {/* Customer PO / authorisation document — show only the warning
+                    when no Work Order is attached. The file itself is rendered
+                    as a card inside the "Source Documents" section below, so we
+                    don't duplicate the surface area. */}
                 {(() => {
                     const customerPo = job.attachments?.find(a => a.kind === 'customer_po');
-                    if (!customerPo) {
-                        return (
-                            <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-4 flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                                    <i className="fi fi-rr-triangle-warning text-amber-600 text-base leading-none" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-bold text-amber-900">No Customer PO document on file</div>
-                                    <p className="text-xs text-amber-700 mt-0.5">The customer's signed PO / Work Order copy wasn't attached when this job was created. Ask the IED team to upload it — needed as audit proof.</p>
-                                </div>
-                            </div>
-                        );
-                    }
-                    const ext = (customerPo.extension ?? customerPo.filename.split('.').pop() ?? 'FILE').toUpperCase();
+                    if (customerPo) return null;
                     return (
-                        <div className="card overflow-hidden">
-                            <div className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <i className="fi fi-rr-receipt text-base leading-none" />
-                                    <span className="text-xs font-bold uppercase tracking-wider">Customer PO / Work Order Copy</span>
-                                </div>
-                                <span className="text-[10px] text-white/80 italic">Audit reference</span>
+                        <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-4 flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                <i className="fi fi-rr-triangle-warning text-amber-600 text-base leading-none" />
                             </div>
-                            <div className="card-body flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-700 text-[11px] font-bold shrink-0">
-                                    {ext}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-semibold text-surface-900 truncate">{customerPo.filename}</div>
-                                    <div className="text-[11px] text-surface-500 mt-0.5">
-                                        {customerPo.human_size && <>{customerPo.human_size} · </>}
-                                        uploaded by {customerPo.uploaded_by ?? '—'} · {customerPo.uploaded_at}
-                                    </div>
-                                    {job.customer_po_no && (
-                                        <div className="text-[11px] text-surface-600 font-mono mt-0.5">PO No.: {job.customer_po_no}</div>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setPdfPopup({
-                                        open: true,
-                                        url: customerPo.url,
-                                        title: customerPo.filename,
-                                        subtitle: job.customer_po_no ? `PO ${job.customer_po_no}` : 'Customer PO / Work Order Copy',
-                                    })}
-                                    className="btn-outline btn-sm">
-                                    <i className="fi fi-rr-eye text-xs leading-none" /> Open
-                                </button>
-                                <a href={customerPo.url} download={customerPo.filename} className="btn-primary btn-sm">
-                                    <i className="fi fi-rr-download text-xs leading-none" /> Download
-                                </a>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-amber-900">No Customer Work Order on file</div>
+                                <p className="text-xs text-amber-700 mt-0.5">The customer's signed Work Order copy wasn't attached. Ask IED to upload it — needed as audit proof.</p>
                             </div>
                         </div>
                     );
@@ -448,12 +435,47 @@ export default function JobDetail({ job, checklist }: Props) {
                                     Complete all 3 steps to release this job to the shops
                                 </p>
                             </div>
-                            {checklist.all_done && !checklist.released && (
-                                <span className="badge badge-green">
-                                    <i className="fi fi-rr-check-circle mr-1" />
-                                    Ready to Release
-                                </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {checklist.section_assign.done && (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            // Stream the PDF via ?preview=base64 to dodge IDM/FDM interceptors.
+                                            try {
+                                                const res = await fetch(`/pcd/work-orders/${job.id}/pdf?preview=base64`, {
+                                                    credentials: 'same-origin',
+                                                    headers: { Accept: 'application/json' },
+                                                });
+                                                if (!res.ok) throw new Error('PDF fetch failed');
+                                                const data = await res.json();
+                                                const blob = new Blob(
+                                                    [Uint8Array.from(atob(data.data), (c) => c.charCodeAt(0))],
+                                                    { type: 'application/pdf' },
+                                                );
+                                                const url = URL.createObjectURL(blob);
+                                                setPdfPopup({
+                                                    open: true,
+                                                    url,
+                                                    title: 'Work Order',
+                                                    subtitle: job.job_number ? `Job #${job.job_number}` : job.wo_number,
+                                                });
+                                            } catch (e) {
+                                                window.open(`/pcd/work-orders/${job.id}/pdf?preview=1`, '_blank');
+                                            }
+                                        }}
+                                        className="btn-outline btn-sm"
+                                    >
+                                        <i className="fi fi-rr-file-pdf mr-1.5" />
+                                        View Work Order PDF
+                                    </button>
+                                )}
+                                {checklist.all_done && !checklist.released && (
+                                    <span className="badge badge-green">
+                                        <i className="fi fi-rr-check-circle mr-1" />
+                                        Ready to Release
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="card-body">
@@ -547,6 +569,10 @@ export default function JobDetail({ job, checklist }: Props) {
                                                             <span className="badge badge-green">
                                                                 Completed
                                                             </span>
+                                                        ) : step.optional ? (
+                                                            <span className="badge badge-slate">
+                                                                Optional
+                                                            </span>
                                                         ) : (
                                                             <span className="badge badge-amber">
                                                                 Pending
@@ -563,10 +589,139 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                 </div>
 
+                {/* Per-item Operation Sheets — itemwise routing. Each item gets
+                    its own sheet with its own steps, machines, operators, QR. */}
+                {job.item_operation_sheets && job.item_operation_sheets.length > 0 && (
+                    <div id="operation-sheets" className="card animate-slide-up">
+                        <div className="card-header">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-base font-semibold text-surface-900">
+                                        <i className="fi fi-rr-document mr-2 text-brand-600" />
+                                        Operation Sheets — per item
+                                    </h3>
+                                    <p className="text-xs text-surface-500 mt-0.5">
+                                        Each WO item has its own routing & operations. Create one sheet per item.
+                                    </p>
+                                </div>
+                                <span className="badge badge-slate">
+                                    {checklist.operation_sheet.items_covered}/{checklist.operation_sheet.items_total} done
+                                </span>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            <div className="space-y-3">
+                                {job.item_operation_sheets.map(({ item, sheet }) => (
+                                    <div
+                                        key={item.id}
+                                        className={`flex items-start gap-3 p-3 rounded-xl border ${sheet ? 'bg-green-50/40 border-green-200' : 'bg-amber-50/40 border-amber-200'}`}
+                                    >
+                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold ${sheet ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {sheet ? <i className="fi fi-rr-check text-sm leading-none" /> : item.sequence}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="badge badge-slate text-[10px]">Item {item.sequence}</span>
+                                                <span className="text-xs text-surface-500">Qty {item.quantity} {item.unit}</span>
+                                                {sheet && (
+                                                    <span className="badge badge-green text-[10px] font-mono">
+                                                        Sheet {sheet.sheet_number} · {sheet.step_count} step{sheet.step_count !== 1 ? 's' : ''}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-sm font-semibold text-surface-900 mt-1 truncate">
+                                                {item.description ?? '—'}
+                                            </div>
+                                        </div>
+                                        <div className="shrink-0">
+                                            {sheet ? (
+                                                <Link
+                                                    href={`/operation-sheets/${sheet.id}`}
+                                                    className="btn-outline btn-sm"
+                                                >
+                                                    <i className="fi fi-rr-eye mr-1" />
+                                                    View
+                                                </Link>
+                                            ) : (
+                                                <Link
+                                                    href={`/operation-sheets/${job.id}/create?item_id=${item.id}`}
+                                                    className="btn-primary btn-sm"
+                                                >
+                                                    <i className="fi fi-rr-plus mr-1" />
+                                                    Create Sheet
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Two-column grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left column */}
                     <div className="lg:col-span-2 space-y-6">
+                        {/* Job QC Certificate — appears once every item has a passing
+                            final inspection (WO status reached qc_passed or beyond). */}
+                        {['qc_passed', 'ready_for_delivery', 'delivered'].includes(job.status) && (
+                            <div className="card border-emerald-200 bg-emerald-50/40 animate-slide-up">
+                                <div className="card-body">
+                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                                        <div className="flex items-start gap-3 min-w-0">
+                                            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                                <i className="fi fi-rr-shield-check text-lg leading-none" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-bold text-emerald-900">Job QC Certificate</h3>
+                                                <p className="text-xs text-emerald-700/80 mt-0.5">
+                                                    Every item inspected and accepted (OK). The combined certificate is ready for the customer.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await fetch(`/qc/work-orders/${job.id}/certificate?preview=base64`, {
+                                                            credentials: 'same-origin',
+                                                            headers: { Accept: 'application/json' },
+                                                        });
+                                                        if (!res.ok) throw new Error('certificate fetch failed');
+                                                        const data = await res.json();
+                                                        const blob = new Blob(
+                                                            [Uint8Array.from(atob(data.data), c => c.charCodeAt(0))],
+                                                            { type: 'application/pdf' },
+                                                        );
+                                                        const url = URL.createObjectURL(blob);
+                                                        setPdfPopup({
+                                                            open: true,
+                                                            url,
+                                                            title: 'Job QC Certificate',
+                                                            subtitle: job.job_number ? `Job# ${job.job_number}` : job.wo_number,
+                                                        });
+                                                    } catch {
+                                                        window.open(`/qc/work-orders/${job.id}/certificate?preview=1`, '_blank');
+                                                    }
+                                                }}
+                                                className="btn-outline btn-sm"
+                                            >
+                                                <i className="fi fi-rr-eye text-xs leading-none mr-1" /> View
+                                            </button>
+                                            <a
+                                                href={`/qc/work-orders/${job.id}/certificate`}
+                                                className="btn-primary btn-sm"
+                                            >
+                                                <i className="fi fi-rr-file-download text-xs leading-none mr-1" /> Download
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Source Documents — collapsible. RFQ (IED form) + approved Quotation letter */}
                         {(job.rfq_source || job.quotation_source) && (
                             <div className="card">
@@ -583,41 +738,39 @@ export default function JobDetail({ job, checklist }: Props) {
                                                 Source Documents
                                             </h3>
                                             <span className="badge badge-slate">
-                                                {(job.rfq_source ? 1 : 0) + (job.quotation_source ? 1 : 0)}
+                                                {(job.rfq_source ? 1 : 0) + (job.quotation_source ? 1 : 0) + ((job.attachments ?? []).some(a => a.kind === 'customer_po') ? 1 : 0)}
                                             </span>
                                         </div>
                                         <p className="text-xs text-surface-500 mt-1">
-                                            Preview the upstream IED documents this job inherited from.
+                                            Customer's RFQ Letter, the approved Quotation, and the Work Order the customer authorised.
                                         </p>
                                     </div>
                                     <i className={`fi fi-rr-angle-${sourceDocsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
                                 </button>
                                 {sourceDocsOpen && (
                                 <div className="card-body">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                         {job.rfq_source && (
                                             <button
                                                 type="button"
                                                 onClick={() => setPdfPopup({
                                                     open: true,
                                                     url: job.rfq_source!.pdf_url,
-                                                    title: job.rfq_source!.rfq_no,
-                                                    subtitle: `Issued ${job.rfq_source!.created_at ?? '—'}`,
+                                                    title: job.rfq_source!.title ?? 'Customer RFQ Letter',
+                                                    subtitle: `${job.rfq_source!.rfq_no} · ${job.customer}`,
                                                 })}
                                                 className="group flex items-start gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-left transition-all"
                                             >
                                                 <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                                    <i className="fi fi-rr-clipboard-list text-lg leading-none" />
+                                                    <i className="fi fi-rr-envelope text-lg leading-none" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-blue-600">RFQ — IED Form</div>
-                                                    <div className="text-sm font-bold text-blue-900 font-mono mt-0.5">{job.rfq_source.rfq_no}</div>
-                                                    {job.rfq_source.created_at && (
-                                                        <div className="text-[11px] text-blue-700 mt-0.5">Issued {job.rfq_source.created_at}</div>
-                                                    )}
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-blue-600">Customer RFQ Letter</div>
+                                                    <div className="text-sm font-bold text-blue-900 mt-0.5 truncate">{job.rfq_source.title ?? job.rfq_source.rfq_no}</div>
+                                                    <div className="text-[11px] text-blue-700 mt-0.5 font-mono">{job.rfq_source.rfq_no}</div>
                                                     <div className="text-[10px] text-blue-600 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <i className="fi fi-rr-eye text-[9px] leading-none" />
-                                                        Click to preview PDF
+                                                        Click to preview
                                                     </div>
                                                 </div>
                                                 <i className="fi fi-rr-file-pdf text-blue-400 text-base leading-none" />
@@ -652,6 +805,43 @@ export default function JobDetail({ job, checklist }: Props) {
                                                 <i className="fi fi-rr-file-pdf text-emerald-400 text-base leading-none" />
                                             </button>
                                         )}
+
+                                        {/* Customer Work Order — the customer's signed PO/WO copy. */}
+                                        {(() => {
+                                            const cwo = job.attachments?.find(a => a.kind === 'customer_po');
+                                            if (!cwo) return null;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const sep = cwo.url.includes('?') ? '&' : '?';
+                                                        setPdfPopup({
+                                                            open: true,
+                                                            url: `${cwo.url}${sep}preview=base64`,
+                                                            title: 'Customer Work Order',
+                                                            subtitle: job.customer_po_no ? `PO ${job.customer_po_no}` : job.customer,
+                                                        });
+                                                    }}
+                                                    className="group flex items-start gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-200 hover:border-amber-400 hover:bg-amber-50 text-left transition-all"
+                                                >
+                                                    <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                        <i className="fi fi-rr-clipboard-list text-lg leading-none" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Customer Work Order</div>
+                                                        <div className="text-sm font-bold text-amber-900 mt-0.5 truncate">{cwo.filename}</div>
+                                                        {job.customer_po_no && (
+                                                            <div className="text-[11px] text-amber-700 mt-0.5 font-mono">PO: {job.customer_po_no}</div>
+                                                        )}
+                                                        <div className="text-[10px] text-amber-700 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <i className="fi fi-rr-eye text-[9px] leading-none" />
+                                                            Click to preview
+                                                        </div>
+                                                    </div>
+                                                    <i className="fi fi-rr-file-pdf text-amber-400 text-base leading-none" />
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 )}
@@ -686,24 +876,35 @@ export default function JobDetail({ job, checklist }: Props) {
                                                 <tr>
                                                     <th className="text-left w-12">#</th>
                                                     <th className="text-left">Description</th>
-                                                    <th className="text-right">Quantity</th>
-                                                    <th className="text-left">Unit</th>
+                                                    <th className="text-right w-24">Quantity</th>
+                                                    <th className="text-left w-20">Unit</th>
+                                                    <th className="text-left w-72">IED Notes</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {job.rfq_items.map((item, idx) => (
+                                                {job.rfq_items.map((item: any, idx: number) => (
                                                     <tr key={idx}>
-                                                        <td className="text-surface-500">
+                                                        <td className="text-surface-500 align-top">
                                                             {idx + 1}
                                                         </td>
-                                                        <td className="font-medium text-surface-900">
+                                                        <td className="font-medium text-surface-900 align-top">
                                                             {item.description}
                                                         </td>
-                                                        <td className="text-right font-semibold text-surface-900">
+                                                        <td className="text-right font-semibold text-surface-900 align-top">
                                                             {item.quantity}
                                                         </td>
-                                                        <td className="text-surface-600">
+                                                        <td className="text-surface-600 align-top">
                                                             {item.unit}
+                                                        </td>
+                                                        <td className="align-top">
+                                                            {item.ied_note ? (
+                                                                <div className="inline-flex items-start gap-1.5 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-900 max-w-full">
+                                                                    <i className="fi fi-rr-comment-alt text-amber-600 text-[10px] leading-none mt-0.5 shrink-0" />
+                                                                    <span>{item.ied_note}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-surface-300">—</span>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -725,7 +926,82 @@ export default function JobDetail({ job, checklist }: Props) {
                             )}
                         </div>
 
-                        {/* All Job Documents — collapsible, aggregated from RFQ, Quotation, and Work Order */}
+                        {/* Gate Passes — IN/OUT passes attached to the parent RFQ */}
+                        {(job.gate_passes ?? []).length > 0 && (
+                            <div className="card">
+                                <button
+                                    type="button"
+                                    onClick={() => setGatePassesOpen(o => !o)}
+                                    className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors text-left"
+                                    aria-expanded={gatePassesOpen}
+                                >
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <i className="fi fi-rr-shield-check text-brand-600" />
+                                            <h3 className="text-base font-semibold text-surface-900">Gate Passes</h3>
+                                            <span className="badge badge-slate">{(job.gate_passes ?? []).length}</span>
+                                        </div>
+                                        <p className="text-xs text-surface-500 mt-1">
+                                            Reference samples / parts moving in and out of BITAC against this job.
+                                        </p>
+                                    </div>
+                                    <i className={`fi fi-rr-angle-${gatePassesOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
+                                </button>
+                                {gatePassesOpen && (
+                                    <div className="card-body space-y-2">
+                                        {(job.gate_passes ?? []).map((gp: any) => {
+                                            const isIn = gp.direction === 'in';
+                                            const dirCls = isIn
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200';
+                                            const statusCls = gp.status === 'completed'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : gp.status === 'cancelled'
+                                                    ? 'bg-rose-100 text-rose-700'
+                                                    : 'bg-surface-100 text-surface-700';
+                                            return (
+                                                <a
+                                                    key={gp.id}
+                                                    href={gp.view_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-surface-200 hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            <i className={`fi ${isIn ? 'fi-rr-sign-in-alt' : 'fi-rr-sign-out-alt'} text-sm leading-none`} />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="font-mono text-sm font-bold text-surface-900">{gp.pass_no}</span>
+                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider ${dirCls}`}>
+                                                                    {isIn ? 'IN' : 'OUT'}
+                                                                </span>
+                                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize ${statusCls}`}>{gp.status}</span>
+                                                            </div>
+                                                            <div className="text-[11px] text-surface-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                                                                <span>{gp.pass_date}</span>
+                                                                {gp.party_name && <span>· {gp.party_name}</span>}
+                                                                {gp.vehicle_no && <span>· Vehicle {gp.vehicle_no}</span>}
+                                                                <span>· {gp.item_count} item{gp.item_count === 1 ? '' : 's'}</span>
+                                                            </div>
+                                                            {gp.items_summary?.length > 0 && (
+                                                                <div className="text-[10px] text-surface-400 mt-0.5 truncate">
+                                                                    {gp.items_summary.join(', ')}{gp.item_count > gp.items_summary.length ? '…' : ''}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <i className="fi fi-rr-arrow-up-right-from-square text-[10px] text-surface-400 shrink-0" />
+                                                </a>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Job Reference — collapsible, aggregated from RFQ, Quotation, and Work Order */}
                         {job.all_attachments && job.all_attachments.length > 0 && (
                             <div className="card">
                                 <button
@@ -738,7 +1014,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                         <div className="flex items-center gap-2">
                                             <i className="fi fi-rr-folder-open text-brand-600" />
                                             <h3 className="text-base font-semibold text-surface-900">
-                                                All Job Documents
+                                                Job Reference
                                             </h3>
                                             <span className="badge badge-slate">{job.all_attachments.length}</span>
                                         </div>

@@ -43,10 +43,14 @@ class ProductionController extends Controller
                     'workOrder.customer',
                     'workOrder.product',
                     'workOrder.rfq:id,job_type',
+                    'workOrder.items',
+                    'workOrder.operationSheets.steps',
                     'section',
                 ])
                 ->get()
-                ->map(fn($wos) => $this->serializeWosForQueue($wos))
+                // Expand item-wise: every item with work at this section becomes
+                // its own row. A WO with 2 items at Machine Shop → 2 rows in the queue.
+                ->flatMap(fn($wos) => $this->expandWosForQueue($wos))
                 ->values()
             : collect();
 
@@ -71,18 +75,17 @@ class ProductionController extends Controller
             return back()->with('error', 'This section is not in a completable state.');
         }
 
-        // Block forwarding if any operation step in this section is still
-        // open. Operators close their step from the operation list before
-        // the supervisor can hand the whole section off.
-        $sheet = $workOrderSection->workOrder->operationSheets()->first();
-        if ($sheet) {
-            $unfinished = $sheet->steps()
-                ->where('section_id', $workOrderSection->section_id)
-                ->whereNotIn('status', ['completed', 'skipped'])
-                ->count();
-            if ($unfinished > 0) {
-                return back()->with('error', "Cannot forward: {$unfinished} operation step(s) in this section are still open. Mark each step complete first.");
-            }
+        // Block manual section-level handoff if ANY operation step at this
+        // section is still open across all items' sheets. (Sections also auto-
+        // complete via syncWoSectionStatuses when the last item moves on, so
+        // this manual gate is mainly for supervisors recording explicit notes.)
+        $sheetIds   = $workOrderSection->workOrder->operationSheets()->pluck('id');
+        $unfinished = \App\Models\OperationStep::whereIn('operation_sheet_id', $sheetIds)
+            ->where('section_id', $workOrderSection->section_id)
+            ->whereNotIn('status', ['completed', 'skipped'])
+            ->count();
+        if ($unfinished > 0) {
+            return back()->with('error', "Cannot forward: {$unfinished} operation step(s) in this section are still open. Mark each step complete first.");
         }
 
         $validated = $request->validate([
@@ -207,19 +210,112 @@ class ProductionController extends Controller
                 break;
         }
 
+        // Items flow through routing independently — re-derive every WOS status
+        // based on which items still have open work at that section. So when
+        // Item 1 finishes Machine Shop, its Fitting WOS flips to 'ready' even
+        // though Item 2 is still at Machine Shop.
+        $this->syncWoSectionStatuses($wo->fresh(['sections.section', 'items', 'operationSheets.steps']));
+
         return back()->with('success', 'Operation step updated.');
     }
 
+    /**
+     * Auto-derive WorkOrderSection statuses from the per-item operation step
+     * states. Each item travels through routing independently:
+     *   - As soon as an item's pending step lands at a section, that section's
+     *     WOS becomes 'ready' (if it was 'pending').
+     *   - When at least one item has an in_progress step at the section, the
+     *     WOS becomes 'in_progress'.
+     *   - When no items have open work at the section, the WOS becomes
+     *     'completed' (auto-handoff to whatever section the items moved to).
+     *
+     * Rework/awaiting_rework states are left alone — those follow a separate
+     * supervisor-driven flow (SendBack action) and shouldn't be auto-cleared.
+     */
+    private function syncWoSectionStatuses(\App\Models\WorkOrder $wo): void
+    {
+        foreach ($wo->sections as $wos) {
+            // Don't touch rework states — supervisor controls those explicitly.
+            if (in_array($wos->status, ['rework', 'awaiting_rework'])) continue;
+
+            $sectionId = $wos->section_id;
+            $openCount = 0;
+            $inProgressCount = 0;
+
+            // Per-item routing: count items whose CURRENT pending step lives at
+            // this section. An item's "current" step is its lowest-sequence
+            // step that isn't completed/skipped — that's where the item lives
+            // right now in the routing.
+            foreach ($wo->items as $item) {
+                $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+                if (!$sheet) continue;
+                $current = $sheet->steps
+                    ->sortBy('sequence')
+                    ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+                if (!$current || $current->section_id !== $sectionId) continue;
+                $openCount++;
+                if ($current->status === 'in_progress') $inProgressCount++;
+            }
+            // Legacy WO-wide sheets count too — current step at this section.
+            foreach ($wo->operationSheets->whereNull('work_order_item_id') as $sheet) {
+                $current = $sheet->steps
+                    ->sortBy('sequence')
+                    ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+                if (!$current || $current->section_id !== $sectionId) continue;
+                $openCount++;
+                if ($current->status === 'in_progress') $inProgressCount++;
+            }
+
+            // Decide the target status from the open counts.
+            $target = $wos->status;
+            if ($openCount === 0) {
+                if (in_array($wos->status, ['ready', 'in_progress'])) {
+                    $target = 'completed';
+                }
+            } else {
+                if ($wos->status === 'pending') {
+                    $target = 'ready';
+                } elseif ($wos->status === 'ready' && $inProgressCount > 0) {
+                    $target = 'in_progress';
+                } elseif ($wos->status === 'completed') {
+                    // A reopened step pulled this section back into play.
+                    $target = $inProgressCount > 0 ? 'in_progress' : 'ready';
+                }
+            }
+
+            if ($target !== $wos->status) {
+                $update = ['status' => $target];
+                if ($target === 'in_progress' && !$wos->started_at) {
+                    $update['started_at'] = now();
+                }
+                if ($target === 'completed') {
+                    $update['completed_at'] = $wos->completed_at ?? now();
+                }
+                if (in_array($target, ['ready', 'in_progress']) && $wos->completed_at) {
+                    $update['completed_at'] = null;
+                }
+                $wos->update($update);
+            }
+        }
+    }
+
     /** Drawer/details view for a single WOS — sibling routing + handoff history. */
-    public function show(WorkOrderSection $workOrderSection)
+    public function show(Request $request, WorkOrderSection $workOrderSection)
     {
         $this->authorizeAccess($workOrderSection);
+
+        // Optional ?item_id=X scopes the page to one WO item — used when the
+        // operator clicked the item-row in the queue. Without it, the page
+        // shows every item's work at this section.
+        $scopedItemId = $request->integer('item_id') ?: null;
 
         $workOrderSection->load([
             'workOrder.customer',
             'workOrder.product',
             'workOrder.rfq:id,job_type',
             'workOrder.sections.section',
+            'workOrder.items',
+            'workOrder.operationSheets.workOrderItem',
             'workOrder.operationSheets.steps' => fn($q) => $q->orderBy('sequence'),
             'workOrder.operationSheets.steps.machine',
             'workOrder.operationSheets.steps.operator',
@@ -303,9 +399,33 @@ class ProductionController extends Controller
                 'status'   => $s->status,
                 'section'  => ['name' => $s->section->name, 'code' => $s->section->code],
             ])->values(),
-            'op_steps' => optional($workOrderSection->workOrder->operationSheets->first())->steps
-                ?->where('section_id', $workOrderSection->section_id)
-                ->map(fn($s) => [
+            // Optionally surface the scoped item so the page header can show it.
+            'scoped_item' => $scopedItemId
+                ? (function () use ($workOrderSection, $scopedItemId) {
+                    $item = $workOrderSection->workOrder->items->firstWhere('id', $scopedItemId);
+                    if (!$item) return null;
+                    $idx = $workOrderSection->workOrder->items->search(fn ($i) => $i->id === $item->id);
+                    return [
+                        'id'          => $item->id,
+                        'sequence'    => $idx !== false ? $idx + 1 : null,
+                        'description' => $item->description,
+                        'quantity'    => (float) $item->quantity,
+                        'unit'        => $item->unit ?? 'pcs',
+                    ];
+                })()
+                : null,
+            'siblings_count' => $scopedItemId
+                ? (int) $workOrderSection->workOrder->items->count() - 1
+                : 0,
+            // Item-wise: every WO item that has an operation sheet contributes
+            // its own steps at this section. Supervisor sees one block per item,
+            // can start/complete each independently. Legacy WOs with WO-wide
+            // sheets (work_order_item_id NULL) get bucketed under a "shared" item.
+            // When ?item_id is set, only that item's block is shipped.
+            'op_items' => (function () use ($workOrderSection, $scopedItemId) {
+                $wo = $workOrderSection->workOrder;
+                $sectionId = $workOrderSection->section_id;
+                $packStep = fn ($s) => [
                     'id'                => $s->id,
                     'sequence'          => $s->sequence,
                     'operation_name'    => $s->operation_name,
@@ -321,7 +441,45 @@ class ProductionController extends Controller
                     'completed_at_iso'  => $s->completed_at?->toIso8601String(),
                     'tooling_notes'     => $s->tooling_notes,
                     'qc_notes'          => $s->qc_notes,
-                ])->values() ?? [],
+                ];
+
+                $result = collect();
+                foreach ($wo->items as $idx => $item) {
+                    // When scoped, skip every item except the selected one.
+                    if ($scopedItemId && $item->id !== $scopedItemId) continue;
+                    $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+                    $steps = $sheet
+                        ? $sheet->steps->where('section_id', $sectionId)->values()
+                        : collect();
+                    $result->push([
+                        'item' => [
+                            'id'          => $item->id,
+                            'sequence'    => $idx + 1,
+                            'description' => $item->description,
+                            'quantity'    => (float) $item->quantity,
+                            'unit'        => $item->unit ?? 'pcs',
+                        ],
+                        'sheet_id'     => $sheet?->id,
+                        'sheet_number' => $sheet?->sheet_number,
+                        'steps'        => $steps->map($packStep)->values(),
+                    ]);
+                }
+                // Legacy WO-wide sheets only render when not scoped to an item.
+                if (!$scopedItemId) {
+                    $legacy = $wo->operationSheets->whereNull('work_order_item_id');
+                    foreach ($legacy as $sheet) {
+                        $steps = $sheet->steps->where('section_id', $sectionId)->values();
+                        if ($steps->isEmpty()) continue;
+                        $result->push([
+                            'item' => null,
+                            'sheet_id'     => $sheet->id,
+                            'sheet_number' => $sheet->sheet_number,
+                            'steps' => $steps->map($packStep)->values(),
+                        ]);
+                    }
+                }
+                return $result->values();
+            })(),
             'handoffs'         => $handoffs,
             'rework_context'   => $reworkContext,
             'earlier_sections' => $this->routing->earlierSectionsFor($workOrderSection)->map(fn($s) => [
@@ -342,7 +500,58 @@ class ProductionController extends Controller
             'You are not the supervisor of this section.');
     }
 
-    private function serializeWosForQueue(WorkOrderSection $wos): array
+    /**
+     * Expand a WOS into one row per WO item that has work at this section.
+     * Each item carries its own sheet info + per-section step progress so
+     * operators see "Job 37708 — Item 1 (Cylinder Body)" as a distinct row
+     * from "Job 37708 — Item 2 (Piston)". Legacy WOs without item-wise sheets
+     * (or items that don't yet have a sheet) fall back to a single un-itemed
+     * row so nothing disappears from the queue.
+     */
+    private function expandWosForQueue(WorkOrderSection $wos): \Illuminate\Support\Collection
+    {
+        $wo    = $wos->workOrder;
+        $items = $wo->items;
+        $sectionId = $wos->section_id;
+
+        // Per-item routing: an item appears at a section only when that section
+        // is its CURRENT pending step (lowest-sequence open step). An item with
+        // an open Fitting step but a still-pending Machine Shop step "lives"
+        // at Machine Shop — it only shows up at Fitting after MS is cleared.
+        $rows = collect();
+        $hasAnyItemSheet = false;
+        foreach ($items as $idx => $item) {
+            $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+            if (!$sheet) continue;
+            $hasAnyItemSheet = true;
+            $current = $sheet->steps
+                ->sortBy('sequence')
+                ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+            if (!$current || $current->section_id !== $sectionId) continue;
+            $sectionSteps = $sheet->steps->where('section_id', $sectionId);
+            $rows->push($this->serializeWosForQueue($wos, [
+                'item' => [
+                    'id'          => $item->id,
+                    'sequence'    => $idx + 1,
+                    'description' => $item->description,
+                    'quantity'    => (float) $item->quantity,
+                    'unit'        => $item->unit ?? 'pcs',
+                ],
+                'sheet_number'   => $sheet->sheet_number,
+                'steps_total'    => $sectionSteps->count(),
+                'steps_done'     => $sectionSteps->whereIn('status', ['completed', 'skipped'])->count(),
+            ]));
+        }
+
+        // Legacy fallback: no item-wise sheets covered this section → one row,
+        // no item info, like the old behavior.
+        if (!$hasAnyItemSheet) {
+            $rows->push($this->serializeWosForQueue($wos));
+        }
+        return $rows;
+    }
+
+    private function serializeWosForQueue(WorkOrderSection $wos, array $itemContext = []): array
     {
         $wo = $wos->workOrder;
 
@@ -363,8 +572,10 @@ class ProductionController extends Controller
             ] : null;
         }
 
-        return [
+        return array_merge([
             'id'         => $wos->id,
+            // Stable composite key so React can render multiple item-rows per WOS.
+            'row_key'    => 'wos-' . $wos->id . (isset($itemContext['item']['id']) ? '-item-' . $itemContext['item']['id'] : ''),
             'sequence'   => $wos->sequence,
             'status'     => $wos->status,
             'started_at' => $wos->started_at?->diffForHumans(),
@@ -380,6 +591,12 @@ class ProductionController extends Controller
                 'priority'   => $wo->priority,
             ],
             'rework'     => $reworkBanner,
-        ];
+            // Item context (null when this WOS has no item-wise sheets) —
+            // drives the per-item row UI on the queue.
+            'item'         => null,
+            'sheet_number' => null,
+            'steps_total'  => null,
+            'steps_done'   => null,
+        ], $itemContext);
     }
 }

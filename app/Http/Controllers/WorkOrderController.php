@@ -52,7 +52,6 @@ class WorkOrderController extends Controller
                 'job_number'   => $wo->job_number,
                 'job_type'     => $wo->rfq?->job_type ?? 'regular',
                 'job_category' => $wo->jobCategory?->name,
-                'product'      => $wo->product->name ?? '',
                 'customer'     => $wo->customer->name ?? '',
                 'quantity'     => $wo->quantity,
                 'status'       => $wo->status,
@@ -63,34 +62,33 @@ class WorkOrderController extends Controller
                 'is_overdue'   => $wo->is_overdue,
                 'created_at'   => $wo->created_at->format('d/m/Y'),
                 'progress_pct' => (function () use ($wo) {
-                    // Terminal states: the WO has cleared production and onwards.
-                    // Force 100% so the list reads cleanly even if some op-steps
-                    // were never closed (e.g. an op-step in a section that wasn't
-                    // actually routed through).
                     if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) {
                         return 100;
                     }
                     if ($wo->status === 'cancelled') return null;
 
-                    $sheet = $wo->operationSheets->first();
-                    if (!$sheet) return null;
-                    $steps = $sheet->steps;
-                    if ($steps->isEmpty()) return 0;
+                    // Multi-item: average each sheet's own progress so a WO
+                    // with 2 items where Item 1 is 100% but Item 2 is 50% reads
+                    // as 75% on the list, not 100% (which the old code did by
+                    // only checking the first sheet).
+                    $sheets = $wo->operationSheets;
+                    if ($sheets->isEmpty()) return null;
 
-                    // Prefer weighted progress (sum of completed steps' weight_pct,
-                    // + half-credit for in-progress). Falls back to step-count when
-                    // no weights have been assigned yet — old behavior preserved.
-                    $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
-                    if ($weightSum > 0) {
-                        $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
-                        $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
-                        return round(min(100, $done + $wip * 0.5));
-                    }
-                    // Legacy step-count fallback
-                    $total = $steps->count();
-                    $done = $steps->where('status', 'completed')->count();
-                    $wip  = $steps->where('status', 'in_progress')->count();
-                    return round((($done + $wip * 0.5) / $total) * 100);
+                    $perSheet = $sheets->map(function ($sheet) {
+                        $steps = $sheet->steps;
+                        if ($steps->isEmpty()) return 0;
+                        $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
+                        if ($weightSum > 0) {
+                            $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
+                            $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
+                            return min(100, $done + $wip * 0.5);
+                        }
+                        $total = $steps->count();
+                        $done = $steps->where('status', 'completed')->count();
+                        $wip  = $steps->where('status', 'in_progress')->count();
+                        return (($done + $wip * 0.5) / $total) * 100;
+                    });
+                    return (int) round($perSheet->avg());
                 })(),
             ]),
             'filters'    => [
@@ -110,6 +108,8 @@ class WorkOrderController extends Controller
             'product', 'customer',
             'quotation',
             'rfq:id,job_type',
+            'items',
+            'operationSheets.workOrderItem',
             'operationSheets.steps.machine.workCentre',
             'operationSheets.steps.operator',
             'operationSheets.steps.section',
@@ -120,10 +120,39 @@ class WorkOrderController extends Controller
             'invoices',
         ]);
 
-        $sheet = $workOrder->operationSheets->first();
         $delivery = $workOrder->deliveryOrders->first();
         $invoice = $workOrder->invoices->first();
         $user = auth()->user();
+
+        // Per-item operation sheets — WO is now multi-item, so every item has
+        // its own sheet. The page renders one card per item with its own
+        // progress, and the overall WO progress aggregates across them.
+        $itemSheets = $workOrder->items->values()->map(function ($item, $idx) use ($workOrder) {
+            $sheet = $workOrder->operationSheets->firstWhere('work_order_item_id', $item->id);
+            return [
+                'item' => [
+                    'id'          => $item->id,
+                    'sequence'    => $idx + 1,
+                    'description' => $item->description,
+                    'quantity'    => (float) $item->quantity,
+                    'unit'        => $item->unit ?? 'pcs',
+                ],
+                'sheet' => $sheet ? $this->packSheetForShow($sheet, $workOrder) : null,
+            ];
+        });
+
+        // Aggregate progress = weighted average of each item's progress
+        // (each item carries equal weight in the rollup). Empty if no sheets.
+        $progressList = $itemSheets->pluck('sheet.progress')->filter()->values();
+        $overallProgress = $progressList->isNotEmpty() ? [
+            'pct'             => (int) round($progressList->avg('pct')),
+            'total'           => (int) $progressList->sum('total'),
+            'completed'       => (int) $progressList->sum('completed'),
+            'in_progress'     => (int) $progressList->sum('in_progress'),
+            'pending'         => (int) $progressList->sum('pending'),
+            'estimated_hours' => round((float) $progressList->sum('estimated_hours'), 1),
+            'actual_hours'    => round((float) $progressList->sum('actual_hours'), 1),
+        ] : null;
 
         $canApprove = $user->can('approve work-orders') && $workOrder->status === 'draft';
 
@@ -169,73 +198,10 @@ class WorkOrderController extends Controller
                     'total_amount' => $workOrder->quotation->total_amount,
                     'vat_rate'     => $workOrder->quotation->vat_rate,
                 ] : null,
-                'operation_sheet' => $sheet ? [
-                    'id'    => $sheet->id,
-                    'steps' => $sheet->steps->map(fn($s) => [
-                        'id'              => $s->id,
-                        'sequence'        => $s->sequence,
-                        'operation_name'  => $s->operation_name,
-                        'machine'         => ['name' => $s->machine?->name ?? '—'],
-                        'operator'        => $s->operator?->name ?? null,
-                        'estimated_hours' => (float) ($s->estimated_hours ?? 0),
-                        'actual_hours'    => (float) ($s->actual_hours ?? 0),
-                        'status'          => $s->status,
-                        'started_at'      => $s->started_at?->toIso8601String(),
-                        'completed_at'    => $s->completed_at?->toIso8601String(),
-                    ]),
-                ] : null,
-                'progress' => $sheet ? (function () use ($sheet, $workOrder) {
-                    $steps = $sheet->steps->sortBy('sequence')->values();
-                    $total = $steps->count();
-                    if ($total === 0) return ['pct' => 0, 'completed' => 0, 'total' => 0, 'in_progress' => 0];
-
-                    $completed  = $steps->where('status', 'completed')->count();
-                    $inProgress = $steps->where('status', 'in_progress')->count();
-
-                    // Cap to 100 once the WO has moved past production.
-                    $isTerminal = in_array($workOrder->status, ['qc_passed', 'ready_for_delivery', 'delivered']);
-
-                    // Prefer weighted progress when weights are configured (sum to >0),
-                    // fall back to step-count. Half-credit for in-progress steps.
-                    $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
-                    if ($weightSum > 0) {
-                        $doneW = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
-                        $wipW  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
-                        $pct   = round(min(100, $doneW + $wipW * 0.5));
-                    } else {
-                        $pct   = round((($completed + $inProgress * 0.5) / $total) * 100);
-                    }
-                    if ($isTerminal) $pct = 100;
-
-                    // Current step = first in_progress, else first pending after a completed one.
-                    $current = $steps->firstWhere('status', 'in_progress')
-                            ?? $steps->firstWhere('status', 'pending');
-
-                    $totalEstimated = $steps->sum(fn($s) => (float) ($s->estimated_hours ?? 0));
-                    $totalActual    = $steps->sum(fn($s) => (float) ($s->actual_hours ?? 0));
-
-                    return [
-                        'pct'              => $pct,
-                        'completed'        => $completed,
-                        'in_progress'      => $inProgress,
-                        'pending'          => $steps->where('status', 'pending')->count(),
-                        'total'            => $total,
-                        'estimated_hours'  => round($totalEstimated, 1),
-                        'actual_hours'     => round($totalActual, 1),
-                        // Only meaningful once actual hours have been logged. Otherwise
-                        // dividing by a tiny epsilon gave us absurd 19000% readings.
-                        'efficiency'       => ($totalEstimated > 0 && $totalActual > 0)
-                            ? round(($totalEstimated / $totalActual) * 100)
-                            : null,
-                        'current_step'     => $current ? [
-                            'sequence'       => $current->sequence,
-                            'operation_name' => $current->operation_name,
-                            'section'        => $current->section?->name,
-                            'status'         => $current->status,
-                            'weight_pct'     => (float) $current->weight_pct,
-                        ] : null,
-                    ];
-                })() : null,
+                // Per-item op sheets — array of { item, sheet } pairs.
+                'item_operation_sheets' => $itemSheets->all(),
+                // Overall WO progress aggregated across every item's sheet.
+                'progress' => $overallProgress,
                 'mrp_result' => $workOrder->materialRequisitions->map(fn($m) => [
                     'id'            => $m->id,
                     'material_name' => $m->material_name,
@@ -280,6 +246,78 @@ class WorkOrderController extends Controller
         abort_unless(in_array($workOrder->status, ['draft']), 422, 'Cannot approve this work order.');
         $workOrder->update(['status' => 'approved']);
         return back()->with('success', 'Work order approved.');
+    }
+
+    /**
+     * Build the per-item Operation Sheet payload + progress block. Mirrors the
+     * old single-sheet shape but scoped to one item so the Show page can render
+     * a card per item.
+     */
+    private function packSheetForShow(\App\Models\OperationSheet $sheet, WorkOrder $workOrder): array
+    {
+        $steps = $sheet->steps->sortBy('sequence')->values();
+        $total = $steps->count();
+
+        $completed  = $steps->where('status', 'completed')->count();
+        $inProgress = $steps->where('status', 'in_progress')->count();
+        $isTerminal = in_array($workOrder->status, ['qc_passed', 'ready_for_delivery', 'delivered']);
+
+        if ($total === 0) {
+            $pct = 0;
+        } else {
+            $weightSum = $steps->sum(fn ($s) => (float) $s->weight_pct);
+            if ($weightSum > 0) {
+                $doneW = $steps->where('status', 'completed')->sum(fn ($s) => (float) $s->weight_pct);
+                $wipW  = $steps->where('status', 'in_progress')->sum(fn ($s) => (float) $s->weight_pct);
+                $pct   = (int) round(min(100, $doneW + $wipW * 0.5));
+            } else {
+                $pct   = (int) round((($completed + $inProgress * 0.5) / $total) * 100);
+            }
+            if ($isTerminal) $pct = 100;
+        }
+
+        $current = $steps->firstWhere('status', 'in_progress')
+                ?? $steps->firstWhere('status', 'pending');
+
+        $totalEst = $steps->sum(fn ($s) => (float) ($s->estimated_hours ?? 0));
+        $totalAct = $steps->sum(fn ($s) => (float) ($s->actual_hours ?? 0));
+
+        return [
+            'id'    => $sheet->id,
+            'sheet_number' => $sheet->sheet_number,
+            'steps' => $steps->map(fn ($s) => [
+                'id'              => $s->id,
+                'sequence'        => $s->sequence,
+                'operation_name'  => $s->operation_name,
+                'machine'         => ['name' => $s->machine?->name ?? '—'],
+                'operator'        => $s->operator?->name ?? null,
+                'estimated_hours' => (float) ($s->estimated_hours ?? 0),
+                'actual_hours'    => (float) ($s->actual_hours ?? 0),
+                'weight_pct'      => (float) ($s->weight_pct ?? 0),
+                'status'          => $s->status,
+                'started_at'      => $s->started_at?->toIso8601String(),
+                'completed_at'    => $s->completed_at?->toIso8601String(),
+            ])->all(),
+            'progress' => [
+                'pct'              => $pct,
+                'completed'        => $completed,
+                'in_progress'      => $inProgress,
+                'pending'          => $steps->where('status', 'pending')->count(),
+                'total'            => $total,
+                'estimated_hours'  => round($totalEst, 1),
+                'actual_hours'     => round($totalAct, 1),
+                'efficiency'       => ($totalEst > 0 && $totalAct > 0)
+                    ? (int) round(($totalEst / $totalAct) * 100)
+                    : null,
+                'current_step'     => $current ? [
+                    'sequence'       => $current->sequence,
+                    'operation_name' => $current->operation_name,
+                    'section'        => $current->section?->name,
+                    'status'         => $current->status,
+                    'weight_pct'     => (float) $current->weight_pct,
+                ] : null,
+            ],
+        ];
     }
 
     public function create()

@@ -32,19 +32,24 @@ interface AssignedSection {
     sequence?: number;
     status?: string;
     notes?: string | null;
+    remarks?: string | null;
 }
 
 interface JobItem {
+    id: number | null;
     sequence: number;
     description: string;
     quantity: number;
     unit: string;
+    pcd_note?: string | null;
 }
 
 interface WorkOrder {
     id: number;
     wo_number: string;
     job_number: string | number | null;
+    suggested_job_number?: string | null;
+    department?: string | null;
     customer: string;
     customer_po_no: string | null;
     status: string;
@@ -63,6 +68,7 @@ interface Props {
 interface SectionRow {
     section_id: number;
     notes: string;
+    remarks: string;
     section: SectionLite;
     status?: string;
 }
@@ -86,11 +92,13 @@ function SortableSectionRow({
     row,
     index,
     onNotesChange,
+    onRemarksChange,
     onRemove,
 }: {
     row: SectionRow;
     index: number;
     onNotesChange: (value: string) => void;
+    onRemarksChange: (value: string) => void;
     onRemove: () => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -129,13 +137,22 @@ function SortableSectionRow({
                     {row.section.name_bn && <> · <span>{row.section.name_bn}</span></>}
                 </div>
             </td>
-            <td className="border border-surface-300 px-3 py-2 align-middle">
-                <input
-                    type="text"
+            <td className="border border-surface-300 px-2 py-1.5 align-top">
+                <textarea
                     value={row.notes}
                     onChange={(e) => onNotesChange(e.target.value)}
-                    className="form-input form-input-sm w-full"
+                    rows={2}
+                    className="w-full text-sm text-surface-900 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1 resize-y min-h-[3rem]"
                     placeholder="e.g. Pattern making, Casting, CNC turning…"
+                />
+            </td>
+            <td className="border border-surface-300 px-2 py-1.5 align-top">
+                <textarea
+                    value={row.remarks}
+                    onChange={(e) => onRemarksChange(e.target.value)}
+                    rows={2}
+                    className="w-full text-sm text-surface-900 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1 resize-y min-h-[3rem]"
+                    placeholder="Remarks…"
                 />
             </td>
             <td className="border border-surface-300 px-3 py-3 text-center align-middle w-28">
@@ -163,17 +180,39 @@ export default function SectionAssign({
     assigned_sections,
     available_sections,
 }: Props) {
-    const { data, setData, put, processing, errors } = useForm<{ sections: SectionRow[]; job_number: string }>({
+    const { data, setData, put, processing, errors } = useForm<{
+        sections: SectionRow[];
+        job_number: string;
+        department: string;
+        items: Array<{ id: number | null; description: string; pcd_note: string }>;
+    }>({
         sections: assigned_sections.map((s) => ({
             section_id: s.section_id,
             notes: s.notes ?? '',
+            remarks: s.remarks ?? '',
             section: s.section,
             status: s.status,
         })),
-        // PCD officer enters their own job number on this form. Pre-fills if
-        // already saved so re-edits don't blank it out.
-        job_number: String(work_order.job_number ?? ''),
+        // Pre-fill with the saved job number when present, otherwise the
+        // suggested next sequence from the server. The officer can edit
+        // either before saving.
+        job_number: String(work_order.job_number ?? work_order.suggested_job_number ?? ''),
+        // কার্যবিন্যাস — PCD editable, defaults to PCD per BITAC convention.
+        department: work_order.department ?? '',
+        // PCD-editable copy of the job items (description + per-item note).
+        // Quantity and unit stay read-only — those are commercially binding.
+        items: job_items.map((it) => ({
+            id: it.id,
+            description: it.description ?? '',
+            pcd_note: it.pcd_note ?? '',
+        })),
     });
+
+    const updateItemField = (idx: number, field: 'description' | 'pcd_note', value: string) => {
+        const next = [...data.items];
+        next[idx] = { ...next[idx], [field]: value };
+        setData('items', next);
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -195,7 +234,7 @@ export default function SectionAssign({
     const addSection = (section: SectionLite) => {
         setData('sections', [
             ...data.sections,
-            { section_id: section.id, notes: '', section, status: 'pending' },
+            { section_id: section.id, notes: '', remarks: '', section, status: 'pending' },
         ]);
     };
 
@@ -207,6 +246,13 @@ export default function SectionAssign({
         setData(
             'sections',
             data.sections.map((s) => s.section_id === sectionId ? { ...s, notes } : s),
+        );
+    };
+
+    const updateRemarks = (sectionId: number, remarks: string) => {
+        setData(
+            'sections',
+            data.sections.map((s) => s.section_id === sectionId ? { ...s, remarks } : s),
         );
     };
 
@@ -238,6 +284,12 @@ export default function SectionAssign({
                                 required
                                 className="w-full text-xl font-bold font-mono text-surface-900 bg-transparent border-b-2 border-dashed border-surface-300 focus:border-brand-500 focus:outline-none py-1 -mb-0.5"
                             />
+                            {!work_order.job_number && work_order.suggested_job_number && data.job_number === String(work_order.suggested_job_number) && (
+                                <p className="text-[10px] text-surface-400 mt-1">
+                                    <i className="fi fi-rr-magic-wand text-[9px] leading-none mr-0.5" />
+                                    Auto-suggested — edit if your sequence differs.
+                                </p>
+                            )}
                             {(errors as any).job_number && <p className="form-error">{(errors as any).job_number}</p>}
                             <div className="text-[11px] text-surface-500 mt-1 font-mono">{work_order.wo_number}</div>
                         </div>
@@ -255,11 +307,15 @@ export default function SectionAssign({
                     {/* Section / Customer / Status row */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 border-b border-surface-200">
                         <div className="px-6 py-3 border-r border-surface-200">
-                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">কার্যবিন্যাস</div>
-                            <div className="text-sm font-semibold text-surface-900 mt-0.5">
-                                উৎপাদন নিয়ন্ত্রণ বিভাগ
-                            </div>
-                            <div className="text-[11px] text-surface-500">(PCD)</div>
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold mb-1">কার্যবিন্যাস</div>
+                            <input
+                                type="text"
+                                value={data.department}
+                                onChange={e => setData('department', e.target.value)}
+                                placeholder="উৎপাদন নিয়ন্ত্রণ বিভাগ (PCD)"
+                                className="w-full text-sm font-semibold text-surface-900 bg-transparent border-b border-dashed border-surface-300 focus:border-brand-500 focus:outline-none py-0.5"
+                            />
+                            {(errors as any).department && <p className="form-error">{(errors as any).department}</p>}
                         </div>
                         <div className="px-6 py-3 border-r border-surface-200">
                             <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">ক্রেতা / Customer</div>
@@ -285,26 +341,43 @@ export default function SectionAssign({
                             <thead className="bg-surface-50">
                                 <tr>
                                     <th className="border border-surface-300 px-3 py-2 text-center w-16 font-semibold text-surface-700 text-xs">Sl. No</th>
-                                    <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Description</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Job Description</th>
                                     <th className="border border-surface-300 px-3 py-2 text-center w-24 font-semibold text-surface-700 text-xs">পরিমান (Qty)</th>
                                     <th className="border border-surface-300 px-3 py-2 text-center w-20 font-semibold text-surface-700 text-xs">Unit</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Note</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {job_items.length > 0 ? job_items.map((it) => (
-                                    <tr key={it.sequence}>
+                                {job_items.length > 0 ? job_items.map((it, idx) => (
+                                    <tr key={it.id ?? it.sequence} className="align-top">
                                         <td className="border border-surface-300 px-3 py-2 text-center font-semibold text-surface-700">
                                             {String(it.sequence).padStart(2, '0')}
                                         </td>
-                                        <td className="border border-surface-300 px-3 py-2 text-surface-900">{it.description}</td>
+                                        <td className="border border-surface-300 px-2 py-1.5">
+                                            <textarea
+                                                value={data.items[idx]?.description ?? ''}
+                                                onChange={e => updateItemField(idx, 'description', e.target.value)}
+                                                rows={2}
+                                                className="w-full text-sm text-surface-900 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1 resize-none"
+                                            />
+                                        </td>
                                         <td className="border border-surface-300 px-3 py-2 text-right font-semibold text-surface-900 font-mono">
                                             {it.quantity}
                                         </td>
                                         <td className="border border-surface-300 px-3 py-2 text-center text-surface-700">{it.unit}</td>
+                                        <td className="border border-surface-300 px-2 py-1.5">
+                                            <textarea
+                                                value={data.items[idx]?.pcd_note ?? ''}
+                                                onChange={e => updateItemField(idx, 'pcd_note', e.target.value)}
+                                                rows={2}
+                                                placeholder="PCD note…"
+                                                className="w-full text-xs text-surface-700 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1 resize-none"
+                                            />
+                                        </td>
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={4} className="border border-surface-300 px-3 py-4 text-center text-surface-400 italic text-xs">
+                                        <td colSpan={5} className="border border-surface-300 px-3 py-4 text-center text-surface-400 italic text-xs">
                                             No items linked to this job
                                         </td>
                                     </tr>
@@ -388,6 +461,10 @@ export default function SectionAssign({
                                                                 কার্যকাল<br />
                                                                 <span className="font-normal text-surface-500">(Operation / Task)</span>
                                                             </th>
+                                                            <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
+                                                                মন্তব্য<br />
+                                                                <span className="font-normal text-surface-500">(Remarks)</span>
+                                                            </th>
                                                             <th className="border border-surface-300 px-3 py-2 text-center w-28 text-xs font-semibold text-surface-700">Status</th>
                                                             <th className="border border-surface-300 px-2 py-2 w-12 text-xs font-semibold text-surface-700"></th>
                                                         </tr>
@@ -400,6 +477,9 @@ export default function SectionAssign({
                                                                 index={i}
                                                                 onNotesChange={(value) =>
                                                                     updateNotes(row.section_id, value)
+                                                                }
+                                                                onRemarksChange={(value) =>
+                                                                    updateRemarks(row.section_id, value)
                                                                 }
                                                                 onRemove={() =>
                                                                     removeSection(row.section_id)

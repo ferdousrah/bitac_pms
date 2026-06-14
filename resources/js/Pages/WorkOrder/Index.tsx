@@ -77,7 +77,7 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                 <thead>
                                     <tr>
                                         <SortableHeader label="Job Number" column="job_number" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/work-orders" filters={filters} className="w-32" />
-                                        <th>Product / Customer</th>
+                                        <th>Customer</th>
                                         <SortableHeader label="Qty" column="quantity" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/work-orders" filters={filters} className="w-16 text-right" />
                                         <th className="w-24">Progress</th>
                                         <SortableHeader label="Status" column="status" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/work-orders" filters={filters} className="w-36" />
@@ -100,9 +100,8 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                                     </Link>
                                                 </td>
                                                 <td>
-                                                    <div className="font-semibold text-surface-900 text-sm">{wo.product}</div>
-                                                    <div className="flex items-center gap-1.5 text-xs text-surface-400">
-                                                        <span className="truncate">{wo.customer}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-semibold text-surface-900 text-sm truncate">{wo.customer}</span>
                                                         {wo.job_category && (
                                                             <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-semibold uppercase tracking-wide">
                                                                 {wo.job_category}
@@ -178,8 +177,7 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                                 <span className="font-mono text-sm font-bold text-brand-600">{wo.job_number ?? wo.wo_number}</span>
                                                 <JobTypeBadge type={wo.job_type} size="xs" onlyRnd />
                                             </div>
-                                            <div className="font-semibold text-surface-900 text-sm mt-0.5">{wo.product}</div>
-                                            <div className="text-xs text-surface-400">{wo.customer}</div>
+                                            <div className="font-semibold text-surface-900 text-sm mt-0.5">{wo.customer}</div>
                                         </div>
                                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border shrink-0 ${st.badge}`}>
                                             <i className={`fi ${st.icon} leading-none`} /> {wo.status_label}

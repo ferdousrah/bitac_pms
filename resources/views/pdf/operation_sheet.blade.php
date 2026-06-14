@@ -9,9 +9,9 @@
     <div>
         <div class="section-title">Work Order</div>
         <dl>
-            <dt>WO Number</dt><dd style="font-size:14px;font-family:monospace;color:#1d4ed8;">{{ $sheet->workOrder->wo_number }}</dd>
-            <dt>Product</dt><dd>{{ $sheet->workOrder->product->name }}</dd>
-            <dt>Product Code</dt><dd>{{ $sheet->workOrder->product->code }}</dd>
+            <dt>Job Number</dt><dd style="font-size:14px;font-family:monospace;color:#1d4ed8;">{{ $sheet->workOrder->job_number ?? '—' }}</dd>
+            <dt>Product</dt><dd>{{ $sheet->workOrder->product->name ?? '—' }}</dd>
+            <dt>Product Code</dt><dd>{{ $sheet->workOrder->product->code ?? '—' }}</dd>
             <dt>Quantity</dt><dd>{{ $sheet->workOrder->quantity }} {{ $sheet->workOrder->product->unit ?? '' }}</dd>
             <dt>Customer</dt><dd>{{ $sheet->workOrder->customer->name }}</dd>
             <dt>Due Date</dt><dd>{{ $sheet->workOrder->due_date ?? '—' }}</dd>
@@ -28,7 +28,6 @@
         <dl>
             <dt>Sheet Number</dt><dd>{{ $sheet->sheet_number }}</dd>
             <dt>Total Steps</dt><dd>{{ $sheet->steps->count() }}</dd>
-            <dt>Total Est. Hours</dt><dd>{{ $sheet->steps->sum('estimated_hours') }}h</dd>
         </dl>
     </div>
 </div>
@@ -43,7 +42,6 @@
                 <th>Machine</th>
                 <th>Work Centre</th>
                 <th>Operator</th>
-                <th>Est. Hrs</th>
                 <th>Instructions</th>
                 <th style="width:60px;">Sign-off</th>
             </tr>
@@ -56,7 +54,6 @@
                 <td>{{ $step->machine->name ?? '—' }}</td>
                 <td>{{ $step->machine->workCentre->name ?? '—' }}</td>
                 <td>{{ $step->assignment->operator->name ?? 'Unassigned' }}</td>
-                <td style="text-align:center;font-family:monospace;">{{ $step->estimated_hours }}</td>
                 <td style="font-size:9px;color:#6b7280;">{{ $step->instructions ?? '' }}</td>
                 <td style="border-left:1px solid #e5e7eb;"></td>
             </tr>

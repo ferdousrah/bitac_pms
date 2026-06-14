@@ -68,11 +68,20 @@ class PcdReleaseService
         $progress = $workOrder->pcd_progress;
         $sectionsCount = $workOrder->sections()->count();
 
+        // Item-wise op-sheet progress — how many of the WO's items have a sheet.
+        $itemsTotal   = $workOrder->items()->count();
+        $itemsCovered = $itemsTotal > 0
+            ? max(0, $itemsTotal - $workOrder->itemsMissingOperationSheet()->count())
+            : ($progress['op_sheet'] ? 1 : 0);
+
         return [
             'material_requisition' => [
-                'done'  => $progress['mr'],
-                'label' => 'Material Requisition',
-                'icon'  => 'fi-rr-clipboard-list',
+                'done'     => $progress['mr'],
+                'label'    => 'Material Requisition',
+                'icon'     => 'fi-rr-clipboard-list',
+                // Surfaces in JobDetail as a non-blocking step — the gate
+                // releases without it; PCD can raise an MR later if needed.
+                'optional' => true,
             ],
             'section_assign' => [
                 'done'  => $progress['sections'],
@@ -81,9 +90,11 @@ class PcdReleaseService
                 'count' => $sectionsCount,
             ],
             'operation_sheet' => [
-                'done'  => $progress['op_sheet'],
-                'label' => 'Operation Sheet',
-                'icon'  => 'fi-rr-document',
+                'done'           => $progress['op_sheet'],
+                'label'          => 'Operation Sheet',
+                'icon'           => 'fi-rr-document',
+                'items_total'    => $itemsTotal,
+                'items_covered'  => $itemsCovered,
             ],
             'all_done'  => $progress['all_done'],
             'released'  => $workOrder->released_to_shops_at !== null,

@@ -338,6 +338,28 @@ PROMPT;
             if (!$json) {
                 return response()->json(['error' => 'Could not parse AI response', 'raw' => $raw], 500);
             }
+
+            // Safety net — the prompt asks for "Dear Sir/Madam," as the
+            // opener but a deviant model could still skip it. Prepend it
+            // when missing so the customer-facing letter is always polite.
+            $ensureSalutation = function (?string $body): ?string {
+                if (!$body) return $body;
+                $trimmed = ltrim($body);
+                // Already opens with a "Dear …" line — leave it alone.
+                if (preg_match('/^Dear\b/i', $trimmed)) return $trimmed;
+                return "Dear Sir/Madam,\n\n" . $trimmed;
+            };
+
+            if (isset($json['polished'])) {
+                $json['polished'] = $ensureSalutation($json['polished']);
+            }
+            if (isset($json['suggestions']) && is_array($json['suggestions'])) {
+                foreach ($json['suggestions'] as &$s) {
+                    if (isset($s['text'])) $s['text'] = $ensureSalutation($s['text']);
+                }
+                unset($s);
+            }
+
             return response()->json($json);
         } catch (\Throwable $e) {
             \Log::warning('AI forwarding letter failed: ' . $e->getMessage());
@@ -362,7 +384,7 @@ The preparer drafted this forwarding-letter body (the cover note that ships with
 TASK: Polish it into a formal forwarding letter body, AND propose a matching subject line. Rules:
 - 3-5 short paragraphs, professional government letter register.
 - DO NOT include "Date:", "Ref:", recipient/address block, or a signature line — those are added by the PDF generator automatically.
-- DO start naturally (e.g. "With reference to..." or "Please find enclosed...").
+- MUST start with the salutation "Dear Sir/Madam,\\n\\n" as the very first line, then continue naturally (e.g. "With reference to..." or "Please find enclosed..."). If the writer's original text already opened with a salutation, normalise it to "Dear Sir/Madam,".
 - When referencing the customer's incoming request, use ONLY the customer's own reference number (context.customer_ref_no). NEVER mention "RFQ #" or our internal RFQ id — customers don't recognise it.
 - Reference customer / total naturally when context provides them; do not invent numbers.
 - Keep the writer's intent — don't reword aggressively, just clean it up.
@@ -391,7 +413,7 @@ TASK: Generate 3 distinct forwarding-letter drafts the preparer can use directly
 RULES:
 - Body: 3-5 short paragraphs each, professional government letter register.
 - DO NOT include "Date:", "Ref:", recipient/address block, or a signature line in the body — those are added by the PDF generator automatically.
-- DO start naturally (e.g. "With reference to your enquiry...").
+- MUST start with the salutation "Dear Sir/Madam,\\n\\n" as the very first line of every draft, then continue naturally (e.g. "With reference to your enquiry…").
 - When referencing the customer's incoming request, use ONLY the customer's own reference number (context.customer_ref_no). NEVER write "RFQ #" or any internal id — customers don't recognise it.
 - Each draft should differ in style/emphasis:
   1. CONCISE  — minimal, just the essentials (2-3 short paragraphs).

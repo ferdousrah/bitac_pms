@@ -74,10 +74,9 @@ export default function QCIndex({ inspections, filters }: any) {
                             <select value={filters?.result ?? ''} onChange={e => applyFilters({ result: e.target.value })}
                                 className="form-select !py-2 text-sm w-full sm:w-36">
                                 <option value="">All Results</option>
-                                <option value="pass">Pass</option>
-                                <option value="fail">Fail</option>
-                                <option value="partial">Partial</option>
-                                <option value="conditional">Conditional</option>
+                                <option value="pass">Ok</option>
+                                <option value="fail">Not Ok</option>
+                                <option value="conditional">N/A</option>
                             </select>
                             <div className="flex items-center gap-1.5">
                                 <button type="submit" className="btn-primary btn-sm"><i className="fi fi-rr-search text-xs leading-none" /> Search</button>
@@ -94,12 +93,10 @@ export default function QCIndex({ inspections, filters }: any) {
                                     <tr>
                                         <SortableHeader label="ID" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-20" />
                                         <th>Job #</th>
-                                        <th>Product</th>
+                                        <th>Item</th>
                                         <th>Type</th>
                                         <th>Inspector</th>
                                         <SortableHeader label="Result" column="result" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-28" />
-                                        <th>Pass Qty</th>
-                                        <th>Fail Qty</th>
                                         <SortableHeader label="Date" column="inspection_date" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-28" />
                                         <th className="w-24 text-right">Actions</th>
                                     </tr>
@@ -113,12 +110,25 @@ export default function QCIndex({ inspections, filters }: any) {
                                                 </Link>
                                             </td>
                                             <td>
-                                                <div className="font-bold text-surface-900">{qc.job_number ?? '—'}</div>
-                                                {qc.wo_number && (
-                                                    <div className="text-[11px] text-surface-400 font-mono mt-0.5">{qc.wo_number}</div>
+                                                <div className="font-bold text-surface-900">Job# {qc.job_number ?? '—'}</div>
+                                                <div className="text-[11px] text-surface-400">{qc.customer ?? ''}</div>
+                                            </td>
+                                            <td>
+                                                {qc.item ? (
+                                                    <div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="badge badge-amber text-[10px]">Item {qc.item.sequence}</span>
+                                                            {qc.sheet_number && (
+                                                                <span className="text-[10px] font-mono text-surface-400">Sheet {qc.sheet_number}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-surface-700 mt-0.5 truncate max-w-[260px]">{qc.item.description ?? '—'}</div>
+                                                        <div className="text-[10px] text-surface-400">qty {qc.item.quantity} {qc.item.unit}</div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-surface-300 text-xs italic">WO-wide (legacy)</span>
                                                 )}
                                             </td>
-                                            <td className="text-surface-700">{qc.product}</td>
                                             <td>
                                                 <span className={`badge ${typeBadge[qc.inspection_type] ?? 'badge-slate'}`}>
                                                     {formatType(qc.inspection_type)}
@@ -127,11 +137,9 @@ export default function QCIndex({ inspections, filters }: any) {
                                             <td className="text-surface-600">{qc.inspector}</td>
                                             <td>
                                                 <span className={`badge ${resultBadge[qc.result] ?? 'badge-slate'}`}>
-                                                    {qc.result}
+                                                    {qc.result === 'pass' ? 'Ok' : qc.result === 'fail' ? 'Not Ok' : qc.result === 'conditional' ? 'N/A' : qc.result}
                                                 </span>
                                             </td>
-                                            <td className="font-mono font-semibold text-emerald-600">{qc.qty_passed}</td>
-                                            <td className="font-mono font-semibold text-rose-600">{qc.qty_failed ?? 0}</td>
                                             <td className="text-xs text-surface-500">{qc.inspected_at}</td>
                                             <td>
                                                 <div className="flex items-center justify-end gap-1.5">
@@ -166,10 +174,7 @@ export default function QCIndex({ inspections, filters }: any) {
                                                 #{qc.id}
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="font-bold text-surface-900 text-sm">Job #{qc.job_number ?? '—'}</div>
-                                                {qc.wo_number && (
-                                                    <div className="text-[11px] text-surface-400 font-mono">{qc.wo_number}</div>
-                                                )}
+                                                <div className="font-bold text-surface-900 text-sm">Job# {qc.job_number ?? '—'}</div>
                                                 <div className="text-sm text-surface-700 mt-0.5 truncate">{qc.product}</div>
                                             </div>
                                         </div>
@@ -189,15 +194,7 @@ export default function QCIndex({ inspections, filters }: any) {
                                     </span>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-surface-50">
-                                    <div>
-                                        <div className="text-[10px] text-surface-400 uppercase">Passed</div>
-                                        <div className="font-mono font-semibold text-emerald-600 text-sm">{qc.qty_passed}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-[10px] text-surface-400 uppercase">Failed</div>
-                                        <div className="font-mono font-semibold text-rose-600 text-sm">{qc.qty_failed ?? 0}</div>
-                                    </div>
+                                <div className="flex items-center justify-end pt-2 border-t border-surface-50">
                                     <div className="text-right">
                                         <div className="text-[10px] text-surface-400 uppercase">Date</div>
                                         <div className="text-xs text-surface-600">{qc.inspected_at}</div>
