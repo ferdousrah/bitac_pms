@@ -725,6 +725,11 @@ Route::middleware(['auth'])->group(function () {
             ->names('admin.qc-checkpoints')
             ->parameters(['qc-checkpoints' => 'qcCheckpoint'])
             ->except(['show']);
+        Route::resource('products', \App\Http\Controllers\Admin\ProductController::class)
+            ->middleware('permission:manage materials-master')
+            ->names('admin.products')
+            ->parameters(['products' => 'product'])
+            ->except(['show']);
         Route::post('machines/{machine}/state', [MachineController::class, 'changeState'])
             ->middleware('permission:manage machines')
             ->name('admin.machines.state');

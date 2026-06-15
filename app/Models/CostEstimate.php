@@ -16,6 +16,7 @@ class CostEstimate extends Model
         'pricing_group', 'overhead_pct', 'vat_pct', 'tax_pct', 'times_multiplier', 'job_quantity',
         'material_cost', 'machining_cost', 'surface_cost', 'other_cost',
         'net_cost', 'overhead_amount', 'extra_cost', 'vat_amount', 'tax_amount', 'total', 'grand_total',
+        'grand_total_override',
         'status', 'notes', 'created_by',
     ];
 
@@ -75,7 +76,14 @@ class CostEstimate extends Model
         $tax       = $afterOH * ((float) ($this->tax_pct ?? 0) / 100);
         $total     = $afterOH + $vat + $tax;
         $withTimes = $total * (float) $this->times_multiplier;
-        $grand     = $withTimes * (int) $this->job_quantity;
+        $autoGrand = $withTimes * (int) $this->job_quantity;
+
+        // Honour the planner's manual override (e.g. rounding ৳250,500 →
+        // ৳250,000) — the override sticks even when lines change later.
+        $override   = $this->grand_total_override;
+        $finalGrand = ($override !== null && (float) $override > 0)
+            ? (float) $override
+            : $autoGrand;
 
         $this->fill([
             'material_cost'   => round($material, 2),
@@ -88,7 +96,7 @@ class CostEstimate extends Model
             'vat_amount'      => round($vat, 2),
             'tax_amount'      => round($tax, 2),
             'total'           => round($withTimes, 2),
-            'grand_total'     => round($grand, 2),
+            'grand_total'     => round($finalGrand, 2),
         ])->save();
 
         return $this;
@@ -97,7 +105,12 @@ class CostEstimate extends Model
     public static function generateEstimateNo(): string
     {
         $year = now()->format('Y');
-        $last = static::where('estimate_no', 'like', "EST-{$year}-%")->max('estimate_no');
+        // Ignore the HasCenter global scope — estimate_no's unique index is
+        // global (no center prefix), so the next number must consider rows
+        // across every centre (and legacy rows with NULL center_id).
+        $last = static::withoutGlobalScopes()
+            ->where('estimate_no', 'like', "EST-{$year}-%")
+            ->max('estimate_no');
         $next = $last ? ((int) substr($last, -4)) + 1 : 1;
         return sprintf('EST-%s-%04d', $year, $next);
     }

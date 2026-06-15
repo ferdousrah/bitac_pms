@@ -40,6 +40,7 @@ class MaterialController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validateMaterial($request);
+        $validated['density_kg_in3'] = $this->deriveKgIn3($validated['density_kg_m3'] ?? null);
         Material::create($validated);
         return redirect()->route('admin.materials.index')->with('success', 'Material created.');
     }
@@ -48,7 +49,7 @@ class MaterialController extends Controller
     {
         return Inertia::render('Admin/Materials/CreateEdit', [
             'material' => $material->only([
-                'id', 'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3', 'notes', 'is_active',
+                'id', 'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3', 'notes', 'is_active',
             ]),
             'categories' => \App\Models\MaterialCategory::active()->orderBy('display_order')->orderBy('name')->get(['code', 'name']),
         ]);
@@ -57,8 +58,20 @@ class MaterialController extends Controller
     public function update(Request $request, Material $material)
     {
         $validated = $this->validateMaterial($request, $material->id);
+        $validated['density_kg_in3'] = $this->deriveKgIn3($validated['density_kg_m3'] ?? null);
         $material->update($validated);
         return redirect()->route('admin.materials.index')->with('success', 'Material updated.');
+    }
+
+    /**
+     * Keep kg/In³ in lockstep with kg/m³ so the costing sheet never sees the
+     * two diverge. 1 m³ = 61023.744 in³, so kg/in³ = kg/m³ ÷ 61023.744.
+     * Per BITAC master file's Materials Rate sheet, EN-24 @ 7850 kg/m³ → 0.1286 kg/In³.
+     */
+    private function deriveKgIn3(?float $kgM3): ?float
+    {
+        if ($kgM3 === null || $kgM3 <= 0) return null;
+        return round($kgM3 / 61023.7440947, 5);
     }
 
     public function destroy(Material $material)

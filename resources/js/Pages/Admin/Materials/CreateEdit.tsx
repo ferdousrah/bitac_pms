@@ -89,6 +89,13 @@ export default function MaterialCreateEdit({ material, categories = [] }: any) {
                                     <input type="number" min="0" step="0.01" value={data.density_kg_m3}
                                         onChange={e => setData('density_kg_m3', e.target.value)}
                                         className="form-input font-mono" />
+                                    {/* kg/In³ auto-derived from kg/m³ — kept in lockstep on save.
+                                        Per BITAC master file: EN-24 @ 7850 kg/m³ → 0.1286 kg/In³. */}
+                                    {Number(data.density_kg_m3) > 0 && (
+                                        <p className="text-[11px] text-surface-500 mt-1">
+                                            ≈ <span className="font-mono">{(Number(data.density_kg_m3) / 61023.7440947).toFixed(5)}</span> kg/In³ <span className="text-surface-400">(auto-computed)</span>
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 

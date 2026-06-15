@@ -244,11 +244,11 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">
-                                        Customer Ref / PO No. <span className="form-label-optional">(optional)</span>
+                                        Customer Ref. <span className="form-label-optional">(optional)</span>
                                     </label>
                                     <input type="text" value={data.customer_ref_no}
                                         onChange={e => setData('customer_ref_no', e.target.value)}
-                                        placeholder="e.g. PO-2024-123"
+                                        placeholder="e.g. Ref-2024-123"
                                         className="form-input" />
                                 </div>
                             </div>

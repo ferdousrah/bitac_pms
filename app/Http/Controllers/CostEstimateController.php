@@ -125,7 +125,7 @@ class CostEstimateController extends Controller
                 'customer_id'     => $rfqItem->rfq?->customer_id,
                 'customer_name'   => $rfqItem->rfq?->customer?->name,
             ] : null,
-            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3']),
+            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
             'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -150,9 +150,11 @@ class CostEstimateController extends Controller
                 $jobCategoryId = \App\Models\Rfq::find($rfqId)?->job_category_id;
             }
 
-            $estimate = CostEstimate::create([
-                'estimate_no'      => CostEstimate::generateEstimateNo(),
+            // Retry-on-conflict for the estimate_no — concurrent submits can
+            // race and both compute the same next number before either commits.
+            $estimate = $this->createEstimateWithRetry([
                 'rfq_id'           => $rfqId,
+                // estimate_no injected by createEstimateWithRetry with retry on duplicates.
                 'rfq_item_id'      => $validated['rfq_item_id'] ?? null,
                 'customer_id'      => $validated['customer_id'] ?? null,
                 'job_category_id'  => $jobCategoryId,
@@ -168,6 +170,7 @@ class CostEstimateController extends Controller
                 'tax_pct'          => $validated['tax_pct'] ?? 0,
                 'times_multiplier' => $validated['times_multiplier'] ?? 1,
                 'job_quantity'     => $validated['job_quantity'] ?? 1,
+                'grand_total_override' => $this->normalizeOverride($validated['grand_total_override'] ?? null),
                 'notes'            => $validated['notes'] ?? null,
                 'status'           => 'draft',
                 'created_by'       => auth()->id(),
@@ -555,7 +558,7 @@ class CostEstimateController extends Controller
         return Inertia::render('CostEstimate/Form', [
             'estimate'   => $this->serializeEstimate($costEstimate),
             'rfq'        => null,
-            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3']),
+            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
             'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
@@ -581,6 +584,7 @@ class CostEstimateController extends Controller
                 'tax_pct'          => $validated['tax_pct'] ?? 0,
                 'times_multiplier' => $validated['times_multiplier'] ?? 1,
                 'job_quantity'     => $validated['job_quantity'] ?? 1,
+                'grand_total_override' => $this->normalizeOverride($validated['grand_total_override'] ?? null),
                 'notes'            => $validated['notes'] ?? null,
             ]);
 
@@ -636,6 +640,36 @@ class CostEstimateController extends Controller
         ])->with('success', 'Estimate ready to use in quotation.');
     }
 
+    /** Treat blank/zero override as "no override" so the auto value reapplies. */
+    private function normalizeOverride($value): ?float
+    {
+        if ($value === null || $value === '' || $value === false) return null;
+        $f = (float) $value;
+        return $f > 0 ? $f : null;
+    }
+
+    /**
+     * Create a CostEstimate with retry-on-conflict for the auto-generated
+     * estimate_no. Two concurrent submits can both compute "EST-2026-0002"
+     * before either commits, so on UniqueConstraintViolationException we
+     * regenerate and try again — up to 5 times.
+     */
+    private function createEstimateWithRetry(array $payload): CostEstimate
+    {
+        $attempts = 0;
+        while (true) {
+            try {
+                $payload['estimate_no'] = CostEstimate::generateEstimateNo();
+                return CostEstimate::create($payload);
+            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                if (++$attempts >= 5 || !str_contains((string) $e->getMessage(), 'estimate_no')) {
+                    throw $e;
+                }
+                usleep(50_000); // 50ms back-off
+            }
+        }
+    }
+
     private function saveLines(CostEstimate $estimate, array $lines): void
     {
         foreach ($lines as $idx => $line) {
@@ -688,6 +722,7 @@ class CostEstimateController extends Controller
             'machining_cost'   => $e->machining_cost,
             'surface_cost'     => $e->surface_cost,
             'other_cost'       => $e->other_cost,
+            'grand_total_override' => $e->grand_total_override,
             'net_cost'         => $e->net_cost,
             'overhead_amount'  => $e->overhead_amount,
             'extra_cost'       => $e->extra_cost ?? 0,
@@ -731,6 +766,8 @@ class CostEstimateController extends Controller
             'tax_pct'          => 'nullable|numeric|min:0|max:100',
             'times_multiplier' => 'nullable|numeric|min:0|max:100',
             'job_quantity'     => 'nullable|integer|min:1',
+            // Manual rounding override (e.g. ৳250,500 → ৳250,000). Null/0 = use auto.
+            'grand_total_override' => 'nullable|numeric|min:0',
             'notes'            => 'nullable|string|max:1000',
             'lines'                 => 'nullable|array',
             'lines.*.section'       => 'required|in:material,machining,surface,other',

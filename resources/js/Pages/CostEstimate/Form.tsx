@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo, useState, useCallback, useRef } from 'react';
 import WeightCalculator from '@/Components/Widgets/WeightCalculator';
+import HtCalculator from '@/Components/Widgets/HtCalculator';
 import SearchableSelect from '@/Components/SearchableSelect';
 import axios from 'axios';
 
@@ -75,6 +76,8 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
         tax_pct:          estimate?.tax_pct ?? 0,
         times_multiplier: estimate?.times_multiplier ?? 1,
         job_quantity:     defaultJobQty,
+        // Manual round-off override (e.g. ৳250,500 → ৳250,000). Blank = auto.
+        grand_total_override: estimate?.grand_total_override ?? '',
         notes:            estimate?.notes ?? '',
         lines: [
             ...initLines('material'),
@@ -86,6 +89,8 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
 
     const [weightCalcOpen, setWeightCalcOpen] = useState(false);
     const [weightTargetIdx, setWeightTargetIdx] = useState<number | null>(null);
+    const [htCalcOpen, setHtCalcOpen]       = useState(false);
+    const [htTargetIdx, setHtTargetIdx]     = useState<number | null>(null);
 
     // ── AI: Rate Suggestions ──
     const [rateSuggestions, setRateSuggestions] = useState<Record<number, any>>({});
@@ -294,6 +299,19 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
     const openWeightCalc = (idx: number) => {
         setWeightTargetIdx(idx);
         setWeightCalcOpen(true);
+    };
+
+    const openHtCalc = (idx: number) => {
+        setHtTargetIdx(idx);
+        setHtCalcOpen(true);
+    };
+
+    const onHtApplied = (volumeIn3: number) => {
+        if (htTargetIdx == null) return;
+        updateLine(htTargetIdx, {
+            quantity: volumeIn3.toFixed(4),
+            unit: 'In³',
+        });
     };
 
     const onWeightApplied = (weight: number, materialName?: string) => {
@@ -690,7 +708,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                         />
                     </CostSection>
 
-                    {/* ── C. Heat Treatment Cost ──────────────────── */}
+                    {/* ── C. Heat Treatment Cost (BITAC's "Surface Treatment" bucket) ── */}
                     <CostSection
                         title="Heat Treatment Cost"
                         icon="fi-rr-shine"
@@ -707,6 +725,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                             onRemove={removeLine}
                             lineAmount={lineAmount}
                             total={totals.surface}
+                            onOpenHtCalc={openHtCalc}
                         />
                     </CostSection>
 
@@ -900,8 +919,57 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                                             <span className="font-mono font-semibold">{fmt(totals.total)}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-base pt-2 mt-2 border-t border-white/20">
-                                            <span className="font-bold">Grand Total</span>
-                                            <span className="font-mono font-bold text-2xl text-brand-400">{fmt(totals.grand)}</span>
+                                            <span className="font-bold">
+                                                {Number(data.grand_total_override) > 0 ? 'Auto Grand Total' : 'Grand Total'}
+                                            </span>
+                                            <span className={`font-mono font-bold ${Number(data.grand_total_override) > 0 ? 'text-base text-white/60 line-through' : 'text-2xl text-brand-400'}`}>
+                                                {fmt(totals.grand)}
+                                            </span>
+                                        </div>
+
+                                        {/* Manual round-off override — BITAC planners use this to
+                                            round e.g. ৳250,500 → ৳250,000 without retouching lines. */}
+                                        <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <label className="text-xs text-white/70 font-medium">
+                                                    Override Grand Total <span className="text-white/40 font-normal">(optional)</span>
+                                                </label>
+                                                {Number(data.grand_total_override) > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setData('grand_total_override', '')}
+                                                        className="text-[10px] text-amber-400 hover:text-amber-300 font-medium"
+                                                    >
+                                                        Clear override
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-white/60">৳</span>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={data.grand_total_override ?? ''}
+                                                    onChange={e => setData('grand_total_override', e.target.value)}
+                                                    placeholder={`e.g. ${Math.round(totals.grand / 1000) * 1000}`}
+                                                    className="flex-1 px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/30 font-mono focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                                />
+                                            </div>
+                                            {Number(data.grand_total_override) > 0 && (
+                                                <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                                                    <span className="text-sm font-bold text-amber-300">Final Grand Total</span>
+                                                    <span className="font-mono font-bold text-2xl text-amber-300">
+                                                        {fmt(Number(data.grand_total_override))}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {Number(data.grand_total_override) > 0 && (
+                                                <div className="text-[10px] text-white/40 text-right">
+                                                    Rounded from <span className="font-mono">{fmt(totals.grand)}</span>
+                                                    {' '}({(((Number(data.grand_total_override) - totals.grand) / totals.grand) * 100).toFixed(2)}%)
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -938,6 +1006,14 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, materials, op
                 open={weightCalcOpen}
                 onClose={() => setWeightCalcOpen(false)}
                 onApply={onWeightApplied}
+                materials={materials}
+            />
+
+            {/* Heat Treatment Calculator Modal (mirrors HT Cal + HT Size sheets) */}
+            <HtCalculator
+                open={htCalcOpen}
+                onClose={() => setHtCalcOpen(false)}
+                onApply={onHtApplied}
                 materials={materials}
             />
         </AppLayout>
@@ -991,7 +1067,34 @@ function SubtotalFooter({ total }: { total: number }) {
     );
 }
 
-function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationChange, onRemove, lineAmount, total }: any) {
+// Scope the operation dropdown by section so the planner only sees relevant
+// operations. Matches BITAC's official costing master:
+//   B. Machining Cost      — machining / casting / fabrication
+//   C. Surface Treatment   — surface_treatment / plating (hard chrome, anodise, etc.)
+// Heat treatment is treated as its own category in the operations master but
+// BITAC's costing sheet doesn't have a separate section for it.
+const SECTION_CATEGORIES: Record<string, string[]> = {
+    // BITAC's "Surface Treatment Cost" is the umbrella for heat treatment +
+    // surface treatment + plating ops — same DB bucket, same costing section.
+    surface: ['heat_treatment', 'surface_treatment', 'plating'],
+};
+
+// Column unit sub-label per BITAC master file:
+//   B. Machining Cost        — Hour
+//   C. Heat / Surface Treat. — In³
+//   D. Other Parts           — PCs
+const SECTION_QTY_UNIT: Record<string, string> = {
+    machining: 'Hour',
+    surface:   'In³',
+    other:     'PCs',
+};
+
+function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationChange, onRemove, lineAmount, total, onOpenHtCalc }: any) {
+    const allowed = SECTION_CATEGORIES[section];
+    const filteredOps = allowed
+        ? Object.fromEntries(Object.entries(opsByCategory).filter(([cat]) => allowed.includes(cat)))
+        : opsByCategory;
+    const qtyUnit = SECTION_QTY_UNIT[section] ?? 'Hour';
     return (
         <table className="premium-table w-full" style={{ tableLayout: 'fixed' }}>
             <colgroup>
@@ -1007,9 +1110,15 @@ function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationCh
                 <tr>
                     <th>#</th>
                     <th>Operation</th>
-                    <th>Qty / Hours</th>
+                    <th>
+                        Quantity (Time)
+                        <div className="text-[10px] font-normal text-surface-400 mt-0.5">{qtyUnit}</div>
+                    </th>
                     <th>Unit</th>
-                    <th>Rate (৳)</th>
+                    <th>
+                        Rate (৳)
+                        <div className="text-[10px] font-normal text-surface-400 mt-0.5">৳ / {qtyUnit}</div>
+                    </th>
                     <th className="text-right">Sub-Total (৳)</th>
                     <th></th>
                 </tr>
@@ -1023,7 +1132,7 @@ function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationCh
                                 size="sm"
                                 value={line.operation_id ?? ''}
                                 onChange={(v) => onOperationChange(idx, String(v))}
-                                options={Object.entries(opsByCategory).flatMap(([cat, ops]: any) =>
+                                options={Object.entries(filteredOps).flatMap(([cat, ops]: any) =>
                                     ops.map((o: any) => ({
                                         value: o.id,
                                         label: o.name,
@@ -1040,9 +1149,18 @@ function OperationLines({ lines, section, opsByCategory, onUpdate, onOperationCh
                             )}
                         </td>
                         <td>
-                            <input type="number" min="0" step="0.001" value={line.quantity}
-                                onChange={e => onUpdate(idx, { quantity: e.target.value })}
-                                className="form-input text-xs py-1.5" />
+                            <div className="flex items-center gap-1">
+                                <input type="number" min="0" step="0.001" value={line.quantity}
+                                    onChange={e => onUpdate(idx, { quantity: e.target.value })}
+                                    className="form-input text-xs py-1.5" />
+                                {section === 'surface' && onOpenHtCalc && (
+                                    <button type="button" onClick={() => onOpenHtCalc(idx)}
+                                        title="Open Heat Treatment volume calculator"
+                                        className="btn-ghost btn-icon shrink-0 text-purple-600 hover:bg-purple-50">
+                                        <i className="fi fi-rr-calculator text-xs leading-none" />
+                                    </button>
+                                )}
+                            </div>
                         </td>
                         <td>
                             <input type="text" value={line.unit}

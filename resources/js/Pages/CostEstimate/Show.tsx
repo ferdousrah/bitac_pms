@@ -261,17 +261,38 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                 </div>
                             </div>
 
-                            {/* Grand Total — refined */}
+                            {/* Grand Total — refined. When override is set, the
+                                stored grand_total IS the override; auto = total × job_quantity. */}
                             <div className="relative overflow-hidden">
                                 <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-800" />
                                 <div className="relative px-5 py-5">
                                     <div className="flex items-baseline justify-between mb-1">
-                                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/60 font-bold">Grand Total</span>
+                                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/60 font-bold">
+                                            Grand Total
+                                            {Number(estimate.grand_total_override) > 0 && (
+                                                <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-amber-400/20 text-amber-300 normal-case tracking-normal">
+                                                    <i className="fi fi-rr-edit text-[9px] mr-0.5" /> Rounded
+                                                </span>
+                                            )}
+                                        </span>
                                         <span className="text-[10px] text-white/40 font-mono">BDT</span>
                                     </div>
                                     <div className="font-mono font-bold text-3xl text-white tabular-nums">
                                         {fmt(estimate.grand_total)}
                                     </div>
+                                    {Number(estimate.grand_total_override) > 0 && (() => {
+                                        const auto = Number(estimate.total) * Number(estimate.job_quantity);
+                                        const delta = Number(estimate.grand_total) - auto;
+                                        const pct = auto > 0 ? (delta / auto) * 100 : 0;
+                                        return (
+                                            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/50">
+                                                <span>Auto (calculated): <span className="font-mono">৳ {fmt(auto)}</span></span>
+                                                <span className={delta >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                                                    {delta >= 0 ? '+' : ''}৳ {fmt(delta)} ({pct >= 0 ? '+' : ''}{pct.toFixed(2)}%)
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </CollapsibleCard>
