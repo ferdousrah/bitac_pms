@@ -1,6 +1,6 @@
 # BITAC PMS — Project Context for Claude
 
-> **For Claude**: This file captures the architecture, conventions, and feature inventory. Read this first before making changes. Last major update: 2026-04-14.
+> **For Claude**: This file captures the architecture, conventions, and feature inventory. Read this first before making changes. Last major update: 2026-06-16 (Official letters, RFQ Letters module, email system, quotation VAT/Tax model).
 
 ---
 
@@ -192,6 +192,36 @@ Tailwind font-size classes (`text-[9px]`) don't work in SVG text. Use `fontSize=
 ### 5. PPTX Files
 Upload uses PhpPresentation (server-side). Max 20MB. Slides are text-only — embedded images in PPTX aren't extracted (future: use LibreOffice headless to render as PNG).
 
+## 📝 Official Letters, Quotation Pricing & Email (2026-06)
+
+> Conventions hammered out over many iterations — read before touching these areas.
+
+### Official letter format (one renderer for all letters)
+- **`app/Services/OfficialLetterRenderer.php`** `buildHtml($d, $lang)` is the SINGLE source of the BITAC letterhead letter body (Bangla + English). Used by the quotation **forwarding letter** and the standalone **RFQ letters** — never re-implement the HTML.
+- Layout: Memo No (top-left) / Date (top-right) → Subject → customer Ref → body (justified, no indent, salutation lives in the body) → recipient bottom-left + signatory bottom-right with the **"পক্ষে / For — পরিচালক (কেন্দ্র প্রধান) / Director (Centre Head)"** sign-off.
+- **Signatory ink colour = `#a349a4`** (purple) everywhere (cost estimate, quotation PDF, letters). Labels stay black.
+- Bangla = `font-family: siyamrupali` + Bangla digits; English = default font.
+- Re-quotation: title is just "RE-QUOTATION" (no `(n)`); revision number appended to the END of the Memo No → `…028.51.(2)`.
+
+### RFQ Letters module (IED → "Letters")
+- Table `rfq_letters`, `RfqLetterController`, `Pages/RfqLetter/{Index,Create}.tsx`. Issue an official letter against an RFQ (RFQ optional — selecting it auto-fills customer ref + recipient). **Direct issue, no approval. Signatory is selectable.** PDF in BN & EN. Entry: "Issue Letter" button on RFQ show + Letters index.
+
+### Email system (PDF attachments)
+- Both RFQ letters and quotations email via a compose modal: **From** (defaults to logged-in user; sets From+Reply-To), **To**, **CC** (comma-sep), **Subject**, **Message** (RichTextEditor → sanitised HTML), attachment language toggle, animated sending overlay.
+- Quotation email (`quotations.email` → `emailToCustomer`) attaches **Quotation PDF + Forwarding Letter PDF together** (reuses `pdf()`/`exportForwardingLetterPdf()` via a synthetic `preview=base64` request). Mailables: `RfqLetterMail` (single), `DocumentMail` (multi-attachment).
+- **Needs SMTP** — set `MAIL_*` env (in Coolify for prod) or it flashes an error. RichTextEditor now has a Justify button.
+
+### Quotation VAT/Tax model (IMPORTANT — don't add tax "on top")
+- Quotation **unit prices are VAT & Tax INCLUSIVE** (mirrors the cost estimate). **Grand Total = Σ line amounts**; VAT/Tax are EMBEDDED and extracted for display only: `base = gross/(1+(vat%+tax%)/100)`. VAT/Tax rates are inherited from the source cost estimate (no manual rate inputs).
+- `quotations.show_tax_breakdown` toggle ("Show VAT & Tax to customer"): **ON** → standard tax invoice with **ex-tax line items** + `Subtotal + VAT + Tax = Grand Total`; **OFF** → inclusive line items, Grand Total reads "(incl. VAT & Tax)". Keep 3 calc sites in sync: `store()`, `update()`, `Quotation/Create.tsx`.
+- Cost-estimate **`grand_total_override` flows through**: quotation prefills `unit_price = estimate grand_total / job_quantity` so the rounded override is honoured.
+
+### Transactional-data wipe
+- `Admin/SystemResetController` (super-admin, "DELETE ALL"). When adding any new transactional table, ALSO add it to `TABLES_TO_WIPE` + the `Reset.tsx` GROUPS display, and any upload dir to `STORAGE_DIRS_TO_WIPE`. Master/config (incl. `qc_checkpoints`, stakeholder form templates) is preserved.
+
+### Deployment (Coolify)
+- Dockerfile-based; `docker/entrypoint.sh` auto-runs `migrate --force` + `storage:link` + caches on boot, and Dockerfile builds Vite assets. `git push` → Coolify rebuilds/redeploys (migrations apply automatically). App is a **PWA** — hard-refresh (Ctrl+Shift+R) after deploy to bust the cached bundle. See `docs/DEPLOYMENT.md`.
+
 ## 🚀 Quick Commands
 
 ```bash
@@ -231,6 +261,11 @@ tail -f storage/logs/laravel.log
 | WebRTC | `resources/js/lib/WebRTCManager.ts` |
 | Settings service | `app/Services/SettingService.php` |
 | Chatbot customization | `resources/js/Pages/Admin/ChatbotSettings.tsx` |
+| Official letter renderer (BN/EN) | `app/Services/OfficialLetterRenderer.php` |
+| RFQ Letters module | `app/Http/Controllers/RfqLetterController.php` + `resources/js/Pages/RfqLetter/*` |
+| Email Mailables | `app/Mail/DocumentMail.php` (multi-attach), `app/Mail/RfqLetterMail.php` |
+| Transactional data wipe | `app/Http/Controllers/Admin/SystemResetController.php` |
+| Deployment guide | `docs/DEPLOYMENT.md` (Coolify + Dockerfile) |
 
 ## 📦 What's Been Built (Feature Inventory)
 
