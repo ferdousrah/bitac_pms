@@ -26,19 +26,28 @@ class SystemResetController extends Controller
     private const TABLES_TO_WIPE = [
         // Notifications / audit / comments — touch many entities, wipe first
         'notifications',
+        'customer_notifications',
         'entity_comments',
         'entity_revisions',
 
-        // Delivery + billing
+        // Delivery + billing + completion certificates
+        'completion_certificates',
         'proof_of_deliveries',
         'delivery_orders',
         'invoices',
 
-        // QC / NCRs
+        // QC / NCRs / rework
+        'qc_checklist_items',
         'qc_inspections',
         'ncrs',
+        'rework_orders',
 
         // Production execution
+        'production_message_files',
+        'production_messages',
+        'section_handoff_files',
+        'section_handoffs',
+        'downtime_events',
         'job_executions',
         'production_schedules',
         'operator_assignments',
@@ -46,11 +55,18 @@ class SystemResetController extends Controller
         'operation_sheets',
 
         // Work Order chain
+        'material_requisition_notes',
         'material_requisition_items',
         'material_requisitions',
         'work_order_files',
+        'work_order_items',
         'work_order_sections',
         'work_orders',
+
+        // Gate passes (IED)
+        'gate_pass_condition_notes',
+        'gate_pass_items',
+        'gate_passes',
 
         // Quotation chain
         'customer_responses',
@@ -65,9 +81,28 @@ class SystemResetController extends Controller
         'cost_estimates',
 
         // RFQ chain
+        'rfq_letters',
+        'rfq_automation_logs',
         'rfq_item_files',
         'rfq_items',
         'rfqs',
+
+        // Customer feedback / complaints
+        'complaint_discussions',
+        'complaint_decision_makers',
+        'customer_complaints',
+
+        // Standalone transactional requests / logs
+        'emergency_requests',
+        'consultancy_requests',
+        'service_demand_logs',
+        'maintenance_requests',
+
+        // Stakeholder form submissions (form/section/question TEMPLATES are kept)
+        'stakeholder_form_answers',
+        'stakeholder_form_responses',
+        'stakeholder_form_invitations',
+        'stakeholders',
     ];
 
     /**
@@ -75,8 +110,12 @@ class SystemResetController extends Controller
      * Anything not under these dirs (logos, portfolio, etc.) is left alone.
      */
     private const STORAGE_DIRS_TO_WIPE = [
-        'rfqs', 'cost-estimates', 'quotations', 'work-orders',
-        'customer-responses', 'signatures/approvals',
+        'rfqs', 'rfq-items', 'rfq-letters', 'cost-estimates',
+        'quotations', 'work-orders', 'work-order-files',
+        'section-handoffs', 'production-messages',
+        'customer-responses', 'completion-certificates',
+        'consultancy-requests', 'maintenance-requests',
+        'signatures/approvals',
     ];
 
     public function index(Request $request)

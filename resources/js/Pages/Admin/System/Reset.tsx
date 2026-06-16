@@ -11,8 +11,8 @@ interface Props {
 // instead of dumping raw table names.
 const GROUPS: { label: string; tables: string[] }[] = [
     {
-        label: 'RFQs',
-        tables: ['rfqs', 'rfq_items', 'rfq_item_files'],
+        label: 'RFQs & Letters',
+        tables: ['rfqs', 'rfq_items', 'rfq_item_files', 'rfq_letters', 'rfq_automation_logs'],
     },
     {
         label: 'Cost Estimates',
@@ -24,19 +24,35 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Jobs / Work Orders',
-        tables: ['work_orders', 'work_order_sections', 'work_order_files', 'material_requisitions', 'material_requisition_items'],
+        tables: ['work_orders', 'work_order_items', 'work_order_sections', 'work_order_files', 'material_requisitions', 'material_requisition_items', 'material_requisition_notes'],
     },
     {
         label: 'Operation Sheets & Production',
-        tables: ['operation_sheets', 'operation_steps', 'operator_assignments', 'production_schedules', 'job_executions'],
+        tables: ['operation_sheets', 'operation_steps', 'operator_assignments', 'production_schedules', 'job_executions', 'section_handoffs', 'section_handoff_files', 'production_messages', 'production_message_files', 'downtime_events'],
     },
     {
-        label: 'Delivery, Billing, QC',
-        tables: ['delivery_orders', 'proof_of_deliveries', 'invoices', 'qc_inspections', 'ncrs'],
+        label: 'QC, NCR & Rework',
+        tables: ['qc_inspections', 'qc_checklist_items', 'ncrs', 'rework_orders'],
+    },
+    {
+        label: 'Delivery, Billing & Certificates',
+        tables: ['delivery_orders', 'proof_of_deliveries', 'invoices', 'completion_certificates'],
+    },
+    {
+        label: 'Gate Passes',
+        tables: ['gate_passes', 'gate_pass_items', 'gate_pass_condition_notes'],
+    },
+    {
+        label: 'Feedback & Service Requests',
+        tables: ['customer_complaints', 'complaint_discussions', 'complaint_decision_makers', 'emergency_requests', 'consultancy_requests', 'service_demand_logs', 'maintenance_requests'],
+    },
+    {
+        label: 'Stakeholder Form Responses',
+        tables: ['stakeholder_form_responses', 'stakeholder_form_answers', 'stakeholder_form_invitations', 'stakeholders'],
     },
     {
         label: 'Notifications & Audit Trail',
-        tables: ['notifications', 'entity_comments', 'entity_revisions'],
+        tables: ['notifications', 'customer_notifications', 'entity_comments', 'entity_revisions'],
     },
 ];
 
