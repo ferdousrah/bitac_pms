@@ -21,6 +21,7 @@ export default function QuotationCreate({
     rfq,
     kickoffNote,
     vatRate: defaultVatRate = 15,
+    defaultTaxRate = 0,
     defaultRecipient = '',
     defaultTerms = [],
     defaultCustomerRefNo = '',
@@ -43,14 +44,15 @@ export default function QuotationCreate({
     const { data, setData, post, transform, errors, processing } = useForm<any>({
         rfq_id:            rfq?.id ?? '',
         vat_rate:          String(existing?.vat_rate ?? defaultVatRate),
-        tax_rate:          String(existing?.tax_rate ?? 0),
+        tax_rate:          String(existing?.tax_rate ?? defaultTaxRate),
+        show_tax_breakdown: existing?.show_tax_breakdown ?? false,
         notes:             existing?.notes ?? '',
         items:             initialItems,
         attachments:       [] as File[],
         attachment_kinds:  [] as string[],
         save_as_draft:     false,
         // BITAC letter header
-        memo_no:            existing?.memo_no ?? '',
+        memo_no:            existing?.memo_no ?? '36.06.2692.028.51.',
         memo_date:          existing?.memo_date ?? new Date().toISOString().slice(0, 10),
         discount_type:      (existing?.discount_type ?? '') as '' | 'percent' | 'fixed',
         discount:           String(existing?.discount ?? '0'),
@@ -117,10 +119,10 @@ export default function QuotationCreate({
         setData('items', next);
     };
 
-    // Live totals — unit prices are VAT-INCLUSIVE per BITAC convention,
-    // so the line-item sum IS the grand total. We compute the embedded VAT
-    // portion for display only (so the preparer can see the breakdown).
-    // Tax (separate from VAT, e.g. AIT) is calculated on pre-VAT subtotal and ADDED on top.
+    // Live totals — unit prices are inclusive of BOTH VAT and Tax (mirrors the
+    // cost estimate). So the line-item sum IS the grand total; VAT and Tax are
+    // EMBEDDED portions extracted for display only — never added on top
+    // (otherwise tax gets double-counted against the estimate).
     const { grandTotal, embeddedVat, taxAmount, lineAmounts, discountAmount } = useMemo(() => {
         const vatRate = parseFloat(data.vat_rate) || 0;
         const taxRate = parseFloat(data.tax_rate) || 0;
@@ -129,15 +131,16 @@ export default function QuotationCreate({
             (parseFloat(String(i.quantity)) || 0) * (parseFloat(String(i.unit_price)) || 0)
         );
         const gross = amounts.reduce((a, b) => a + b, 0);
-        const embedded = vatRate > 0 ? gross * vatRate / (100 + vatRate) : 0;
-        const preVatSubtotal = gross - embedded;
-        const tax = taxRate > 0 ? preVatSubtotal * taxRate / 100 : 0;
+        // Both VAT and Tax computed on the same pre-tax base, like the estimate.
+        const base = (vatRate + taxRate) > 0 ? gross / (1 + (vatRate + taxRate) / 100) : gross;
+        const embedded = vatRate > 0 ? base * vatRate / 100 : 0;
+        const tax = taxRate > 0 ? base * taxRate / 100 : 0;
         let discount = 0;
         if (data.discount_type === 'percent') discount = gross * discInput / 100;
         else if (data.discount_type === 'fixed') discount = discInput;
         discount = Math.min(discount, gross);
         return {
-            grandTotal:  gross - discount + tax,
+            grandTotal:  gross - discount,
             embeddedVat: embedded,
             taxAmount:   tax,
             lineAmounts: amounts,
@@ -402,26 +405,32 @@ export default function QuotationCreate({
                             )}
                             {errors.items && <p className="form-error mt-2">{errors.items}</p>}
 
-                            {/* VAT + Tax rate inputs */}
-                            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="form-group !mb-0">
-                                    <label className="form-label">VAT Rate (%)</label>
-                                    <input type="number" min={0} max={100} step="0.01"
-                                        value={data.vat_rate}
-                                        onChange={e => setData('vat_rate', e.target.value)}
-                                        className="form-input font-mono"
-                                        placeholder="15" />
-                                    <p className="form-hint">Embedded — already included in unit prices</p>
+                            {/* VAT & Tax are inherited from the cost estimate and already
+                                embedded in the unit prices. The preparer only decides whether
+                                to break them out on the customer's copy. */}
+                            <div className="mt-5 rounded-xl border border-surface-200 bg-surface-50/60 p-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm font-semibold text-surface-800">Show VAT &amp; Tax to customer</p>
+                                        <p className="text-xs text-surface-500 mt-0.5">
+                                            {data.show_tax_breakdown
+                                                ? `VAT (${parseFloat(data.vat_rate) || 0}%) and Tax (${parseFloat(data.tax_rate) || 0}%) will be itemised on the PDF and customer portal.`
+                                                : 'Grand Total prints as “(incl. VAT & Tax)” — no separate VAT/Tax rows.'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={data.show_tax_breakdown}
+                                        onClick={() => setData('show_tax_breakdown', !data.show_tax_breakdown)}
+                                        className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors ${data.show_tax_breakdown ? 'bg-brand-500' : 'bg-surface-300'}`}
+                                    >
+                                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${data.show_tax_breakdown ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                    </button>
                                 </div>
-                                <div className="form-group !mb-0">
-                                    <label className="form-label">Tax Rate (%) <span className="form-label-optional">(e.g. AIT)</span></label>
-                                    <input type="number" min={0} max={100} step="0.01"
-                                        value={data.tax_rate}
-                                        onChange={e => setData('tax_rate', e.target.value)}
-                                        className="form-input font-mono"
-                                        placeholder="0" />
-                                    <p className="form-hint">Added on top of subtotal — separate from VAT</p>
-                                </div>
+                                <p className="text-[11px] text-surface-400 mt-2">
+                                    Rates are inherited from the cost estimate and already included in the unit prices.
+                                </p>
                             </div>
 
                             {/* Discount input — type toggle + amount */}
@@ -469,12 +478,24 @@ export default function QuotationCreate({
                                     <span className="text-xs font-semibold text-surface-300 uppercase tracking-wider">Quotation Totals</span>
                                 </div>
                                 <div className="space-y-2.5 text-sm">
-                                    {(embeddedVat > 0 || taxAmount > 0 || discountAmount > 0) && (
+                                    {((data.show_tax_breakdown && (embeddedVat > 0 || taxAmount > 0)) || discountAmount > 0) && (
                                         <div className="space-y-1 pb-2 border-b border-white/10">
-                                            {embeddedVat > 0 && (
+                                            {(data.show_tax_breakdown || discountAmount > 0) && (
                                                 <div className="flex justify-between text-surface-300 text-xs">
-                                                    <span>Embedded VAT @ {parseFloat(data.vat_rate) || 0}%</span>
-                                                    <span className="font-mono tabular-nums">{fmt(embeddedVat)}</span>
+                                                    <span>Subtotal{data.show_tax_breakdown ? ' (excl. VAT & Tax)' : ''}</span>
+                                                    <span className="font-mono tabular-nums">{fmt(data.show_tax_breakdown ? grandTotal + discountAmount - embeddedVat - taxAmount : grandTotal + discountAmount)}</span>
+                                                </div>
+                                            )}
+                                            {data.show_tax_breakdown && embeddedVat > 0 && (
+                                                <div className="flex justify-between text-surface-300 text-xs">
+                                                    <span>VAT @ {parseFloat(data.vat_rate) || 0}%</span>
+                                                    <span className="font-mono tabular-nums">+ {fmt(embeddedVat)}</span>
+                                                </div>
+                                            )}
+                                            {data.show_tax_breakdown && taxAmount > 0 && (
+                                                <div className="flex justify-between text-surface-300 text-xs">
+                                                    <span>Tax @ {parseFloat(data.tax_rate) || 0}%</span>
+                                                    <span className="font-mono tabular-nums">+ {fmt(taxAmount)}</span>
                                                 </div>
                                             )}
                                             {discountAmount > 0 && (
@@ -483,17 +504,13 @@ export default function QuotationCreate({
                                                     <span className="font-mono tabular-nums">− {fmt(discountAmount)}</span>
                                                 </div>
                                             )}
-                                            {taxAmount > 0 && (
-                                                <div className="flex justify-between text-surface-300 text-xs">
-                                                    <span>Tax @ {parseFloat(data.tax_rate) || 0}%</span>
-                                                    <span className="font-mono tabular-nums">+ {fmt(taxAmount)}</span>
-                                                </div>
-                                            )}
                                         </div>
                                     )}
                                     <div className="flex justify-between items-center pt-1">
                                         <div>
-                                            <span className="text-sm font-semibold text-surface-100">Grand Total</span>
+                                            <span className="text-sm font-semibold text-surface-100">
+                                                Grand Total{!data.show_tax_breakdown && (embeddedVat > 0 || taxAmount > 0) ? ' (incl. VAT & Tax)' : ''}
+                                            </span>
                                             <div className="text-[10px] text-surface-400 mt-0.5">
                                                 {(data.items as LineItem[]).length} item{(data.items as LineItem[]).length === 1 ? '' : 's'}
                                             </div>

@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router, useForm } from '@inertiajs/react';
+import { Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
+import RichTextEditor from '@/Components/RichTextEditor';
 import RevisionTimeline from '@/Components/RevisionTimeline';
 import ApprovalActionModal, { ApprovalAction } from '@/Components/ApprovalActionModal';
 import JobTypeBadge from '@/Components/JobTypeBadge';
@@ -211,6 +212,22 @@ export default function QuotationShow({
     canSubmitForApproval, canApprove, canReject, canRequestChanges, canSendToCustomer, canConvert,
     canRecordResponse, canCreateRevision,
 }: any) {
+    // Unit prices are stored VAT/Tax-inclusive. When the preparer opts to itemise
+    // VAT/Tax, line items are shown EX-tax so they reconcile with the additive
+    // Subtotal + VAT + Tax = Grand Total layout.
+    const qHasTax = (Number(quotation.vat_amount) || 0) + (Number(quotation.tax_amount) || 0) > 0;
+    const qShowBreakdown = !!quotation.show_tax_breakdown && qHasTax;
+    const qTaxFactor = 1 + ((Number(quotation.vat_rate) || 0) + (Number(quotation.tax_rate) || 0)) / 100;
+    const exTax = (v: any) => (qShowBreakdown && qTaxFactor > 0 ? Number(v) / qTaxFactor : Number(v));
+
+    // Re-quotations read just "Re-Quotation"; the revision number rides at the
+    // end of the Memo No. (e.g. "…028.51.(2)") instead of in the title.
+    const isRevision = quotation.version > 1;
+    const titleLabel = isRevision ? 'Re-Quotation' : 'Quotation';
+    const memoNoDisplay = quotation.memo_no
+        ? (isRevision ? `${String(quotation.memo_no).replace(/\s*$/, '')}(${quotation.version})` : quotation.memo_no)
+        : '';
+
     const [forwardOpen, setForwardOpen] = useState(false);
     const forwardForm = useForm<any>({ forwarded_to_user_id: '', reason: '' });
     const sendForm    = useForm({});
@@ -246,6 +263,41 @@ export default function QuotationShow({
             url: est.pdf_url,
             title: `Cost Estimate ${est.estimate_no}`,
             subtitle: `${est.item_desc ?? est.job_name} · Pricing ${est.pricing_group}`,
+        });
+    };
+
+    // Email-to-customer modal state
+    const authUser = (usePage().props as any)?.auth?.user;
+    const hasForwarding = !!(quotation.forwarding_letter && String(quotation.forwarding_letter).trim().length > 0);
+    const [mail, setMail] = useState<{ open: boolean; from: string; to: string; cc: string; subject: string; message: string; lang: 'bn' | 'en'; includeFwd: boolean; sending: boolean }>({
+        open: false, from: '', to: '', cc: '', subject: '', message: '', lang: 'bn', includeFwd: true, sending: false,
+    });
+    const openMail = () => setMail({
+        open: true,
+        from: authUser?.email ?? '',
+        to: quotation.customer_email ?? '',
+        cc: '',
+        subject: `Quotation Q-${String(quotation.id).padStart(5, '0')}${typeof quotation.customer === 'string' && quotation.customer ? ` — ${quotation.customer}` : ''}`,
+        message: `<p>Dear ${(typeof quotation.customer === 'string' && quotation.customer) || 'Sir/Madam'},</p><p>Please find attached our quotation${hasForwarding ? ' along with the forwarding letter' : ''} for your kind consideration.</p><p>Best regards,<br>Bangladesh Industrial Technical Assistance Centre (BITAC)</p>`,
+        lang: 'bn',
+        includeFwd: hasForwarding,
+        sending: false,
+    });
+    const sendMail = () => {
+        setMail(s => ({ ...s, sending: true }));
+        router.post(`/quotations/${quotation.id}/email`, {
+            from_email: mail.from.trim() || undefined,
+            email: mail.to.trim() || undefined,
+            cc: mail.cc.trim() || undefined,
+            subject: mail.subject,
+            message: mail.message,
+            lang: mail.lang,
+            include_forwarding: mail.includeFwd,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => setMail(s => ({ ...s, open: false, sending: false })),
+            onError:   () => setMail(s => ({ ...s, sending: false })),
+            onFinish:  () => setMail(s => ({ ...s, sending: false })),
         });
     };
 
@@ -307,7 +359,7 @@ export default function QuotationShow({
     };
 
     return (
-        <AppLayout header={`${quotation.version > 1 ? `Re-Quotation (${quotation.version})` : 'Quotation'} #${quotation.id}`}>
+        <AppLayout header={`${titleLabel} #${quotation.id}`}>
             <div className="space-y-6 animate-fade-in">
 
                 {/* ── Revision chain banner ──────────────────────────── */}
@@ -350,7 +402,7 @@ export default function QuotationShow({
                                 <div>
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <h2 className="text-lg font-bold text-surface-900">
-                                            {quotation.version > 1 ? `Re-Quotation (${quotation.version})` : 'Quotation'} #{quotation.id}
+                                            {titleLabel} #{quotation.id}
                                         </h2>
                                         {currentRevisionNo !== null && (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-bold font-mono" title={`Change revision ${currentRevisionNo}`}>
@@ -365,7 +417,7 @@ export default function QuotationShow({
                                     <p className="text-sm text-surface-500 mt-0.5">{quotation.customer}</p>
                                     {quotation.memo_no && (
                                         <p className="text-xs text-surface-400 mt-0.5">
-                                            <i className="fi fi-rr-document text-[10px] leading-none" /> নং: <span className="font-mono font-semibold text-surface-700">{quotation.memo_no}</span>
+                                            <i className="fi fi-rr-document text-[10px] leading-none" /> নং: <span className="font-mono font-semibold text-surface-700">{memoNoDisplay}</span>
                                         </p>
                                     )}
                                     {quotation.customer_ref_no && (
@@ -432,8 +484,8 @@ export default function QuotationShow({
                                                     <td className="px-5 py-3 text-xs text-surface-400 font-mono">{idx + 1}</td>
                                                     <td className="px-3 py-3 text-surface-800">{li.description}</td>
                                                     <td className="px-3 py-3 text-right font-mono text-surface-700 tabular-nums">{Number(li.quantity).toLocaleString('en-IN')}</td>
-                                                    <td className="px-3 py-3 text-right font-mono text-surface-700 tabular-nums">{fmt(li.unit_price)}</td>
-                                                    <td className="px-5 py-3 text-right font-mono font-bold text-surface-900 tabular-nums">{fmt(li.amount)}</td>
+                                                    <td className="px-3 py-3 text-right font-mono text-surface-700 tabular-nums">{fmt(exTax(li.unit_price))}</td>
+                                                    <td className="px-5 py-3 text-right font-mono font-bold text-surface-900 tabular-nums">{fmt(exTax(li.amount))}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -455,29 +507,39 @@ export default function QuotationShow({
                                         const tax   = Number(quotation.tax_amount ?? 0);
                                         const disc  = Number(quotation.discount ?? 0);
                                         const total = Number(quotation.total_amount ?? 0);
+                                        const hasTax = vat > 0 || tax > 0;
+                                        const showBreakdown = qShowBreakdown;
+                                        // Standard tax invoice when itemised: ex-tax Subtotal,
+                                        // then VAT + Tax = Grand Total. Otherwise all-inclusive.
                                         const subtotal = total - vat - tax + disc;
                                         return (
                                             <>
-                                                <div className="flex items-center justify-between text-surface-600">
-                                                    <span>Subtotal</span>
-                                                    <span className="font-mono tabular-nums">{fmt(subtotal)}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-surface-600">
-                                                    <span>VAT <span className="text-[10px] text-surface-400">({quotation.vat_rate}%)</span></span>
-                                                    <span className="font-mono tabular-nums">+ {fmt(vat)}</span>
-                                                </div>
+                                                {(showBreakdown || disc > 0) && (
+                                                    <div className="flex items-center justify-between text-surface-600">
+                                                        <span>Subtotal</span>
+                                                        <span className="font-mono tabular-nums">{fmt(showBreakdown ? subtotal : total + disc)}</span>
+                                                    </div>
+                                                )}
+                                                {showBreakdown && vat > 0 && (
+                                                    <div className="flex items-center justify-between text-surface-600">
+                                                        <span>VAT <span className="text-[10px] text-surface-400">({quotation.vat_rate}%)</span></span>
+                                                        <span className="font-mono tabular-nums">+ {fmt(vat)}</span>
+                                                    </div>
+                                                )}
+                                                {showBreakdown && tax > 0 && (
+                                                    <div className="flex items-center justify-between text-surface-600">
+                                                        <span>Tax <span className="text-[10px] text-surface-400">({quotation.tax_rate}%)</span></span>
+                                                        <span className="font-mono tabular-nums">+ {fmt(tax)}</span>
+                                                    </div>
+                                                )}
                                                 {disc > 0 && (
                                                     <div className="flex items-center justify-between text-emerald-700">
                                                         <span>Discount {quotation.discount_type === 'percent' ? '(%)' : '(৳)'}</span>
                                                         <span className="font-mono tabular-nums">− {fmt(disc)}</span>
                                                     </div>
                                                 )}
-                                                <div className="flex items-center justify-between text-surface-600">
-                                                    <span>Tax <span className="text-[10px] text-surface-400">({quotation.tax_rate}%)</span></span>
-                                                    <span className="font-mono tabular-nums">+ {fmt(tax)}</span>
-                                                </div>
                                                 <div className="flex items-center justify-between pt-2 border-t border-surface-200 mt-2">
-                                                    <span className="text-base font-bold text-surface-900">Grand Total</span>
+                                                    <span className="text-base font-bold text-surface-900">Grand Total{!showBreakdown && hasTax ? ' (incl. VAT & Tax)' : ''}</span>
                                                     <span className="text-xl font-bold font-mono text-surface-900 tabular-nums">{fmt(total)}</span>
                                                 </div>
                                             </>
@@ -844,7 +906,7 @@ export default function QuotationShow({
                                 {quotation.memo_no && (
                                     <div>
                                         <dt className="text-xs text-surface-400 font-medium">Memo No.</dt>
-                                        <dd className="text-sm font-mono font-semibold text-surface-800 mt-0.5 break-all">{quotation.memo_no}</dd>
+                                        <dd className="text-sm font-mono font-semibold text-surface-800 mt-0.5 break-all">{memoNoDisplay}</dd>
                                     </div>
                                 )}
 
@@ -925,22 +987,42 @@ export default function QuotationShow({
                                     Preview / Download PDF
                                 </button>
 
-                                {/* Forwarding Letter PDF — only when one is written */}
+                                {/* Forwarding Letter PDF — Bangla & English variants */}
                                 {quotation.forwarding_letter && quotation.forwarding_letter.trim().length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setEstimatePdf({
-                                            open:     true,
-                                            url:      `/quotations/${quotation.id}/forwarding-letter/pdf?preview=base64`,
-                                            title:    `Forwarding Letter — Q-${String(quotation.id).padStart(5, '0')}`,
-                                            subtitle: quotation.forwarding_letter_subject ?? '',
-                                        })}
-                                        className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-sm font-semibold transition-colors"
-                                    >
-                                        <i className="fi fi-rr-envelope text-sm leading-none" />
-                                        Forwarding Letter PDF
-                                    </button>
+                                    <div>
+                                        <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400 mb-1.5 flex items-center gap-1.5">
+                                            <i className="fi fi-rr-envelope text-[11px] leading-none" /> Forwarding Letter PDF
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {([['bn', 'বাংলা'], ['en', 'English']] as const).map(([lng, label]) => (
+                                                <button
+                                                    key={lng}
+                                                    type="button"
+                                                    onClick={() => setEstimatePdf({
+                                                        open:     true,
+                                                        url:      `/quotations/${quotation.id}/forwarding-letter/pdf?preview=base64&lang=${lng}`,
+                                                        title:    `Forwarding Letter (${label}) — Q-${String(quotation.id).padStart(5, '0')}`,
+                                                        subtitle: quotation.forwarding_letter_subject ?? '',
+                                                    })}
+                                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-sm font-semibold transition-colors"
+                                                >
+                                                    <i className="fi fi-rr-file-pdf text-sm leading-none" />
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
+
+                                {/* Email to Customer — quotation + forwarding letter together */}
+                                <button
+                                    type="button"
+                                    onClick={openMail}
+                                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-sm font-semibold transition-colors"
+                                >
+                                    <i className="fi fi-rr-envelope text-sm leading-none" />
+                                    Email to Customer
+                                </button>
 
                                 {/* Send to Customer */}
                                 {canSendToCustomer && (
@@ -1102,6 +1184,95 @@ export default function QuotationShow({
                 subtitle={estimatePdf.subtitle}
                 onClose={() => setEstimatePdf(s => ({ ...s, open: false }))}
             />
+
+            {/* ─── Email to Customer modal ───────────────────────────── */}
+            {mail.open && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => !mail.sending && setMail(s => ({ ...s, open: false }))}>
+                    <div className="relative overflow-hidden bg-white rounded-2xl shadow-xl w-full max-w-3xl animate-fade-in" onClick={e => e.stopPropagation()}>
+                        {mail.sending && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-white/85 backdrop-blur-sm">
+                                <style>{`
+                                    @keyframes planeFly { 0%{transform:translate(-16px,10px) rotate(-8deg);opacity:0} 25%{opacity:1} 70%{opacity:1} 100%{transform:translate(18px,-12px) rotate(-8deg);opacity:0} }
+                                    @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:.35} 50%{transform:scale(1.18);opacity:.7} }
+                                    @keyframes dotPulse { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+                                `}</style>
+                                <div className="relative w-20 h-20 flex items-center justify-center">
+                                    <span className="absolute inset-0 rounded-full bg-brand-100" style={{ animation: 'ringPulse 1.6s ease-in-out infinite' }} />
+                                    <span className="absolute inset-0 rounded-full border-4 border-brand-200 border-t-brand-500 animate-spin" />
+                                    <i className="fi fi-rr-paper-plane text-brand-600 text-2xl relative" style={{ animation: 'planeFly 1.2s ease-in-out infinite' }} />
+                                </div>
+                                <div className="text-sm font-semibold text-surface-700">
+                                    Sending email
+                                    <span style={{ animation: 'dotPulse 1.4s infinite' }}>.</span>
+                                    <span style={{ animation: 'dotPulse 1.4s infinite .2s' }}>.</span>
+                                    <span style={{ animation: 'dotPulse 1.4s infinite .4s' }}>.</span>
+                                </div>
+                                <div className="text-[11px] text-surface-400">Attaching the documents and delivering now</div>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2 px-5 py-4 border-b border-surface-100">
+                            <i className="fi fi-rr-envelope text-sky-500 text-sm leading-none" />
+                            <h3 className="text-sm font-bold text-surface-900">Email Quotation to Customer</h3>
+                            <button onClick={() => setMail(s => ({ ...s, open: false }))} className="ml-auto w-7 h-7 inline-flex items-center justify-center rounded-lg text-surface-400 hover:bg-surface-100">
+                                <i className="fi fi-rr-cross-small text-base leading-none" />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-3.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">From</label>
+                                    <input type="email" value={mail.from} onChange={e => setMail(s => ({ ...s, from: e.target.value }))} className="form-input" placeholder="your.name@bitac.gov.bd" />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">To</label>
+                                    <input type="email" value={mail.to} onChange={e => setMail(s => ({ ...s, to: e.target.value }))} className="form-input" placeholder="customer@example.com" />
+                                </div>
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">CC <span className="form-label-optional">(optional)</span></label>
+                                <input type="text" value={mail.cc} onChange={e => setMail(s => ({ ...s, cc: e.target.value }))} className="form-input" placeholder="one@x.com, two@y.com" />
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Subject</label>
+                                <input type="text" value={mail.subject} onChange={e => setMail(s => ({ ...s, subject: e.target.value }))} className="form-input" required />
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Message</label>
+                                <RichTextEditor value={mail.message} onChange={(html) => setMail(s => ({ ...s, message: html }))} placeholder="Write your message…" minHeight="180px" />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                                {hasForwarding && (
+                                    <label className="inline-flex items-center gap-2 text-sm text-surface-700 cursor-pointer">
+                                        <input type="checkbox" checked={mail.includeFwd} onChange={e => setMail(s => ({ ...s, includeFwd: e.target.checked }))} className="rounded border-surface-300" />
+                                        Attach forwarding letter
+                                    </label>
+                                )}
+                                {hasForwarding && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-surface-500">Forwarding letter language:</span>
+                                        {(['bn', 'en'] as const).map(lng => (
+                                            <button key={lng} type="button" onClick={() => setMail(s => ({ ...s, lang: lng }))}
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${mail.lang === lng ? 'bg-brand-500 text-white border-brand-500' : 'bg-surface-50 text-surface-600 border-surface-200 hover:bg-surface-100'}`}>
+                                                {lng === 'bn' ? 'বাংলা' : 'English'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-[11px] text-surface-400">
+                                <i className="fi fi-rr-paperclip text-[10px] leading-none mr-1" />
+                                Attachments: Quotation PDF{hasForwarding && mail.includeFwd ? ' + Forwarding Letter PDF' : ''}.
+                            </p>
+                        </div>
+                        <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-surface-100">
+                            <button onClick={() => setMail(s => ({ ...s, open: false }))} className="btn-ghost" disabled={mail.sending}>Cancel</button>
+                            <button onClick={sendMail} className="btn-primary" disabled={mail.sending || !mail.subject.trim()}>
+                                <i className="fi fi-rr-paper-plane text-sm leading-none" /> {mail.sending ? 'Sending…' : 'Send Email'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ─── Attachment Lightbox ───────────────────────────────── */}
             <FilePreviewModal

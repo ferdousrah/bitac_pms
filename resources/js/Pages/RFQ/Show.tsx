@@ -241,6 +241,9 @@ export default function RFQShow({ rfq }: any) {
                                     Prepare Quotation
                                 </Link>
                             )}
+                            <Link href={`/rfq-letters/create?rfq_id=${rfq.id}`} className="btn-outline btn-sm">
+                                <i className="fi fi-rr-envelope text-xs leading-none" /> Issue Letter
+                            </Link>
                             <Link href={`/rfqs/${rfq.id}/edit`} className="btn-outline btn-sm">
                                 <i className="fi fi-rr-pencil text-xs leading-none" /> Edit
                             </Link>

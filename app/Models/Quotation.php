@@ -12,7 +12,7 @@ class Quotation extends Model
     protected $fillable = [
         'center_id', 'rfq_id', 'customer_id', 'work_order_id', 'job_category_id', 'created_by', 'version',
         'material_cost', 'labour_cost', 'overhead_cost', 'profit_margin',
-        'discount', 'vat_rate', 'vat_amount', 'tax_rate', 'tax_amount', 'total_amount',
+        'discount', 'vat_rate', 'vat_amount', 'tax_rate', 'tax_amount', 'show_tax_breakdown', 'total_amount',
         'validity_days', 'status', 'notes',
         'sent_to_customer_at', 'customer_responded_at', 'parent_quotation_id', 'customer_po_no',
         // BITAC official quotation letter fields
@@ -28,6 +28,7 @@ class Quotation extends Model
             'memo_date'             => 'date',
             'customer_ref_date'     => 'date',
             'terms'                 => 'array',
+            'show_tax_breakdown'    => 'boolean',
         ];
     }
 

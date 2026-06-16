@@ -40,6 +40,7 @@ use App\Http\Controllers\QcController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RfqController;
+use App\Http\Controllers\RfqLetterController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ShopFloorController;
 use App\Http\Controllers\WIPController;
@@ -465,6 +466,8 @@ Route::middleware(['auth'])->group(function () {
     // Forwarding letter as a separate PDF — same letterhead.
     Route::get('quotations/{quotation}/forwarding-letter/pdf', [QuotationController::class, 'exportForwardingLetterPdf'])
         ->name('quotations.forwarding-letter.pdf');
+    Route::post('quotations/{quotation}/email', [QuotationController::class, 'emailToCustomer'])
+        ->name('quotations.email');
     // Approver hands off their pending row to someone outside the chain.
     Route::post('quotations/{quotation}/forward-approval', [QuotationController::class, 'forwardApproval'])
         ->middleware('permission:approve quotations')
@@ -487,6 +490,16 @@ Route::middleware(['auth'])->group(function () {
     Route::get('quotations-export/pdf', [QuotationController::class, 'exportPdf'])
         ->middleware('permission:view quotations')
         ->name('quotations.export.pdf');
+
+    // RFQ Letters — issue official BITAC letters against an RFQ (Bangla/English),
+    // print as PDF or email to the customer.
+    Route::resource('rfq-letters', RfqLetterController::class)
+        ->except(['show'])
+        ->parameters(['rfq-letters' => 'rfqLetter']);
+    Route::get('rfq-letters/{rfqLetter}/pdf', [RfqLetterController::class, 'pdf'])
+        ->name('rfq-letters.pdf');
+    Route::post('rfq-letters/{rfqLetter}/email', [RfqLetterController::class, 'email'])
+        ->name('rfq-letters.email');
 
     // Work Orders
     Route::resource('work-orders', WorkOrderController::class)

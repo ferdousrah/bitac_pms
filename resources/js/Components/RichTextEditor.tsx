@@ -30,6 +30,7 @@ const TOOLS: Tool[] = [
     { cmd: 'justifyLeft',         icon: 'fi-rr-align-left',    title: 'Align left' },
     { cmd: 'justifyCenter',       icon: 'fi-rr-align-center',  title: 'Align centre' },
     { cmd: 'justifyRight',        icon: 'fi-rr-align-right',   title: 'Align right' },
+    { cmd: 'justifyFull',         icon: 'fi-rr-align-justify', title: 'Justify' },
     { cmd: '__divider__', divider: true, title: '' },
     { cmd: 'removeFormat',        icon: 'fi-rr-eraser',        title: 'Clear formatting' },
 ];

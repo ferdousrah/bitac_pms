@@ -244,6 +244,7 @@ class CustomerRfqController extends Controller
                     'vat_amount'   => (float) $visibleQuotation->vat_amount,
                     'tax_rate'     => (float) $visibleQuotation->tax_rate,
                     'tax_amount'   => (float) $visibleQuotation->tax_amount,
+                    'show_tax_breakdown' => (bool) $visibleQuotation->show_tax_breakdown,
                     'discount'     => (float) ($visibleQuotation->discount ?? 0),
                     'status'       => $visibleQuotation->status,
                     'created_at'   => $visibleQuotation->created_at->format('d M Y'),

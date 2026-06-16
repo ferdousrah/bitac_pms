@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CostEstimate;
 use App\Models\Customer;
 use App\Models\Quotation;
 use App\Models\Rfq;
@@ -87,9 +88,17 @@ class QuotationController extends Controller
 
             // BITAC quotations follow the convention: Unit Price is INCLUDING VAT & TAX
             // (no separate VAT row — see sample re-quotation 36.06.2692.028.51.028(2).26.92).
-            // The cost estimate stores `total` as the per-unit VAT-inclusive price
-            // (net + overhead + vat, times multiplier). We use that directly.
-            $unitPrice = $estimate ? round((float) $estimate->total, 2) : null;
+            // Derive the per-unit price from the estimate's grand_total / job_quantity
+            // so a manual grand-total override (e.g. rounded ৳604,800 → ৳600,000)
+            // flows through to the quotation. With no override grand_total ==
+            // total × job_quantity, so this equals the per-unit `total`.
+            $unitPrice = null;
+            if ($estimate) {
+                $estQty = (int) $estimate->job_quantity;
+                $unitPrice = $estQty > 0
+                    ? round((float) $estimate->grand_total / $estQty, 2)
+                    : round((float) $estimate->total, 2);
+            }
 
             return [
                 'rfq_item_id'  => $i->id,
@@ -101,6 +110,21 @@ class QuotationController extends Controller
                 'estimate_id'  => $estimate?->id,
             ];
         })->values() : [];
+
+        // Pull VAT/Tax rates from the source cost estimate so the quotation
+        // inherits whatever was entered during costing (e.g. AIT/tax %). Fall
+        // back to the first item's estimate, then to config defaults.
+        $sourceEstimate = null;
+        if ($estId = $request->query('estimate_id')) {
+            $sourceEstimate = CostEstimate::find($estId);
+        }
+        if (!$sourceEstimate && $rfq) {
+            $sourceEstimate = $rfq->items
+                ->flatMap->costEstimates
+                ->where('status', '!=', 'draft')
+                ->sortByDesc('id')
+                ->first() ?? $rfq->items->flatMap->costEstimates->sortByDesc('id')->first();
+        }
 
         // Pre-fill the recipient block from the customer's stored address (the customer
         // model holds contact_person/address — IED preparer can edit before sending).
@@ -134,7 +158,8 @@ class QuotationController extends Controller
                 'items'       => $items,
             ] : null,
             'customers'    => Customer::where('is_active', true)->get(['id', 'name']),
-            'vatRate'      => config('app.vat_rate', 15),
+            'vatRate'      => $sourceEstimate ? (float) $sourceEstimate->vat_pct : config('app.vat_rate', 15),
+            'defaultTaxRate' => $sourceEstimate ? (float) ($sourceEstimate->tax_pct ?? 0) : 0,
             'kickoffNote'  => $request->query('kickoff_note'),
             'sourceEstimateId' => $request->query('estimate_id'),
             'defaultRecipient'      => $defaultRecipient,
@@ -207,6 +232,7 @@ class QuotationController extends Controller
                 'version'           => $quotation->version,
                 'vat_rate'          => (float) $quotation->vat_rate,
                 'tax_rate'          => (float) ($quotation->tax_rate ?? 0),
+                'show_tax_breakdown' => (bool) $quotation->show_tax_breakdown,
                 'notes'             => $quotation->notes,
                 'memo_no'           => $quotation->memo_no,
                 'memo_date'         => $quotation->memo_date?->format('Y-m-d'),
@@ -277,6 +303,7 @@ class QuotationController extends Controller
             'discount_type'           => 'nullable|in:percent,fixed',
             'discount'                => 'nullable|numeric|min:0',
             'tax_rate'                => 'nullable|numeric|min:0|max:100',
+            'show_tax_breakdown'      => 'boolean',
             'forwarding_letter_subject' => 'nullable|string|max:255',
             'forwarding_letter'       => 'nullable|string',
         ]);
@@ -286,13 +313,18 @@ class QuotationController extends Controller
         foreach ($validated['items'] as $item) {
             $grossTotal += ((float) $item['quantity']) * ((float) $item['unit_price']);
         }
+        // Unit prices are inclusive of BOTH VAT and Tax (mirrors the cost
+        // estimate, where VAT & Tax are computed on the same pre-tax base and
+        // baked into the total). So both are EMBEDDED here — extracted from the
+        // gross for display, never added on top (otherwise tax is double-counted).
         $vatRate   = (float) $validated['vat_rate'];
-        $vatAmount = $vatRate > 0 ? round($grossTotal * $vatRate / (100 + $vatRate), 2) : 0.0;
-        $subtotal  = round($grossTotal - $vatAmount, 2);
+        $taxRate2  = (float) ($validated['tax_rate'] ?? 0);
+        $base      = ($vatRate + $taxRate2) > 0 ? $grossTotal / (1 + ($vatRate + $taxRate2) / 100) : $grossTotal;
+        $vatAmount  = $vatRate  > 0 ? round($base * $vatRate  / 100, 2) : 0.0;
+        $taxAmount2 = $taxRate2 > 0 ? round($base * $taxRate2 / 100, 2) : 0.0;
+        $subtotal  = round($grossTotal - $vatAmount - $taxAmount2, 2);
 
-        // Discount + tax (same rules as the create path)
-        $taxRate2 = (float) ($validated['tax_rate'] ?? 0);
-        $taxAmount2 = $taxRate2 > 0 ? round($subtotal * $taxRate2 / 100, 2) : 0.0;
+        // Discount (same rules as the create path)
         $discountType2 = $validated['discount_type'] ?? null;
         $discountInput2 = (float) ($validated['discount'] ?? 0);
         $discountAmount2 = match ($discountType2) {
@@ -301,7 +333,7 @@ class QuotationController extends Controller
             default   => 0.0,
         };
         $discountAmount2 = min($discountAmount2, $grossTotal);
-        $total = round($grossTotal - $discountAmount2 + $taxAmount2, 2);
+        $total = round($grossTotal - $discountAmount2, 2);
 
         $cleanTerms = collect($validated['terms'] ?? [])
             ->map(fn($t) => trim((string) $t))
@@ -309,13 +341,15 @@ class QuotationController extends Controller
             ->values()
             ->all();
 
-        \DB::transaction(function () use ($quotation, $validated, $subtotal, $vatRate, $vatAmount, $total, $taxRate2, $taxAmount2, $discountAmount2, $discountType2, $cleanTerms) {
+        $showTaxBreakdown = $request->boolean('show_tax_breakdown');
+        \DB::transaction(function () use ($quotation, $validated, $subtotal, $vatRate, $vatAmount, $total, $taxRate2, $taxAmount2, $showTaxBreakdown, $discountAmount2, $discountType2, $cleanTerms) {
             $quotation->update([
                 'material_cost'     => $subtotal,
                 'vat_rate'          => $vatRate,
                 'vat_amount'        => $vatAmount,
                 'tax_rate'          => $taxRate2,
                 'tax_amount'        => $taxAmount2,
+                'show_tax_breakdown' => $showTaxBreakdown,
                 'discount'          => $discountAmount2,
                 'discount_type'     => $discountType2,
                 'total_amount'      => $total,
@@ -379,6 +413,7 @@ class QuotationController extends Controller
             'rfq_id'                  => 'required|exists:rfqs,id',
             'vat_rate'                => 'required|numeric|min:0|max:100',
             'tax_rate'                => 'nullable|numeric|min:0|max:100',
+            'show_tax_breakdown'      => 'boolean',
             'validity_days'           => 'nullable|integer|min:1',
             'notes'                   => 'nullable|string',
             'items'                   => 'required|array|min:1',
@@ -413,17 +448,18 @@ class QuotationController extends Controller
         foreach ($validated['items'] as $item) {
             $grossTotal += ((float) $item['quantity']) * ((float) $item['unit_price']);
         }
+        // Unit prices are inclusive of BOTH VAT and Tax (mirrors the cost
+        // estimate, where VAT & Tax are computed on the same pre-tax base and
+        // baked into the total). So both are EMBEDDED — extracted from the gross
+        // for the PDF/audit break-up, never added on top (would double-count tax).
         $vatRate   = (float) $validated['vat_rate'];
-        // Embedded VAT extraction: gross × rate / (100 + rate)
-        $vatAmount = $vatRate > 0
-            ? round($grossTotal * $vatRate / (100 + $vatRate), 2)
-            : 0.0;
-        // Tax (AIT etc.) — applied on the PRE-VAT subtotal and ADDED on top of gross.
         $taxRate   = (float) ($validated['tax_rate'] ?? 0);
-        $subtotal  = round($grossTotal - $vatAmount, 2);
-        $taxAmount = $taxRate > 0 ? round($subtotal * $taxRate / 100, 2) : 0.0;
+        $base      = ($vatRate + $taxRate) > 0 ? $grossTotal / (1 + ($vatRate + $taxRate) / 100) : $grossTotal;
+        $vatAmount = $vatRate > 0 ? round($base * $vatRate / 100, 2) : 0.0;
+        $taxAmount = $taxRate > 0 ? round($base * $taxRate / 100, 2) : 0.0;
+        $subtotal  = round($grossTotal - $vatAmount - $taxAmount, 2);
 
-        // Discount — applied on the gross before tax. Type can be 'percent' or 'fixed'.
+        // Discount — applied on the gross. Type can be 'percent' or 'fixed'.
         $discountType = $validated['discount_type'] ?? null;
         $discountInput = (float) ($validated['discount'] ?? 0);
         $discountAmount = match ($discountType) {
@@ -434,7 +470,7 @@ class QuotationController extends Controller
         // Cap discount at gross — never produce a negative quote.
         $discountAmount = min($discountAmount, $grossTotal);
 
-        $total = round($grossTotal - $discountAmount + $taxAmount, 2);
+        $total = round($grossTotal - $discountAmount, 2);
 
         $saveAsDraft = $request->boolean('save_as_draft');
 
@@ -460,6 +496,7 @@ class QuotationController extends Controller
             'vat_amount'     => $vatAmount,
             'tax_rate'       => $taxRate,
             'tax_amount'     => $taxAmount,
+            'show_tax_breakdown' => $request->boolean('show_tax_breakdown'),
             'total_amount'   => $total,
             'validity_days'  => $validated['validity_days'] ?? 90,
             'notes'          => $validated['notes'] ?? null,
@@ -603,6 +640,7 @@ class QuotationController extends Controller
                 'rfq_id'          => $quotation->rfq_id,
                 'job_type'        => $quotation->rfq?->job_type ?? 'regular',
                 'customer'        => $quotation->customer?->name ?? $quotation->rfq?->customer?->name ?? '',
+                'customer_email'  => $quotation->customer?->email ?? $quotation->rfq?->customer?->email,
                 'customer_po_no'  => $quotation->customer_po_no,
                 'parent_quotation_id' => $quotation->parent_quotation_id,
                 'sent_to_customer_at'  => $quotation->sent_to_customer_at?->format('d M Y'),
@@ -632,6 +670,7 @@ class QuotationController extends Controller
                 'vat_amount'      => $quotation->vat_amount,
                 'tax_rate'        => $quotation->tax_rate,
                 'tax_amount'      => $quotation->tax_amount,
+                'show_tax_breakdown' => (bool) $quotation->show_tax_breakdown,
                 'total_amount'    => $quotation->total_amount,
                 'validity_days'   => $quotation->validity_days,
                 'notes'           => $quotation->notes,
@@ -955,6 +994,7 @@ class QuotationController extends Controller
                 'vat_amount'          => $quotation->vat_amount,
                 'tax_rate'            => $quotation->tax_rate,
                 'tax_amount'          => $quotation->tax_amount,
+                'show_tax_breakdown'  => $quotation->show_tax_breakdown,
                 'total_amount'        => $quotation->total_amount,
                 'validity_days'       => $quotation->validity_days,
                 'notes'               => $quotation->notes,
@@ -1191,39 +1231,31 @@ class QuotationController extends Controller
         if ($signerPhone !== '') $contactParts[] = 'Phone: ' . $signerPhone;
         $contactLine = implode(' &nbsp;|&nbsp; ', $contactParts);
 
-        $html = <<<HTML
-<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">
-    <tr>
-        <td style="font-size: 11pt; color: #000;"><b>Ref No.</b> - {$refNo}</td>
-        <td style="font-size: 11pt; color: #000; text-align: right;"><b>Date:</b> {$issued}</td>
-    </tr>
-</table>
-<div style="text-align: center; margin-bottom: 14pt;">
-    <div style="font-size: 14pt; font-weight: bold; color: #000; letter-spacing: 1.5pt;">FORWARDING LETTER</div>
-</div>
-{$recipientHtml}
-<div style="margin-bottom: 6pt; font-size: 11.5pt; color: #000;"><b>Subject:</b> {$subject}</div>
-<div style="margin-top: 14pt; font-size: 11pt; color: #000; line-height: 1.65;">
-    {$bodyHtml}
-</div>
-<div style="margin-top: 28pt; font-size: 11pt; color: #000;">
-    <div style="margin-bottom: 4pt;">Best Regards,</div>
-    <div style="margin-top: 4pt;">{$signatureImgHtml}</div>
-    <div style="border-top: 0.75pt solid #000; width: 180pt; margin-top: 2pt;"></div>
-    <div style="margin-top: 4pt;"><b>{$signerName}</b></div>
-HTML;
-        if ($signerDesignation !== '') {
-            $html .= '<div style="font-size: 9.5pt; color: #4b5563;">' . $signerDesignation . '</div>';
-        }
-        if ($signerCenter !== '') {
-            $html .= '<div style="font-size: 9.5pt; color: #4b5563;">' . $signerCenter . '</div>';
-        }
-        if ($contactLine !== '') {
-            $html .= '<div style="font-size: 9pt; color: #6b7280; margin-top: 1pt;">' . $contactLine . '</div>';
-        }
-        $html .= '</div>';
-
+        // ── BITAC official letter layout (Bangla + English) ────────────────
         $lang = $request->query('lang') === 'en' ? 'en' : 'bn';
+
+        // Memo No. — re-quotations carry the revision number at the end.
+        $memoFwd = (string) ($quotation->memo_no ?? '');
+        if ($quotation->version > 1) {
+            $memoFwd = rtrim($memoFwd) . '(' . $quotation->version . ')';
+        }
+
+        $html = app(\App\Services\OfficialLetterRenderer::class)->buildHtml([
+            'memoNo'            => $memoFwd,
+            'issued'            => $issued,
+            'subject'           => $quotation->forwarding_letter_subject ?? 'Quotation — Forwarding Letter',
+            'custRefNo'         => $quotation->customer_ref_no,
+            'custRefDate'       => $quotation->customer_ref_date?->format('d/m/Y'),
+            'recipientBlock'    => $quotation->recipient_block,
+            'bodyHtml'          => $bodyHtml,
+            'signerName'        => $signer?->name,
+            'signerDesignation' => $signer?->designation,
+            'signerCenter'      => $signerCenterRaw,
+            'signerEmail'       => $signer?->email,
+            'signerPhone'       => $signer?->phone,
+            'signatureImgHtml'  => $signatureImgHtml,
+        ], $lang);
+
         $bytes = app(\App\Services\BitacLetterhead::class)->render($html, "Forwarding Letter {$quotationLabel}", null, $lang);
         $filename = "forwarding-letter-{$quotationLabel}" . ($lang === 'en' ? '-EN' : '') . '.pdf';
 
@@ -1241,6 +1273,88 @@ HTML;
             'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
             'Content-Length'      => strlen($bytes),
         ]);
+    }
+
+    /**
+     * Email the quotation (and, optionally, its forwarding letter) to the
+     * customer as PDF attachments. Reuses the existing PDF generators.
+     */
+    public function emailToCustomer(Request $request, Quotation $quotation)
+    {
+        $validated = $request->validate([
+            'email'              => 'nullable|email',
+            'cc'                 => 'nullable|string|max:1000',
+            'from_email'         => 'nullable|email',
+            'subject'            => 'required|string|max:255',
+            'message'            => 'nullable|string|max:5000',
+            'lang'               => 'nullable|in:bn,en',
+            'include_forwarding' => 'nullable|boolean',
+        ]);
+
+        $quotation->loadMissing('customer', 'rfq.customer');
+        $customer = $quotation->customer ?? $quotation->rfq?->customer;
+        $to = $validated['email'] ?? $customer?->email;
+        if (!$to) {
+            return back()->with('error', 'No customer email on file. Add one to the customer, or provide an email address.');
+        }
+
+        $lang = ($validated['lang'] ?? 'bn') === 'en' ? 'en' : 'bn';
+
+        // CC — comma/semicolon separated; keep only valid addresses.
+        $ccList = collect(preg_split('/[,;]+/', (string) ($validated['cc'] ?? '')))
+            ->map(fn ($e) => trim($e))
+            ->filter(fn ($e) => $e !== '' && filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->unique()->values()->all();
+
+        $fromEmail = $validated['from_email'] ?? auth()->user()?->email;
+        $fromName  = auth()->user()?->name;
+
+        // Build attachments by reusing the existing PDF generators (base64 path).
+        $grab = fn ($resp) => base64_decode(json_decode($resp->getContent(), true)['data'] ?? '');
+        $qNo  = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT);
+
+        $files = [[
+            'data' => $grab($this->pdf(new \Illuminate\Http\Request(['preview' => 'base64']), $quotation)),
+            'name' => "Quotation-{$qNo}.pdf",
+        ]];
+
+        $includeFwd = $request->boolean('include_forwarding', true);
+        $hasFwd = trim((string) $quotation->forwarding_letter) !== '';
+        if ($includeFwd && $hasFwd) {
+            $files[] = [
+                'data' => $grab($this->exportForwardingLetterPdf(new \Illuminate\Http\Request(['preview' => 'base64', 'lang' => $lang]), $quotation)),
+                'name' => "Forwarding-Letter-{$qNo}.pdf",
+            ];
+        }
+
+        // Compose the email body — rich-text HTML, sanitised; fall back to default.
+        $message = trim((string) ($validated['message'] ?? ''));
+        if (trim(strip_tags($message)) === '') {
+            $name = $customer?->contact_person ?? $customer?->name ?? 'Sir/Madam';
+            $message = '<p>Dear ' . e($name) . ',</p>'
+                . '<p>Please find attached our quotation ' . $qNo
+                . ($includeFwd && $hasFwd ? ' along with the forwarding letter' : '')
+                . ' for your kind consideration.</p>'
+                . '<p>Best regards,<br>Bangladesh Industrial Technical Assistance Centre (BITAC)</p>';
+        }
+        $messageHtml = $this->sanitizeLetterHtml($message);
+
+        try {
+            \Illuminate\Support\Facades\Mail::send(new \App\Mail\DocumentMail(
+                toEmail: $to,
+                subjectLine: $validated['subject'],
+                messageHtml: $messageHtml,
+                files: $files,
+                ccList: $ccList,
+                fromEmail: $fromEmail,
+                fromName: $fromName,
+            ));
+        } catch (\Throwable $e) {
+            \Log::error('Quotation email failed: ' . $e->getMessage());
+            return back()->with('error', 'Could not send email: ' . $e->getMessage());
+        }
+
+        return back()->with('success', "Quotation emailed to {$to}.");
     }
 
     /**
@@ -1371,6 +1485,11 @@ HTML;
         $quotationNo = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . ' v' . $quotation->version;
 
         $memoNo     = $quotation->memo_no ?? '';
+        // For re-quotations, the revision number rides at the END of the Memo No.
+        // (e.g. "…028.51.(2)") instead of in the title.
+        if ($quotation->version > 1) {
+            $memoNo = rtrim($memoNo) . '(' . $quotation->version . ')';
+        }
         $custRefNo  = $quotation->customer_ref_no ?? '';
         $custRefDt  = $quotation->customer_ref_date?->format('d/m/Y') ?? '';
         $recipient  = $quotation->recipient_block ?? '';
@@ -1394,11 +1513,12 @@ HTML;
             . '</table>';
 
         // ─────────────────────────────────────────────────────────────────────
-        // Title — English-only. Revisions show "RE-QUOTATION (n)".
+        // Title — English-only. Revisions read "RE-QUOTATION" (the revision
+        // number is carried at the end of the Memo No., not in the title).
         $isRevision = $quotation->version > 1;
-        $titleEn    = $isRevision ? "RE-QUOTATION ({$quotation->version})" : 'QUOTATION';
+        $titleEn    = $isRevision ? 'RE-QUOTATION' : 'QUOTATION';
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div style="font-size: 14pt; font-weight: bold; color: #000; letter-spacing: 1.5pt;">' . $titleEn . '</div>'
+            . '<div style="font-size: 14pt; font-weight: bold; color: #000; letter-spacing: 0.3pt;">' . $titleEn . '</div>'
             . '</div>';
 
         // ─────────────────────────────────────────────────────────────────────
@@ -1448,6 +1568,20 @@ HTML;
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9.5pt; font-weight: bold; text-align: center; vertical-align: middle;">Total Price</th>';
         $itemsHtml .= '</tr>';
 
+        $vatAmount = (float) ($quotation->vat_amount ?? 0);
+        $taxAmount = (float) ($quotation->tax_amount ?? 0);
+        $vatRate   = (float) ($quotation->vat_rate ?? 0);
+        $taxRate   = (float) ($quotation->tax_rate ?? 0);
+        $discAmount = (float) ($quotation->discount ?? 0);
+        $discType   = $quotation->discount_type ?? null;
+        $hasTax = ($vatAmount > 0 || $taxAmount > 0);
+        $showBreakdown = (bool) $quotation->show_tax_breakdown && $hasTax;
+        // In breakdown mode the line items are shown EX-VAT/Tax so they reconcile
+        // with the additive Subtotal + VAT + Tax = Grand Total layout. The unit
+        // prices are stored VAT/Tax-inclusive, so divide out the combined rate.
+        $taxFactor = 1 + ($vatRate + $taxRate) / 100;
+        $exUnit = fn($v) => $showBreakdown && $taxFactor > 0 ? (float) $v / $taxFactor : (float) $v;
+
         if ($lineItems->isEmpty()) {
             $itemsHtml .= '<tr><td colspan="6" style="border: 0.75pt solid #000; padding: 10pt; text-align: center; font-style: italic; font-size: 10pt;">No line items</td></tr>';
         } else {
@@ -1459,20 +1593,15 @@ HTML;
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; line-height: 1.4;">' . nl2br($esc($li->description)) . '</td>';
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $fmt($li->quantity) . '</td>';
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $esc($unit) . '</td>';
-                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($li->unit_price) . '</td>';
-                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($li->amount) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($exUnit($li->unit_price)) . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($exUnit($li->amount)) . '</td>';
                 $itemsHtml .= '</tr>';
             }
         }
 
-        // Bottom rows INSIDE the items table — Subtotal, VAT, Tax, Grand Total
-        // shown separately so the customer sees the tax break-up clearly.
-        $vatAmount = (float) ($quotation->vat_amount ?? 0);
-        $taxAmount = (float) ($quotation->tax_amount ?? 0);
-        $vatRate   = (float) ($quotation->vat_rate ?? 0);
-        $taxRate   = (float) ($quotation->tax_rate ?? 0);
-        $discAmount = (float) ($quotation->discount ?? 0);
-        $discType   = $quotation->discount_type ?? null;
+        // Bottom rows INSIDE the items table — Subtotal, VAT, Tax, Grand Total.
+        // Subtotal = grand total less the embedded VAT/Tax (and add back discount),
+        // so Subtotal + VAT + Tax − Discount reconciles to the Grand Total exactly.
         $subtotal  = (float) $total - $vatAmount - $taxAmount + $discAmount;
 
         $sumRow = function (string $label, string $value, bool $bold = false) {
@@ -1483,19 +1612,30 @@ HTML;
                 . '</tr>';
         };
 
-        $itemsHtml .= $sumRow('Subtotal', $fmt($subtotal));
-        // VAT / Discount / Tax rows only render when they contribute something
-        // to the final figure — keeps the totals block tight on clean quotations.
-        if ($vatAmount > 0) {
-            $itemsHtml .= $sumRow('VAT (' . rtrim(rtrim(number_format($vatRate, 2, '.', ''), '0'), '.') . '%)', $fmt($vatAmount));
+        $rateLbl = fn($r) => rtrim(rtrim(number_format($r, 2, '.', ''), '0'), '.');
+
+        if ($showBreakdown) {
+            // Standard tax invoice: ex-tax Subtotal, then VAT + Tax = Grand Total.
+            $itemsHtml .= $sumRow('Subtotal', $fmt($subtotal));
+            if ($vatAmount > 0) {
+                $itemsHtml .= $sumRow('VAT (' . $rateLbl($vatRate) . '%)', '+ ' . $fmt($vatAmount));
+            }
+            if ($taxAmount > 0) {
+                $itemsHtml .= $sumRow('Tax (' . $rateLbl($taxRate) . '%)', '+ ' . $fmt($taxAmount));
+            }
+            if ($discAmount > 0) {
+                $itemsHtml .= $sumRow('Discount', '− ' . $fmt($discAmount));
+            }
+            $itemsHtml .= $sumRow('Grand Total', $fmt($total), true);
+        } else {
+            // All-inclusive unit prices — Grand Total reads "(incl. VAT & Tax)".
+            if ($discAmount > 0) {
+                $itemsHtml .= $sumRow('Subtotal', $fmt((float) $total + $discAmount));
+                $itemsHtml .= $sumRow('Discount', '− ' . $fmt($discAmount));
+            }
+            $grandLabel = $hasTax ? 'Grand Total (incl. VAT &amp; Tax)' : 'Grand Total';
+            $itemsHtml .= $sumRow($grandLabel, $fmt($total), true);
         }
-        if ($discAmount > 0) {
-            $itemsHtml .= $sumRow('Discount', '− ' . $fmt($discAmount));
-        }
-        if ($taxAmount > 0) {
-            $itemsHtml .= $sumRow('Tax (' . rtrim(rtrim(number_format($taxRate, 2, '.', ''), '0'), '.') . '%)', $fmt($taxAmount));
-        }
-        $itemsHtml .= $sumRow('Grand Total', $fmt($total), true);
         $itemsHtml .= '</table>';
 
         // Amount in words — sits just below the items table, left-aligned.
@@ -1551,15 +1691,15 @@ HTML;
             .   '<td width="55%"></td>'
             .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5;">'
             .     '<div>' . $signatureImg . '</div>'
-            .     '<div>(' . $esc($signerName) . ')</div>'
-            .     '<div>' . $esc($signerDesignation) . '</div>'
-            .     '<div>' . $esc($signerCenter) . '</div>';
+            .     '<div style="color: #a349a4;">(' . $esc($signerName) . ')</div>'
+            .     '<div style="color: #a349a4;">' . $esc($signerDesignation) . '</div>'
+            .     '<div style="color: #a349a4;">' . $esc($signerCenter) . '</div>';
         if ($signerEmail) {
-            $signatureBlock .= '<div style="margin-top: 2pt;"><b>Email:</b> '
+            $signatureBlock .= '<div style="margin-top: 2pt; color: #a349a4;"><b>Email:</b> '
                 . '<u>' . $esc($signerEmail) . '</u></div>';
         }
         if ($signerPhone) {
-            $signatureBlock .= '<div><b>Phone:</b> ' . $esc($signerPhone) . '</div>';
+            $signatureBlock .= '<div style="color: #a349a4;"><b>Phone:</b> ' . $esc($signerPhone) . '</div>';
         }
         $signatureBlock .= '</td>'
             . '</tr>'

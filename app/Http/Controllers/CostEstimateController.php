@@ -897,7 +897,7 @@ class CostEstimateController extends Controller
 
         // ─── Centered title ────────────────────────────────────────────
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div style="font-size: 13pt; font-weight: bold; color: #000; letter-spacing: 1pt;">COST ESTIMATE</div>'
+            . '<div style="font-size: 13pt; font-weight: bold; color: #000; letter-spacing: 0.3pt;">COST ESTIMATE</div>'
             . '</div>';
 
         // ─── Customer / Job info two-column block ──────────────────────
@@ -979,14 +979,23 @@ class CostEstimateController extends Controller
 
         // ─── Summary card right-aligned (plain, no color, like Quotation) ───
         $summary  = '<table align="right" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; width: 320pt; margin-top: 6pt;">';
+        $showVat = (float) $e->vat_amount > 0;
+        $showTax = (float) ($e->tax_amount ?? 0) > 0;
+        // Only annotate "incl. VAT & Tax" when those rows are NOT shown.
+        $inclSuffix = (!$showVat && !$showTax) ? ', incl. VAT & Tax' : '';
+
         $rows = [
             ['Net Cost',                                    $e->net_cost,        false],
             ["Overhead ({$e->overhead_pct}%)",              $e->overhead_amount, false],
-            ["VAT ({$e->vat_pct}%)",                        $e->vat_amount,      false],
-            ["Tax ({$e->tax_pct}%)",                        $e->tax_amount ?? 0, false],
         ];
+        if ($showVat) {
+            $rows[] = ["VAT ({$e->vat_pct}%)",              $e->vat_amount,      false];
+        }
+        if ($showTax) {
+            $rows[] = ["Tax ({$e->tax_pct}%)",             $e->tax_amount ?? 0, false];
+        }
         $rows = array_merge($rows, [
-            ['Total (per unit, incl. VAT & Tax)',           $e->total,           true],
+            ["Total (per unit{$inclSuffix})",               $e->total,           true],
             ['Times Multiplier',                            $e->times_multiplier,false],
             ['Job Quantity',                                $e->job_quantity,    false],
         ]);
@@ -998,7 +1007,8 @@ class CostEstimateController extends Controller
             $summary .= '</tr>';
         }
         $summary .= '<tr>';
-        $summary .=   '<td style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 11pt; color: #000; font-weight: bold;">Grand Total (Including VAT &amp; TAX)</td>';
+        $grandLabel = (!$showVat && !$showTax) ? 'Grand Total (Including VAT &amp; TAX)' : 'Grand Total';
+        $summary .=   '<td style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 11pt; color: #000; font-weight: bold;">' . $grandLabel . '</td>';
         $summary .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 11pt; color: #000; text-align: right; white-space: nowrap; font-weight: bold;">' . $fmt($e->grand_total) . '</td>';
         $summary .= '</tr>';
         $summary .= '</table>';
@@ -1037,9 +1047,9 @@ class CostEstimateController extends Controller
             .   '<td width="35%" style="vertical-align: bottom; text-align: left;">'
             .     '<div style="margin-bottom: 4pt;">' . $sigImg($preparerSig) . '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Prepared By</div>'
-            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparedByName . '</div>'
-            .     ($preparedByTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparedByTitle . '</div>' : '')
-            .     ($preparedByCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparedByCenter . '</div>' : '')
+            .     '<div style="font-size: 10pt; color: #a349a4; margin-top: 2pt;">' . $preparedByName . '</div>'
+            .     ($preparedByTitle !== '' ? '<div style="font-size: 9pt; color: #a349a4; margin-top: 1pt;">' . $preparedByTitle . '</div>' : '')
+            .     ($preparedByCenter !== '' ? '<div style="font-size: 9pt; color: #a349a4;">' . $preparedByCenter . '</div>' : '')
             .   '</td>'
             // Spacer column
             .   '<td width="30%"></td>'
@@ -1059,15 +1069,15 @@ class CostEstimateController extends Controller
         $signatureBlock .=     '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Approved By</div>';
         if ($isApproved) {
-            $signatureBlock .= '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $approverName . '</div>';
+            $signatureBlock .= '<div style="font-size: 10pt; color: #a349a4; margin-top: 2pt;">' . $approverName . '</div>';
             if ($approverTitle !== '') {
-                $signatureBlock .= '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $approverTitle . '</div>';
+                $signatureBlock .= '<div style="font-size: 9pt; color: #a349a4; margin-top: 1pt;">' . $approverTitle . '</div>';
             }
             if ($approverCenter !== '') {
-                $signatureBlock .= '<div style="font-size: 9pt; color: #4b5563;">' . $approverCenter . '</div>';
+                $signatureBlock .= '<div style="font-size: 9pt; color: #a349a4;">' . $approverCenter . '</div>';
             }
             if ($approvedDate !== '') {
-                $signatureBlock .= '<div style="font-size: 8pt; color: #4b5563; margin-top: 1pt;">' . $esc($approvedDate) . '</div>';
+                $signatureBlock .= '<div style="font-size: 8pt; color: #a349a4; margin-top: 1pt;">' . $esc($approvedDate) . '</div>';
             }
         } else {
             $signatureBlock .= '<div style="font-size: 8pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Not yet approved</div>';

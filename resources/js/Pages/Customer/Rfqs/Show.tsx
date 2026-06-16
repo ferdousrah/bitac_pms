@@ -148,7 +148,11 @@ export default function CustomerRfqShow({ rfq }: any) {
                 const tax = Number(q.tax_amount ?? 0);
                 const disc = Number(q.discount ?? 0);
                 const total = Number(q.total_amount ?? 0);
-                // Subtotal reverses the maths: total = subtotal + vat - disc + tax
+                // VAT & Tax are only itemised when the preparer opted in; otherwise
+                // the unit price is all-inclusive and the Grand Total reads "incl."
+                const showBreakdown = !!q.show_tax_breakdown && (vat > 0 || tax > 0);
+                const hasTax = vat > 0 || tax > 0;
+                // Standard tax invoice when itemised: ex-tax Subtotal + VAT + Tax = Grand Total.
                 const subtotal = total - vat - tax + disc;
                 return (
                     <div className="card border-emerald-200 bg-emerald-50/40">
@@ -173,32 +177,42 @@ export default function CustomerRfqShow({ rfq }: any) {
                                         className="btn-primary btn-sm">
                                         <i className="fi fi-rr-file-pdf text-xs" /> Quotation PDF
                                     </button>
-                                    {q.has_forwarding_letter && (
+                                    {q.has_forwarding_letter && ([['bn', 'বাংলা'], ['en', 'English']] as const).map(([lng, label]) => (
                                         <button
+                                            key={lng}
                                             type="button"
                                             onClick={() => setPdfPopup({
                                                 open:     true,
-                                                url:      `/customer/documents/quotation/${q.id}/forwarding-letter?preview=base64`,
-                                                title:    `Forwarding Letter`,
+                                                url:      `/customer/documents/quotation/${q.id}/forwarding-letter?preview=base64&lang=${lng}`,
+                                                title:    `Forwarding Letter (${label})`,
                                                 subtitle: `Quotation v${q.version} · RFQ #${rfq.id}`,
                                             })}
                                             className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">
-                                            <i className="fi fi-rr-envelope text-xs" /> Forwarding Letter
+                                            <i className="fi fi-rr-envelope text-xs" /> Letter ({label})
                                         </button>
-                                    )}
+                                    ))}
                                 </div>
                             </div>
-                            {/* Breakdown — VAT / Discount / Tax rows only show when non-zero */}
+                            {/* Unit prices are VAT/Tax inclusive → grand total = line total.
+                                VAT/Tax disclosed as "Including" only when the preparer opted in. */}
                             <div className="mt-4 pt-3 border-t border-emerald-200/60">
                                 <div className="max-w-sm ml-auto space-y-1 text-xs">
-                                    <div className="flex items-center justify-between text-emerald-800/80">
-                                        <span>Subtotal</span>
-                                        <span className="font-mono tabular-nums">৳{fmt(subtotal)}</span>
-                                    </div>
-                                    {vat > 0 && (
+                                    {(showBreakdown || disc > 0) && (
+                                        <div className="flex items-center justify-between text-emerald-800/80">
+                                            <span>Subtotal</span>
+                                            <span className="font-mono tabular-nums">৳{fmt(showBreakdown ? subtotal : total + disc)}</span>
+                                        </div>
+                                    )}
+                                    {showBreakdown && vat > 0 && (
                                         <div className="flex items-center justify-between text-emerald-800/80">
                                             <span>VAT <span className="text-[10px] text-emerald-600/70">({q.vat_rate}%)</span></span>
                                             <span className="font-mono tabular-nums">+ ৳{fmt(vat)}</span>
+                                        </div>
+                                    )}
+                                    {showBreakdown && tax > 0 && (
+                                        <div className="flex items-center justify-between text-emerald-800/80">
+                                            <span>Tax <span className="text-[10px] text-emerald-600/70">({q.tax_rate}%)</span></span>
+                                            <span className="font-mono tabular-nums">+ ৳{fmt(tax)}</span>
                                         </div>
                                     )}
                                     {disc > 0 && (
@@ -207,14 +221,8 @@ export default function CustomerRfqShow({ rfq }: any) {
                                             <span className="font-mono tabular-nums">− ৳{fmt(disc)}</span>
                                         </div>
                                     )}
-                                    {tax > 0 && (
-                                        <div className="flex items-center justify-between text-emerald-800/80">
-                                            <span>Tax <span className="text-[10px] text-emerald-600/70">({q.tax_rate}%)</span></span>
-                                            <span className="font-mono tabular-nums">+ ৳{fmt(tax)}</span>
-                                        </div>
-                                    )}
                                     <div className="flex items-center justify-between pt-2 border-t border-emerald-300/40 mt-1.5">
-                                        <span className="text-sm font-bold text-emerald-900">Grand Total</span>
+                                        <span className="text-sm font-bold text-emerald-900">Grand Total{!showBreakdown && hasTax ? ' (incl. VAT & Tax)' : ''}</span>
                                         <span className="text-base font-bold font-mono text-emerald-900 tabular-nums">৳{fmt(total)}</span>
                                     </div>
                                 </div>

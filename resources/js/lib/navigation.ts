@@ -39,6 +39,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Gate Passes',    href: '/ied/gate-passes',   icon: 'fi-rr-shield-check', permission: 'manage gate-passes' },
             { label: 'Cost Estimates', href: '/cost-estimates',    icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
             { label: 'Quotations',     href: '/quotations',        icon: 'fi-rr-coins',        permission: 'view quotations' },
+            { label: 'Letters',        href: '/rfq-letters',       icon: 'fi-rr-envelope',     permission: 'view rfqs' },
             { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
             { label: 'Work Order Inbox', href: '/ied/work-orders', icon: 'fi-rr-paper-plane',  permission: 'view rfqs', badgeKey: 'pending_ied_work_orders' },
             { label: 'Jobs',             href: '/ied/jobs',         icon: 'fi-rr-briefcase',    permission: 'view rfqs' },
