@@ -730,8 +730,8 @@ export default function JobDetail({ job, checklist }: Props) {
                             </div>
                         )}
 
-                        {/* Source Documents — collapsible. RFQ (IED form) + approved Quotation letter */}
-                        {(job.rfq_source || job.quotation_source) && (
+                        {/* Attached Documents — source docs (RFQ/Quotation/WO) + every inherited attachment, in one section */}
+                        {(job.rfq_source || job.quotation_source || (job.all_attachments?.length ?? 0) > 0 || (job.attachments ?? []).some(a => a.kind === 'customer_po')) && (
                             <div className="card">
                                 <button
                                     type="button"
@@ -741,22 +741,23 @@ export default function JobDetail({ job, checklist }: Props) {
                                 >
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <i className="fi fi-rr-document-signed text-brand-600" />
+                                            <i className="fi fi-rr-folder-open text-brand-600" />
                                             <h3 className="text-base font-semibold text-surface-900">
-                                                Source Documents
+                                                Attached Documents
                                             </h3>
                                             <span className="badge badge-slate">
-                                                {(job.rfq_source ? 1 : 0) + (job.quotation_source ? 1 : 0) + ((job.attachments ?? []).some(a => a.kind === 'customer_po') ? 1 : 0)}
+                                                {(job.rfq_source ? 1 : 0) + (job.quotation_source ? 1 : 0) + ((job.attachments ?? []).some(a => a.kind === 'customer_po') ? 1 : 0) + (job.all_attachments?.length ?? 0)}
                                             </span>
                                         </div>
                                         <p className="text-xs text-surface-500 mt-1">
-                                            Customer's RFQ Letter, the approved Quotation, and the Work Order the customer authorised.
+                                            Customer's RFQ Letter, approved Quotation, authorised Work Order, plus every drawing & file inherited from upstream.
                                         </p>
                                     </div>
                                     <i className={`fi fi-rr-angle-${sourceDocsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
                                 </button>
                                 {sourceDocsOpen && (
-                                <div className="card-body">
+                                <div className="card-body space-y-5">
+                                    {(job.rfq_source || job.quotation_source || (job.attachments ?? []).some(a => a.kind === 'customer_po')) && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                         {job.rfq_source && (
                                             <button
@@ -851,6 +852,67 @@ export default function JobDetail({ job, checklist }: Props) {
                                             );
                                         })()}
                                     </div>
+                                    )}
+
+                                    {/* Inherited attachments — every file from upstream RFQ, Quotation & Work Order */}
+                                    {job.all_attachments && job.all_attachments.length > 0 && (() => {
+                                        const SOURCE_META: Record<string, { label: string; color: string; icon: string }> = {
+                                            rfq_drawing:  { label: 'RFQ Drawing',   color: 'bg-blue-50 text-blue-700 border-blue-200',       icon: 'fi-rr-blueprint' },
+                                            rfq_sample:   { label: 'RFQ Sample',    color: 'bg-violet-50 text-violet-700 border-violet-200', icon: 'fi-rr-picture' },
+                                            quotation:    { label: 'Quotation',     color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fi-rr-document' },
+                                            work_order:   { label: 'Work Order',    color: 'bg-amber-50 text-amber-700 border-amber-200',    icon: 'fi-rr-tools' },
+                                        };
+                                        const SOURCE_ORDER = ['rfq_drawing', 'rfq_sample', 'quotation', 'work_order'];
+                                        const grouped = SOURCE_ORDER
+                                            .map(src => ({ src, files: job.all_attachments.filter(a => a.source === src) }))
+                                            .filter(g => g.files.length > 0);
+
+                                        return (
+                                            <div className="space-y-4 pt-4 border-t border-surface-100">
+                                                {grouped.map(group => {
+                                                    const meta = SOURCE_META[group.src];
+                                                    return (
+                                                        <div key={group.src}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <i className={`fi ${meta.icon} text-surface-500 text-sm`} />
+                                                                <span className="text-xs font-bold text-surface-700 uppercase tracking-wider">{meta.label}</span>
+                                                                <span className="text-[10px] text-surface-400">({group.files.length})</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                {group.files.map((f) => (
+                                                                    <a
+                                                                        key={`${group.src}-${f.id}`}
+                                                                        href={f.url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-surface-100 hover:border-brand-200 hover:shadow-sm transition-all"
+                                                                    >
+                                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold border shrink-0 ${meta.color}`}>
+                                                                            {f.extension || 'FILE'}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="text-xs font-semibold text-surface-900 truncate">{f.filename}</div>
+                                                                            <div className="text-[10px] text-surface-400 flex items-center gap-1.5 mt-0.5">
+                                                                                {f.human_size && <span>{f.human_size}</span>}
+                                                                                {f.kind && <><span>·</span><span className="capitalize">{f.kind.replace(/_/g, ' ')}</span></>}
+                                                                                {f.uploaded_by && <><span>·</span><span>by {f.uploaded_by}</span></>}
+                                                                            </div>
+                                                                            {f.item_description && (
+                                                                                <div className="text-[10px] text-surface-500 truncate mt-0.5 italic">
+                                                                                    For: {f.item_description}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <i className="fi fi-rr-arrow-up-right-from-square text-surface-400 text-xs leading-none shrink-0" />
+                                                                    </a>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 )}
                             </div>
@@ -927,95 +989,6 @@ export default function JobDetail({ job, checklist }: Props) {
                                             );
                                         })}
                                     </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Job Reference — collapsible, aggregated from RFQ, Quotation, and Work Order */}
-                        {job.all_attachments && job.all_attachments.length > 0 && (
-                            <div className="card">
-                                <button
-                                    type="button"
-                                    onClick={() => setDocsOpen(o => !o)}
-                                    className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors text-left"
-                                    aria-expanded={docsOpen}
-                                >
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <i className="fi fi-rr-folder-open text-brand-600" />
-                                            <h3 className="text-base font-semibold text-surface-900">
-                                                Job Reference
-                                            </h3>
-                                            <span className="badge badge-slate">{job.all_attachments.length}</span>
-                                        </div>
-                                        <p className="text-xs text-surface-500 mt-1">
-                                            Every attachment inherited from the upstream RFQ, Quotation, and Work Order — one view.
-                                        </p>
-                                    </div>
-                                    <i className={`fi fi-rr-angle-${docsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
-                                </button>
-                                {docsOpen && (
-                                <div className="card-body">
-                                    {(() => {
-                                        const SOURCE_META: Record<string, { label: string; color: string; icon: string }> = {
-                                            rfq_drawing:  { label: 'RFQ Drawing',   color: 'bg-blue-50 text-blue-700 border-blue-200',       icon: 'fi-rr-blueprint' },
-                                            rfq_sample:   { label: 'RFQ Sample',    color: 'bg-violet-50 text-violet-700 border-violet-200', icon: 'fi-rr-picture' },
-                                            quotation:    { label: 'Quotation',     color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fi-rr-document' },
-                                            work_order:   { label: 'Work Order',    color: 'bg-amber-50 text-amber-700 border-amber-200',    icon: 'fi-rr-tools' },
-                                        };
-                                        // Group by source for readability — PCD usually reviews drawings first.
-                                        const SOURCE_ORDER = ['rfq_drawing', 'rfq_sample', 'quotation', 'work_order'];
-                                        const grouped = SOURCE_ORDER
-                                            .map(src => ({ src, files: job.all_attachments.filter(a => a.source === src) }))
-                                            .filter(g => g.files.length > 0);
-
-                                        return (
-                                            <div className="space-y-4">
-                                                {grouped.map(group => {
-                                                    const meta = SOURCE_META[group.src];
-                                                    return (
-                                                        <div key={group.src}>
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <i className={`fi ${meta.icon} text-surface-500 text-sm`} />
-                                                                <span className="text-xs font-bold text-surface-700 uppercase tracking-wider">{meta.label}</span>
-                                                                <span className="text-[10px] text-surface-400">({group.files.length})</span>
-                                                            </div>
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                                {group.files.map((f) => (
-                                                                    <a
-                                                                        key={`${group.src}-${f.id}`}
-                                                                        href={f.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-surface-100 hover:border-brand-200 hover:shadow-sm transition-all"
-                                                                    >
-                                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold border shrink-0 ${meta.color}`}>
-                                                                            {f.extension || 'FILE'}
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <div className="text-xs font-semibold text-surface-900 truncate">{f.filename}</div>
-                                                                            <div className="text-[10px] text-surface-400 flex items-center gap-1.5 mt-0.5">
-                                                                                {f.human_size && <span>{f.human_size}</span>}
-                                                                                {f.kind && <><span>·</span><span className="capitalize">{f.kind.replace(/_/g, ' ')}</span></>}
-                                                                                {f.uploaded_by && <><span>·</span><span>by {f.uploaded_by}</span></>}
-                                                                            </div>
-                                                                            {f.item_description && (
-                                                                                <div className="text-[10px] text-surface-500 truncate mt-0.5 italic">
-                                                                                    For: {f.item_description}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <i className="fi fi-rr-arrow-up-right-from-square text-surface-400 text-xs leading-none shrink-0" />
-                                                                    </a>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
                                 )}
                             </div>
                         )}
