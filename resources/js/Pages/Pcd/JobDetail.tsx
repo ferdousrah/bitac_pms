@@ -423,6 +423,84 @@ export default function JobDetail({ job, checklist }: Props) {
                     );
                 })()}
 
+                {/* Job Items — collapsible (shown above the workflow progress) */}
+                <div className="card">
+                    <button
+                        type="button"
+                        onClick={() => setJobItemsOpen(o => !o)}
+                        className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors"
+                        aria-expanded={jobItemsOpen}
+                    >
+                        <div className="flex items-center gap-2">
+                            <i className="fi fi-rr-boxes text-brand-600" />
+                            <h3 className="text-base font-semibold text-surface-900">
+                                Job Items
+                            </h3>
+                            <span className="badge badge-slate">
+                                {job.rfq_items.length}
+                            </span>
+                        </div>
+                        <i className={`fi fi-rr-angle-${jobItemsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
+                    </button>
+                    {jobItemsOpen && (
+                    <div className="card-body p-0">
+                        {job.rfq_items.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="premium-table w-full">
+                                    <thead>
+                                        <tr>
+                                            <th className="text-left w-12">#</th>
+                                            <th className="text-left">Description</th>
+                                            <th className="text-right w-24">Quantity</th>
+                                            <th className="text-left w-20">Unit</th>
+                                            <th className="text-left w-72">IED Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {job.rfq_items.map((item: any, idx: number) => (
+                                            <tr key={idx}>
+                                                <td className="text-surface-500 align-top">
+                                                    {idx + 1}
+                                                </td>
+                                                <td className="font-medium text-surface-900 align-top">
+                                                    {item.description}
+                                                </td>
+                                                <td className="text-right font-semibold text-surface-900 align-top">
+                                                    {item.quantity}
+                                                </td>
+                                                <td className="text-surface-600 align-top">
+                                                    {item.unit}
+                                                </td>
+                                                <td className="align-top">
+                                                    {item.ied_note ? (
+                                                        <div className="inline-flex items-start gap-1.5 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-900 max-w-full">
+                                                            <i className="fi fi-rr-comment-alt text-amber-600 text-[10px] leading-none mt-0.5 shrink-0" />
+                                                            <span>{item.ied_note}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-surface-300">—</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="empty-state">
+                                <div className="empty-state-icon">
+                                    <i className="fi fi-rr-box" />
+                                </div>
+                                <div className="empty-state-title">No items</div>
+                                <div className="empty-state-text">
+                                    This job has no line items.
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    )}
+                </div>
+
                 {/* PCD Progress Banner */}
                 <div className="card animate-slide-up">
                     <div className="card-header">
@@ -777,84 +855,6 @@ export default function JobDetail({ job, checklist }: Props) {
                                 )}
                             </div>
                         )}
-
-                        {/* Job Items — collapsible */}
-                        <div className="card">
-                            <button
-                                type="button"
-                                onClick={() => setJobItemsOpen(o => !o)}
-                                className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors"
-                                aria-expanded={jobItemsOpen}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <i className="fi fi-rr-boxes text-brand-600" />
-                                    <h3 className="text-base font-semibold text-surface-900">
-                                        Job Items
-                                    </h3>
-                                    <span className="badge badge-slate">
-                                        {job.rfq_items.length}
-                                    </span>
-                                </div>
-                                <i className={`fi fi-rr-angle-${jobItemsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
-                            </button>
-                            {jobItemsOpen && (
-                            <div className="card-body p-0">
-                                {job.rfq_items.length > 0 ? (
-                                    <div className="overflow-x-auto">
-                                        <table className="premium-table w-full">
-                                            <thead>
-                                                <tr>
-                                                    <th className="text-left w-12">#</th>
-                                                    <th className="text-left">Description</th>
-                                                    <th className="text-right w-24">Quantity</th>
-                                                    <th className="text-left w-20">Unit</th>
-                                                    <th className="text-left w-72">IED Notes</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {job.rfq_items.map((item: any, idx: number) => (
-                                                    <tr key={idx}>
-                                                        <td className="text-surface-500 align-top">
-                                                            {idx + 1}
-                                                        </td>
-                                                        <td className="font-medium text-surface-900 align-top">
-                                                            {item.description}
-                                                        </td>
-                                                        <td className="text-right font-semibold text-surface-900 align-top">
-                                                            {item.quantity}
-                                                        </td>
-                                                        <td className="text-surface-600 align-top">
-                                                            {item.unit}
-                                                        </td>
-                                                        <td className="align-top">
-                                                            {item.ied_note ? (
-                                                                <div className="inline-flex items-start gap-1.5 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-900 max-w-full">
-                                                                    <i className="fi fi-rr-comment-alt text-amber-600 text-[10px] leading-none mt-0.5 shrink-0" />
-                                                                    <span>{item.ied_note}</span>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-xs text-surface-300">—</span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ) : (
-                                    <div className="empty-state">
-                                        <div className="empty-state-icon">
-                                            <i className="fi fi-rr-box" />
-                                        </div>
-                                        <div className="empty-state-title">No items</div>
-                                        <div className="empty-state-text">
-                                            This job has no line items.
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            )}
-                        </div>
 
                         {/* Gate Passes — IN/OUT passes attached to the parent RFQ */}
                         {(job.gate_passes ?? []).length > 0 && (
