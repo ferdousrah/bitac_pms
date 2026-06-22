@@ -589,76 +589,6 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                 </div>
 
-                {/* Per-item Operation Sheets — itemwise routing. Each item gets
-                    its own sheet with its own steps, machines, operators, QR. */}
-                {job.item_operation_sheets && job.item_operation_sheets.length > 0 && (
-                    <div id="operation-sheets" className="card animate-slide-up">
-                        <div className="card-header">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-base font-semibold text-surface-900">
-                                        <i className="fi fi-rr-document mr-2 text-brand-600" />
-                                        Operation Sheets — per item
-                                    </h3>
-                                    <p className="text-xs text-surface-500 mt-0.5">
-                                        Each WO item has its own routing & operations. Create one sheet per item.
-                                    </p>
-                                </div>
-                                <span className="badge badge-slate">
-                                    {checklist.operation_sheet.items_covered}/{checklist.operation_sheet.items_total} done
-                                </span>
-                            </div>
-                        </div>
-                        <div className="card-body">
-                            <div className="space-y-3">
-                                {job.item_operation_sheets.map(({ item, sheet }) => (
-                                    <div
-                                        key={item.id}
-                                        className={`flex items-start gap-3 p-3 rounded-xl border ${sheet ? 'bg-green-50/40 border-green-200' : 'bg-amber-50/40 border-amber-200'}`}
-                                    >
-                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold ${sheet ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                            {sheet ? <i className="fi fi-rr-check text-sm leading-none" /> : item.sequence}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="badge badge-slate text-[10px]">Item {item.sequence}</span>
-                                                <span className="text-xs text-surface-500">Qty {item.quantity} {item.unit}</span>
-                                                {sheet && (
-                                                    <span className="badge badge-green text-[10px] font-mono">
-                                                        Sheet {sheet.sheet_number} · {sheet.step_count} step{sheet.step_count !== 1 ? 's' : ''}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-sm font-semibold text-surface-900 mt-1 truncate">
-                                                {item.description ?? '—'}
-                                            </div>
-                                        </div>
-                                        <div className="shrink-0">
-                                            {sheet ? (
-                                                <Link
-                                                    href={`/operation-sheets/${sheet.id}`}
-                                                    className="btn-outline btn-sm"
-                                                >
-                                                    <i className="fi fi-rr-eye mr-1" />
-                                                    View
-                                                </Link>
-                                            ) : (
-                                                <Link
-                                                    href={`/operation-sheets/${job.id}/create?item_id=${item.id}`}
-                                                    className="btn-primary btn-sm"
-                                                >
-                                                    <i className="fi fi-rr-plus mr-1" />
-                                                    Create Sheet
-                                                </Link>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* Two-column grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left column */}
@@ -1254,18 +1184,67 @@ export default function JobDetail({ job, checklist }: Props) {
                             </div>
                         </div>
 
-                        {/* Operation Sheet */}
-                        <div className="card">
+                        {/* Operation Sheets — per item (single consolidated section).
+                            Each WO item has its own sheet/routing; falls back to the
+                            legacy single-sheet view / empty state when no items. */}
+                        <div id="operation-sheets" className="card">
                             <div className="card-header">
-                                <div className="flex items-center gap-2">
-                                    <i className="fi fi-rr-document text-brand-600" />
-                                    <h3 className="text-base font-semibold text-surface-900">
-                                        Operation Sheet
-                                    </h3>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <i className="fi fi-rr-document text-brand-600" />
+                                        <h3 className="text-base font-semibold text-surface-900">
+                                            Operation Sheet{(job.item_operation_sheets?.length ?? 0) > 1 ? 's — per item' : ''}
+                                        </h3>
+                                    </div>
+                                    {checklist.operation_sheet.items_total > 0 && (
+                                        <span className="badge badge-slate">
+                                            {checklist.operation_sheet.items_covered}/{checklist.operation_sheet.items_total} done
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <div className="card-body">
-                                {job.operation_sheet ? (
+                                {job.item_operation_sheets && job.item_operation_sheets.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {job.item_operation_sheets.map(({ item, sheet }) => (
+                                            <div
+                                                key={item.id}
+                                                className={`flex items-start gap-3 p-3 rounded-xl border ${sheet ? 'bg-green-50/40 border-green-200' : 'bg-amber-50/40 border-amber-200'}`}
+                                            >
+                                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold ${sheet ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {sheet ? <i className="fi fi-rr-check text-sm leading-none" /> : item.sequence}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="badge badge-slate text-[10px]">Item {item.sequence}</span>
+                                                        <span className="text-xs text-surface-500">Qty {item.quantity} {item.unit}</span>
+                                                        {sheet && (
+                                                            <span className="badge badge-green text-[10px] font-mono">
+                                                                Sheet {sheet.sheet_number} · {sheet.step_count} step{sheet.step_count !== 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-sm font-semibold text-surface-900 mt-1 truncate">
+                                                        {item.description ?? '—'}
+                                                    </div>
+                                                </div>
+                                                <div className="shrink-0">
+                                                    {sheet ? (
+                                                        <Link href={`/operation-sheets/${sheet.id}`} className="btn-outline btn-sm">
+                                                            <i className="fi fi-rr-eye mr-1" />
+                                                            View
+                                                        </Link>
+                                                    ) : (
+                                                        <Link href={`/operation-sheets/${job.id}/create?item_id=${item.id}`} className="btn-primary btn-sm">
+                                                            <i className="fi fi-rr-plus mr-1" />
+                                                            Create Sheet
+                                                        </Link>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : job.operation_sheet ? (
                                     <div className="flex items-center justify-between p-4 rounded-lg border border-surface-200 bg-brand-50/30">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className="w-12 h-12 rounded-xl bg-white border border-brand-200 flex items-center justify-center shrink-0">

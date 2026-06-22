@@ -192,6 +192,9 @@ Tailwind font-size classes (`text-[9px]`) don't work in SVG text. Use `fontSize=
 ### 5. PPTX Files
 Upload uses PhpPresentation (server-side). Max 20MB. Slides are text-only — embedded images in PPTX aren't extracted (future: use LibreOffice headless to render as PNG).
 
+### 6. PCD Job Detail — single Operation Sheet section
+`Pages/Pcd/JobDetail.tsx` shows ONE consolidated "Operation Sheet(s)" card (in the left column, below Work Order). It renders per-item sheets (`job.item_operation_sheets`) when present, else the legacy single `job.operation_sheet` / empty state. Don't re-add a separate top-level per-item section — it caused a duplicate.
+
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 
 > Conventions hammered out over many iterations — read before touching these areas.
