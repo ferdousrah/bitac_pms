@@ -251,6 +251,24 @@ export default function JobDetail({ job, checklist }: Props) {
     const [jobItemsOpen, setJobItemsOpen] = useState(false);
     const [docsOpen, setDocsOpen] = useState(false);
     const [gatePassesOpen, setGatePassesOpen] = useState(true);
+    const [mrOpen, setMrOpen] = useState(false);
+
+    // Open any controller PDF endpoint in the popup viewer (base64 to dodge
+    // download-manager intercept); falls back to a new tab on failure.
+    const openPdf = async (baseUrl: string, title: string, subtitle?: string) => {
+        try {
+            const res = await fetch(`${baseUrl}?preview=base64`, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error('PDF fetch failed');
+            const data = await res.json();
+            const blob = new Blob([Uint8Array.from(atob(data.data), (c) => c.charCodeAt(0))], { type: 'application/pdf' });
+            setPdfPopup({ open: true, url: URL.createObjectURL(blob), title, subtitle });
+        } catch {
+            window.open(`${baseUrl}?preview=1`, '_blank');
+        }
+    };
 
     const steps = [
         {
@@ -844,30 +862,38 @@ export default function JobDetail({ job, checklist }: Props) {
                             </div>
                         )}
 
-                        {/* Material Requisitions */}
+                        {/* Material Requisitions — collapsed by default */}
                         <div className="card">
-                            <div className="card-header">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <i className="fi fi-rr-box-alt text-brand-600" />
-                                        <h3 className="text-base font-semibold text-surface-900">
-                                            Material Requisitions
-                                        </h3>
-                                        <span className="badge badge-slate">
-                                            {job.material_requisitions.length}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        href={`/pcd/material-requisitions/create?work_order_id=${job.id}`}
-                                        className="btn-primary btn-sm"
-                                    >
-                                        <i className="fi fi-rr-plus mr-1.5" />
-                                        Create New MR
-                                    </Link>
+                            <button
+                                type="button"
+                                onClick={() => setMrOpen(o => !o)}
+                                className="card-header w-full flex items-center justify-between bg-brand-50/60 hover:bg-brand-50 transition-colors text-left"
+                                aria-expanded={mrOpen}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <i className="fi fi-rr-box-alt text-brand-600" />
+                                    <h3 className="text-base font-semibold text-surface-900">
+                                        Material Requisitions
+                                    </h3>
+                                    <span className="badge badge-slate">
+                                        {job.material_requisitions.length}
+                                    </span>
                                 </div>
-                            </div>
+                                <i className={`fi fi-rr-angle-${mrOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
+                            </button>
+                            {mrOpen && (
                             <div className="card-body">
                                 {job.material_requisitions.length > 0 ? (
+                                    <>
+                                    <div className="flex justify-end mb-3">
+                                        <Link
+                                            href={`/pcd/material-requisitions/create?work_order_id=${job.id}`}
+                                            className="btn-primary btn-sm"
+                                        >
+                                            <i className="fi fi-rr-plus mr-1.5" />
+                                            Create New MR
+                                        </Link>
+                                    </div>
                                     <div className="space-y-2">
                                         {job.material_requisitions.map((mr) => (
                                             <div
@@ -902,6 +928,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                             </div>
                                         ))}
                                     </div>
+                                    </>
                                 ) : (
                                     <div className="empty-state">
                                         <div className="empty-state-icon">
@@ -923,14 +950,15 @@ export default function JobDetail({ job, checklist }: Props) {
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
 
                         {/* Work Order — PCD's internal routing slip. Defines the ordered
                             list of production shops the job will pass through. Shops
                             pick up the job from their inbox in this sequence. */}
                         <div className="card">
-                            <div className="card-header">
-                                <div className="flex items-center justify-between">
+                            <div className="card-header bg-brand-50/60">
+                                <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
                                         <i className="fi fi-rr-diagram-project text-brand-600" />
                                         <h3 className="text-base font-semibold text-surface-900">
@@ -940,15 +968,25 @@ export default function JobDetail({ job, checklist }: Props) {
                                             {job.sections.length} {job.sections.length === 1 ? 'shop' : 'shops'}
                                         </span>
                                     </div>
-                                    {job.sections.length > 0 && (
-                                        <Link
-                                            href={sectionsHref}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => openPdf(`/pcd/work-orders/${job.id}/pdf`, 'Work Order', job.job_number ? `Job #${job.job_number}` : job.wo_number)}
                                             className="btn-outline btn-sm"
                                         >
-                                            <i className="fi fi-rr-edit mr-1.5" />
-                                            Edit
-                                        </Link>
-                                    )}
+                                            <i className="fi fi-rr-file-pdf mr-1.5" />
+                                            PDF
+                                        </button>
+                                        {job.sections.length > 0 && (
+                                            <Link
+                                                href={sectionsHref}
+                                                className="btn-outline btn-sm"
+                                            >
+                                                <i className="fi fi-rr-edit mr-1.5" />
+                                                Edit
+                                            </Link>
+                                        )}
+                                    </div>
                                 </div>
                                 <p className="text-xs text-surface-500 mt-1">
                                     Routing of production shops — each shop picks up this job in sequence.
@@ -1012,7 +1050,7 @@ export default function JobDetail({ job, checklist }: Props) {
                             Each WO item has its own sheet/routing; falls back to the
                             legacy single-sheet view / empty state when no items. */}
                         <div id="operation-sheets" className="card">
-                            <div className="card-header">
+                            <div className="card-header bg-brand-50/60">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <i className="fi fi-rr-document text-brand-600" />
@@ -1052,12 +1090,22 @@ export default function JobDetail({ job, checklist }: Props) {
                                                         {item.description ?? '—'}
                                                     </div>
                                                 </div>
-                                                <div className="shrink-0">
+                                                <div className="shrink-0 flex items-center gap-2">
                                                     {sheet ? (
-                                                        <Link href={`/operation-sheets/${sheet.id}`} className="btn-outline btn-sm">
-                                                            <i className="fi fi-rr-eye mr-1" />
-                                                            View
-                                                        </Link>
+                                                        <>
+                                                            <Link href={`/operation-sheets/${sheet.id}`} className="btn-outline btn-sm">
+                                                                <i className="fi fi-rr-eye mr-1" />
+                                                                View
+                                                            </Link>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openPdf(`/operation-sheets/${sheet.id}/pdf`, `Operation Sheet ${sheet.sheet_number}`, item.description ?? undefined)}
+                                                                className="btn-outline btn-sm"
+                                                            >
+                                                                <i className="fi fi-rr-file-pdf mr-1" />
+                                                                PDF
+                                                            </button>
+                                                        </>
                                                     ) : (
                                                         <Link href={`/operation-sheets/${job.id}/create?item_id=${item.id}`} className="btn-primary btn-sm">
                                                             <i className="fi fi-rr-plus mr-1" />
@@ -1084,13 +1132,23 @@ export default function JobDetail({ job, checklist }: Props) {
                                                 </div>
                                             </div>
                                         </div>
-                                        <Link
-                                            href={`/operation-sheets/${job.operation_sheet.id}`}
-                                            className="btn-outline btn-sm"
-                                        >
-                                            View
-                                            <i className="fi fi-rr-arrow-right ml-1" />
-                                        </Link>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Link
+                                                href={`/operation-sheets/${job.operation_sheet.id}`}
+                                                className="btn-outline btn-sm"
+                                            >
+                                                View
+                                                <i className="fi fi-rr-arrow-right ml-1" />
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => openPdf(`/operation-sheets/${job.operation_sheet!.id}/pdf`, `Operation Sheet ${job.operation_sheet!.sheet_number}`)}
+                                                className="btn-outline btn-sm"
+                                            >
+                                                <i className="fi fi-rr-file-pdf mr-1" />
+                                                PDF
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="empty-state">
@@ -1249,139 +1307,6 @@ export default function JobDetail({ job, checklist }: Props) {
                                 </div>
                             );
                         })()}
-
-                        {/* Quick Actions */}
-                        <div className="card">
-                            <div className="card-header">
-                                <div className="flex items-center gap-2">
-                                    <i className="fi fi-rr-bolt text-brand-600" />
-                                    <h3 className="text-base font-semibold text-surface-900">
-                                        Quick Actions
-                                    </h3>
-                                </div>
-                            </div>
-                            <div className="card-body space-y-2">
-                                <Link
-                                    href={mrHref}
-                                    className={`flex items-center justify-between w-full p-3 rounded-lg border transition-all ${
-                                        checklist.material_requisition.done
-                                            ? 'border-green-200 bg-green-50/50 hover:bg-green-50'
-                                            : 'border-surface-200 hover:border-brand-300 hover:bg-brand-50/30'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                                checklist.material_requisition.done
-                                                    ? 'bg-green-500 text-white'
-                                                    : 'bg-brand-50 text-brand-600'
-                                            }`}
-                                        >
-                                            {checklist.material_requisition.done ? (
-                                                <i className="fi fi-rr-check text-sm" />
-                                            ) : (
-                                                <span className="text-sm font-bold">1</span>
-                                            )}
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="font-semibold text-surface-900 text-sm">
-                                                Material Requisition
-                                            </div>
-                                            <div className="text-xs text-surface-500">
-                                                {checklist.material_requisition.done
-                                                    ? 'View / edit'
-                                                    : 'Create MR'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <i className="fi fi-rr-arrow-right text-surface-400" />
-                                </Link>
-
-                                <Link
-                                    href={sectionsHref}
-                                    className={`flex items-center justify-between w-full p-3 rounded-lg border transition-all ${
-                                        checklist.section_assign.done
-                                            ? 'border-green-200 bg-green-50/50 hover:bg-green-50'
-                                            : 'border-surface-200 hover:border-brand-300 hover:bg-brand-50/30'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                                checklist.section_assign.done
-                                                    ? 'bg-green-500 text-white'
-                                                    : 'bg-brand-50 text-brand-600'
-                                            }`}
-                                        >
-                                            {checklist.section_assign.done ? (
-                                                <i className="fi fi-rr-check text-sm" />
-                                            ) : (
-                                                <span className="text-sm font-bold">2</span>
-                                            )}
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="font-semibold text-surface-900 text-sm">
-                                                Work Order
-                                            </div>
-                                            <div className="text-xs text-surface-500">
-                                                {checklist.section_assign.done
-                                                    ? `${checklist.section_assign.count} shop${checklist.section_assign.count > 1 ? 's' : ''} routed`
-                                                    : 'Create work order'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <i className="fi fi-rr-arrow-right text-surface-400" />
-                                </Link>
-
-                                <Link
-                                    href={opSheetHref}
-                                    className={`flex items-center justify-between w-full p-3 rounded-lg border transition-all ${
-                                        checklist.operation_sheet.done
-                                            ? 'border-green-200 bg-green-50/50 hover:bg-green-50'
-                                            : 'border-surface-200 hover:border-brand-300 hover:bg-brand-50/30'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                                checklist.operation_sheet.done
-                                                    ? 'bg-green-500 text-white'
-                                                    : 'bg-brand-50 text-brand-600'
-                                            }`}
-                                        >
-                                            {checklist.operation_sheet.done ? (
-                                                <i className="fi fi-rr-check text-sm" />
-                                            ) : (
-                                                <span className="text-sm font-bold">3</span>
-                                            )}
-                                        </div>
-                                        <div className="text-left">
-                                            <div className="font-semibold text-surface-900 text-sm">
-                                                Operation Sheet
-                                            </div>
-                                            <div className="text-xs text-surface-500">
-                                                {checklist.operation_sheet.done
-                                                    ? 'View / edit'
-                                                    : 'Create sheet'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <i className="fi fi-rr-arrow-right text-surface-400" />
-                                </Link>
-
-                                {checklist.all_done && !checklist.released && (
-                                    <div className="pt-2">
-                                        <button
-                                            type="button"
-                                            className="btn-success btn-sm w-full"
-                                        >
-                                            <i className="fi fi-rr-paper-plane mr-1.5" />
-                                            Release to Shops
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
