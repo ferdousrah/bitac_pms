@@ -1240,8 +1240,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                                 <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-clipboard-list text-base leading-none" /></div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Customer Work Order</div>
-                                                    <div className="text-sm font-semibold text-amber-900 truncate">{customerWo.filename}</div>
-                                                    {job.customer_po_no && <div className="text-[10px] text-amber-700 font-mono">PO: {job.customer_po_no}</div>}
+                                                    <div className="text-sm font-semibold text-amber-900 truncate font-mono">{job.customer_po_no ? `PO: ${job.customer_po_no}` : 'View document'}</div>
                                                 </div>
                                                 <i className="fi fi-rr-eye text-amber-400 text-sm leading-none" />
                                             </button>
