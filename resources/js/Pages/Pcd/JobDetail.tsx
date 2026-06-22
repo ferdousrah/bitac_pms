@@ -4,10 +4,22 @@ import AppLayout from '@/Layouts/AppLayout';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 
+interface ItemFile {
+    id: number;
+    url: string;
+    filename: string;
+    extension: string | null;
+    is_image: boolean;
+}
+
 interface RfqItem {
+    id?: number;
     description: string;
     quantity: number;
     unit: string;
+    ied_note?: string | null;
+    drawings?: ItemFile[];
+    samples?: ItemFile[];
 }
 
 interface MaterialRequisition {
@@ -443,49 +455,76 @@ export default function JobDetail({ job, checklist }: Props) {
                         <i className={`fi fi-rr-angle-${jobItemsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
                     </button>
                     {jobItemsOpen && (
-                    <div className="card-body p-0">
+                    <div className="card-body space-y-3">
                         {job.rfq_items.length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <table className="premium-table w-full">
-                                    <thead>
-                                        <tr>
-                                            <th className="text-left w-12">#</th>
-                                            <th className="text-left">Description</th>
-                                            <th className="text-right w-24">Quantity</th>
-                                            <th className="text-left w-20">Unit</th>
-                                            <th className="text-left w-72">IED Notes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {job.rfq_items.map((item: any, idx: number) => (
-                                            <tr key={idx}>
-                                                <td className="text-surface-500 align-top">
-                                                    {idx + 1}
-                                                </td>
-                                                <td className="font-medium text-surface-900 align-top">
-                                                    {item.description}
-                                                </td>
-                                                <td className="text-right font-semibold text-surface-900 align-top">
-                                                    {item.quantity}
-                                                </td>
-                                                <td className="text-surface-600 align-top">
-                                                    {item.unit}
-                                                </td>
-                                                <td className="align-top">
-                                                    {item.ied_note ? (
-                                                        <div className="inline-flex items-start gap-1.5 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-900 max-w-full">
-                                                            <i className="fi fi-rr-comment-alt text-amber-600 text-[10px] leading-none mt-0.5 shrink-0" />
-                                                            <span>{item.ied_note}</span>
+                            job.rfq_items.map((item: any, idx: number) => {
+                                const files = [
+                                    ...(item.drawings ?? []).map((f: any) => ({ ...f, tag: 'Drawing' })),
+                                    ...(item.samples ?? []).map((f: any) => ({ ...f, tag: 'Sample' })),
+                                ];
+                                return (
+                                    <div key={item.id ?? idx} className="rounded-xl border border-surface-200 p-4 hover:border-brand-200 hover:shadow-sm transition-all">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                                                {idx + 1}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-3 flex-wrap">
+                                                    <div className="font-semibold text-surface-900">{item.description}</div>
+                                                    <span className="badge badge-blue text-[10px] shrink-0">Qty {item.quantity} {item.unit}</span>
+                                                </div>
+
+                                                {item.ied_note && (
+                                                    <div className="mt-2 inline-flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+                                                        <i className="fi fi-rr-comment-alt text-amber-600 text-[10px] leading-none mt-0.5 shrink-0" />
+                                                        <span><span className="font-semibold">IED note:</span> {item.ied_note}</span>
+                                                    </div>
+                                                )}
+
+                                                {files.length > 0 ? (
+                                                    <div className="mt-3">
+                                                        <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400 mb-1.5 flex items-center gap-1">
+                                                            <i className="fi fi-rr-blueprint text-[10px] leading-none" /> Drawings &amp; Samples
                                                         </div>
-                                                    ) : (
-                                                        <span className="text-xs text-surface-300">—</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {files.map((f: any) => f.is_image ? (
+                                                                <a
+                                                                    key={`${f.tag}-${f.id}`}
+                                                                    href={f.url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    title={`${f.tag}: ${f.filename}`}
+                                                                    className="group relative w-16 h-16 rounded-lg overflow-hidden border border-surface-200 hover:border-brand-400 shrink-0"
+                                                                >
+                                                                    <img src={f.url} alt={f.filename} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                                    <span className={`absolute bottom-0 inset-x-0 text-white text-[8px] font-semibold text-center py-0.5 ${f.tag === 'Drawing' ? 'bg-blue-600/75' : 'bg-violet-600/75'}`}>{f.tag}</span>
+                                                                </a>
+                                                            ) : (
+                                                                <a
+                                                                    key={`${f.tag}-${f.id}`}
+                                                                    href={f.url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    title={f.filename}
+                                                                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-surface-200 hover:border-brand-400 hover:bg-brand-50/40 bg-white shrink-0"
+                                                                >
+                                                                    <span className={`w-8 h-8 rounded text-[9px] font-bold flex items-center justify-center shrink-0 ${f.tag === 'Drawing' ? 'bg-blue-50 text-blue-700' : 'bg-violet-50 text-violet-700'}`}>{f.extension || 'FILE'}</span>
+                                                                    <span className="min-w-0">
+                                                                        <span className="block text-xs font-medium text-surface-800 truncate max-w-[150px]">{f.filename}</span>
+                                                                        <span className="block text-[10px] text-surface-400">{f.tag}</span>
+                                                                    </span>
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-2 text-[11px] text-surface-300 italic">No drawings or samples from IED for this item.</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
                         ) : (
                             <div className="empty-state">
                                 <div className="empty-state-icon">
@@ -727,194 +766,6 @@ export default function JobDetail({ job, checklist }: Props) {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* Attached Documents — source docs (RFQ/Quotation/WO) + every inherited attachment, in one section */}
-                        {(job.rfq_source || job.quotation_source || (job.all_attachments?.length ?? 0) > 0 || (job.attachments ?? []).some(a => a.kind === 'customer_po')) && (
-                            <div className="card">
-                                <button
-                                    type="button"
-                                    onClick={() => setSourceDocsOpen(o => !o)}
-                                    className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors text-left"
-                                    aria-expanded={sourceDocsOpen}
-                                >
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <i className="fi fi-rr-folder-open text-brand-600" />
-                                            <h3 className="text-base font-semibold text-surface-900">
-                                                Attached Documents
-                                            </h3>
-                                            <span className="badge badge-slate">
-                                                {(job.rfq_source ? 1 : 0) + (job.quotation_source ? 1 : 0) + ((job.attachments ?? []).some(a => a.kind === 'customer_po') ? 1 : 0) + (job.all_attachments?.length ?? 0)}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-surface-500 mt-1">
-                                            Customer's RFQ Letter, approved Quotation, authorised Work Order, plus every drawing & file inherited from upstream.
-                                        </p>
-                                    </div>
-                                    <i className={`fi fi-rr-angle-${sourceDocsOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
-                                </button>
-                                {sourceDocsOpen && (
-                                <div className="card-body space-y-5">
-                                    {(job.rfq_source || job.quotation_source || (job.attachments ?? []).some(a => a.kind === 'customer_po')) && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {job.rfq_source && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPdfPopup({
-                                                    open: true,
-                                                    url: job.rfq_source!.pdf_url,
-                                                    title: job.rfq_source!.title ?? 'Customer RFQ Letter',
-                                                    subtitle: `${job.rfq_source!.rfq_no} · ${job.customer}`,
-                                                })}
-                                                className="group flex items-start gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-left transition-all"
-                                            >
-                                                <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                                    <i className="fi fi-rr-envelope text-lg leading-none" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-blue-600">Customer RFQ Letter</div>
-                                                    <div className="text-sm font-bold text-blue-900 mt-0.5 truncate">{job.rfq_source.title ?? job.rfq_source.rfq_no}</div>
-                                                    <div className="text-[11px] text-blue-700 mt-0.5 font-mono">{job.rfq_source.rfq_no}</div>
-                                                    <div className="text-[10px] text-blue-600 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <i className="fi fi-rr-eye text-[9px] leading-none" />
-                                                        Click to preview
-                                                    </div>
-                                                </div>
-                                                <i className="fi fi-rr-file-pdf text-blue-400 text-base leading-none" />
-                                            </button>
-                                        )}
-
-                                        {job.quotation_source && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPdfPopup({
-                                                    open: true,
-                                                    url: job.quotation_source!.pdf_url,
-                                                    title: job.quotation_source!.quotation_no,
-                                                    subtitle: `${job.customer} · BDT ${job.quotation_source!.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                                                })}
-                                                className="group flex items-start gap-3 p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-left transition-all"
-                                            >
-                                                <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                                                    <i className="fi fi-rr-file-invoice-dollar text-lg leading-none" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600">Approved Quotation</div>
-                                                    <div className="text-sm font-bold text-emerald-900 font-mono mt-0.5">{job.quotation_source.quotation_no}</div>
-                                                    <div className="text-[11px] text-emerald-700 mt-0.5 font-mono">
-                                                        BDT {job.quotation_source.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </div>
-                                                    <div className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <i className="fi fi-rr-eye text-[9px] leading-none" />
-                                                        Click to preview PDF
-                                                    </div>
-                                                </div>
-                                                <i className="fi fi-rr-file-pdf text-emerald-400 text-base leading-none" />
-                                            </button>
-                                        )}
-
-                                        {/* Customer Work Order — the customer's signed PO/WO copy. */}
-                                        {(() => {
-                                            const cwo = job.attachments?.find(a => a.kind === 'customer_po');
-                                            if (!cwo) return null;
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const sep = cwo.url.includes('?') ? '&' : '?';
-                                                        setPdfPopup({
-                                                            open: true,
-                                                            url: `${cwo.url}${sep}preview=base64`,
-                                                            title: 'Customer Work Order',
-                                                            subtitle: job.customer_po_no ? `PO ${job.customer_po_no}` : job.customer,
-                                                        });
-                                                    }}
-                                                    className="group flex items-start gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-200 hover:border-amber-400 hover:bg-amber-50 text-left transition-all"
-                                                >
-                                                    <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                                                        <i className="fi fi-rr-clipboard-list text-lg leading-none" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Customer Work Order</div>
-                                                        <div className="text-sm font-bold text-amber-900 mt-0.5 truncate">{cwo.filename}</div>
-                                                        {job.customer_po_no && (
-                                                            <div className="text-[11px] text-amber-700 mt-0.5 font-mono">PO: {job.customer_po_no}</div>
-                                                        )}
-                                                        <div className="text-[10px] text-amber-700 mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <i className="fi fi-rr-eye text-[9px] leading-none" />
-                                                            Click to preview
-                                                        </div>
-                                                    </div>
-                                                    <i className="fi fi-rr-file-pdf text-amber-400 text-base leading-none" />
-                                                </button>
-                                            );
-                                        })()}
-                                    </div>
-                                    )}
-
-                                    {/* Inherited attachments — every file from upstream RFQ, Quotation & Work Order */}
-                                    {job.all_attachments && job.all_attachments.length > 0 && (() => {
-                                        const SOURCE_META: Record<string, { label: string; color: string; icon: string }> = {
-                                            rfq_drawing:  { label: 'RFQ Drawing',   color: 'bg-blue-50 text-blue-700 border-blue-200',       icon: 'fi-rr-blueprint' },
-                                            rfq_sample:   { label: 'RFQ Sample',    color: 'bg-violet-50 text-violet-700 border-violet-200', icon: 'fi-rr-picture' },
-                                            quotation:    { label: 'Quotation',     color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fi-rr-document' },
-                                            work_order:   { label: 'Work Order',    color: 'bg-amber-50 text-amber-700 border-amber-200',    icon: 'fi-rr-tools' },
-                                        };
-                                        const SOURCE_ORDER = ['rfq_drawing', 'rfq_sample', 'quotation', 'work_order'];
-                                        const grouped = SOURCE_ORDER
-                                            .map(src => ({ src, files: job.all_attachments.filter(a => a.source === src) }))
-                                            .filter(g => g.files.length > 0);
-
-                                        return (
-                                            <div className="space-y-4 pt-4 border-t border-surface-100">
-                                                {grouped.map(group => {
-                                                    const meta = SOURCE_META[group.src];
-                                                    return (
-                                                        <div key={group.src}>
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <i className={`fi ${meta.icon} text-surface-500 text-sm`} />
-                                                                <span className="text-xs font-bold text-surface-700 uppercase tracking-wider">{meta.label}</span>
-                                                                <span className="text-[10px] text-surface-400">({group.files.length})</span>
-                                                            </div>
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                                {group.files.map((f) => (
-                                                                    <a
-                                                                        key={`${group.src}-${f.id}`}
-                                                                        href={f.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-surface-100 hover:border-brand-200 hover:shadow-sm transition-all"
-                                                                    >
-                                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold border shrink-0 ${meta.color}`}>
-                                                                            {f.extension || 'FILE'}
-                                                                        </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <div className="text-xs font-semibold text-surface-900 truncate">{f.filename}</div>
-                                                                            <div className="text-[10px] text-surface-400 flex items-center gap-1.5 mt-0.5">
-                                                                                {f.human_size && <span>{f.human_size}</span>}
-                                                                                {f.kind && <><span>·</span><span className="capitalize">{f.kind.replace(/_/g, ' ')}</span></>}
-                                                                                {f.uploaded_by && <><span>·</span><span>by {f.uploaded_by}</span></>}
-                                                                            </div>
-                                                                            {f.item_description && (
-                                                                                <div className="text-[10px] text-surface-500 truncate mt-0.5 italic">
-                                                                                    For: {f.item_description}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                        <i className="fi fi-rr-arrow-up-right-from-square text-surface-400 text-xs leading-none shrink-0" />
-                                                                    </a>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                                )}
                             </div>
                         )}
 
@@ -1333,6 +1184,72 @@ export default function JobDetail({ job, checklist }: Props) {
                                 )}
                             </div>
                         </div>
+
+                        {/* Documents — Customer RFQ Letter, Approved Quotation, Customer Work Order */}
+                        {(() => {
+                            const customerWo = job.attachments?.find(a => a.kind === 'customer_po');
+                            if (!job.rfq_source && !job.quotation_source && !customerWo) return null;
+                            const fmtAmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            return (
+                                <div className="card">
+                                    <div className="card-header">
+                                        <div className="flex items-center gap-2">
+                                            <i className="fi fi-rr-document-signed text-brand-600" />
+                                            <h3 className="text-base font-semibold text-surface-900">Documents</h3>
+                                        </div>
+                                    </div>
+                                    <div className="card-body space-y-2.5">
+                                        {job.rfq_source && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPdfPopup({ open: true, url: job.rfq_source!.pdf_url, title: job.rfq_source!.title ?? 'Customer RFQ Letter', subtitle: `${job.rfq_source!.rfq_no} · ${job.customer}` })}
+                                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-50 hover:border-blue-400 text-left transition-all"
+                                            >
+                                                <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-envelope text-base leading-none" /></div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-blue-600">RFQ Letter</div>
+                                                    <div className="text-sm font-semibold text-blue-900 truncate font-mono">{job.rfq_source.rfq_no}</div>
+                                                </div>
+                                                <i className="fi fi-rr-eye text-blue-400 text-sm leading-none" />
+                                            </button>
+                                        )}
+                                        {job.quotation_source && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPdfPopup({ open: true, url: job.quotation_source!.pdf_url, title: job.quotation_source!.quotation_no, subtitle: `${job.customer} · BDT ${fmtAmt(job.quotation_source!.total_amount)}` })}
+                                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-400 text-left transition-all"
+                                            >
+                                                <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-file-invoice-dollar text-base leading-none" /></div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600">Approved Quotation</div>
+                                                    <div className="text-sm font-semibold text-emerald-900 truncate font-mono">{job.quotation_source.quotation_no}</div>
+                                                    <div className="text-[10px] text-emerald-700 font-mono">BDT {fmtAmt(job.quotation_source.total_amount)}</div>
+                                                </div>
+                                                <i className="fi fi-rr-eye text-emerald-400 text-sm leading-none" />
+                                            </button>
+                                        )}
+                                        {customerWo && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const sep = customerWo.url.includes('?') ? '&' : '?';
+                                                    setPdfPopup({ open: true, url: `${customerWo.url}${sep}preview=base64`, title: 'Customer Work Order', subtitle: job.customer_po_no ? `PO ${job.customer_po_no}` : job.customer });
+                                                }}
+                                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-50 hover:border-amber-400 text-left transition-all"
+                                            >
+                                                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-clipboard-list text-base leading-none" /></div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Customer Work Order</div>
+                                                    <div className="text-sm font-semibold text-amber-900 truncate">{customerWo.filename}</div>
+                                                    {job.customer_po_no && <div className="text-[10px] text-amber-700 font-mono">PO: {job.customer_po_no}</div>}
+                                                </div>
+                                                <i className="fi fi-rr-eye text-amber-400 text-sm leading-none" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Quick Actions */}
                         <div className="card">

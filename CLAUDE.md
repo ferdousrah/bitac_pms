@@ -195,7 +195,8 @@ Upload uses PhpPresentation (server-side). Max 20MB. Slides are text-only — em
 ### 6. PCD Job Detail (`Pages/Pcd/JobDetail.tsx`) — consolidated sections
 - **Job Items** card sits ABOVE "PCD Workflow Progress" (full-width, collapsible).
 - ONE consolidated **"Operation Sheet(s)"** card (left column, below Work Order): per-item sheets (`job.item_operation_sheets`) when present, else legacy single `job.operation_sheet` / empty state. Don't re-add a separate per-item section.
-- ONE **"Attached Documents"** card merges what used to be "Source Documents" (RFQ Letter / Quotation / Customer WO preview cards) + "Job Reference" (all upstream inherited attachments, grouped). Don't re-split them.
+- **Job Items** is a per-item card list (not a plain table): each item shows description, qty badge, IED note, and its **drawings & sample photos as inline thumbnails/chips** (`rfq_items[].drawings/samples`, served from the controller with an `is_image` flag). Drawings/samples live HERE, not in a separate documents section.
+- **Source documents** (Customer RFQ Letter, Approved Quotation, Customer Work Order) are buttons in a sidebar **"Documents"** card (right column), each opening the PDF popup. The old left-column "Attached Documents" / "Source Documents" / "Job Reference" sections were removed in favour of these two homes.
 
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 

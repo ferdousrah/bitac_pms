@@ -136,11 +136,27 @@ class PcdInboxController extends Controller
                         ->whereNotNull('rfq_item_id')
                         ->mapWithKeys(fn ($i) => [$i->rfq_item_id => $i->ied_note])
                         ->all();
+                    $imgExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+                    // Per-item file → compact shape with an is_image flag so the
+                    // Job Items table can show image thumbnails inline.
+                    $mapFile = function ($f) use ($imgExt) {
+                        $ext = strtolower($f->extension ?? pathinfo($f->original_name ?? '', PATHINFO_EXTENSION));
+                        return [
+                            'id'        => $f->id,
+                            'url'       => $f->url,
+                            'filename'  => $f->original_name,
+                            'extension' => $ext ? strtoupper($ext) : null,
+                            'is_image'  => in_array($ext, $imgExt, true),
+                        ];
+                    };
                     return $rfqItems->map(fn ($i) => [
+                        'id'          => $i->id,
                         'description' => $i->job_description ?? $i->product?->name ?? '—',
                         'quantity'    => $i->quantity,
                         'unit'        => $i->unit,
                         'ied_note'    => $iedNoteByRfqItem[$i->id] ?? null,
+                        'drawings'    => collect($i->drawings ?? [])->map($mapFile)->values(),
+                        'samples'     => collect($i->samplePhotos ?? [])->map($mapFile)->values(),
                     ])->values();
                 })(),
                 // Upstream source documents — PCD officer can preview the
