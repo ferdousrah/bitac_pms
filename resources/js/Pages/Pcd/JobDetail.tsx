@@ -331,6 +331,13 @@ export default function JobDetail({ job, checklist }: Props) {
         if (isNaN(d.getTime())) return null;
         return Math.ceil((d.getTime() - Date.now()) / 86400000);
     })();
+    const dueShort = job.due_date ? job.due_date.replace(/ \d{4}$/, '') : '—';
+    const dueYear = job.due_date ? job.due_date.slice(-4) : '';
+    const dueDaysLabel = dueDays === null
+        ? ''
+        : (dueDays >= 0
+            ? ` · in ${dueDays} day${dueDays === 1 ? '' : 's'}`
+            : ` · ${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? '' : 's'} overdue`);
 
     return (
         <AppLayout
@@ -579,7 +586,8 @@ export default function JobDetail({ job, checklist }: Props) {
                 </div>
 
                 {/* === Production Routing hero — the live shop-floor tracker === */}
-                {routeTotal > 0 && (
+                {/* Temporarily hidden (set the guard back to `routeTotal > 0` to restore) */}
+                {false && routeTotal > 0 && (
                     <div className="card overflow-hidden animate-slide-up">
                         <div className="card-body bg-gradient-to-br from-amber-50/50 via-white to-brand-50/40">
                             <div className="flex items-start justify-between gap-4">
@@ -590,7 +598,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                         <h3 className="text-lg font-bold text-surface-900 truncate">{routeLabel}</h3>
                                     </div>
                                     <p className="text-xs text-surface-500 mt-0.5">
-                                        {checklist.released ? `Released to shops · ${job.released_at}` : 'Not yet released'} · stage {routeStage} of {routeTotal}
+                                        {checklist.released ? `Released from PCD to shop · ${job.released_at}` : 'Not yet released'} · stage {routeStage} of {routeTotal}
                                     </p>
                                 </div>
                                 <div className="text-right shrink-0">
@@ -627,7 +635,8 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                 )}
 
-                {/* === Quick stat tiles === */}
+                {/* === Quick stat tiles === (temporarily hidden) */}
+                {false && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-amber-400 p-4">
                         <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Quantity</div>
@@ -636,10 +645,9 @@ export default function JobDetail({ job, checklist }: Props) {
                     </div>
                     <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-rose-400 p-4">
                         <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Due Date</div>
-                        <div className="text-2xl font-extrabold text-surface-900 mt-0.5 leading-none">{job.due_date ? job.due_date.replace(/ \d{4}$/, '') : '—'}</div>
+                        <div className="text-2xl font-extrabold text-surface-900 mt-0.5 leading-none">{dueShort}</div>
                         <div className="text-[11px] text-surface-400 mt-1">
-                            {job.due_date ? job.due_date.slice(-4) : ''}
-                            {dueDays !== null && (dueDays >= 0 ? ` · in ${dueDays} day${dueDays === 1 ? '' : 's'}` : ` · ${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? '' : 's'} overdue`)}
+                            {dueYear}{dueDaysLabel}
                         </div>
                     </div>
                     <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-teal-400 p-4">
@@ -653,6 +661,7 @@ export default function JobDetail({ job, checklist }: Props) {
                         <div className="text-[11px] text-surface-400 mt-1 truncate">{job.customer}</div>
                     </div>
                 </div>
+                )}
 
                 {/* === PCD Workflow Progress — compact release gates === */}
                 <div className="card animate-slide-up">
@@ -686,7 +695,7 @@ export default function JobDetail({ job, checklist }: Props) {
                         {checklist.released && (
                             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">
                                 <i className="fi fi-rr-check-circle text-base leading-none" />
-                                <span><span className="font-semibold">Released to shops</span> · {formatDateTime(job.released_at)}</span>
+                                <span><span className="font-semibold">Released from PCD to shop</span> · {formatDateTime(job.released_at)}</span>
                             </div>
                         )}
                         {steps.map((step) => (
@@ -1094,57 +1103,45 @@ export default function JobDetail({ job, checklist }: Props) {
 
                     {/* Right sidebar */}
                     <div className="space-y-6">
-                        {/* Job Details */}
+                        {/* Job Details — label / right-aligned value rows */}
                         <div className="card">
                             <div className="card-header">
                                 <div className="flex items-center gap-2">
-                                    <i className="fi fi-rr-info text-brand-600" />
-                                    <h3 className="text-base font-semibold text-surface-900">
-                                        Job Details
-                                    </h3>
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                                    <h3 className="text-base font-semibold text-surface-900">Job Details</h3>
                                 </div>
                             </div>
-                            <div className="card-body space-y-4">
-                                <div>
-                                    <div className="form-label text-xs">Quantity</div>
-                                    <div className="text-surface-900 font-semibold">
-                                        {job.quantity}
+                            <div className="card-body py-1">
+                                <div className="divide-y divide-surface-100">
+                                    <div className="flex items-center justify-between gap-3 py-3">
+                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Quantity</span>
+                                        <span className="text-sm font-bold text-surface-900 font-mono tabular-nums">{job.quantity}</span>
                                     </div>
-                                </div>
-                                <div>
-                                    <div className="form-label text-xs">Priority</div>
-                                    <div>
-                                        <span className={priorityBadgeClass(job.priority)}>
-                                            {job.priority}
-                                        </span>
+                                    <div className="flex items-center justify-between gap-3 py-3">
+                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Priority</span>
+                                        <span className="text-sm font-bold text-surface-900 capitalize">{job.priority}</span>
                                     </div>
-                                </div>
-                                <div>
-                                    <div className="form-label text-xs">Due Date</div>
-                                    <div className="text-surface-900">
-                                        {formatDate(job.due_date)}
+                                    <div className="flex items-center justify-between gap-3 py-3">
+                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Due Date</span>
+                                        <span className="text-sm font-bold text-rose-600">{formatDate(job.due_date)}</span>
                                     </div>
-                                </div>
-                                <div>
-                                    <div className="form-label text-xs">Customer PO</div>
-                                    <div className="text-surface-900">
-                                        {job.customer_po_no || '—'}
+                                    <div className="flex items-center justify-between gap-3 py-3">
+                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Customer PO</span>
+                                        <span className="text-sm font-bold text-surface-900 font-mono tabular-nums">{job.customer_po_no || '—'}</span>
                                     </div>
-                                </div>
-                                <div>
-                                    <div className="form-label text-xs">Handoff Date</div>
-                                    <div className="text-surface-900">
-                                        {formatDateTime(job.pcd_handoff_at)}
+                                    <div className="flex items-center justify-between gap-3 py-3">
+                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Handoff Date</span>
+                                        <span className="text-sm font-bold text-surface-900">{formatDateTime(job.pcd_handoff_at)}</span>
                                     </div>
-                                </div>
-                                {job.notes && (
-                                    <div>
-                                        <div className="form-label text-xs">Notes</div>
-                                        <div className="text-sm text-surface-700 whitespace-pre-wrap p-3 bg-surface-50 rounded-lg border border-surface-200">
-                                            {job.notes}
+                                    {job.notes && (
+                                        <div className="py-3">
+                                            <div className="text-[11px] uppercase tracking-wider font-semibold text-surface-400 mb-1.5">Notes</div>
+                                            <div className="text-sm text-surface-700 whitespace-pre-wrap p-3 bg-surface-50 rounded-lg border border-surface-200">
+                                                {job.notes}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         </div>
 
