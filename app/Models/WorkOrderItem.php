@@ -8,7 +8,7 @@ class WorkOrderItem extends Model
 {
     protected $fillable = [
         'work_order_id', 'job_number', 'product_id', 'rfq_item_id', 'quotation_item_id',
-        'description', 'quantity', 'unit', 'status', 'display_order', 'notes', 'ied_note', 'pcd_note',
+        'description', 'part_no', 'quantity', 'unit', 'status', 'display_order', 'notes', 'ied_note', 'pcd_note',
     ];
 
     protected function casts(): array

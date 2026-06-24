@@ -33,6 +33,7 @@ class WorkOrderSectionController extends Controller
                 'id'          => $i->id,
                 'sequence'    => $idx + 1,
                 'description' => $i->description,
+                'part_no'     => $i->part_no,
                 'quantity'    => (float) $i->quantity,
                 'unit'        => $i->unit ?? 'pcs',
                 'pcd_note'    => $i->pcd_note,
@@ -43,6 +44,7 @@ class WorkOrderSectionController extends Controller
                 'id'          => null,
                 'sequence'    => $idx + 1,
                 'description' => $i->job_description ?? $i->product?->name ?? '—',
+                'part_no'     => null,
                 'quantity'    => (float) $i->quantity,
                 'unit'        => $i->unit ?? 'pcs',
                 'pcd_note'    => null,
@@ -69,7 +71,8 @@ class WorkOrderSectionController extends Controller
                 'customer_po_no' => $workOrder->customer_po_no,
                 'status'         => $workOrder->status,
                 'created_at'     => $workOrder->created_at->format('d/m/Y'),
-                'due_date'       => $workOrder->due_date?->format('d/m/Y'),
+                // Y-m-d for the editable date input on the form.
+                'due_date'       => $workOrder->due_date?->format('Y-m-d'),
                 'prepared_by'    => $workOrder->createdBy?->name ?? auth()->user()?->name ?? '—',
             ],
             'job_items' => $jobItems,
@@ -105,15 +108,18 @@ class WorkOrderSectionController extends Controller
                 \Illuminate\Validation\Rule::unique('work_orders', 'job_number')->ignore($workOrder->id),
             ],
             'department'            => 'nullable|string|max:200',
+            'due_date'              => 'nullable|date',
             'sections'              => 'required|array|min:1',
             'sections.*.section_id' => 'required|exists:sections,id',
             'sections.*.notes'      => 'nullable|string|max:2000',
             'sections.*.qc_notes'   => 'nullable|string|max:2000',
             'sections.*.remarks'    => 'nullable|string|max:2000',
-            // PCD edits to each item — description override + per-item note.
+            // PCD edits to each item — description, part no, qty + per-item note.
             'items'                 => 'nullable|array',
             'items.*.id'            => 'nullable|integer',
             'items.*.description'   => 'nullable|string|max:1000',
+            'items.*.part_no'       => 'nullable|string|max:100',
+            'items.*.quantity'      => 'nullable|numeric|min:0',
             'items.*.pcd_note'      => 'nullable|string|max:1000',
         ], [
             'job_number.unique' => 'This job number is already used on another work order.',
@@ -128,19 +134,25 @@ class WorkOrderSectionController extends Controller
             $workOrder->update([
                 'job_number'  => $jobNumber,
                 'department'  => $validated['department'] ?? null,
+                'due_date'    => $validated['due_date'] ?? null,
                 // Whoever submits the PCD Work Order form is the "Prepared By"
                 // on the printed sheet — stamped once, then preserved.
                 'prepared_by' => $workOrder->prepared_by ?? auth()->id(),
             ]);
 
-            // Persist PCD's per-item edits (description + note). Only rows
-            // with a matching id are updated — new rows aren't created here.
+            // Persist PCD's per-item edits (description, part no, qty + note).
+            // Only rows with a matching id are updated — new rows aren't created here.
             foreach ($validated['items'] ?? [] as $row) {
                 if (empty($row['id'])) continue;
-                $workOrder->items()->where('id', (int) $row['id'])->update([
+                $update = [
                     'description' => $row['description'] ?? null,
+                    'part_no'     => $row['part_no'] ?? null,
                     'pcd_note'    => $row['pcd_note'] ?? null,
-                ]);
+                ];
+                if (isset($row['quantity']) && $row['quantity'] !== '') {
+                    $update['quantity'] = (float) $row['quantity'];
+                }
+                $workOrder->items()->where('id', (int) $row['id'])->update($update);
             }
 
             // Wipe and recreate sections to preserve sequence
@@ -252,7 +264,7 @@ class WorkOrderSectionController extends Controller
                 $desc    = $i->description ?? $i->job_description ?? $i->product?->name ?? '—';
                 $qty     = $i->quantity ?? '';
                 $unit    = $i->unit ?? 'pcs';
-                $partNo  = ($idx + 1) . '/' . $itemCount;
+                $partNo  = !empty($i->part_no) ? $esc($i->part_no) : (($idx + 1) . '/' . $itemCount);
                 $pcdNote = $i->pcd_note ?? '';
 
                 $itemsHtml .= '<tr style="vertical-align: top;">';

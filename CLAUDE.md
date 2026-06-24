@@ -196,9 +196,13 @@ Upload uses PhpPresentation (server-side). Max 20MB. Slides are text-only — em
 Top→bottom: header band → **Production Routing hero** (live shop stepper: "X is running it now", overall %, stage N of M — from `job.sections` statuses) → **4 stat tiles** (Quantity / Due Date w/ "in N days" / Job Items / Customer PO) → two-column grid.
 - **Job Items** (full-width, collapsible, ABOVE the hero): per-item card list — description, qty badge, IED note, and inline **drawings & sample thumbnails/chips** (`rfq_items[].drawings/samples`, `is_image` flag from controller). Drawings/samples live HERE.
 - **PCD Workflow Progress** is a COMPACT 3-row gates list (MR/WO/OS w/ status badges + "Work Order PDF" button) — NOT the old big-circle stepper.
-- Left column: Workflow gates, Work Order (header bg, PDF + Edit), consolidated **Operation Sheet(s)** (per-item `job.item_operation_sheets`, View + PDF each; else legacy single `job.operation_sheet`), Gate Passes. MR/WO/OS headers use `bg-brand-50/60`.
-- Right sidebar: Job Details, **Material Requisitions** (optional gate), **Documents** (Customer RFQ Letter / Approved Quotation / Customer Work Order → PDF-popup buttons). "Quick Actions" + old "Attached Documents"/"Source Documents"/"Job Reference" sections were removed.
+- Left column: Workflow gates, Work Order (PDF + Edit), consolidated **Operation Sheet(s)** (per-item `job.item_operation_sheets`, View + PDF each; else legacy single `job.operation_sheet`), Gate Passes. Main-card headers are clean (no bg tint / no icon — just title + subtitle).
+- Right sidebar (each card header = a coloured dot bullet, not an icon): Job Details (amber dot, label/right-value rows), **Material Requisitions** (brand dot, optional gate), **Documents** (green dot — Customer RFQ Letter / Approved Quotation / Customer Work Order → PDF-popup buttons). "Quick Actions" + old "Attached Documents"/"Source Documents"/"Job Reference" sections were removed.
+- Production Routing hero + stat tiles are currently HIDDEN behind `{false && …}` (flip back to restore).
 - `openPdf(baseUrl, title, subtitle?)` helper: fetch `?preview=base64` → popup (new-tab fallback); reused for WO + op-sheet PDFs.
+
+### 7. PCD Work Order section-assign (`Pages/Pcd/SectionAssign.tsx`)
+BITAC paper-form layout for routing a job through shops. Editable by PCD: **Delivery date** (`due_date`), per-item **Quantity** + **Part No.** (`work_order_items.part_no`, added 2026-06) + description + PCD note, the section routing (drag-to-reorder), job number, department. The "Save Work Order" action card is `sticky bottom-4`. The routing card heading is just "Section". `WorkOrderSectionController@update` persists due_date + per-item qty/part_no; `@pdf` shows `part_no` (positional `n/total` fallback).
 
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 

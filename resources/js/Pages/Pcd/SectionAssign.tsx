@@ -39,6 +39,7 @@ interface JobItem {
     id: number | null;
     sequence: number;
     description: string;
+    part_no?: string | null;
     quantity: number;
     unit: string;
     pcd_note?: string | null;
@@ -184,7 +185,8 @@ export default function SectionAssign({
         sections: SectionRow[];
         job_number: string;
         department: string;
-        items: Array<{ id: number | null; description: string; pcd_note: string }>;
+        due_date: string;
+        items: Array<{ id: number | null; description: string; part_no: string; quantity: string; pcd_note: string }>;
     }>({
         sections: assigned_sections.map((s) => ({
             section_id: s.section_id,
@@ -199,16 +201,19 @@ export default function SectionAssign({
         job_number: String(work_order.job_number ?? work_order.suggested_job_number ?? ''),
         // কার্যবিন্যাস — PCD editable, defaults to PCD per BITAC convention.
         department: work_order.department ?? '',
-        // PCD-editable copy of the job items (description + per-item note).
-        // Quantity and unit stay read-only — those are commercially binding.
+        // Delivery date — PCD editable (Y-m-d).
+        due_date: work_order.due_date ?? '',
+        // PCD-editable copy of the job items (description, part no, qty, note).
         items: job_items.map((it) => ({
             id: it.id,
             description: it.description ?? '',
+            part_no: it.part_no ?? '',
+            quantity: String(it.quantity ?? ''),
             pcd_note: it.pcd_note ?? '',
         })),
     });
 
-    const updateItemField = (idx: number, field: 'description' | 'pcd_note', value: string) => {
+    const updateItemField = (idx: number, field: 'description' | 'part_no' | 'quantity' | 'pcd_note', value: string) => {
         const next = [...data.items];
         next[idx] = { ...next[idx], [field]: value };
         setData('items', next);
@@ -293,14 +298,19 @@ export default function SectionAssign({
                             {(errors as any).job_number && <p className="form-error">{(errors as any).job_number}</p>}
                             <div className="text-[11px] text-surface-500 mt-1 font-mono">{work_order.wo_number}</div>
                         </div>
-                        <div className="px-6 py-3 text-right">
+                        <div className="px-6 py-3 sm:text-right">
                             <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Date</div>
                             <div className="text-xl font-bold text-surface-900 mt-0.5">{work_order.created_at}</div>
-                            {work_order.due_date && (
-                                <div className="text-[11px] text-surface-500 mt-0.5">
-                                    Delivery: <span className="text-surface-700 font-semibold">{work_order.due_date}</span>
-                                </div>
-                            )}
+                            <div className="mt-2 flex items-center gap-2 sm:justify-end">
+                                <span className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Delivery</span>
+                                <input
+                                    type="date"
+                                    value={data.due_date}
+                                    onChange={e => setData('due_date', e.target.value)}
+                                    className="text-sm font-semibold text-surface-900 bg-transparent border-b border-dashed border-surface-300 focus:border-brand-500 focus:outline-none py-0.5"
+                                />
+                            </div>
+                            {(errors as any).due_date && <p className="form-error">{(errors as any).due_date}</p>}
                         </div>
                     </div>
 
@@ -344,6 +354,7 @@ export default function SectionAssign({
                                     <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Job Description</th>
                                     <th className="border border-surface-300 px-3 py-2 text-center w-24 font-semibold text-surface-700 text-xs">পরিমান (Qty)</th>
                                     <th className="border border-surface-300 px-3 py-2 text-center w-20 font-semibold text-surface-700 text-xs">Unit</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-left w-32 font-semibold text-surface-700 text-xs">Part No.</th>
                                     <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Note</th>
                                 </tr>
                             </thead>
@@ -361,10 +372,26 @@ export default function SectionAssign({
                                                 className="w-full text-sm text-surface-900 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1 resize-none"
                                             />
                                         </td>
-                                        <td className="border border-surface-300 px-3 py-2 text-right font-semibold text-surface-900 font-mono">
-                                            {it.quantity}
+                                        <td className="border border-surface-300 px-2 py-1.5 text-right">
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="any"
+                                                value={data.items[idx]?.quantity ?? ''}
+                                                onChange={e => updateItemField(idx, 'quantity', e.target.value)}
+                                                className="w-full text-sm text-right font-semibold text-surface-900 font-mono bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1"
+                                            />
                                         </td>
                                         <td className="border border-surface-300 px-3 py-2 text-center text-surface-700">{it.unit}</td>
+                                        <td className="border border-surface-300 px-2 py-1.5">
+                                            <input
+                                                type="text"
+                                                value={data.items[idx]?.part_no ?? ''}
+                                                onChange={e => updateItemField(idx, 'part_no', e.target.value)}
+                                                placeholder="Part no.…"
+                                                className="w-full text-sm text-surface-900 font-mono bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1"
+                                            />
+                                        </td>
                                         <td className="border border-surface-300 px-2 py-1.5">
                                             <textarea
                                                 value={data.items[idx]?.pcd_note ?? ''}
@@ -377,7 +404,7 @@ export default function SectionAssign({
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={5} className="border border-surface-300 px-3 py-4 text-center text-surface-400 italic text-xs">
+                                        <td colSpan={6} className="border border-surface-300 px-3 py-4 text-center text-surface-400 italic text-xs">
                                             No items linked to this job
                                         </td>
                                     </tr>
@@ -413,7 +440,7 @@ export default function SectionAssign({
                             <div className="card-header flex items-center justify-between">
                                 <div>
                                     <h2 className="text-base font-bold text-surface-900">
-                                        কার্যাদেশ পরিক্রমা — Production Shop Routing
+                                        Section
                                     </h2>
                                     <p className="text-xs text-surface-400 mt-0.5">
                                         {data.sections.length} shop{data.sections.length === 1 ? '' : 's'} in sequence
@@ -581,8 +608,8 @@ export default function SectionAssign({
                             </div>
                         </div>
 
-                        {/* Bottom action bar — sticks at the right column */}
-                        <div className="card">
+                        {/* Bottom action bar — sticky so Save is always reachable */}
+                        <div className="card sticky bottom-4 z-10 shadow-premium-lg">
                             <div className="card-body flex items-center justify-between gap-2">
                                 <Link
                                     href={`/pcd/inbox/${work_order.id}`}
