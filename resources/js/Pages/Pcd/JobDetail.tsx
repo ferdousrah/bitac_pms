@@ -312,6 +312,26 @@ export default function JobDetail({ job, checklist }: Props) {
     // they don't block release, so they shouldn't appear in the warning banner.
     const pendingSteps = steps.filter((s) => !s.done && !s.optional).map((s) => s.label);
 
+    // ── Production routing (work-order shops) → hero progress tracker ──────
+    const routeShops = [...job.sections].sort((a, b) => a.sequence - b.sequence);
+    const routeTotal = routeShops.length;
+    const routeDoneCount = routeShops.filter((s) => s.status === 'completed').length;
+    const routeRunning = routeShops.find((s) => s.status === 'in_progress');
+    const routeInProgCount = routeShops.filter((s) => s.status === 'in_progress').length;
+    const routePct = routeTotal ? Math.round(((routeDoneCount + 0.5 * routeInProgCount) / routeTotal) * 100) : 0;
+    const routeStage = routeRunning ? routeRunning.sequence : (routeDoneCount >= routeTotal && routeTotal > 0 ? routeTotal : routeDoneCount + 1);
+    const routeLabel = routeRunning
+        ? `${routeRunning.section.name} is running it now`
+        : (routeTotal > 0 && routeDoneCount >= routeTotal ? 'All shops completed' : 'Awaiting first shop');
+
+    // Days until due (parses the pre-formatted "24 Jun 2026" string).
+    const dueDays = (() => {
+        if (!job.due_date) return null;
+        const d = new Date(job.due_date);
+        if (isNaN(d.getTime())) return null;
+        return Math.ceil((d.getTime() - Date.now()) / 86400000);
+    })();
+
     return (
         <AppLayout
             header={
@@ -558,169 +578,145 @@ export default function JobDetail({ job, checklist }: Props) {
                     )}
                 </div>
 
-                {/* PCD Progress Banner */}
-                <div className="card animate-slide-up">
-                    <div className="card-header">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-base font-semibold text-surface-900">
-                                    PCD Workflow Progress
-                                </h3>
-                                <p className="text-xs text-surface-500 mt-0.5">
-                                    Complete all 3 steps to release this job to the shops
-                                </p>
+                {/* === Production Routing hero — the live shop-floor tracker === */}
+                {routeTotal > 0 && (
+                    <div className="card overflow-hidden animate-slide-up">
+                        <div className="card-body bg-gradient-to-br from-amber-50/50 via-white to-brand-50/40">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-amber-600">Production Routing</div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${routeRunning ? 'bg-amber-500 animate-pulse' : routeDoneCount >= routeTotal ? 'bg-green-500' : 'bg-surface-300'}`} />
+                                        <h3 className="text-lg font-bold text-surface-900 truncate">{routeLabel}</h3>
+                                    </div>
+                                    <p className="text-xs text-surface-500 mt-0.5">
+                                        {checklist.released ? `Released to shops · ${job.released_at}` : 'Not yet released'} · stage {routeStage} of {routeTotal}
+                                    </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Overall</div>
+                                    <div className="text-3xl font-extrabold text-surface-900 leading-none">{routePct}<span className="text-lg">%</span></div>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                {checklist.section_assign.done && (
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            // Stream the PDF via ?preview=base64 to dodge IDM/FDM interceptors.
-                                            try {
-                                                const res = await fetch(`/pcd/work-orders/${job.id}/pdf?preview=base64`, {
-                                                    credentials: 'same-origin',
-                                                    headers: { Accept: 'application/json' },
-                                                });
-                                                if (!res.ok) throw new Error('PDF fetch failed');
-                                                const data = await res.json();
-                                                const blob = new Blob(
-                                                    [Uint8Array.from(atob(data.data), (c) => c.charCodeAt(0))],
-                                                    { type: 'application/pdf' },
-                                                );
-                                                const url = URL.createObjectURL(blob);
-                                                setPdfPopup({
-                                                    open: true,
-                                                    url,
-                                                    title: 'Work Order',
-                                                    subtitle: job.job_number ? `Job #${job.job_number}` : job.wo_number,
-                                                });
-                                            } catch (e) {
-                                                window.open(`/pcd/work-orders/${job.id}/pdf?preview=1`, '_blank');
-                                            }
-                                        }}
-                                        className="btn-outline btn-sm"
-                                    >
-                                        <i className="fi fi-rr-file-pdf mr-1.5" />
-                                        View Work Order PDF
-                                    </button>
-                                )}
-                                {checklist.all_done && !checklist.released && (
-                                    <span className="badge badge-green">
-                                        <i className="fi fi-rr-check-circle mr-1" />
-                                        Ready to Release
-                                    </span>
-                                )}
+
+                            {/* Horizontal shop stepper */}
+                            <div className="mt-6 flex items-start">
+                                {routeShops.map((s, idx) => {
+                                    const done = s.status === 'completed';
+                                    const running = s.status === 'in_progress';
+                                    return (
+                                        <React.Fragment key={s.id}>
+                                            <div className="flex flex-col items-center text-center px-1" style={{ flex: '1 1 0' }}>
+                                                <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0 shadow-sm ${done ? 'bg-green-500 text-white' : running ? 'bg-amber-500 text-white' : 'bg-surface-200 text-surface-500'}`}>
+                                                    {done ? <i className="fi fi-rr-check text-sm leading-none" /> : s.sequence}
+                                                </div>
+                                                <div className="mt-2 min-w-0">
+                                                    <div className="text-sm font-semibold text-surface-900 truncate">{s.section.name}</div>
+                                                    <div className="text-[9px] uppercase tracking-wider text-surface-400 truncate">{s.section.code}</div>
+                                                    <span className={`mt-1 inline-block ${statusBadgeClass(s.status)}`}>{s.status}</span>
+                                                </div>
+                                            </div>
+                                            {idx < routeShops.length - 1 && (
+                                                <div className={`h-0.5 mt-[18px] rounded ${done ? 'bg-green-500' : 'bg-surface-200'}`} style={{ flex: '1 1 0' }} />
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
-                    <div className="card-body">
-                        {checklist.released && (
-                            <div className="alert alert-success mb-5">
-                                <i className="fi fi-rr-check-circle text-lg leading-none" />
-                                <div>
-                                    <div className="font-semibold">
-                                        Job released to shops
-                                    </div>
-                                    <div className="text-sm">
-                                        Released at {formatDateTime(job.released_at)}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                )}
 
-                        {!checklist.released && pendingSteps.length > 0 && (
-                            <div className="alert alert-warning mb-5">
-                                <i className="fi fi-rr-exclamation text-lg leading-none" />
-                                <div>
-                                    <div className="font-semibold">Pending steps</div>
-                                    <div className="text-sm">
-                                        {pendingSteps.join(', ')}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                {/* === Quick stat tiles === */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-amber-400 p-4">
+                        <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Quantity</div>
+                        <div className="text-2xl font-extrabold text-surface-900 mt-0.5 leading-none">{job.quantity}</div>
+                        <div className="text-[11px] text-surface-400 mt-1">units ordered</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-rose-400 p-4">
+                        <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Due Date</div>
+                        <div className="text-2xl font-extrabold text-surface-900 mt-0.5 leading-none">{job.due_date ? job.due_date.replace(/ \d{4}$/, '') : '—'}</div>
+                        <div className="text-[11px] text-surface-400 mt-1">
+                            {job.due_date ? job.due_date.slice(-4) : ''}
+                            {dueDays !== null && (dueDays >= 0 ? ` · in ${dueDays} day${dueDays === 1 ? '' : 's'}` : ` · ${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? '' : 's'} overdue`)}
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-teal-400 p-4">
+                        <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Job Items</div>
+                        <div className="text-2xl font-extrabold text-surface-900 mt-0.5 leading-none">{job.rfq_items.length}</div>
+                        <div className="text-[11px] text-surface-400 mt-1">line item{job.rfq_items.length === 1 ? '' : 's'}</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-surface-100 border-l-4 border-l-indigo-400 p-4">
+                        <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Customer PO</div>
+                        <div className="text-xl font-extrabold text-surface-900 mt-0.5 leading-none truncate">{job.customer_po_no || '—'}</div>
+                        <div className="text-[11px] text-surface-400 mt-1 truncate">{job.customer}</div>
+                    </div>
+                </div>
 
-                        {!checklist.released && checklist.all_done && (
-                            <div className="alert alert-info mb-5">
-                                <i className="fi fi-rr-info text-lg leading-none" />
-                                <div>
-                                    <div className="font-semibold">
-                                        All steps complete
-                                    </div>
-                                    <div className="text-sm">
-                                        This job is ready to be released to the shops.
-                                    </div>
-                                </div>
+                {/* === PCD Workflow Progress — compact release gates === */}
+                <div className="card animate-slide-up">
+                    <div className="card-header bg-brand-50/60">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <i className="fi fi-rr-list-check text-brand-600" />
+                                <h3 className="text-base font-semibold text-surface-900">PCD Workflow Progress</h3>
                             </div>
-                        )}
-
-                        {/* Steps pipeline */}
-                        <div className="relative">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-0">
-                                {steps.map((step, idx) => (
-                                    <div
-                                        key={step.key}
-                                        className="relative flex-1"
+                            <div className="flex items-center gap-2 shrink-0">
+                                {checklist.section_assign.done && (
+                                    <button
+                                        type="button"
+                                        onClick={() => openPdf(`/pcd/work-orders/${job.id}/pdf`, 'Work Order', job.job_number ? `Job #${job.job_number}` : job.wo_number)}
+                                        className="btn-outline btn-sm"
                                     >
-                                        {/* Connector line */}
-                                        {idx < steps.length - 1 && (
-                                            <div className="hidden md:block absolute top-7 left-1/2 right-0 h-0.5 bg-surface-200 z-0">
-                                                <div
-                                                    className={`h-full ${step.done ? 'bg-green-500' : 'bg-surface-200'}`}
-                                                    style={{ width: '100%' }}
-                                                />
-                                            </div>
-                                        )}
-                                        <Link
-                                            href={step.href}
-                                            className="relative z-10 block group"
-                                        >
-                                            <div className="flex flex-col items-center text-center px-2">
-                                                <div
-                                                    className={`w-14 h-14 rounded-full flex items-center justify-center border-4 transition-all ${
-                                                        step.done
-                                                            ? 'bg-green-500 border-green-100 text-white'
-                                                            : 'bg-white border-brand-100 text-brand-600 group-hover:border-brand-300'
-                                                    }`}
-                                                >
-                                                    {step.done ? (
-                                                        <i className="fi fi-rr-check text-xl leading-none" />
-                                                    ) : (
-                                                        <span className="text-lg font-bold">
-                                                            {step.number}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="mt-3">
-                                                    <div className="flex items-center justify-center gap-1.5 font-semibold text-surface-900 group-hover:text-brand-600 transition-colors">
-                                                        <i className={`fi ${step.icon} text-sm leading-none`} />
-                                                        {step.label}
-                                                    </div>
-                                                    <div className="text-xs text-surface-500 mt-0.5">
-                                                        {step.subtitle}
-                                                    </div>
-                                                    <div className="mt-2">
-                                                        {step.done ? (
-                                                            <span className="badge badge-green">
-                                                                Completed
-                                                            </span>
-                                                        ) : step.optional ? (
-                                                            <span className="badge badge-slate">
-                                                                Optional
-                                                            </span>
-                                                        ) : (
-                                                            <span className="badge badge-amber">
-                                                                Pending
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    </div>
-                                ))}
+                                        <i className="fi fi-rr-file-pdf mr-1.5" />
+                                        Work Order PDF
+                                    </button>
+                                )}
+                                {checklist.all_done && !checklist.released && (
+                                    <span className="badge badge-green"><i className="fi fi-rr-check-circle mr-1" />Ready</span>
+                                )}
                             </div>
                         </div>
+                        <p className="text-xs text-surface-500 mt-1">
+                            {routeTotal > 0 ? routeTotal : 3} gate{routeTotal === 1 ? '' : 's'} to release this job to the shops
+                        </p>
+                    </div>
+                    <div className="card-body space-y-2.5">
+                        {checklist.released && (
+                            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">
+                                <i className="fi fi-rr-check-circle text-base leading-none" />
+                                <span><span className="font-semibold">Released to shops</span> · {formatDateTime(job.released_at)}</span>
+                            </div>
+                        )}
+                        {steps.map((step) => (
+                            <Link
+                                key={step.key}
+                                href={step.href}
+                                className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all hover:shadow-sm ${
+                                    step.done
+                                        ? 'border-green-200 bg-green-50/40 hover:bg-green-50'
+                                        : step.optional
+                                            ? 'border-surface-200 hover:border-brand-300 hover:bg-brand-50/30'
+                                            : 'border-amber-200 bg-amber-50/30 hover:bg-amber-50'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 ${
+                                        step.done ? 'bg-green-500 text-white' : step.optional ? 'bg-surface-100 text-surface-500' : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                        {step.done ? <i className="fi fi-rr-check text-sm leading-none" /> : step.label.charAt(0)}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-surface-900 text-sm truncate">{step.label}</div>
+                                        <div className="text-xs text-surface-500 truncate">{step.subtitle}</div>
+                                    </div>
+                                </div>
+                                <span className={step.done ? 'badge badge-green' : step.optional ? 'badge badge-slate' : 'badge badge-amber'}>
+                                    {step.done ? 'completed' : step.optional ? 'optional' : 'pending'}
+                                </span>
+                            </Link>
+                        ))}
                     </div>
                 </div>
 
@@ -861,97 +857,6 @@ export default function JobDetail({ job, checklist }: Props) {
                                 )}
                             </div>
                         )}
-
-                        {/* Material Requisitions — collapsed by default */}
-                        <div className="card">
-                            <button
-                                type="button"
-                                onClick={() => setMrOpen(o => !o)}
-                                className="card-header w-full flex items-center justify-between bg-brand-50/60 hover:bg-brand-50 transition-colors text-left"
-                                aria-expanded={mrOpen}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <i className="fi fi-rr-box-alt text-brand-600" />
-                                    <h3 className="text-base font-semibold text-surface-900">
-                                        Material Requisitions
-                                    </h3>
-                                    <span className="badge badge-slate">
-                                        {job.material_requisitions.length}
-                                    </span>
-                                </div>
-                                <i className={`fi fi-rr-angle-${mrOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
-                            </button>
-                            {mrOpen && (
-                            <div className="card-body">
-                                {job.material_requisitions.length > 0 ? (
-                                    <>
-                                    <div className="flex justify-end mb-3">
-                                        <Link
-                                            href={`/pcd/material-requisitions/create?work_order_id=${job.id}`}
-                                            className="btn-primary btn-sm"
-                                        >
-                                            <i className="fi fi-rr-plus mr-1.5" />
-                                            Create New MR
-                                        </Link>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {job.material_requisitions.map((mr) => (
-                                            <div
-                                                key={mr.id}
-                                                className="flex items-center justify-between p-3 rounded-lg border border-surface-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all"
-                                            >
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
-                                                        <i className="fi fi-rr-box-alt text-brand-600" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="font-semibold text-surface-900 truncate">
-                                                            {mr.mrn_number}
-                                                        </div>
-                                                        <div className="text-xs text-surface-500">
-                                                            {mr.item_count} item{mr.item_count !== 1 ? 's' : ''} · {formatDate(mr.request_date)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <span className={statusBadgeClass(mr.status)}>
-                                                        {mr.status}
-                                                    </span>
-                                                    <Link
-                                                        href={`/pcd/material-requisitions/${mr.id}`}
-                                                        className="btn-ghost btn-xs"
-                                                    >
-                                                        View
-                                                        <i className="fi fi-rr-arrow-right ml-1" />
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    </>
-                                ) : (
-                                    <div className="empty-state">
-                                        <div className="empty-state-icon">
-                                            <i className="fi fi-rr-box-alt" />
-                                        </div>
-                                        <div className="empty-state-title">
-                                            No material requisitions
-                                        </div>
-                                        <div className="empty-state-text">
-                                            Create the first MR to request materials for this job.
-                                        </div>
-                                        <Link
-                                            href={`/pcd/material-requisitions/create?work_order_id=${job.id}`}
-                                            className="btn-primary btn-sm mt-3"
-                                        >
-                                            <i className="fi fi-rr-plus mr-1.5" />
-                                            Create MR
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
-                            )}
-                        </div>
 
                         {/* Work Order — PCD's internal routing slip. Defines the ordered
                             list of production shops the job will pass through. Shops
@@ -1238,6 +1143,49 @@ export default function JobDetail({ job, checklist }: Props) {
                                         <div className="text-sm text-surface-700 whitespace-pre-wrap p-3 bg-surface-50 rounded-lg border border-surface-200">
                                             {job.notes}
                                         </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Material Requisitions — optional gate */}
+                        <div className="card">
+                            <div className="card-header bg-brand-50/60">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <i className="fi fi-rr-box-alt text-brand-600" />
+                                        <h3 className="text-base font-semibold text-surface-900">Material Requisitions</h3>
+                                    </div>
+                                    <span className="badge badge-slate">{job.material_requisitions.length}</span>
+                                </div>
+                            </div>
+                            <div className="card-body">
+                                {job.material_requisitions.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {job.material_requisitions.map((mr) => (
+                                            <div key={mr.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-surface-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all">
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-surface-900 text-sm truncate">{mr.mrn_number}</div>
+                                                    <div className="text-[11px] text-surface-500">{mr.item_count} item{mr.item_count !== 1 ? 's' : ''} · {formatDate(mr.request_date)}</div>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <span className={statusBadgeClass(mr.status)}>{mr.status}</span>
+                                                    <Link href={`/pcd/material-requisitions/${mr.id}`} className="btn-ghost btn-xs"><i className="fi fi-rr-arrow-right" /></Link>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <Link href={`/pcd/material-requisitions/create?work_order_id=${job.id}`} className="btn-outline btn-sm w-full mt-1">
+                                            <i className="fi fi-rr-plus mr-1.5" /> New MR
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="text-xs text-surface-500 leading-relaxed">
+                                            Optional gate — none raised. Add a requisition only if the shops need material.
+                                        </p>
+                                        <Link href={`/pcd/material-requisitions/create?work_order_id=${job.id}`} className="btn-outline btn-sm w-full mt-3">
+                                            <i className="fi fi-rr-plus mr-1.5" /> Create MR
+                                        </Link>
                                     </div>
                                 )}
                             </div>
