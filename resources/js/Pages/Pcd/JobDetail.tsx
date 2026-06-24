@@ -665,12 +665,9 @@ export default function JobDetail({ job, checklist }: Props) {
 
                 {/* === PCD Workflow Progress — compact release gates === */}
                 <div className="card animate-slide-up">
-                    <div className="card-header bg-brand-50/60">
+                    <div className="card-header">
                         <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                                <i className="fi fi-rr-list-check text-brand-600" />
-                                <h3 className="text-base font-semibold text-surface-900">PCD Workflow Progress</h3>
-                            </div>
+                            <h3 className="text-base font-semibold text-surface-900">PCD Workflow Progress</h3>
                             <div className="flex items-center gap-2 shrink-0">
                                 {checklist.section_assign.done && (
                                     <button
@@ -871,10 +868,9 @@ export default function JobDetail({ job, checklist }: Props) {
                             list of production shops the job will pass through. Shops
                             pick up the job from their inbox in this sequence. */}
                         <div className="card">
-                            <div className="card-header bg-brand-50/60">
+                            <div className="card-header">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
-                                        <i className="fi fi-rr-diagram-project text-brand-600" />
                                         <h3 className="text-base font-semibold text-surface-900">
                                             Work Order
                                         </h3>
@@ -964,14 +960,11 @@ export default function JobDetail({ job, checklist }: Props) {
                             Each WO item has its own sheet/routing; falls back to the
                             legacy single-sheet view / empty state when no items. */}
                         <div id="operation-sheets" className="card">
-                            <div className="card-header bg-brand-50/60">
+                            <div className="card-header">
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <i className="fi fi-rr-document text-brand-600" />
-                                        <h3 className="text-base font-semibold text-surface-900">
-                                            Operation Sheet{(job.item_operation_sheets?.length ?? 0) > 1 ? 's — per item' : ''}
-                                        </h3>
-                                    </div>
+                                    <h3 className="text-base font-semibold text-surface-900">
+                                        Operation Sheet{(job.item_operation_sheets?.length ?? 0) > 1 ? 's — per item' : ''}
+                                    </h3>
                                     {checklist.operation_sheet.items_total > 0 && (
                                         <span className="badge badge-slate">
                                             {checklist.operation_sheet.items_covered}/{checklist.operation_sheet.items_total} done
@@ -1147,10 +1140,10 @@ export default function JobDetail({ job, checklist }: Props) {
 
                         {/* Material Requisitions — optional gate */}
                         <div className="card">
-                            <div className="card-header bg-brand-50/60">
+                            <div className="card-header">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <i className="fi fi-rr-box-alt text-brand-600" />
+                                        <span className="w-2 h-2 rounded-full bg-brand-500 shrink-0" />
                                         <h3 className="text-base font-semibold text-surface-900">Material Requisitions</h3>
                                     </div>
                                     <span className="badge badge-slate">{job.material_requisitions.length}</span>
@@ -1197,7 +1190,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                 <div className="card">
                                     <div className="card-header">
                                         <div className="flex items-center gap-2">
-                                            <i className="fi fi-rr-document-signed text-brand-600" />
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                                             <h3 className="text-base font-semibold text-surface-900">Documents</h3>
                                         </div>
                                     </div>
