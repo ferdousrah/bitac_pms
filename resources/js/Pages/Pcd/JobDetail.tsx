@@ -201,6 +201,13 @@ const statusBadgeClass = (status: string): string => {
     return 'badge badge-slate';
 };
 
+// Friendly status label — humanises the raw status, with a special case
+// for the released-to-shops state.
+const statusLabel = (status: string): string => {
+    if (status === 'released_to_shops') return 'Released from PCD to shop';
+    return (status ?? '').replace(/_/g, ' ');
+};
+
 const formatDate = (date: string | null): string => {
     if (!date) return '—';
     try {
@@ -391,8 +398,8 @@ export default function JobDetail({ job, checklist }: Props) {
                                             </span>
                                         )}
                                         <JobTypeBadge type={job.job_type} />
-                                        <span className={statusBadgeClass(job.status)}>
-                                            {job.status}
+                                        <span className={`${statusBadgeClass(job.status)} capitalize`}>
+                                            {statusLabel(job.status)}
                                         </span>
                                         <span className={priorityBadgeClass(job.priority)}>
                                             {job.priority}
