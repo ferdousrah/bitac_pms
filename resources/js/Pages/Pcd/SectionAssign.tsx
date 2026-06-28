@@ -524,19 +524,16 @@ export default function SectionAssign({
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                     <div className="text-center">
                                         <div className="h-12" />
-                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">প্রস্তুতকারী</div>
-                                        <div className="text-[10px] text-surface-500 mt-0.5">(Prepared by)</div>
+                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">Prepared by</div>
                                         <div className="text-[11px] text-surface-700 mt-1 font-medium">{work_order.prepared_by}</div>
                                     </div>
                                     <div className="text-center">
                                         <div className="h-12" />
-                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">যাচাইকারী</div>
-                                        <div className="text-[10px] text-surface-500 mt-0.5">(Verified by)</div>
+                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">Verified by</div>
                                     </div>
                                     <div className="text-center">
                                         <div className="h-12" />
-                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">অনুমোদনকারী</div>
-                                        <div className="text-[10px] text-surface-500 mt-0.5">(Approved by)</div>
+                                        <div className="border-t border-surface-400 pt-2 text-xs font-semibold text-surface-700">Approved by</div>
                                     </div>
                                 </div>
                             </div>
