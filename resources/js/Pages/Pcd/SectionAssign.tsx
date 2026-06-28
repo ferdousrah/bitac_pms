@@ -273,7 +273,6 @@ export default function SectionAssign({
                 <div className="card">
                     {/* Title strip */}
                     <div className="px-6 py-3 border-b border-surface-200 text-center">
-                        <div className="text-xs text-surface-500 uppercase tracking-wider">কার্যাদেশ</div>
                         <div className="text-lg font-bold text-surface-900">Work Order</div>
                     </div>
 
@@ -317,7 +316,7 @@ export default function SectionAssign({
                     {/* Section / Customer / Status row */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 border-b border-surface-200">
                         <div className="px-6 py-3 border-r border-surface-200">
-                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold mb-1">কার্যবিন্যাস</div>
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold mb-1">Department</div>
                             <input
                                 type="text"
                                 value={data.department}
@@ -328,7 +327,7 @@ export default function SectionAssign({
                             {(errors as any).department && <p className="form-error">{(errors as any).department}</p>}
                         </div>
                         <div className="px-6 py-3 border-r border-surface-200">
-                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">ক্রেতা / Customer</div>
+                            <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Party Name</div>
                             <div className="text-sm font-semibold text-surface-900 mt-0.5">{work_order.customer ?? '—'}</div>
                             {work_order.customer_po_no && (
                                 <div className="text-[11px] text-surface-500 font-mono mt-0.5">PO: {work_order.customer_po_no}</div>
@@ -337,7 +336,7 @@ export default function SectionAssign({
                         <div className="px-6 py-3">
                             <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Status</div>
                             <span className="badge badge-blue capitalize mt-1 inline-flex">
-                                {work_order.status?.replace(/_/g, ' ')}
+                                {work_order.status === 'released_to_shops' ? 'Released from PCD to shop' : work_order.status?.replace(/_/g, ' ')}
                             </span>
                         </div>
                     </div>
@@ -345,14 +344,14 @@ export default function SectionAssign({
                     {/* Job Items table — কার্যের বিশদ বিবরণ */}
                     <div className="px-6 py-4">
                         <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold mb-2">
-                            কার্যের বিশদ বিবরণ — Items
+                            Items
                         </div>
                         <table className="w-full text-sm border-collapse border border-surface-300">
                             <thead className="bg-surface-50">
                                 <tr>
-                                    <th className="border border-surface-300 px-3 py-2 text-center w-16 font-semibold text-surface-700 text-xs">Sl. No</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-center w-16 font-semibold text-surface-700 text-xs">SL No.</th>
                                     <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Job Description</th>
-                                    <th className="border border-surface-300 px-3 py-2 text-center w-24 font-semibold text-surface-700 text-xs">পরিমান (Qty)</th>
+                                    <th className="border border-surface-300 px-3 py-2 text-center w-24 font-semibold text-surface-700 text-xs">Qty</th>
                                     <th className="border border-surface-300 px-3 py-2 text-center w-20 font-semibold text-surface-700 text-xs">Unit</th>
                                     <th className="border border-surface-300 px-3 py-2 text-left w-32 font-semibold text-surface-700 text-xs">Part No.</th>
                                     <th className="border border-surface-300 px-3 py-2 text-left font-semibold text-surface-700 text-xs">Note</th>
@@ -479,18 +478,15 @@ export default function SectionAssign({
                                                     <thead className="bg-surface-50">
                                                         <tr>
                                                             <th className="border border-surface-300 px-2 py-2 w-10 text-xs font-semibold text-surface-700"></th>
-                                                            <th className="border border-surface-300 px-3 py-2 w-12 text-xs font-semibold text-surface-700">Sl.</th>
+                                                            <th className="border border-surface-300 px-3 py-2 w-16 text-xs font-semibold text-surface-700">SL No.</th>
                                                             <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
-                                                                কার্যাদেশ পরিক্রমা<br />
-                                                                <span className="font-normal text-surface-500">(Section)</span>
+                                                                Section
                                                             </th>
                                                             <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
-                                                                কার্যকাল<br />
-                                                                <span className="font-normal text-surface-500">(Operation / Task)</span>
+                                                                Operation / Task
                                                             </th>
                                                             <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
-                                                                মন্তব্য<br />
-                                                                <span className="font-normal text-surface-500">(Remarks)</span>
+                                                                Remarks
                                                             </th>
                                                             <th className="border border-surface-300 px-3 py-2 text-center w-28 text-xs font-semibold text-surface-700">Status</th>
                                                             <th className="border border-surface-300 px-2 py-2 w-12 text-xs font-semibold text-surface-700"></th>
