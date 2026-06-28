@@ -32,6 +32,7 @@ interface AssignedSection {
     sequence?: number;
     status?: string;
     notes?: string | null;
+    work_hours?: string | null;
     remarks?: string | null;
 }
 
@@ -69,6 +70,7 @@ interface Props {
 interface SectionRow {
     section_id: number;
     notes: string;
+    work_hours: string;
     remarks: string;
     section: SectionLite;
     status?: string;
@@ -93,12 +95,14 @@ function SortableSectionRow({
     row,
     index,
     onNotesChange,
+    onWorkHoursChange,
     onRemarksChange,
     onRemove,
 }: {
     row: SectionRow;
     index: number;
     onNotesChange: (value: string) => void;
+    onWorkHoursChange: (value: string) => void;
     onRemarksChange: (value: string) => void;
     onRemove: () => void;
 }) {
@@ -137,6 +141,15 @@ function SortableSectionRow({
                     <span className="font-mono">{row.section.code}</span>
                     {row.section.name_bn && <> · <span>{row.section.name_bn}</span></>}
                 </div>
+            </td>
+            <td className="border border-surface-300 px-2 py-1.5 align-top w-28">
+                <input
+                    type="text"
+                    value={row.work_hours}
+                    onChange={(e) => onWorkHoursChange(e.target.value)}
+                    placeholder="e.g. 2.5"
+                    className="w-full text-sm text-center text-surface-900 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded px-1.5 py-1"
+                />
             </td>
             <td className="border border-surface-300 px-2 py-1.5 align-top">
                 <textarea
@@ -191,6 +204,7 @@ export default function SectionAssign({
         sections: assigned_sections.map((s) => ({
             section_id: s.section_id,
             notes: s.notes ?? '',
+            work_hours: s.work_hours ?? '',
             remarks: s.remarks ?? '',
             section: s.section,
             status: s.status,
@@ -239,7 +253,7 @@ export default function SectionAssign({
     const addSection = (section: SectionLite) => {
         setData('sections', [
             ...data.sections,
-            { section_id: section.id, notes: '', remarks: '', section, status: 'pending' },
+            { section_id: section.id, notes: '', work_hours: '', remarks: '', section, status: 'pending' },
         ]);
     };
 
@@ -251,6 +265,13 @@ export default function SectionAssign({
         setData(
             'sections',
             data.sections.map((s) => s.section_id === sectionId ? { ...s, notes } : s),
+        );
+    };
+
+    const updateWorkHours = (sectionId: number, work_hours: string) => {
+        setData(
+            'sections',
+            data.sections.map((s) => s.section_id === sectionId ? { ...s, work_hours } : s),
         );
     };
 
@@ -482,6 +503,9 @@ export default function SectionAssign({
                                                             <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
                                                                 Section
                                                             </th>
+                                                            <th className="border border-surface-300 px-3 py-2 text-center w-28 text-xs font-semibold text-surface-700">
+                                                                Working Time / Hour
+                                                            </th>
                                                             <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
                                                                 Operation / Task
                                                             </th>
@@ -500,6 +524,9 @@ export default function SectionAssign({
                                                                 index={i}
                                                                 onNotesChange={(value) =>
                                                                     updateNotes(row.section_id, value)
+                                                                }
+                                                                onWorkHoursChange={(value) =>
+                                                                    updateWorkHours(row.section_id, value)
                                                                 }
                                                                 onRemarksChange={(value) =>
                                                                     updateRemarks(row.section_id, value)

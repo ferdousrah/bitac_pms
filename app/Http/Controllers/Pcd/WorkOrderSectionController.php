@@ -83,6 +83,7 @@ class WorkOrderSectionController extends Controller
                 'sequence'   => $s->sequence,
                 'status'     => $s->status,
                 'notes'      => $s->notes,
+                'work_hours' => $s->work_hours,
                 'qc_notes'   => $s->qc_notes,
                 'remarks'    => $s->remarks,
             ]),
@@ -112,6 +113,7 @@ class WorkOrderSectionController extends Controller
             'sections'              => 'required|array|min:1',
             'sections.*.section_id' => 'required|exists:sections,id',
             'sections.*.notes'      => 'nullable|string|max:2000',
+            'sections.*.work_hours' => 'nullable|string|max:50',
             'sections.*.qc_notes'   => 'nullable|string|max:2000',
             'sections.*.remarks'    => 'nullable|string|max:2000',
             // PCD edits to each item — description, part no, qty + per-item note.
@@ -163,6 +165,7 @@ class WorkOrderSectionController extends Controller
                     'sequence'   => $idx + 1,
                     'status'     => 'pending',
                     'notes'      => $row['notes'] ?? null,
+                    'work_hours' => $row['work_hours'] ?? null,
                     'qc_notes'   => $row['qc_notes'] ?? null,
                     'remarks'    => $row['remarks'] ?? null,
                 ]);
@@ -308,6 +311,7 @@ class WorkOrderSectionController extends Controller
             foreach ($sections->values() as $s) {
                 $secName    = $s->section?->name ?? '—';
                 $operation  = $s->notes ?? '';
+                $workHours  = $s->work_hours ?? '';
                 $remarks    = $s->remarks ?? '';
                 $signedDate = $s->completed_at?->format('d-m-Y') ?? '';
 
@@ -315,7 +319,7 @@ class WorkOrderSectionController extends Controller
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">'
                     .   '<b>' . $esc($secName) . '</b>'
                     . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt; min-height: 22pt;">&nbsp;</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center;">' . nl2br($esc($workHours)) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">' . nl2br($esc($operation)) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; min-height: 22pt;">&nbsp;</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9pt; text-align: center;">' . $esc($signedDate) . '</td>'
