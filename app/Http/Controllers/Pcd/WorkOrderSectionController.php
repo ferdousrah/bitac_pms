@@ -243,12 +243,12 @@ class WorkOrderSectionController extends Controller
             . '</tr>';
         // Column headers (6 columns)
         $itemsHtml .= '<tr style="background:#f3f4f6;">'
-            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 14%; vertical-align: middle;">Department</th>'
-            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 14%; vertical-align: middle;">Customer</th>'
+            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 16%; vertical-align: middle; white-space: nowrap;">Department</th>'
+            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 14%; vertical-align: middle; white-space: nowrap;">Party Name</th>'
             . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; vertical-align: middle;">Job Description</th>'
             . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 9%; vertical-align: middle;">Part No</th>'
-            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 11%; vertical-align: middle;">Quantity</th>'
-            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 18%; vertical-align: middle;">Remarks</th>'
+            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 9%; vertical-align: middle;">Qty</th>'
+            . '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 17%; vertical-align: middle;">Remarks</th>'
             . '</tr>';
         // Item rows — first row carries the rowspan'd Department + Customer cells.
         if ($items->isEmpty()) {
@@ -291,18 +291,19 @@ class WorkOrderSectionController extends Controller
         $routingHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-bottom: 14pt;">';
         $routingHtml .= '<thead>'
             . '<tr>'
-            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 28%; vertical-align: middle;">Routing / Section</th>'
-            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 22%; vertical-align: middle;">Operation Time (Hr)</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 20%; vertical-align: middle;">Section</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 13%; vertical-align: middle;">Working Time / Hour</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 19%; vertical-align: middle;">Operation Hour / Task</th>'
             .   '<th colspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt;">Receipt</th>'
-            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 22%; vertical-align: middle;">Remarks</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 18%; vertical-align: middle;">Remarks</th>'
             . '</tr>'
             . '<tr>'
-            .   '<th style="border: 0.75pt solid #000; padding: 3pt; font-size: 9pt; width: 13%;">Signature</th>'
-            .   '<th style="border: 0.75pt solid #000; padding: 3pt; font-size: 9pt; width: 15%;">Date</th>'
+            .   '<th style="border: 0.75pt solid #000; padding: 3pt; font-size: 9pt; width: 12%;">Signature</th>'
+            .   '<th style="border: 0.75pt solid #000; padding: 3pt; font-size: 9pt; width: 14%;">Date</th>'
             . '</tr>'
             . '</thead><tbody>';
         if ($sections->isEmpty()) {
-            $routingHtml .= '<tr><td colspan="5" style="border: 0.75pt solid #000; padding: 10pt; font-size: 9pt; color: #666; text-align: center; font-style: italic;">No sections assigned.</td></tr>';
+            $routingHtml .= '<tr><td colspan="6" style="border: 0.75pt solid #000; padding: 10pt; font-size: 9pt; color: #666; text-align: center; font-style: italic;">No sections assigned.</td></tr>';
         } else {
             foreach ($sections->values() as $s) {
                 $secName    = $s->section?->name ?? '—';
@@ -314,6 +315,7 @@ class WorkOrderSectionController extends Controller
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">'
                     .   '<b>' . $esc($secName) . '</b>'
                     . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt; min-height: 22pt;">&nbsp;</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">' . nl2br($esc($operation)) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; min-height: 22pt;">&nbsp;</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9pt; text-align: center;">' . $esc($signedDate) . '</td>'
@@ -323,7 +325,7 @@ class WorkOrderSectionController extends Controller
             // Trailing supplier-date row (Delivery Date).
             if ($workOrder->due_date) {
                 $routingHtml .= '<tr>'
-                    . '<td colspan="4" style="border: 0.75pt solid #000; padding: 6pt;">&nbsp;</td>'
+                    . '<td colspan="5" style="border: 0.75pt solid #000; padding: 6pt;">&nbsp;</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt; vertical-align: middle;">'
                     .   '<b>Delivery Date:</b><br>' . $esc($delivery)
                     . '</td>'
