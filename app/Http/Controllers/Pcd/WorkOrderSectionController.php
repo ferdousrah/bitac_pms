@@ -256,8 +256,8 @@ class WorkOrderSectionController extends Controller
         // Item rows — first row carries the rowspan'd Department + Customer cells.
         if ($items->isEmpty()) {
             $itemsHtml .= '<tr>'
-                . '<td style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: top;"><b>' . $esc($department) . '</b></td>'
-                . '<td style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: top;"><b>' . $customer . '</b>'
+                . '<td style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: top;"><b><span class="bn">' . $esc($department) . '</span></b></td>'
+                . '<td style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: top;"><b><span class="bn">' . $customer . '</span></b>'
                 .   ($customerPo !== '' ? '<div style="font-size: 8.5pt; color: #555; font-family: dejavusansmono; margin-top: 2pt;">PO: ' . $customerPo . '</div>' : '')
                 . '</td>'
                 . '<td colspan="4" style="border: 0.75pt solid #000; padding: 10pt; font-size: 9pt; color: #666; text-align: center; font-style: italic;">No items.</td>'
@@ -272,17 +272,17 @@ class WorkOrderSectionController extends Controller
 
                 $itemsHtml .= '<tr style="vertical-align: top;">';
                 if ($idx === 0) {
-                    $itemsHtml .= '<td rowspan="' . $itemCount . '" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: middle; text-align: center;"><b>' . $esc($department) . '</b></td>';
-                    $itemsHtml .= '<td rowspan="' . $itemCount . '" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: middle;"><b>' . $customer . '</b>'
+                    $itemsHtml .= '<td rowspan="' . $itemCount . '" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: middle; text-align: center;"><b><span class="bn">' . $esc($department) . '</span></b></td>';
+                    $itemsHtml .= '<td rowspan="' . $itemCount . '" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: middle;"><b><span class="bn">' . $customer . '</span></b>'
                         . ($customerPo !== '' ? '<div style="font-size: 8.5pt; color: #555; font-family: dejavusansmono; margin-top: 2pt;">PO: ' . $customerPo . '</div>' : '')
                         . '</td>';
                 }
                 $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt; vertical-align: top;">'
-                    . '<b>' . ($idx + 1) . '. </b>' . nl2br($esc($desc))
+                    . '<b>' . ($idx + 1) . '. </b><span class="bn">' . nl2br($esc($desc)) . '</span>'
                     . '</td>';
                 $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center; vertical-align: middle; font-family: dejavusansmono;">' . $partNo . '</td>';
                 $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $fmt($qty) . ' ' . $esc($unit) . '</td>';
-                $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9pt; vertical-align: top; color: #333;">' . nl2br($esc($pcdNote)) . '</td>';
+                $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9pt; vertical-align: top; color: #333;"><span class="bn">' . nl2br($esc($pcdNote)) . '</span></td>';
                 $itemsHtml .= '</tr>';
             }
         }
@@ -317,13 +317,13 @@ class WorkOrderSectionController extends Controller
 
                 $routingHtml .= '<tr style="vertical-align: top;">'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">'
-                    .   '<b>' . $esc($secName) . '</b>'
+                    .   '<b><span class="bn">' . $esc($secName) . '</span></b>'
                     . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center;">' . nl2br($esc($workHours)) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">' . nl2br($esc($operation)) . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center;"><span class="bn">' . nl2br($esc($workHours)) . '</span></td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;"><span class="bn">' . nl2br($esc($operation)) . '</span></td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; min-height: 22pt;">&nbsp;</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9pt; text-align: center;">' . $esc($signedDate) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt;">' . nl2br($esc($remarks)) . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt;"><span class="bn">' . nl2br($esc($remarks)) . '</span></td>'
                     . '</tr>';
             }
             // Trailing supplier-date row (Delivery Date).
