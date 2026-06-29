@@ -487,7 +487,7 @@ export default function OperationSheetBuilder({
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             <div className="form-group mb-0 lg:col-span-2">
                                 <label className="form-label">
-                                    Job Title
+                                    Item Name
                                 </label>
                                 <input
                                     type="text"
@@ -504,7 +504,7 @@ export default function OperationSheetBuilder({
 
                             <div className="form-group mb-0">
                                 <label className="form-label">
-                                    Job Description
+                                    Instruction
                                 </label>
                                 <input
                                     type="text"
