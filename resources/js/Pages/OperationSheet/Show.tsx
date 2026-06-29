@@ -119,7 +119,7 @@ export default function OperationSheetShow({ sheet }: any) {
                                             <th>Seq</th>
                                             <th>Operation</th>
                                             <th>Machine</th>
-                                            <th>Work Centre</th>
+                                            <th>Section</th>
                                             <th>Status</th>
                                             <th>Notes</th>
                                         </tr>
@@ -139,7 +139,7 @@ export default function OperationSheetShow({ sheet }: any) {
                                                     {step.machine?.name ?? '--'}
                                                 </td>
                                                 <td className="text-surface-600">
-                                                    {step.machine?.work_centre?.name ?? '--'}
+                                                    {step.section?.name || '--'}
                                                 </td>
                                                 <td>
                                                     <span
@@ -190,9 +190,9 @@ export default function OperationSheetShow({ sheet }: any) {
                                         </div>
 
                                         <div className="text-xs">
-                                            <div className="text-surface-400">Work Centre</div>
+                                            <div className="text-surface-400">Section</div>
                                             <div className="text-surface-700">
-                                                {step.machine?.work_centre?.name ?? '--'}
+                                                {step.section?.name || '--'}
                                             </div>
                                         </div>
 

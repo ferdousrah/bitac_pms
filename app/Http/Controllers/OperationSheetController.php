@@ -404,7 +404,7 @@ class OperationSheetController extends Controller
 
     public function show(OperationSheet $sheet)
     {
-        $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre']);
+        $sheet->load(['workOrder.product', 'workOrder.customer', 'steps.machine.workCentre', 'steps.section']);
         $qrCode = $this->service->generateQrImage($sheet->qr_code);
 
         return Inertia::render('OperationSheet/Show', [
@@ -428,6 +428,7 @@ class OperationSheetController extends Controller
                     'id'              => $s->id,
                     'sequence_number' => $s->sequence,
                     'operation_name'  => $s->operation_name,
+                    'section'         => ['name' => $s->section?->name ?? ''],
                     'machine'         => [
                         'name'        => $s->machine?->name ?? '',
                         // Nest the work centre so the Show page can read
