@@ -1,6 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 
 const STATUS_BADGE: Record<string, string> = {
@@ -25,18 +25,27 @@ export default function PcdInbox({ jobs, stats }: any) {
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [search, setSearch] = useState('');
-    const [tab, setTab] = useState<'all' | 'released' | 'mr_pending'>('all');
+    const [tab, setTab] = useState<'all' | 'released' | 'wo_pending' | 'op_sheet_pending'>('all');
 
     const q = search.trim().toLowerCase();
     const filteredJobs = (jobs as any[]).filter((job) => {
         if (tab === 'released' && job.status !== 'released_to_shops') return false;
-        if (tab === 'mr_pending' && (job.status === 'cancelled' || job.checklist?.material_requisition?.done)) return false;
+        if (tab === 'wo_pending' && (job.status === 'cancelled' || job.checklist?.section_assign?.done)) return false;
+        if (tab === 'op_sheet_pending' && (job.status === 'cancelled' || job.checklist?.operation_sheet?.done)) return false;
         if (!q) return true;
         return [job.job_number, job.customer_po_no, job.wo_number, job.customer]
             .filter(Boolean)
             .some((v) => String(v).toLowerCase().includes(q));
     });
     const awaiting = (jobs as any[]).filter((j) => j.status !== 'cancelled').length;
+
+    // Client-side pagination over the filtered list.
+    const perPage = 10;
+    const [page, setPage] = useState(1);
+    useEffect(() => { setPage(1); }, [search, tab]);
+    const totalPages = Math.max(1, Math.ceil(filteredJobs.length / perPage));
+    const safePage = Math.min(page, totalPages);
+    const pageJobs = filteredJobs.slice((safePage - 1) * perPage, safePage * perPage);
 
     const openCancel = (job: any, e: React.MouseEvent) => {
         e.preventDefault();
@@ -85,30 +94,19 @@ export default function PcdInbox({ jobs, stats }: any) {
             <div className="space-y-6 animate-fade-in">
 
                 {/* Page header */}
-                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-                    <div>
-                        <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-amber-600">Production Control · PCD</div>
-                        <h1 className="text-2xl font-extrabold text-surface-900 mt-0.5">Job Queue</h1>
-                        <p className="text-sm text-surface-500">Jobs handed off from IED awaiting PCD processing</p>
-                    </div>
-                    <div className="relative w-full lg:w-72">
-                        <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-xs leading-none" />
-                        <input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search job #, PO, customer…"
-                            className="form-input pl-9 w-full"
-                        />
-                    </div>
+                <div>
+                    <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-amber-600">Production Control · PCD</div>
+                    <h1 className="text-2xl font-extrabold text-surface-900 mt-0.5">Job Queue</h1>
+                    <p className="text-sm text-surface-500">Jobs handed off from IED awaiting PCD processing</p>
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
                     <StatTile label="Total Jobs" value={stats.total} icon="fi-rr-clipboard-list" color="blue" tag="in scope" />
                     <StatTile label="Pending PCD" value={stats.pending} icon="fi-rr-time-check" color="amber" tag="clear" />
                     <StatTile label="Released to Shops" value={stats.released} icon="fi-rr-check-circle" color="green" tag="live" />
-                    <StatTile label="MR Pending" value={stats.mr_pending} icon="fi-rr-document" color="red" tag="action" />
+                    <StatTile label="WO Pending" value={stats.wo_pending ?? 0} icon="fi-rr-sitemap" color="amber" tag="action" />
+                    <StatTile label="Op Sheet Pending" value={stats.op_sheet_pending ?? 0} icon="fi-rr-document" color="red" tag="action" />
                     <StatTile label="Closed" value={stats.cancelled ?? 0} icon="fi-rr-cross-circle" color="rose" tag="period" />
                 </div>
 
@@ -119,8 +117,19 @@ export default function PcdInbox({ jobs, stats }: any) {
                             <h2 className="text-base font-bold text-surface-900">PCD Job Queue</h2>
                             {awaiting > 0 && <span className="badge badge-amber">{awaiting} awaiting</span>}
                         </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="relative w-full sm:w-64">
+                            <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-xs leading-none" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search job #, PO, customer…"
+                                className="form-input pl-9 w-full"
+                            />
+                        </div>
                         <div className="flex items-center gap-0.5 bg-surface-100 rounded-lg p-0.5">
-                            {([['all', 'All'], ['released', 'Released'], ['mr_pending', 'MR Pending']] as const).map(([key, lbl]) => (
+                            {([['all', 'All'], ['released', 'Released'], ['wo_pending', 'WO Pending'], ['op_sheet_pending', 'Op Sheet Pending']] as const).map(([key, lbl]) => (
                                 <button
                                     key={key}
                                     type="button"
@@ -130,6 +139,7 @@ export default function PcdInbox({ jobs, stats }: any) {
                                     {lbl}
                                 </button>
                             ))}
+                        </div>
                         </div>
                     </div>
 
@@ -150,7 +160,7 @@ export default function PcdInbox({ jobs, stats }: any) {
                             </div>
                         ) : (
                             <div className="divide-y divide-surface-100">
-                                {filteredJobs.map((job: any) => {
+                                {pageJobs.map((job: any) => {
                                     const isClosed = job.status === 'cancelled';
                                     const c = job.checklist ?? {};
                                     return (
@@ -206,9 +216,36 @@ export default function PcdInbox({ jobs, stats }: any) {
                         )}
                     </div>
 
-                    <div className="flex items-center justify-between px-5 py-3 border-t border-surface-100 text-xs text-surface-400">
-                        <span>Showing {filteredJobs.length} of {jobs.length} job{jobs.length === 1 ? '' : 's'} in queue</span>
-                        <span>Auto-refreshed · just now</span>
+                    <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-3 border-t border-surface-100 text-xs text-surface-400">
+                        <span>
+                            {filteredJobs.length === 0
+                                ? 'No jobs'
+                                : `Showing ${(safePage - 1) * perPage + 1}–${Math.min(safePage * perPage, filteredJobs.length)} of ${filteredJobs.length} job${filteredJobs.length === 1 ? '' : 's'}`}
+                        </span>
+                        <div className="flex items-center gap-3">
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={safePage <= 1}
+                                        className="px-2 py-1 rounded-md border border-surface-200 text-surface-600 hover:bg-surface-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        <i className="fi fi-rr-angle-left text-[10px] leading-none" />
+                                    </button>
+                                    <span className="px-1 font-semibold text-surface-600">Page {safePage} of {totalPages}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={safePage >= totalPages}
+                                        className="px-2 py-1 rounded-md border border-surface-200 text-surface-600 hover:bg-surface-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        <i className="fi fi-rr-angle-right text-[10px] leading-none" />
+                                    </button>
+                                </div>
+                            )}
+                            <span>Auto-refreshed · just now</span>
+                        </div>
                     </div>
                 </div>
             </div>

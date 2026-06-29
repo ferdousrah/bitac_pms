@@ -49,6 +49,8 @@ class PcdInboxController extends Controller
             'released'   => $jobs->where('status', 'released_to_shops')->count(),
             'cancelled'  => $jobs->where('status', 'cancelled')->count(),
             'mr_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['material_requisition']['done'])->count(),
+            'wo_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['section_assign']['done'])->count(),
+            'op_sheet_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['operation_sheet']['done'])->count(),
         ];
 
         return Inertia::render('Pcd/Inbox', [
