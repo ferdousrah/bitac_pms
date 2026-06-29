@@ -270,7 +270,8 @@ export default function OperationSheetBuilder({
     machines,
     operations,
     sheet,
-}: Props) {
+    defaultInstruction = '',
+}: Props & { defaultInstruction?: string }) {
     const isEdit = !!sheet;
 
     const initialSteps: Step[] = sheet && sheet.steps.length > 0
@@ -300,7 +301,7 @@ export default function OperationSheetBuilder({
         work_order_item_id: item ? item.id : null,
         // Job Title inherits from item description on create; PCD can edit before saving.
         job_title: sheet?.job_title ?? item?.description ?? '',
-        job_description: sheet?.job_description ?? '',
+        job_description: sheet?.job_description ?? defaultInstruction ?? '',
         material: sheet?.material ?? '',
         steps: initialSteps,
     });

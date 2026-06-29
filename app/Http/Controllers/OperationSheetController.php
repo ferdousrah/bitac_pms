@@ -107,7 +107,21 @@ class OperationSheetController extends Controller
             return redirect()->route('operation-sheets.edit', $existing);
         }
 
+        // Auto "as per drawing / sample / drawing and sample" derived from the
+        // RFQ item's attached references — pre-fills the Instruction field.
+        $defaultInstruction = '';
+        if ($item) {
+            $item->loadMissing('rfqItem.drawings', 'rfqItem.samplePhotos');
+            $ref = $item->rfqItem;
+            $hasDrawing = $ref && $ref->drawings->isNotEmpty();
+            $hasSample  = $ref && $ref->samplePhotos->isNotEmpty();
+            $defaultInstruction = $hasDrawing && $hasSample
+                ? 'as per drawing and sample'
+                : ($hasDrawing ? 'as per drawing' : ($hasSample ? 'as per sample' : ''));
+        }
+
         return Inertia::render('OperationSheet/Builder', [
+            'defaultInstruction' => $defaultInstruction,
             'workOrder' => [
                 'id'         => $workOrder->id,
                 'wo_number'  => $workOrder->wo_number,
