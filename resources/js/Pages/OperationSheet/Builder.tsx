@@ -223,7 +223,7 @@ function SortableStepCard({
                                 type="number"
                                 min="0"
                                 max="100"
-                                step="0.1"
+                                step="any"
                                 value={step.weight_pct}
                                 onChange={(e) =>
                                     onChange({ weight_pct: e.target.value })
