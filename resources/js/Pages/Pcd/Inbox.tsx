@@ -188,8 +188,6 @@ export default function PcdInbox({ jobs, stats }: any) {
                                             {/* PCD workflow mini-steps */}
                                             {!isClosed ? (
                                                 <div className="hidden lg:flex items-center justify-center gap-1 w-[300px] shrink-0">
-                                                    <MiniStep done={c.material_requisition?.done} icon="fi-rr-clipboard-list" label="MR" sub={c.material_requisition?.done ? 'done' : 'optional'} muted />
-                                                    <span className="w-4 h-px bg-surface-200" />
                                                     <MiniStep done={c.section_assign?.done} icon="fi-rr-sitemap" label="Work Order" sub={c.section_assign?.done ? `${c.section_assign?.count ?? 0} shops` : '—'} />
                                                     <span className="w-4 h-px bg-surface-200" />
                                                     <MiniStep done={c.operation_sheet?.done} icon="fi-rr-document" label="Op Sheet" sub={c.operation_sheet?.done ? 'done' : '—'} />
