@@ -62,9 +62,19 @@ class OperationSheetService
 
         $jobTitle = $esc($sheet->job_title ?: ($item?->description ?? $wo->product?->name ?? '—'));
         $jobNo    = $esc($wo->job_number ?? '—');
-        $jobDesc  = $esc($sheet->job_description ?? '');
         $customer = $esc($wo->customer?->name ?? '—');
         $material = $esc($sheet->material ?? '');
+
+        // Instruction — a manual job_description wins; otherwise auto-derive
+        // "as per drawing / sample / drawing and sample" from the RFQ item's
+        // attached references (drawings + sample photos).
+        $rfqRef     = $item?->rfqItem;
+        $hasDrawing = $rfqRef && $rfqRef->drawings->isNotEmpty();
+        $hasSample  = $rfqRef && $rfqRef->samplePhotos->isNotEmpty();
+        $asPer = $hasDrawing && $hasSample
+            ? 'as per drawing and sample'
+            : ($hasDrawing ? 'as per drawing' : ($hasSample ? 'as per sample' : ''));
+        $jobDesc = $esc(trim((string) ($sheet->job_description ?? '')) !== '' ? $sheet->job_description : $asPer);
 
         // Part No is item-sequence/total when this is an item-wise sheet.
         $partNo = '—';
@@ -88,7 +98,7 @@ class OperationSheetService
         // Row 1: Job Title | Job No
         $headerHtml .= '<tr>'
             . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt; width: 65%;">'
-            .   '<b>Job Title:</b> ' . $jobTitle
+            .   '<b>Item Name:</b> <span class="bn">' . $jobTitle . '</span>'
             . '</td>'
             . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt;">'
             .   '<b>Job No:</b> <b style="font-family: dejavusansmono;">' . $jobNo . '</b>'
@@ -97,10 +107,10 @@ class OperationSheetService
         // Row 2: Job Description | Customer
         $headerHtml .= '<tr>'
             . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt;">'
-            .   '<b>Job Description:</b> ' . $jobDesc
+            .   '<b>Instruction:</b> <span class="bn">' . $jobDesc . '</span>'
             . '</td>'
             . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt;">'
-            .   '<b>Customer:</b> ' . $customer
+            .   '<b>Party Name:</b> <span class="bn">' . $customer . '</span>'
             . '</td>'
             . '</tr>';
         // Row 3: Material | Part No + Quantity
@@ -154,7 +164,7 @@ class OperationSheetService
         // Operation routing table — English headers + section names.
         $routingHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-bottom: 14pt;">';
         $routingHtml .= '<thead><tr style="background:#f3f4f6;">'
-            . '<th style="border: 0.75pt solid #000; padding: 5pt; font-size: 10pt; width: 12%;">Sl. No</th>'
+            . '<th style="border: 0.75pt solid #000; padding: 5pt; font-size: 10pt; width: 12%;">SL. No</th>'
             . '<th style="border: 0.75pt solid #000; padding: 5pt; font-size: 10pt;">Operation</th>'
             . '<th style="border: 0.75pt solid #000; padding: 5pt; font-size: 10pt; width: 25%;">Section</th>'
             . '<th style="border: 0.75pt solid #000; padding: 5pt; font-size: 10pt; width: 28%;">Remarks</th>'
