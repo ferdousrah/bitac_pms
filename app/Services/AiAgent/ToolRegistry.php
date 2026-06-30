@@ -500,25 +500,8 @@ DESC,
                     ?? $wo->sections->firstWhere('status', 'rework')
                     ?? $wo->sections->firstWhere('status', 'ready');
 
-            // Weighted progress %
-            $progressPct = (function () use ($wo) {
-                if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) return 100;
-                if ($wo->status === 'cancelled') return null;
-                $sheet = $wo->operationSheets->first();
-                if (!$sheet) return 0;
-                $steps = $sheet->steps;
-                if ($steps->isEmpty()) return 0;
-                $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
-                if ($weightSum > 0) {
-                    $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
-                    $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
-                    return (int) round(min(100, $done + $wip * 0.5));
-                }
-                $total = $steps->count();
-                $done  = $steps->where('status', 'completed')->count();
-                $wip   = $steps->where('status', 'in_progress')->count();
-                return (int) round((($done + $wip * 0.5) / $total) * 100);
-            })();
+            // Section-weighted progress % (see WorkOrder::production_progress).
+            $progressPct = $wo->production_progress;
 
             return [
                 'job_number'  => $wo->job_number,

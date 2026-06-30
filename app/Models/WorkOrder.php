@@ -152,33 +152,50 @@ class WorkOrder extends Model
     }
 
     /**
-     * Weighted production progress, 0-100. Returns null for cancelled WOs.
-     * Mirrors DashboardController/ReportController logic; uses the first
-     * operation sheet's steps with their weight_pct. Falls back to equal
-     * weighting when no weights are set. In-progress steps count as half.
+     * Section-weighted production progress, 0-100. Returns null for cancelled WOs.
+     *
+     * Each routing section carries a weight_pct (PCD-assigned, sums to 100). A
+     * section's own completion is the quantity-average of its operation steps
+     * (WorkOrderSection::progressFraction()). Overall progress is therefore
+     * Σ(section_weight × section_completion) / Σ(section_weight). When no
+     * section weights are set, sections are weighted equally.
      */
     public function getProductionProgressAttribute(): ?int
     {
         if (in_array($this->status, ['qc_passed', 'ready_for_delivery', 'delivered'], true)) return 100;
         if ($this->status === 'cancelled') return null;
 
-        $sheet = $this->operationSheets->first() ?? $this->operationSheets()->with('steps')->first();
-        if (!$sheet) return 0;
+        $breakdown = $this->sectionProgressBreakdown();
+        if ($breakdown->isEmpty()) return 0;
 
-        $steps = $sheet->relationLoaded('steps') ? $sheet->steps : $sheet->steps()->get();
-        if ($steps->isEmpty()) return 0;
-
-        // Quantity-aware: each step contributes its weight × completion fraction
-        // (completed_qty / target_qty), falling back to status (½ for in-progress)
-        // when no target qty is set. See OperationStep::progressFraction().
-        $weightSum = $steps->sum(fn ($s) => (float) $s->weight_pct);
+        $weightSum = $breakdown->sum('weight');
         if ($weightSum > 0) {
-            $acc = $steps->sum(fn ($s) => (float) $s->weight_pct * $s->progressFraction());
-            return (int) round(min(100, $acc));
+            $acc = $breakdown->sum(fn ($b) => $b['weight'] * $b['fraction']);
+            return (int) round(min(100, ($acc / $weightSum) * 100));
         }
-        $total = $steps->count();
-        $acc   = $steps->sum(fn ($s) => $s->progressFraction());
-        return (int) round(($acc / $total) * 100);
+        // No weights set → equal-weight the sections.
+        return (int) round($breakdown->avg('fraction') * 100);
+    }
+
+    /**
+     * Per-section progress rows used by the WO detail + production views:
+     * [{section_id, name, code, weight, fraction, pct, status}, ...]
+     */
+    public function sectionProgressBreakdown(): \Illuminate\Support\Collection
+    {
+        $sections = $this->relationLoaded('sections') ? $this->sections : $this->sections()->with('section')->get();
+        return $sections->map(function ($wos) {
+            $frac = $wos->progressFraction();
+            return [
+                'section_id' => $wos->section_id,
+                'name'       => $wos->section?->name,
+                'code'       => $wos->section?->code,
+                'weight'     => (float) $wos->weight_pct,
+                'fraction'   => $frac,
+                'pct'        => (int) round($frac * 100),
+                'status'     => $wos->status,
+            ];
+        })->values();
     }
 
     /**

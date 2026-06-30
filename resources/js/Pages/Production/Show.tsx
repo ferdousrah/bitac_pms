@@ -61,6 +61,8 @@ interface Wos {
     started_at: string | null;
     completed_at: string | null;
     section: SectionLite;
+    weight_pct: number;
+    section_progress: number;
     work_order: {
         id: number;
         wo_number: string;
@@ -221,6 +223,11 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         <span className={`badge ${STATUS_BADGE[wos.status] ?? 'badge-slate'}`}>
                                             {STATUS_LABEL[wos.status] ?? wos.status}
                                         </span>
+                                        {wos.weight_pct > 0 && (
+                                            <span className="badge badge-violet" title="This shop's share of the whole job, and how much of it is done">
+                                                <i className="fi fi-rr-chart-pie-alt text-[9px]" /> {wos.weight_pct.toFixed(2)}% of job · {wos.section_progress}% done
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-600">
                                         <span><i className="fi fi-rr-building text-surface-400" /> {wos.work_order.customer}</span>
@@ -534,9 +541,6 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         <span className={`badge ${sb.cls} text-[10px]`}>
                             <i className={`fi ${sb.icon} text-[9px]`} /> {sb.label}
                         </span>
-                        {step.weight_pct > 0 && (
-                            <span className="text-[10px] text-surface-400">{step.weight_pct.toFixed(1)}% of progress</span>
-                        )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-surface-500 flex-wrap">
                         {subSections.length > 0 && canAct ? (

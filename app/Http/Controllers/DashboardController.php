@@ -40,7 +40,7 @@ class DashboardController extends Controller
 
         // ── Recent Work Orders ────────────────────────────────────────
         $recentWorkOrders = WorkOrder::with([
-            'product', 'customer', 'operationSheets.steps',
+            'product', 'customer', 'operationSheets.steps', 'sections.section',
             'ncrs' => fn($q) => $q->whereIn('status', ['open', 'in_rework']),
         ])
             ->latest()->limit(8)->get()
@@ -164,28 +164,11 @@ class DashboardController extends Controller
     }
 
     /**
-     * Compute weighted production progress %. Mirrors WorkOrderController so
-     * the dashboard and the WO list show the same number.
+     * Section-weighted production progress % — delegates to the WorkOrder model
+     * so the dashboard, the WO list and the production views all agree.
      */
     private function progressFor(WorkOrder $wo): ?int
     {
-        if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) return 100;
-        if ($wo->status === 'cancelled') return null;
-
-        $sheet = $wo->operationSheets->first();
-        if (!$sheet) return 0;
-        $steps = $sheet->steps;
-        if ($steps->isEmpty()) return 0;
-
-        $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
-        if ($weightSum > 0) {
-            $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
-            $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
-            return (int) round(min(100, $done + $wip * 0.5));
-        }
-        $total = $steps->count();
-        $done  = $steps->where('status', 'completed')->count();
-        $wip   = $steps->where('status', 'in_progress')->count();
-        return (int) round((($done + $wip * 0.5) / $total) * 100);
+        return $wo->production_progress;
     }
 }

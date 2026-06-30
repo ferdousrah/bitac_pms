@@ -523,6 +523,10 @@ class ProductionController extends Controller
                     'code'    => $workOrderSection->section->code,
                     'name_bn' => $workOrderSection->section->name_bn,
                 ],
+                // Section-level weightage (share of the whole job) + this
+                // section's own completion, by quantity.
+                'weight_pct'       => (float) $workOrderSection->weight_pct,
+                'section_progress' => (int) round($workOrderSection->progressFraction() * 100),
                 'work_order' => [
                     'id'         => $workOrderSection->workOrder->id,
                     'wo_number'  => $workOrderSection->workOrder->wo_number,

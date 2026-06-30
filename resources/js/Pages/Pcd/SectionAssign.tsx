@@ -30,6 +30,7 @@ interface AssignedSection {
     section_id: number;
     section: SectionLite;
     sequence?: number;
+    weight_pct?: number;
     status?: string;
     notes?: string | null;
     work_hours?: string | null;
@@ -69,6 +70,7 @@ interface Props {
 
 interface SectionRow {
     section_id: number;
+    weight_pct: number;
     notes: string;
     work_hours: string;
     remarks: string;
@@ -96,6 +98,7 @@ function SortableSectionRow({
     index,
     onNotesChange,
     onWorkHoursChange,
+    onWeightChange,
     onRemarksChange,
     onRemove,
 }: {
@@ -103,6 +106,7 @@ function SortableSectionRow({
     index: number;
     onNotesChange: (value: string) => void;
     onWorkHoursChange: (value: string) => void;
+    onWeightChange: (value: string) => void;
     onRemarksChange: (value: string) => void;
     onRemove: () => void;
 }) {
@@ -140,6 +144,21 @@ function SortableSectionRow({
                 <div className="text-[11px] text-surface-400 mt-0.5">
                     <span className="font-mono">{row.section.code}</span>
                     {row.section.name_bn && <> · <span>{row.section.name_bn}</span></>}
+                </div>
+            </td>
+            <td className="border border-surface-300 px-2 py-1.5 align-middle w-24">
+                <div className="relative">
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={row.weight_pct || ''}
+                        onChange={(e) => onWeightChange(e.target.value)}
+                        placeholder="0"
+                        className="w-full text-sm text-center font-semibold text-surface-900 bg-transparent border border-transparent focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-100 rounded pl-1.5 pr-5 py-1"
+                    />
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-surface-400 pointer-events-none">%</span>
                 </div>
             </td>
             <td className="border border-surface-300 px-2 py-1.5 align-top w-28">
@@ -203,6 +222,7 @@ export default function SectionAssign({
     }>({
         sections: assigned_sections.map((s) => ({
             section_id: s.section_id,
+            weight_pct: s.weight_pct ?? 0,
             notes: s.notes ?? '',
             work_hours: s.work_hours ?? '',
             remarks: s.remarks ?? '',
@@ -253,7 +273,7 @@ export default function SectionAssign({
     const addSection = (section: SectionLite) => {
         setData('sections', [
             ...data.sections,
-            { section_id: section.id, notes: '', work_hours: '', remarks: '', section, status: 'pending' },
+            { section_id: section.id, weight_pct: 0, notes: '', work_hours: '', remarks: '', section, status: 'pending' },
         ]);
     };
 
@@ -273,6 +293,29 @@ export default function SectionAssign({
             'sections',
             data.sections.map((s) => s.section_id === sectionId ? { ...s, work_hours } : s),
         );
+    };
+
+    const updateWeight = (sectionId: number, value: string) => {
+        const n = value === '' ? 0 : parseFloat(value);
+        setData(
+            'sections',
+            data.sections.map((s) => s.section_id === sectionId ? { ...s, weight_pct: isNaN(n) ? 0 : n } : s),
+        );
+    };
+
+    // Sum of section weights — PCD aims for 100. Badge turns green at 100.
+    const totalWeight = data.sections.reduce((acc, s) => acc + (Number(s.weight_pct) || 0), 0);
+
+    // Distribute 100% equally across all sections (pads the first row for an exact 100).
+    const balanceWeights = () => {
+        const n = data.sections.length;
+        if (n === 0) return;
+        const each = Math.floor((100 / n) * 100) / 100;
+        const remainder = +(100 - each * n).toFixed(2);
+        setData('sections', data.sections.map((s, i) => ({
+            ...s,
+            weight_pct: i === 0 ? +(each + remainder).toFixed(2) : each,
+        })));
     };
 
     const updateRemarks = (sectionId: number, remarks: string) => {
@@ -457,18 +500,33 @@ export default function SectionAssign({
                     {/* Routing table */}
                     <div className="lg:col-span-2">
                         <div className="card">
-                            <div className="card-header flex items-center justify-between">
+                            <div className="card-header flex items-center justify-between gap-3">
                                 <div>
                                     <h2 className="text-base font-bold text-surface-900">
                                         Section
                                     </h2>
                                     <p className="text-xs text-surface-400 mt-0.5">
-                                        {data.sections.length} shop{data.sections.length === 1 ? '' : 's'} in sequence
+                                        {data.sections.length} shop{data.sections.length === 1 ? '' : 's'} in sequence · weightage drives job progress
                                     </p>
                                 </div>
-                                <span className="badge badge-blue">
-                                    {data.sections.length} total
-                                </span>
+                                {data.sections.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={balanceWeights}
+                                            className="btn-ghost btn-sm text-xs"
+                                            title="Distribute 100% equally across all sections"
+                                        >
+                                            <i className="fi fi-rr-physics text-xs" /> Auto-balance
+                                        </button>
+                                        <span
+                                            className={`badge ${Math.abs(totalWeight - 100) < 0.01 ? 'badge-green' : totalWeight > 100 ? 'badge-red' : 'badge-amber'}`}
+                                            title="Sum of all section weightages — should total 100%"
+                                        >
+                                            Σ {totalWeight.toFixed(2)}%
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="card-body p-0">
@@ -503,6 +561,9 @@ export default function SectionAssign({
                                                             <th className="border border-surface-300 px-3 py-2 text-left text-xs font-semibold text-surface-700">
                                                                 Section
                                                             </th>
+                                                            <th className="border border-surface-300 px-3 py-2 text-center w-24 text-xs font-semibold text-surface-700">
+                                                                Weightage
+                                                            </th>
                                                             <th className="border border-surface-300 px-3 py-2 text-center w-28 text-xs font-semibold text-surface-700">
                                                                 Working Time / Hour
                                                             </th>
@@ -527,6 +588,9 @@ export default function SectionAssign({
                                                                 }
                                                                 onWorkHoursChange={(value) =>
                                                                     updateWorkHours(row.section_id, value)
+                                                                }
+                                                                onWeightChange={(value) =>
+                                                                    updateWeight(row.section_id, value)
                                                                 }
                                                                 onRemarksChange={(value) =>
                                                                     updateRemarks(row.section_id, value)

@@ -223,26 +223,8 @@ function SortableStepCard({
                             </select>
                         </div>
 
-                        {/* Weightage % — contribution to overall job progress */}
-                        <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
-                            <label className="form-label-optional">Weightage %</label>
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="any"
-                                value={step.weight_pct}
-                                onChange={(e) =>
-                                    onChange({ weight_pct: e.target.value })
-                                }
-                                className="form-input"
-                                placeholder="0.0"
-                                title="This step's weightage in overall job progress. All step weightages should sum to 100."
-                            />
-                        </div>
-
                         {/* Target Qty — pieces to produce at this step (defaults to item qty) */}
-                        <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
+                        <div className="form-group sm:col-span-2 lg:col-span-4 mb-0">
                             <label className="form-label-optional">Target Qty</label>
                             <input
                                 type="number"
@@ -369,24 +351,6 @@ export default function OperationSheetBuilder({
         const sorted = [...assigned].sort((a, b) => a.sequence - b.sequence);
         return sorted.map((s) => ({ id: s.id, name: s.name, code: s.code }));
     }, [workOrder.assigned_sections]);
-
-    // Sum of all step weights. PCD officer aims for 100%. Color in the footer
-    // turns green at 100, amber while in flux, red if overshot.
-    const totalWeight = useMemo(() => {
-        return data.steps.reduce((acc, s) => acc + (parseFloat(s.weight_pct) || 0), 0);
-    }, [data.steps]);
-
-    // Distribute 100% equally across all steps. Quick way to balance a fresh sheet.
-    const equalBalance = () => {
-        const n = data.steps.length;
-        if (n === 0) return;
-        const each = Math.floor((100 / n) * 100) / 100; // 2 decimals
-        const remainder = +(100 - each * n).toFixed(2); // pad the first row so total == exactly 100
-        setData('steps', data.steps.map((s, i) => ({
-            ...s,
-            weight_pct: i === 0 ? (each + remainder).toFixed(2) : each.toFixed(2),
-        })));
-    };
 
     // Add a row to a specific section group. Section is implicit — the new row
     // inherits the group's section_id so the user never picks it.
@@ -712,52 +676,9 @@ export default function OperationSheetBuilder({
                         );
                     })()}
 
-                    {/* Weightage summary — sum should be 100 for accurate job progress tracking */}
-                    {data.steps.length > 0 && (
-                        <div className={`card border-2 ${
-                            Math.abs(totalWeight - 100) < 0.01
-                                ? 'border-emerald-200 bg-emerald-50/40'
-                                : totalWeight > 100
-                                    ? 'border-red-200 bg-red-50/40'
-                                    : 'border-amber-200 bg-amber-50/40'
-                        }`}>
-                            <div className="card-body flex items-center justify-between gap-3 flex-wrap">
-                                <div className="flex items-center gap-3">
-                                    <i className={`fi ${
-                                        Math.abs(totalWeight - 100) < 0.01
-                                            ? 'fi-sr-check-circle text-emerald-500'
-                                            : totalWeight > 100
-                                                ? 'fi-sr-cross-circle text-red-500'
-                                                : 'fi-sr-info text-amber-500'
-                                    } text-lg leading-none`} />
-                                    <div>
-                                        <div className="text-sm font-bold text-surface-900">
-                                            Total Weightage: <span className="font-mono">{totalWeight.toFixed(2)}%</span>
-                                            <span className="text-surface-400 font-normal"> / 100%</span>
-                                        </div>
-                                        <div className="text-[11px] text-surface-500 mt-0.5">
-                                            {Math.abs(totalWeight - 100) < 0.01
-                                                ? '✓ Balanced — each step contributes to overall job progress.'
-                                                : totalWeight > 100
-                                                    ? 'Total exceeds 100%. Adjust step weightages or use auto-balance.'
-                                                    : 'Weightages should sum to 100% for accurate progress tracking.'}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={equalBalance}
-                                        className="btn-outline btn-sm"
-                                        title="Distribute 100% equally across all steps"
-                                    >
-                                        <i className="fi fi-rr-equality text-xs leading-none" />
-                                        Equal Split
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* Section weightage (each shop's share of the job) is set on the
+                        Work Order routing page by PCD — not per operation here. Operations
+                        are tracked by quantity (Target Qty above). */}
 
                     <div className="flex items-center justify-end gap-3">
                         <Link href={`/work-orders/${workOrder.id}`} className="btn-outline">

@@ -81,6 +81,7 @@ class WorkOrderSectionController extends Controller
                 'section_id' => $s->section_id,
                 'section'    => ['id' => $s->section->id, 'name' => $s->section->name, 'code' => $s->section->code, 'name_bn' => $s->section->name_bn],
                 'sequence'   => $s->sequence,
+                'weight_pct' => (float) $s->weight_pct,
                 'status'     => $s->status,
                 'notes'      => $s->notes,
                 'work_hours' => $s->work_hours,
@@ -114,6 +115,7 @@ class WorkOrderSectionController extends Controller
             'due_date'              => 'nullable|date',
             'sections'              => 'required|array|min:1',
             'sections.*.section_id' => 'required|exists:sections,id',
+            'sections.*.weight_pct' => 'nullable|numeric|min:0|max:100',
             'sections.*.notes'      => 'nullable|string|max:2000',
             'sections.*.work_hours' => 'nullable|string|max:50',
             'sections.*.qc_notes'   => 'nullable|string|max:2000',
@@ -165,6 +167,7 @@ class WorkOrderSectionController extends Controller
                 $workOrder->sections()->create([
                     'section_id' => $row['section_id'],
                     'sequence'   => $idx + 1,
+                    'weight_pct' => (float) ($row['weight_pct'] ?? 0),
                     'status'     => 'pending',
                     'notes'      => $row['notes'] ?? null,
                     'work_hours' => $row['work_hours'] ?? null,

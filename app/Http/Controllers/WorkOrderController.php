@@ -13,7 +13,7 @@ class WorkOrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps', 'rfq:id,job_type', 'jobCategory']);
+        $query = WorkOrder::with(['product', 'customer', 'createdBy', 'operationSheets.steps', 'sections.section', 'rfq:id,job_type', 'jobCategory']);
 
         if ($search = $request->input('search')) {
             // job_number is an unsigned int — strip prefixes like "Job", "#", spaces
@@ -61,32 +61,11 @@ class WorkOrderController extends Controller
                 'due_date'     => $wo->due_date?->format('d/m/Y'),
                 'is_overdue'   => $wo->is_overdue,
                 'created_at'   => $wo->created_at->format('d/m/Y'),
-                'progress_pct' => (function () use ($wo) {
-                    if (in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'])) {
-                        return 100;
-                    }
-                    if ($wo->status === 'cancelled') return null;
-
-                    // Multi-item: average each sheet's own progress so a WO
-                    // with 2 items where Item 1 is 100% but Item 2 is 50% reads
-                    // as 75% on the list, not 100% (which the old code did by
-                    // only checking the first sheet).
-                    $sheets = $wo->operationSheets;
-                    if ($sheets->isEmpty()) return null;
-
-                    // Quantity-aware per-step fraction (completed_qty / target_qty),
-                    // weighted by weight_pct; status fallback when no target qty.
-                    $perSheet = $sheets->map(function ($sheet) {
-                        $steps = $sheet->steps;
-                        if ($steps->isEmpty()) return 0;
-                        $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
-                        if ($weightSum > 0) {
-                            return min(100, $steps->sum(fn($s) => (float) $s->weight_pct * $s->progressFraction()));
-                        }
-                        return ($steps->sum(fn($s) => $s->progressFraction()) / $steps->count()) * 100;
-                    });
-                    return (int) round($perSheet->avg());
-                })(),
+                // Section-weighted progress — Σ(section weight × section completion).
+                // See WorkOrder::getProductionProgressAttribute().
+                'progress_pct' => $wo->operationSheets->isEmpty() && $wo->sections->isEmpty()
+                    ? null
+                    : $wo->production_progress,
             ]),
             'filters'    => [
                 'search'   => $request->input('search', ''),
@@ -262,14 +241,9 @@ class WorkOrderController extends Controller
         if ($total === 0) {
             $pct = 0;
         } else {
-            $weightSum = $steps->sum(fn ($s) => (float) $s->weight_pct);
-            if ($weightSum > 0) {
-                $doneW = $steps->where('status', 'completed')->sum(fn ($s) => (float) $s->weight_pct);
-                $wipW  = $steps->where('status', 'in_progress')->sum(fn ($s) => (float) $s->weight_pct);
-                $pct   = (int) round(min(100, $doneW + $wipW * 0.5));
-            } else {
-                $pct   = (int) round((($completed + $inProgress * 0.5) / $total) * 100);
-            }
+            // Quantity-aware: average each step's completion fraction
+            // (completed_qty / target_qty), status fallback when no target.
+            $pct = (int) round($steps->avg(fn ($s) => $s->progressFraction()) * 100);
             if ($isTerminal) $pct = 100;
         }
 
