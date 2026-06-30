@@ -98,7 +98,9 @@ export default function MachineCreateEdit({ machine, sections }: any) {
                                         className="form-select" required>
                                         <option value="">Select section...</option>
                                         {sections.map((s: any) => (
-                                            <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                            <option key={s.id} value={s.id}>
+                                                {s.parent_id ? `↳ ${s.name} (${s.code}) — under ${s.parent_name}` : `${s.name} (${s.code})`}
+                                            </option>
                                         ))}
                                     </select>
                                     {errors.section_id && <p className="form-error">{errors.section_id}</p>}

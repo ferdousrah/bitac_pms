@@ -234,6 +234,17 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 ### Deployment (Coolify)
 - Dockerfile-based; `docker/entrypoint.sh` auto-runs `migrate --force` + `storage:link` + caches on boot, and Dockerfile builds Vite assets. `git push` → Coolify rebuilds/redeploys (migrations apply automatically). App is a **PWA** — hard-refresh (Ctrl+Shift+R) after deploy to bust the cached bundle. See `docs/DEPLOYMENT.md`.
 
+## 🏭 Production Module Extension (multi-phase — IN PROGRESS, 2026-06)
+
+> Big initiative: move production from all-or-nothing section status → **quantity-based WIP flow** with sub-sections, daily logs, and partial forwarding. Approved design decisions: extend operation-steps as the "leg" (add sub_section_id + qty), **sequential** sub-sections, **per-item weightage sums to 100**, **section-level partial forward**. UI must stay clean/organized (many features landing on the Production section).
+
+**Phases:** 1) Sub-section foundation ✅ · 2) Quantity model + daily log + qty-based progress · 3) Partial forward (section qty ledger, handoff qty) + Upcoming Jobs · 4) Per-section Job-Detail (production-cycle) page + machine-running state + progress/PDF sync.
+
+### Phase 1 — Sub-sections (done)
+- `sections.parent_id` (self-FK, **one level deep**). `Section`: `parent()`/`children()`, scopes `topLevel()`/`subSections()`, `isSubSection()`. A sub-section is always `type=production_shop`.
+- `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
+- Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
+
 ## 🚀 Quick Commands
 
 ```bash

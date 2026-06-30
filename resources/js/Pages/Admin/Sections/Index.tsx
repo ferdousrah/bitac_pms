@@ -103,14 +103,25 @@ export default function SectionsIndex({ sections, filters }: any) {
                                 </thead>
                                 <tbody>
                                     {sections.map((s: any) => (
-                                        <tr key={s.id}>
+                                        <tr key={s.id} className={s.is_sub ? 'bg-surface-50/50' : ''}>
                                             <td className="text-surface-400 font-mono">{s.display_order}</td>
                                             <td>
-                                                <span className="font-mono font-semibold text-surface-700 text-xs bg-surface-100 px-2 py-0.5 rounded">
+                                                <span className={`font-mono font-semibold text-xs px-2 py-0.5 rounded ${s.is_sub ? 'text-violet-700 bg-violet-50' : 'text-surface-700 bg-surface-100'}`}>
                                                     {s.code}
                                                 </span>
                                             </td>
-                                            <td className="font-semibold text-surface-900">{s.name}</td>
+                                            <td>
+                                                <div className="flex items-center gap-1.5">
+                                                    {s.is_sub && <i className="fi fi-rr-corner-down-right text-surface-300 text-[11px] leading-none ml-3" />}
+                                                    <span className={s.is_sub ? 'text-surface-700' : 'font-semibold text-surface-900'}>{s.name}</span>
+                                                    {!s.is_sub && s.children_count > 0 && (
+                                                        <span className="badge badge-slate text-[9px]">{s.children_count} sub</span>
+                                                    )}
+                                                    {s.is_sub && s.parent_name && (
+                                                        <span className="text-[10px] text-surface-400">· under {s.parent_name}</span>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="text-surface-600">{s.name_bn ?? '—'}</td>
                                             <td>
                                                 <span className={`badge ${TYPE_BADGE[s.type] ?? 'badge-slate'}`}>
@@ -150,13 +161,15 @@ export default function SectionsIndex({ sections, filters }: any) {
                     {/* Mobile cards */}
                     <div className="card-body lg:hidden space-y-3">
                         {sections.map((s: any) => (
-                            <div key={s.id} className="rounded-xl border border-surface-100 p-4 space-y-3">
+                            <div key={s.id} className={`rounded-xl border p-4 space-y-3 ${s.is_sub ? 'border-violet-100 bg-violet-50/30 ml-4' : 'border-surface-100'}`}>
                                 <div className="flex items-start justify-between">
                                     <div>
-                                        <span className="font-mono font-semibold text-surface-700 text-xs bg-surface-100 px-2 py-0.5 rounded">
+                                        <span className={`font-mono font-semibold text-xs px-2 py-0.5 rounded ${s.is_sub ? 'text-violet-700 bg-violet-50' : 'text-surface-700 bg-surface-100'}`}>
                                             {s.code}
                                         </span>
                                         <div className="font-semibold text-surface-900 text-sm mt-1">{s.name}</div>
+                                        {s.is_sub && s.parent_name && <div className="text-[10px] text-surface-400">↳ under {s.parent_name}</div>}
+                                        {!s.is_sub && s.children_count > 0 && <div className="text-[10px] text-surface-400">{s.children_count} sub-section{s.children_count !== 1 && 's'}</div>}
                                         {s.name_bn && <div className="text-xs text-surface-500">{s.name_bn}</div>}
                                     </div>
                                     <span className={`badge ${TYPE_BADGE[s.type] ?? 'badge-slate'}`}>

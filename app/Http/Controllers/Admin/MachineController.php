@@ -11,6 +11,33 @@ use Inertia\Inertia;
 
 class MachineController extends Controller
 {
+    /**
+     * Active production shops + their sub-sections, ordered as a one-level tree
+     * (each shop followed by its sub-sections) with parent context — so the
+     * machine form's section dropdown reads hierarchically.
+     */
+    private function sectionOptions()
+    {
+        $all = Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code', 'parent_id']);
+        $byParent = $all->whereNotNull('parent_id')->groupBy('parent_id');
+        $nameById = $all->pluck('name', 'id');
+        $ordered = collect();
+        foreach ($all->whereNull('parent_id') as $top) {
+            $ordered->push($top);
+            foreach ($byParent->get($top->id, collect()) as $c) $ordered->push($c);
+        }
+        foreach ($all->whereNotNull('parent_id') as $c) {
+            if (!$ordered->contains('id', $c->id)) $ordered->push($c);
+        }
+        return $ordered->map(fn ($s) => [
+            'id'          => $s->id,
+            'name'        => $s->name,
+            'code'        => $s->code,
+            'parent_id'   => $s->parent_id,
+            'parent_name' => $s->parent_id ? ($nameById[$s->parent_id] ?? null) : null,
+        ])->values();
+    }
+
     public function index(Request $request)
     {
         $q = Machine::with('section')->orderBy('name');
@@ -58,7 +85,7 @@ class MachineController extends Controller
         return Inertia::render('Admin/Machines/Index', [
             'machines' => $machines,
             'fleet'    => MachineHealthService::fleetSummary(),
-            'sections' => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'sections' => $this->sectionOptions(),
             'filters'  => $request->only(['search', 'section_id', 'current_state', 'status']),
         ]);
     }
@@ -66,7 +93,7 @@ class MachineController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Machines/CreateEdit', [
-            'sections' => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'sections' => $this->sectionOptions(),
         ]);
     }
 
@@ -161,7 +188,7 @@ class MachineController extends Controller
                 'rate_group_student'        => $machine->rate_group_student,
                 'rate_group_public'         => $machine->rate_group_public,
             ],
-            'sections' => Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'sections' => $this->sectionOptions(),
         ]);
     }
 
