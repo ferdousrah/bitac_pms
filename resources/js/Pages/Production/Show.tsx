@@ -88,6 +88,7 @@ interface OpStep {
     operator: string | null;
     machine_id: number | null;
     sub_section: string | null;
+    sub_section_id: number | null;
     estimated_hours: number;
     actual_hours: number;
     weight_pct: number;
@@ -162,6 +163,7 @@ interface Props {
     siblings_count: number;
     machines?: OptionLite[];
     operators?: OptionLite[];
+    sub_sections?: OptionLite[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -176,7 +178,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [] }: Props) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [] }: Props) {
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
 
@@ -393,7 +395,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
-                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} />
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={sub_sections} />
                                     ))}
                                 </div>
                             ))}
@@ -459,7 +461,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     );
 }
 
-function OpStepRow({ step, canAct, machines, operators }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[] }) {
+function OpStepRow({ step, canAct, machines, operators, subSections }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[] }) {
     const [busy, setBusy] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const today = new Date().toISOString().slice(0, 10);
@@ -500,6 +502,13 @@ function OpStepRow({ step, canAct, machines, operators }: { step: OpStep; canAct
         router.delete(`/production/production-logs/${id}`, { preserveScroll: true });
     };
 
+    // Shop in-charge assigns the step to one of the shop's sub-sections.
+    const assignSub = (subId: string) => {
+        router.post(`/production/op-steps/${step.id}/assign-sub-section`,
+            { sub_section_id: subId || undefined },
+            { preserveScroll: true });
+    };
+
     const statusBadge: Record<string, { cls: string; label: string; icon: string }> = {
         pending:     { cls: 'badge-slate', label: 'Pending',     icon: 'fi-rr-time-twenty-four' },
         in_progress: { cls: 'badge-amber', label: 'In Progress', icon: 'fi-rr-spinner' },
@@ -530,7 +539,25 @@ function OpStepRow({ step, canAct, machines, operators }: { step: OpStep; canAct
                         )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-surface-500 flex-wrap">
-                        {step.sub_section && <span className="text-violet-600"><i className="fi fi-rr-corner-down-right text-[10px]" /> {step.sub_section}</span>}
+                        {subSections.length > 0 && canAct ? (
+                            <span className="inline-flex items-center gap-1">
+                                <i className="fi fi-rr-corner-down-right text-[10px] text-violet-500" />
+                                <select
+                                    value={step.sub_section_id ?? ''}
+                                    onChange={(e) => assignSub(e.target.value)}
+                                    disabled={busy}
+                                    className={`text-[11px] py-0.5 pl-1.5 pr-5 rounded-md border outline-none ${step.sub_section_id ? 'border-violet-200 bg-violet-50 text-violet-700 font-semibold' : 'border-dashed border-surface-300 text-surface-500'}`}
+                                    title="Assign this step to a sub-section"
+                                >
+                                    <option value="">Assign sub-section…</option>
+                                    {subSections.map((ss) => (
+                                        <option key={ss.id} value={ss.id}>{ss.name}{ss.code ? ` (${ss.code})` : ''}</option>
+                                    ))}
+                                </select>
+                            </span>
+                        ) : (
+                            step.sub_section && <span className="text-violet-600"><i className="fi fi-rr-corner-down-right text-[10px]" /> {step.sub_section}</span>
+                        )}
                         {step.machine && <span><i className="fi fi-rr-settings text-[10px]" /> {step.machine}</span>}
                         {step.operator && <span><i className="fi fi-rr-user text-[10px]" /> {step.operator}</span>}
                         <span><i className="fi fi-rr-clock text-[10px]" /> est {step.estimated_hours.toFixed(1)}h</span>

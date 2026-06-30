@@ -88,9 +88,14 @@ class HandleInertiaRequests extends Middleware
             'productionSections' => function () use ($user, $hasSpatieRoles, $isSuperAdmin) {
                 if (!$user || !$hasSpatieRoles) return [];
                 if (!$user->can('view production')) return [];
-                $q = \App\Models\Section::active()->shops()->orderBy('display_order');
+                // Only TOP-LEVEL shops appear as menu items — sub-sections are
+                // internal to a shop (no routing/queue of their own), so they'd
+                // be confusing as separate menus.
+                $q = \App\Models\Section::active()->shops()->topLevel()->orderBy('display_order');
                 if (!$isSuperAdmin && $user->section_id) {
-                    $q->where('id', $user->section_id);
+                    // A supervisor sitting on a sub-section sees its parent shop.
+                    $own = \App\Models\Section::find($user->section_id);
+                    $q->where('id', $own?->parent_id ?? $user->section_id);
                 }
                 $sections = $q->get(['id', 'name', 'code']);
 

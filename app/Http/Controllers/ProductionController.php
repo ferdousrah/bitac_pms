@@ -29,7 +29,8 @@ class ProductionController extends Controller
         $sectionId = (int) ($request->input('section') ?? $user->section_id ?? 0);
         $section   = $sectionId ? Section::find($sectionId) : null;
 
-        $availableSections = Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code', 'name_bn']);
+        // Only top-level shops have a queue — sub-sections are internal to a shop.
+        $availableSections = Section::active()->shops()->topLevel()->orderBy('display_order')->get(['id', 'name', 'code', 'name_bn']);
 
         // Non-admins can only see their own section
         $canSwitch = $user->hasAnyRole(['super_admin', 'admin']) || $user->can('manage users');
@@ -218,6 +219,41 @@ class ProductionController extends Controller
         $this->syncWoSectionStatuses($wo->fresh(['sections.section', 'items', 'operationSheets.steps']));
 
         return back()->with('success', 'Operation step updated.');
+    }
+
+    /**
+     * Shop in-charge assigns (or clears) the sub-section for an operation step
+     * once the job has arrived at the shop. PCD only routes to the top-level
+     * shop; the in-charge decides which sub-shop actually does the work.
+     */
+    public function assignSubSection(Request $request, OperationStep $step)
+    {
+        $wo  = $step->operationSheet->workOrder;
+        $wos = WorkOrderSection::where('work_order_id', $wo->id)
+            ->where('section_id', $step->section_id)
+            ->first();
+        if (!$wos) {
+            return back()->with('error', 'No section assignment matches this operation step.');
+        }
+        $this->authorizeAccess($wos);
+
+        $validated = $request->validate([
+            'sub_section_id' => 'nullable|exists:sections,id',
+        ]);
+
+        // A sub-section must be a child of THIS step's shop.
+        if (!empty($validated['sub_section_id'])) {
+            $valid = Section::where('id', $validated['sub_section_id'])
+                ->where('parent_id', $step->section_id)
+                ->exists();
+            if (!$valid) {
+                return back()->with('error', 'That sub-section does not belong to this shop.');
+            }
+        }
+
+        $step->update(['sub_section_id' => $validated['sub_section_id'] ?: null]);
+
+        return back()->with('success', 'Sub-section updated.');
     }
 
     /**
@@ -538,6 +574,7 @@ class ProductionController extends Controller
                     'machine_id'        => $s->machine_id,
                     'operator'          => $s->operator?->name,
                     'sub_section'       => $s->subSection?->name,
+                    'sub_section_id'    => $s->sub_section_id,
                     'estimated_hours'   => (float) $s->estimated_hours,
                     'actual_hours'      => (float) ($s->actual_hours ?? 0),
                     'weight_pct'        => (float) ($s->weight_pct ?? 0),
@@ -626,6 +663,12 @@ class ProductionController extends Controller
                     ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name, 'employee_id' => $o->employee_id])
                     ->values();
             })(),
+            // Sub-sections of THIS shop — the in-charge assigns each step to one
+            // after the job arrives (PCD only routes to the shop, not the sub-shop).
+            'sub_sections' => $workOrderSection->section->children
+                ->sortBy('display_order')
+                ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code])
+                ->values(),
         ]);
     }
 

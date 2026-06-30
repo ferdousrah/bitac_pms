@@ -557,6 +557,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/wos/{workOrderSection}/complete', [ProductionController::class, 'complete'])->name('complete');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
+        // Shop in-charge assigns a step to one of the shop's sub-sections.
+        Route::post('/op-steps/{step}/assign-sub-section', [ProductionController::class, 'assignSubSection'])->name('op-steps.assign-sub');
         // Quantity-based daily production logging.
         Route::post('/op-steps/{step}/log', [ProductionController::class, 'logProduction'])->name('op-steps.log');
         Route::delete('/production-logs/{productionLog}', [ProductionController::class, 'deleteProductionLog'])->name('logs.destroy');

@@ -140,13 +140,9 @@ function SortableStepCard({
     };
 
     // Section is now implicit from the group — machine list is scoped to it.
+    // Sub-section is decided later by the shop in-charge, NOT here.
     const sectionKey = String(step.section_id || '');
-    const availableSubs = sectionKey ? subSectionsBySection[sectionKey] ?? [] : [];
-    // Machines under the chosen sub-section (if any), else the section's machines.
-    const subKey = String(step.sub_section_id || '');
-    const availableMachines = subKey
-        ? (machinesBySection[subKey] ?? [])
-        : (sectionKey ? machinesBySection[sectionKey] ?? [] : []);
+    const availableMachines = sectionKey ? machinesBySection[sectionKey] ?? [] : [];
 
     const handleOperationChange = (value: string) => {
         if (!value) {
@@ -207,23 +203,6 @@ function SortableStepCard({
                                 ))}
                             </select>
                         </div>
-
-                        {/* Sub-section — only when the step's shop has sub-sections */}
-                        {availableSubs.length > 0 && (
-                            <div className="form-group sm:col-span-2 lg:col-span-2 mb-0">
-                                <label className="form-label">Sub-section <span className="form-label-optional">optional</span></label>
-                                <select
-                                    value={step.sub_section_id}
-                                    onChange={(e) => onChange({ sub_section_id: e.target.value, machine_id: '' })}
-                                    className="form-select"
-                                >
-                                    <option value="">— Whole shop —</option>
-                                    {availableSubs.map((s) => (
-                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
 
                         {/* Machine */}
                         <div className="form-group sm:col-span-2 lg:col-span-2 mb-0">
