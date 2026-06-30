@@ -40,7 +40,7 @@ class MachineController extends Controller
 
     public function index(Request $request)
     {
-        $q = Machine::with('section')->orderBy('name');
+        $q = Machine::with('section.parent')->orderBy('name');
 
         if ($search = trim((string) $request->input('search'))) {
             $q->where(function ($q) use ($search) {
@@ -66,7 +66,7 @@ class MachineController extends Controller
                 'id'                 => $m->id,
                 'name'               => $m->name,
                 'machine_code'       => $m->machine_code,
-                'section'            => $m->section ? ['id' => $m->section->id, 'name' => $m->section->name, 'code' => $m->section->code] : null,
+                'section'            => $m->section ? ['id' => $m->section->id, 'name' => $m->section->name, 'code' => $m->section->code, 'parent_name' => $m->section->parent?->name] : null,
                 'status'             => $m->status,
                 'current_state'      => $m->current_state,
                 'state_color'        => $m->state_color,

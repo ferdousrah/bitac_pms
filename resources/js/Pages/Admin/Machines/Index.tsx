@@ -103,7 +103,9 @@ export default function MachinesIndex({ machines, fleet, sections = [], filters 
                             className="form-select lg:w-48">
                             <option value="">All sections</option>
                             {sections.map((s: any) => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
+                                <option key={s.id} value={s.id}>
+                                    {s.parent_id ? `↳ ${s.name} — under ${s.parent_name}` : s.name}
+                                </option>
                             ))}
                         </select>
                         <select value={currentState}
@@ -158,7 +160,10 @@ export default function MachinesIndex({ machines, fleet, sections = [], filters 
                                                     <div className="font-semibold text-surface-900 group-hover:text-brand-600 transition-colors">{m.name}</div>
                                                 </Link>
                                             </td>
-                                            <td className="text-surface-600 text-sm">{m.section?.name ?? '—'}</td>
+                                            <td className="text-surface-600 text-sm">
+                                                {m.section?.name ?? '—'}
+                                                {m.section?.parent_name && <span className="block text-[10px] text-surface-400">↳ under {m.section.parent_name}</span>}
+                                            </td>
                                             <td>
                                                 <span className={`badge ${STATE_BADGE[m.current_state] ?? 'badge-slate'} capitalize`}>
                                                     {m.current_state === 'running' && (
@@ -237,7 +242,7 @@ export default function MachinesIndex({ machines, fleet, sections = [], filters 
                                     <div>
                                         <span className="font-mono text-xs text-surface-500">{m.machine_code}</span>
                                         <div className="font-semibold text-surface-900 text-sm mt-0.5">{m.name}</div>
-                                        <div className="text-xs text-surface-500">{m.section?.name ?? '—'}</div>
+                                        <div className="text-xs text-surface-500">{m.section?.name ?? '—'}{m.section?.parent_name && ` · under ${m.section.parent_name}`}</div>
                                     </div>
                                     <span className={`badge ${STATE_BADGE[m.current_state] ?? 'badge-slate'} capitalize`}>
                                         {m.current_state}
