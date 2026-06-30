@@ -61,8 +61,10 @@ interface Step {
     operation_id: number | string | null;
     operation_name: string;
     section_id: number | string;
+    sub_section_id: number | string;
     machine_id: number | string;
     weight_pct: string;
+    target_qty: string;
     tooling_notes: string;
 }
 
@@ -92,7 +94,7 @@ interface Props {
     sheet?: ExistingSheet;
 }
 
-function makeEmptyStep(sectionId: number | string = ''): Step {
+function makeEmptyStep(sectionId: number | string = '', targetQty: string = ''): Step {
     return {
         _uid:
             typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -101,8 +103,10 @@ function makeEmptyStep(sectionId: number | string = ''): Step {
         operation_id: null,
         operation_name: '',
         section_id: sectionId,
+        sub_section_id: '',
         machine_id: '',
         weight_pct: '',
+        target_qty: targetQty,
         tooling_notes: '',
     };
 }
@@ -113,6 +117,7 @@ function SortableStepCard({
     groupedOperations,
     operationsById,
     machinesBySection,
+    subSectionsBySection,
     onChange,
     onRemove,
 }: {
@@ -121,6 +126,7 @@ function SortableStepCard({
     groupedOperations: Record<string, Operation[]>;
     operationsById: Record<string, Operation>;
     machinesBySection: Record<string, Machine[]>;
+    subSectionsBySection: Record<string, Section[]>;
     onChange: (patch: Partial<Step>) => void;
     onRemove: () => void;
 }) {
@@ -135,7 +141,12 @@ function SortableStepCard({
 
     // Section is now implicit from the group — machine list is scoped to it.
     const sectionKey = String(step.section_id || '');
-    const availableMachines = sectionKey ? machinesBySection[sectionKey] ?? [] : [];
+    const availableSubs = sectionKey ? subSectionsBySection[sectionKey] ?? [] : [];
+    // Machines under the chosen sub-section (if any), else the section's machines.
+    const subKey = String(step.sub_section_id || '');
+    const availableMachines = subKey
+        ? (machinesBySection[subKey] ?? [])
+        : (sectionKey ? machinesBySection[sectionKey] ?? [] : []);
 
     const handleOperationChange = (value: string) => {
         if (!value) {
@@ -197,6 +208,23 @@ function SortableStepCard({
                             </select>
                         </div>
 
+                        {/* Sub-section — only when the step's shop has sub-sections */}
+                        {availableSubs.length > 0 && (
+                            <div className="form-group sm:col-span-2 lg:col-span-2 mb-0">
+                                <label className="form-label">Sub-section <span className="form-label-optional">optional</span></label>
+                                <select
+                                    value={step.sub_section_id}
+                                    onChange={(e) => onChange({ sub_section_id: e.target.value, machine_id: '' })}
+                                    className="form-select"
+                                >
+                                    <option value="">— Whole shop —</option>
+                                    {availableSubs.map((s) => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         {/* Machine */}
                         <div className="form-group sm:col-span-2 lg:col-span-2 mb-0">
                             <label className="form-label">Machine <span className="form-label-optional">optional</span></label>
@@ -231,6 +259,21 @@ function SortableStepCard({
                                 className="form-input"
                                 placeholder="0.0"
                                 title="This step's weightage in overall job progress. All step weightages should sum to 100."
+                            />
+                        </div>
+
+                        {/* Target Qty — pieces to produce at this step (defaults to item qty) */}
+                        <div className="form-group sm:col-span-1 lg:col-span-2 mb-0">
+                            <label className="form-label-optional">Target Qty</label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={step.target_qty}
+                                onChange={(e) => onChange({ target_qty: e.target.value })}
+                                className="form-input"
+                                placeholder="item qty"
+                                title="How many pieces this step must produce. Defaults to the item quantity."
                             />
                         </div>
 
@@ -271,7 +314,8 @@ export default function OperationSheetBuilder({
     operations,
     sheet,
     defaultInstruction = '',
-}: Props & { defaultInstruction?: string }) {
+    sub_sections = {},
+}: Props & { defaultInstruction?: string; sub_sections?: Record<string, Section[]> }) {
     const isEdit = !!sheet;
 
     const initialSteps: Step[] = sheet && sheet.steps.length > 0
@@ -283,8 +327,10 @@ export default function OperationSheetBuilder({
             operation_id: s.operation_id ?? null,
             operation_name: s.operation_name ?? '',
             section_id: s.section_id ?? '',
+            sub_section_id: (s as any).sub_section_id ?? '',
             machine_id: s.machine_id ?? '',
             weight_pct: String(s.weight_pct ?? ''),
+            target_qty: (s as any).target_qty != null ? String((s as any).target_qty) : '',
             tooling_notes: s.tooling_notes ?? '',
         }))
         : [];
@@ -365,7 +411,7 @@ export default function OperationSheetBuilder({
 
     // Add a row to a specific section group. Section is implicit — the new row
     // inherits the group's section_id so the user never picks it.
-    const addStep = (sectionId: number | string = '') => setData('steps', [...data.steps, makeEmptyStep(sectionId)]);
+    const addStep = (sectionId: number | string = '') => setData('steps', [...data.steps, makeEmptyStep(sectionId, item ? String(item.quantity) : '')]);
 
     const removeStep = (uid: string) =>
         setData(
@@ -616,6 +662,7 @@ export default function OperationSheetBuilder({
                                                             groupedOperations={groupedOperations}
                                                             operationsById={operationsById}
                                                             machinesBySection={machinesBySection}
+                                                            subSectionsBySection={sub_sections}
                                                             onChange={(patch) =>
                                                                 updateStep(step._uid, patch)
                                                             }
@@ -674,6 +721,7 @@ export default function OperationSheetBuilder({
                                                     groupedOperations={groupedOperations}
                                                     operationsById={operationsById}
                                                     machinesBySection={machinesBySection}
+                                                    subSectionsBySection={sub_sections}
                                                     onChange={(patch) => updateStep(step._uid, patch)}
                                                     onRemove={() => removeStep(step._uid)}
                                                 />

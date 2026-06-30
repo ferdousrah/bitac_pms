@@ -86,9 +86,14 @@ interface OpStep {
     operation_name: string;
     machine: string | null;
     operator: string | null;
+    machine_id: number | null;
+    sub_section: string | null;
     estimated_hours: number;
     actual_hours: number;
     weight_pct: number;
+    target_qty: number;
+    completed_qty: number;
+    remaining_qty: number;
     status: 'pending' | 'in_progress' | 'completed' | 'skipped';
     started_at: string | null;
     started_at_iso: string | null;
@@ -96,7 +101,21 @@ interface OpStep {
     completed_at_iso: string | null;
     tooling_notes: string | null;
     qc_notes: string | null;
+    logs: ProdLog[];
 }
+
+interface ProdLog {
+    id: number;
+    log_date: string | null;
+    qty: number;
+    hours: number | null;
+    machine: string | null;
+    operator: string | null;
+    remarks: string | null;
+    logged_by: string | null;
+}
+
+interface OptionLite { id: number; name: string; code?: string; employee_id?: string; section_id?: number | null; }
 
 interface EarlierSection {
     wos_id: number;
@@ -141,6 +160,8 @@ interface Props {
         unit: string;
     } | null;
     siblings_count: number;
+    machines?: OptionLite[];
+    operators?: OptionLite[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -155,7 +176,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count }: Props) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [] }: Props) {
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
 
@@ -372,7 +393,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
-                                        <OpStepRow key={s.id} step={s} canAct={canAct} />
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} />
                                     ))}
                                 </div>
                             ))}
@@ -438,8 +459,17 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     );
 }
 
-function OpStepRow({ step, canAct }: { step: OpStep; canAct: boolean }) {
+function OpStepRow({ step, canAct, machines, operators }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[] }) {
     const [busy, setBusy] = useState(false);
+    const [logOpen, setLogOpen] = useState(false);
+    const today = new Date().toISOString().slice(0, 10);
+    const [form, setForm] = useState({
+        qty: '', machine_id: step.machine_id ? String(step.machine_id) : '', operator_id: '', log_date: today, remarks: '',
+    });
+
+    const hasQty = step.target_qty > 0;
+    const pct = hasQty ? Math.min(100, Math.round((step.completed_qty / step.target_qty) * 100)) : 0;
+    const fmtQty = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
     const fire = (action: 'start' | 'complete' | 'reopen') => {
         setBusy(true);
@@ -447,6 +477,27 @@ function OpStepRow({ step, canAct }: { step: OpStep; canAct: boolean }) {
             preserveScroll: true,
             onFinish: () => setBusy(false),
         });
+    };
+
+    const submitLog = () => {
+        if (!form.qty || parseFloat(form.qty) <= 0) return;
+        setBusy(true);
+        router.post(`/production/op-steps/${step.id}/log`, {
+            qty: form.qty,
+            machine_id: form.machine_id || undefined,
+            operator_id: form.operator_id || undefined,
+            log_date: form.log_date,
+            remarks: form.remarks || undefined,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => { setLogOpen(false); setForm(f => ({ ...f, qty: '', remarks: '' })); },
+            onFinish: () => setBusy(false),
+        });
+    };
+
+    const deleteLog = (id: number) => {
+        if (!confirm('Remove this production log entry?')) return;
+        router.delete(`/production/production-logs/${id}`, { preserveScroll: true });
     };
 
     const statusBadge: Record<string, { cls: string; label: string; icon: string }> = {
@@ -479,11 +530,28 @@ function OpStepRow({ step, canAct }: { step: OpStep; canAct: boolean }) {
                         )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-surface-500 flex-wrap">
+                        {step.sub_section && <span className="text-violet-600"><i className="fi fi-rr-corner-down-right text-[10px]" /> {step.sub_section}</span>}
                         {step.machine && <span><i className="fi fi-rr-settings text-[10px]" /> {step.machine}</span>}
                         {step.operator && <span><i className="fi fi-rr-user text-[10px]" /> {step.operator}</span>}
                         <span><i className="fi fi-rr-clock text-[10px]" /> est {step.estimated_hours.toFixed(1)}h</span>
                         {step.actual_hours > 0 && <span className="text-emerald-600">· actual {step.actual_hours.toFixed(2)}h</span>}
                     </div>
+
+                    {/* Quantity progress */}
+                    {hasQty && (
+                        <div className="mt-2">
+                            <div className="flex items-center justify-between text-[11px] mb-1">
+                                <span className="text-surface-600">
+                                    Produced <span className="font-bold text-surface-900">{fmtQty(step.completed_qty)}</span> / {fmtQty(step.target_qty)}
+                                    {step.remaining_qty > 0 && <span className="text-amber-600"> · {fmtQty(step.remaining_qty)} left</span>}
+                                </span>
+                                <span className="font-bold text-surface-700">{pct}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-surface-100 overflow-hidden">
+                                <div className={`h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }} />
+                            </div>
+                        </div>
+                    )}
 
                     {/* Live running timer (in_progress) */}
                     {step.status === 'in_progress' && step.started_at_iso && (
@@ -519,27 +587,105 @@ function OpStepRow({ step, canAct }: { step: OpStep; canAct: boolean }) {
                             })()}
                         </div>
                     )}
+
+                    {/* Daily production log entry form */}
+                    {canAct && hasQty && logOpen && (
+                        <div className="mt-3 p-3 rounded-xl border border-brand-200 bg-brand-50/40 space-y-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Qty produced *</label>
+                                    <input type="number" min="0" step="any" value={form.qty}
+                                        onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
+                                        max={step.remaining_qty || undefined}
+                                        className="form-input w-full text-sm py-1.5" placeholder={`max ${fmtQty(step.remaining_qty)}`} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Date</label>
+                                    <input type="date" value={form.log_date}
+                                        onChange={e => setForm(f => ({ ...f, log_date: e.target.value }))}
+                                        className="form-input w-full text-sm py-1.5" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Machine</label>
+                                    <select value={form.machine_id} onChange={e => setForm(f => ({ ...f, machine_id: e.target.value }))} className="form-select w-full text-sm py-1.5">
+                                        <option value="">—</option>
+                                        {machines.map(m => <option key={m.id} value={m.id}>{m.name}{m.code ? ` (${m.code})` : ''}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Operator</label>
+                                    <select value={form.operator_id} onChange={e => setForm(f => ({ ...f, operator_id: e.target.value }))} className="form-select w-full text-sm py-1.5">
+                                        <option value="">—</option>
+                                        {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <input type="text" value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))}
+                                className="form-input w-full text-sm py-1.5" placeholder="Remarks (optional)…" />
+                            <div className="flex items-center gap-2 justify-end">
+                                <button type="button" onClick={() => setLogOpen(false)} className="btn-ghost btn-sm" disabled={busy}>Cancel</button>
+                                <button type="button" onClick={submitLog} disabled={busy || !form.qty} className="btn-primary btn-sm">
+                                    <i className="fi fi-rr-disk text-xs" /> {busy ? 'Saving…' : 'Log Output'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Production log history */}
+                    {step.logs.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                            {step.logs.map(l => (
+                                <div key={l.id} className="flex items-center gap-2 text-[11px] text-surface-600 bg-surface-50 rounded-lg px-2.5 py-1.5">
+                                    <span className="font-mono font-semibold text-surface-800">{fmtQty(l.qty)}</span>
+                                    <span className="text-surface-400">pcs ·</span>
+                                    <span>{l.log_date}</span>
+                                    {l.machine && <span className="text-surface-400">· {l.machine}</span>}
+                                    {l.operator && <span className="text-surface-400">· {l.operator}</span>}
+                                    {l.remarks && <span className="text-surface-400 truncate">· {l.remarks}</span>}
+                                    {l.logged_by && <span className="text-surface-300 ml-auto">by {l.logged_by}</span>}
+                                    {canAct && (
+                                        <button type="button" onClick={() => deleteLog(l.id)} className="text-rose-500 hover:text-rose-700 shrink-0" title="Remove">
+                                            <i className="fi fi-rr-trash text-[10px] leading-none" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {canAct && (
                     <div className="shrink-0 flex flex-col items-end gap-1.5">
-                        {step.status === 'pending' && (
-                            <button type="button" onClick={() => fire('start')} disabled={busy}
-                                className="btn-outline btn-sm">
-                                <i className="fi fi-rr-play text-xs" /> Start
-                            </button>
-                        )}
-                        {(step.status === 'pending' || step.status === 'in_progress') && (
-                            <button type="button" onClick={() => fire('complete')} disabled={busy}
-                                className="btn-primary btn-sm">
-                                <i className="fi fi-rr-check text-xs" /> Complete
-                            </button>
-                        )}
-                        {step.status === 'completed' && (
-                            <button type="button" onClick={() => fire('reopen')} disabled={busy}
-                                className="btn-ghost btn-sm text-rose-600">
-                                <i className="fi fi-rr-rotate-left text-xs" /> Reopen
-                            </button>
+                        {hasQty ? (
+                            step.status !== 'completed' ? (
+                                <button type="button" onClick={() => setLogOpen(o => !o)} disabled={busy}
+                                    className="btn-primary btn-sm">
+                                    <i className="fi fi-rr-plus text-xs" /> Log Output
+                                </button>
+                            ) : (
+                                <span className="badge badge-green text-[10px]"><i className="fi fi-rr-check-circle text-[9px]" /> Done</span>
+                            )
+                        ) : (
+                            <>
+                                {step.status === 'pending' && (
+                                    <button type="button" onClick={() => fire('start')} disabled={busy}
+                                        className="btn-outline btn-sm">
+                                        <i className="fi fi-rr-play text-xs" /> Start
+                                    </button>
+                                )}
+                                {(step.status === 'pending' || step.status === 'in_progress') && (
+                                    <button type="button" onClick={() => fire('complete')} disabled={busy}
+                                        className="btn-primary btn-sm">
+                                        <i className="fi fi-rr-check text-xs" /> Complete
+                                    </button>
+                                )}
+                                {step.status === 'completed' && (
+                                    <button type="button" onClick={() => fire('reopen')} disabled={busy}
+                                        className="btn-ghost btn-sm text-rose-600">
+                                        <i className="fi fi-rr-rotate-left text-xs" /> Reopen
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                 )}

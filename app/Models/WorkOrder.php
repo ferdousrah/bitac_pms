@@ -168,16 +168,17 @@ class WorkOrder extends Model
         $steps = $sheet->relationLoaded('steps') ? $sheet->steps : $sheet->steps()->get();
         if ($steps->isEmpty()) return 0;
 
+        // Quantity-aware: each step contributes its weight × completion fraction
+        // (completed_qty / target_qty), falling back to status (½ for in-progress)
+        // when no target qty is set. See OperationStep::progressFraction().
         $weightSum = $steps->sum(fn ($s) => (float) $s->weight_pct);
         if ($weightSum > 0) {
-            $done = $steps->where('status', 'completed')->sum(fn ($s) => (float) $s->weight_pct);
-            $wip  = $steps->where('status', 'in_progress')->sum(fn ($s) => (float) $s->weight_pct);
-            return (int) round(min(100, $done + $wip * 0.5));
+            $acc = $steps->sum(fn ($s) => (float) $s->weight_pct * $s->progressFraction());
+            return (int) round(min(100, $acc));
         }
         $total = $steps->count();
-        $done  = $steps->where('status', 'completed')->count();
-        $wip   = $steps->where('status', 'in_progress')->count();
-        return (int) round((($done + $wip * 0.5) / $total) * 100);
+        $acc   = $steps->sum(fn ($s) => $s->progressFraction());
+        return (int) round(($acc / $total) * 100);
     }
 
     /**

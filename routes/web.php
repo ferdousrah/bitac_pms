@@ -557,6 +557,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/wos/{workOrderSection}/complete', [ProductionController::class, 'complete'])->name('complete');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
+        // Quantity-based daily production logging.
+        Route::post('/op-steps/{step}/log', [ProductionController::class, 'logProduction'])->name('op-steps.log');
+        Route::delete('/production-logs/{productionLog}', [ProductionController::class, 'deleteProductionLog'])->name('logs.destroy');
     });
 
     // Schedule (Gantt)

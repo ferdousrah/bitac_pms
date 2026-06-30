@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\OperationStep;
+use App\Models\ProductionLog;
 use App\Models\Section;
 use App\Models\SectionHandoff;
 use App\Models\WorkOrderSection;
@@ -220,6 +221,106 @@ class ProductionController extends Controller
     }
 
     /**
+     * Record a daily, item-wise production entry for a step (partial quantity).
+     * Bumps the step's completed_qty, derives its status (in_progress / completed
+     * when the target is met), and re-syncs the section so finished pieces can
+     * flow forward.
+     */
+    public function logProduction(Request $request, OperationStep $step)
+    {
+        $sheet = $step->operationSheet;
+        $wo    = $sheet->workOrder;
+
+        $wos = WorkOrderSection::where('work_order_id', $wo->id)
+            ->where('section_id', $step->section_id)
+            ->first();
+        if (!$wos) {
+            return back()->with('error', 'No section assignment matches this operation step.');
+        }
+        $this->authorizeAccess($wos);
+        if (in_array($wos->status, ['completed', 'skipped'])) {
+            return back()->with('error', 'This section is already forwarded — cannot log production.');
+        }
+
+        $remaining = (float) $step->remaining_qty;
+        $validated = $request->validate([
+            'qty'         => ['required', 'numeric', 'min:0.01', $remaining > 0 ? 'max:' . $remaining : 'max:9999999'],
+            'machine_id'  => 'nullable|exists:machines,id',
+            'operator_id' => 'nullable|exists:operators,id',
+            'log_date'    => 'nullable|date',
+            'hours'       => 'nullable|numeric|min:0',
+            'remarks'     => 'nullable|string|max:1000',
+        ]);
+
+        $now = now();
+        \DB::transaction(function () use ($step, $sheet, $wo, $wos, $validated, $now) {
+            ProductionLog::create([
+                'operation_step_id'  => $step->id,
+                'work_order_id'      => $wo->id,
+                'work_order_item_id' => $sheet->work_order_item_id,
+                'section_id'         => $step->section_id,
+                'sub_section_id'     => $step->sub_section_id,
+                'machine_id'         => $validated['machine_id'] ?? $step->machine_id,
+                'operator_id'        => $validated['operator_id'] ?? $step->operator_id,
+                'log_date'           => $validated['log_date'] ?? $now->toDateString(),
+                'qty'                => (float) $validated['qty'],
+                'hours'              => $validated['hours'] ?? null,
+                'remarks'            => $validated['remarks'] ?? null,
+                'logged_by'          => auth()->id(),
+            ]);
+
+            $completed = (float) $step->completed_qty + (float) $validated['qty'];
+            $target    = (float) ($step->target_qty ?? 0);
+            $done      = $target > 0 && $completed >= $target - 0.001;
+
+            $step->update([
+                'completed_qty' => $completed,
+                'status'        => $done ? 'completed' : 'in_progress',
+                'started_at'    => $step->started_at ?? $now,
+                'completed_at'  => $done ? ($step->completed_at ?? $now) : null,
+                'actual_hours'  => $step->productionLogs()->sum('hours') ?: $step->actual_hours,
+            ]);
+
+            if ($wos->status === 'ready') {
+                $wos->update(['status' => 'in_progress', 'started_at' => $wos->started_at ?? $now]);
+            }
+        });
+
+        $this->syncWoSectionStatuses($wo->fresh(['sections.section', 'items', 'operationSheets.steps']));
+
+        return back()->with('success', 'Production logged.');
+    }
+
+    /** Delete a production log entry and roll back the step's completed_qty. */
+    public function deleteProductionLog(ProductionLog $productionLog)
+    {
+        $step = $productionLog->step;
+        $wo   = $step->operationSheet->workOrder;
+        $wos  = WorkOrderSection::where('work_order_id', $wo->id)
+            ->where('section_id', $step->section_id)
+            ->first();
+        if ($wos) $this->authorizeAccess($wos);
+
+        \DB::transaction(function () use ($productionLog, $step) {
+            $qty = (float) $productionLog->qty;
+            $productionLog->delete();
+            $completed = max(0, (float) $step->completed_qty - $qty);
+            $target    = (float) ($step->target_qty ?? 0);
+            $done      = $target > 0 && $completed >= $target - 0.001;
+            $step->update([
+                'completed_qty' => $completed,
+                'status'        => $completed <= 0 ? ($step->started_at ? 'in_progress' : 'pending') : ($done ? 'completed' : 'in_progress'),
+                'completed_at'  => $done ? $step->completed_at : null,
+                'actual_hours'  => $step->productionLogs()->sum('hours') ?: null,
+            ]);
+        });
+
+        $this->syncWoSectionStatuses($wo->fresh(['sections.section', 'items', 'operationSheets.steps']));
+
+        return back()->with('success', 'Production log removed.');
+    }
+
+    /**
      * Auto-derive WorkOrderSection statuses from the per-item operation step
      * states. Each item travels through routing independently:
      *   - As soon as an item's pending step lands at a section, that section's
@@ -320,7 +421,11 @@ class ProductionController extends Controller
             'workOrder.operationSheets.steps.machine',
             'workOrder.operationSheets.steps.operator',
             'workOrder.operationSheets.steps.section',
-            'section',
+            'workOrder.operationSheets.steps.subSection',
+            'workOrder.operationSheets.steps.productionLogs.machine',
+            'workOrder.operationSheets.steps.productionLogs.operator',
+            'workOrder.operationSheets.steps.productionLogs.loggedBy',
+            'section.children',
         ]);
 
         $handoffs = SectionHandoff::with(['fromSection', 'toSection', 'transferredBy', 'files'])
@@ -430,10 +535,15 @@ class ProductionController extends Controller
                     'sequence'          => $s->sequence,
                     'operation_name'    => $s->operation_name,
                     'machine'           => $s->machine?->name,
+                    'machine_id'        => $s->machine_id,
                     'operator'          => $s->operator?->name,
+                    'sub_section'       => $s->subSection?->name,
                     'estimated_hours'   => (float) $s->estimated_hours,
                     'actual_hours'      => (float) ($s->actual_hours ?? 0),
                     'weight_pct'        => (float) ($s->weight_pct ?? 0),
+                    'target_qty'        => (float) ($s->target_qty ?? 0),
+                    'completed_qty'     => (float) ($s->completed_qty ?? 0),
+                    'remaining_qty'     => (float) $s->remaining_qty,
                     'status'            => $s->status,
                     'started_at'        => $s->started_at?->format('d M Y, h:i A'),
                     'started_at_iso'    => $s->started_at?->toIso8601String(),
@@ -441,6 +551,16 @@ class ProductionController extends Controller
                     'completed_at_iso'  => $s->completed_at?->toIso8601String(),
                     'tooling_notes'     => $s->tooling_notes,
                     'qc_notes'          => $s->qc_notes,
+                    'logs'              => $s->productionLogs->map(fn ($l) => [
+                        'id'        => $l->id,
+                        'log_date'  => $l->log_date?->format('d M Y'),
+                        'qty'       => (float) $l->qty,
+                        'hours'     => $l->hours !== null ? (float) $l->hours : null,
+                        'machine'   => $l->machine?->name,
+                        'operator'  => $l->operator?->name,
+                        'remarks'   => $l->remarks,
+                        'logged_by' => $l->loggedBy?->name,
+                    ])->values(),
                 ];
 
                 $result = collect();
@@ -488,6 +608,24 @@ class ProductionController extends Controller
                 'section'  => ['name' => $s->section->name, 'code' => $s->section->code],
                 'status'   => $s->status,
             ])->values(),
+            // Machines + operators for this shop (and its sub-sections) — used by
+            // the daily production log form's machine/operator selects.
+            'machines' => (function () use ($workOrderSection) {
+                $ids = collect([$workOrderSection->section_id])
+                    ->merge($workOrderSection->section->children->pluck('id'))->all();
+                return \App\Models\Machine::whereIn('section_id', $ids)->orderBy('name')
+                    ->get(['id', 'name', 'machine_code', 'section_id'])
+                    ->map(fn ($m) => ['id' => $m->id, 'name' => $m->name, 'code' => $m->machine_code, 'section_id' => $m->section_id])
+                    ->values();
+            })(),
+            'operators' => (function () use ($workOrderSection) {
+                $ids = collect([$workOrderSection->section_id])
+                    ->merge($workOrderSection->section->children->pluck('id'))->all();
+                return \App\Models\Operator::where('is_active', true)->whereIn('section_id', $ids)->orderBy('name')
+                    ->get(['id', 'name', 'employee_id'])
+                    ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name, 'employee_id' => $o->employee_id])
+                    ->values();
+            })(),
         ]);
     }
 

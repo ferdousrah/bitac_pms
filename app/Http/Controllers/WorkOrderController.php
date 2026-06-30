@@ -74,19 +74,16 @@ class WorkOrderController extends Controller
                     $sheets = $wo->operationSheets;
                     if ($sheets->isEmpty()) return null;
 
+                    // Quantity-aware per-step fraction (completed_qty / target_qty),
+                    // weighted by weight_pct; status fallback when no target qty.
                     $perSheet = $sheets->map(function ($sheet) {
                         $steps = $sheet->steps;
                         if ($steps->isEmpty()) return 0;
                         $weightSum = $steps->sum(fn($s) => (float) $s->weight_pct);
                         if ($weightSum > 0) {
-                            $done = $steps->where('status', 'completed')->sum(fn($s) => (float) $s->weight_pct);
-                            $wip  = $steps->where('status', 'in_progress')->sum(fn($s) => (float) $s->weight_pct);
-                            return min(100, $done + $wip * 0.5);
+                            return min(100, $steps->sum(fn($s) => (float) $s->weight_pct * $s->progressFraction()));
                         }
-                        $total = $steps->count();
-                        $done = $steps->where('status', 'completed')->count();
-                        $wip  = $steps->where('status', 'in_progress')->count();
-                        return (($done + $wip * 0.5) / $total) * 100;
+                        return ($steps->sum(fn($s) => $s->progressFraction()) / $steps->count()) * 100;
                     });
                     return (int) round($perSheet->avg());
                 })(),

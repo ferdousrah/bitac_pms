@@ -238,7 +238,14 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 
 > Big initiative: move production from all-or-nothing section status → **quantity-based WIP flow** with sub-sections, daily logs, and partial forwarding. Approved design decisions: extend operation-steps as the "leg" (add sub_section_id + qty), **sequential** sub-sections, **per-item weightage sums to 100**, **section-level partial forward**. UI must stay clean/organized (many features landing on the Production section).
 
-**Phases:** 1) Sub-section foundation ✅ · 2) Quantity model + daily log + qty-based progress · 3) Partial forward (section qty ledger, handoff qty) + Upcoming Jobs · 4) Per-section Job-Detail (production-cycle) page + machine-running state + progress/PDF sync.
+**Phases:** 1) Sub-section foundation ✅ · 2) Quantity model + daily log + qty-based progress ✅ · 3) Partial forward (section qty ledger, handoff qty) + Upcoming Jobs · 4) Per-section Job-Detail (production-cycle) page + machine-running state + progress/PDF sync.
+
+### Phase 2 — Quantity model + daily log (done)
+- `operation_steps` IS the production "leg": added `sub_section_id` (FK sections), `target_qty` (defaults to item qty at op-sheet create/update), `completed_qty` (denormalised, kept in sync). `OperationStep::progressFraction()` = completed_qty/target_qty (status fallback when no target). `remaining_qty` accessor.
+- New `production_logs` table + `ProductionLog` model — daily, item-wise output (qty, machine, operator, date, hours, remarks). Drives completed_qty.
+- **Op-sheet Builder:** per step now has a **Sub-section** select (only when the step's shop has sub-sections; machines re-scope to the sub-section) + **Target Qty** input. Controller passes `sub_sections` (grouped by parent id) and accepts `steps.*.sub_section_id` / `steps.*.target_qty`.
+- **Production Show:** each step shows a **qty progress bar** (produced/target/left) + **"Log Output"** form (qty ≤ remaining, machine, operator, date, remarks) + **log history** (delete rolls back). `ProductionController@logProduction` / `@deleteProductionLog` (routes `production.op-steps.log`, `production.logs.destroy`) bump completed_qty, set step status (in_progress / completed when target met), re-run `syncWoSectionStatuses` so finished work advances. Qty-mode steps (target>0) replace the old Start/Complete buttons; legacy/no-target steps keep them.
+- **Progress is now quantity-aware** everywhere: `WorkOrder::getProductionProgressAttribute` + `WorkOrderController` list use `Σ(weight_pct × progressFraction)`.
 
 ### Phase 1 — Sub-sections (done)
 - `sections.parent_id` (self-FK, **one level deep**). `Section`: `parent()`/`children()`, scopes `topLevel()`/`subSections()`, `isSubSection()`. A sub-section is always `type=production_shop`.

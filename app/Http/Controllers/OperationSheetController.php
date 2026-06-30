@@ -19,6 +19,19 @@ class OperationSheetController extends Controller
 {
     public function __construct(private OperationSheetService $service) {}
 
+    /**
+     * Active sub-sections grouped by their parent shop id — the op-sheet builder
+     * uses this to offer a sub-section per step (only when the step's section has
+     * sub-sections).
+     */
+    private function subSectionMap()
+    {
+        return Section::active()->subSections()->orderBy('display_order')
+            ->get(['id', 'name', 'code', 'parent_id'])
+            ->groupBy('parent_id')
+            ->map(fn ($g) => $g->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code])->values());
+    }
+
     public function index(Request $request)
     {
         $query = OperationSheet::with(['workOrder.customer', 'workOrder.product', 'workOrder.items', 'workOrderItem', 'steps']);
@@ -167,6 +180,7 @@ class OperationSheetController extends Controller
                 ]),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit']),
+            'sub_sections' => $this->subSectionMap(),
         ]);
     }
 
@@ -187,10 +201,12 @@ class OperationSheetController extends Controller
             'steps.*.operation_name'  => 'required|string',
             'steps.*.operation_id'    => 'nullable|exists:machining_operations,id',
             'steps.*.section_id'      => 'nullable|exists:sections,id',
+            'steps.*.sub_section_id'  => 'nullable|exists:sections,id',
             'steps.*.machine_id'      => 'nullable|exists:machines,id',
             'steps.*.operator_id'     => 'nullable|exists:operators,id',
             'steps.*.estimated_hours' => 'nullable|numeric|min:0',
             'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
+            'steps.*.target_qty'      => 'nullable|numeric|min:0',
             'steps.*.tooling_notes'   => 'nullable|string',
             'steps.*.qc_notes'        => 'nullable|string|max:500',
         ]);
@@ -244,16 +260,20 @@ class OperationSheetController extends Controller
             'qr_code'            => 'JOB-' . ($workOrder->job_number ?? $workOrder->id) . '-' . $sheetNumber,
         ]);
 
+        $itemQty = (float) ($item?->quantity ?? $workOrder->quantity ?? 0);
         foreach ($validated['steps'] as $index => $stepData) {
             $sheet->steps()->create([
                 'sequence'         => $index + 1,
                 'operation_name'   => $stepData['operation_name'],
                 'operation_id'     => $stepData['operation_id'] ?? null,
                 'section_id'       => $stepData['section_id'] ?? null,
+                'sub_section_id'   => $stepData['sub_section_id'] ?? null,
                 'machine_id'       => $stepData['machine_id'] ?? null,
                 'operator_id'      => $stepData['operator_id'] ?? null,
                 'estimated_hours'  => $stepData['estimated_hours'] ?? 0,
                 'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
+                'target_qty'       => isset($stepData['target_qty']) && $stepData['target_qty'] !== '' ? (float) $stepData['target_qty'] : $itemQty,
+                'completed_qty'    => 0,
                 'tooling_notes'    => $stepData['tooling_notes'] ?? null,
                 'qc_notes'         => $stepData['qc_notes'] ?? null,
                 'status'           => 'pending',
@@ -291,10 +311,12 @@ class OperationSheetController extends Controller
                     'operation_id'    => $s->operation_id,
                     'operation_name'  => $s->operation_name,
                     'section_id'      => $s->section_id,
+                    'sub_section_id'  => $s->sub_section_id,
                     'machine_id'      => $s->machine_id,
                     'operator_id'     => $s->operator_id,
                     'estimated_hours' => (string) $s->estimated_hours,
                     'weight_pct'      => (string) $s->weight_pct,
+                    'target_qty'      => $s->target_qty !== null ? (string) $s->target_qty : '',
                     'tooling_notes'   => $s->tooling_notes ?? '',
                 ]),
             ],
@@ -341,6 +363,7 @@ class OperationSheetController extends Controller
                 ]),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit']),
+            'sub_sections' => $this->subSectionMap(),
         ]);
     }
 
@@ -360,10 +383,12 @@ class OperationSheetController extends Controller
             'steps.*.operation_name'  => 'required|string',
             'steps.*.operation_id'    => 'nullable|exists:machining_operations,id',
             'steps.*.section_id'      => 'nullable|exists:sections,id',
+            'steps.*.sub_section_id'  => 'nullable|exists:sections,id',
             'steps.*.machine_id'      => 'nullable|exists:machines,id',
             'steps.*.operator_id'     => 'nullable|exists:operators,id',
             'steps.*.estimated_hours' => 'nullable|numeric|min:0',
             'steps.*.weight_pct'      => 'nullable|numeric|min:0|max:100',
+            'steps.*.target_qty'      => 'nullable|numeric|min:0',
             'steps.*.tooling_notes'   => 'nullable|string',
         ]);
 
@@ -373,6 +398,8 @@ class OperationSheetController extends Controller
                 ->withErrors(['steps' => 'Step weights sum to ' . round($weightSum, 2) . '% — total cannot exceed 100%.'])
                 ->withInput();
         }
+
+        $itemQty = (float) ($sheet->workOrderItem?->quantity ?? $sheet->workOrder->quantity ?? 0);
 
         // Persist the BITAC header edits alongside the step refresh.
         $sheet->update([
@@ -389,10 +416,13 @@ class OperationSheetController extends Controller
                 'operation_name'   => $stepData['operation_name'],
                 'operation_id'     => $stepData['operation_id'] ?? null,
                 'section_id'       => $stepData['section_id'] ?? null,
+                'sub_section_id'   => $stepData['sub_section_id'] ?? null,
                 'machine_id'       => $stepData['machine_id'] ?? null,
                 'operator_id'      => $stepData['operator_id'] ?? null,
                 'estimated_hours'  => $stepData['estimated_hours'] ?? 0,
                 'weight_pct'       => (float) ($stepData['weight_pct'] ?? 0),
+                'target_qty'       => isset($stepData['target_qty']) && $stepData['target_qty'] !== '' ? (float) $stepData['target_qty'] : $itemQty,
+                'completed_qty'    => 0,
                 'tooling_notes'    => $stepData['tooling_notes'] ?? null,
                 'status'           => 'pending',
             ]);
