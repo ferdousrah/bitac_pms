@@ -92,6 +92,8 @@ class WorkOrderSectionController extends Controller
             // PCD, Stores) are intentionally excluded — they aren't shop
             // floors.
             'available_sections' => Section::active()
+                ->topLevel() // PCD routes to top-level shops only — sub-sections
+                             // are decided by the shop in-charge after arrival.
                 ->where(function ($q) {
                     $q->where('type', 'production_shop')
                       ->orWhere('code', 'QC');
