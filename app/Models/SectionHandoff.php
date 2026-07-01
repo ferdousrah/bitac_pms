@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class SectionHandoff extends Model
 {
     protected $fillable = [
-        'work_order_id', 'from_section_id', 'to_section_id', 'direction',
+        'work_order_id', 'from_section_id', 'to_section_id', 'direction', 'qty',
         'note', 'rework_for_id', 'transferred_by', 'transferred_at',
     ];
 

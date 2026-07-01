@@ -7,16 +7,18 @@ use Illuminate\Database\Eloquent\Model;
 class WorkOrderSection extends Model
 {
     protected $fillable = [
-        'work_order_id', 'section_id', 'sequence', 'weight_pct', 'status',
+        'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'status',
         'started_at', 'completed_at', 'completed_by', 'notes', 'work_hours', 'qc_notes', 'remarks',
     ];
 
     protected function casts(): array
     {
         return [
-            'started_at'   => 'datetime',
-            'completed_at' => 'datetime',
-            'weight_pct'   => 'decimal:2',
+            'started_at'    => 'datetime',
+            'completed_at'  => 'datetime',
+            'weight_pct'    => 'decimal:2',
+            'received_qty'  => 'decimal:2',
+            'forwarded_qty' => 'decimal:2',
         ];
     }
 
@@ -47,6 +49,62 @@ class WorkOrderSection extends Model
             'in_progress' => 0.5,
             default       => 0.0,
         };
+    }
+
+    /** This WO's operation steps parked at this section (across all sheets). */
+    public function sectionSteps(): \Illuminate\Support\Collection
+    {
+        $wo = $this->relationLoaded('workOrder') ? $this->workOrder : $this->workOrder()->first();
+        if (!$wo) return collect();
+        $sheets = $wo->relationLoaded('operationSheets') ? $wo->operationSheets : $wo->operationSheets()->with('steps')->get();
+        return $sheets->flatMap(fn ($sh) => $sh->relationLoaded('steps') ? $sh->steps : $sh->steps()->get())
+            ->where('section_id', $this->section_id)
+            ->values();
+    }
+
+    /**
+     * Finished output of this section, by quantity — the number of pieces that
+     * have cleared EVERY operation here (min completed_qty across the section's
+     * steps). Those are the pieces eligible to be transferred downstream.
+     */
+    public function sectionOutputQty(): float
+    {
+        $steps = $this->sectionSteps();
+        if ($steps->isEmpty()) return 0.0;
+        return (float) $steps->min(fn ($s) => (float) $s->completed_qty);
+    }
+
+    /** Throughput target of this section (min target across its steps). */
+    public function sectionTargetQty(): float
+    {
+        $steps = $this->sectionSteps();
+        if ($steps->isEmpty()) return 0.0;
+        return (float) $steps->min(fn ($s) => (float) ($s->target_qty ?? 0));
+    }
+
+    /** Pieces done here but not yet transferred downstream. */
+    public function forwardableQty(): float
+    {
+        return max(0.0, $this->sectionOutputQty() - (float) $this->forwarded_qty);
+    }
+
+    /** Is this the first section in the WO's routing? (raw material — ungated). */
+    public function isFirstInRouting(): bool
+    {
+        return !static::where('work_order_id', $this->work_order_id)
+            ->where('sequence', '<', $this->sequence)
+            ->exists();
+    }
+
+    /**
+     * How much this section is allowed to work on: what it received from
+     * upstream. The first section is ungated (has the raw material). A
+     * downstream section with no received_qty yet is gated at 0.
+     */
+    public function effectiveReceivedQty(): ?float
+    {
+        if ($this->received_qty !== null) return (float) $this->received_qty;
+        return $this->isFirstInRouting() ? null : 0.0; // null = unlimited
     }
 
     public function workOrder()   { return $this->belongsTo(WorkOrder::class); }

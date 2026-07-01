@@ -275,10 +275,22 @@ class ProductionController extends Controller
         }
         $this->authorizeAccess($wos);
         if (in_array($wos->status, ['completed', 'skipped'])) {
-            return back()->with('error', 'This section is already forwarded — cannot log production.');
+            return back()->with('error', 'This section is already completed — cannot log production.');
         }
 
+        // Cap by what this section can still do: target remaining AND the
+        // quantity received from upstream (downstream sections can only work
+        // on pieces that have actually been transferred to them).
         $remaining = (float) $step->remaining_qty;
+        $eff = $wos->effectiveReceivedQty(); // null = ungated (first section / raw material)
+        if ($eff !== null) {
+            $capByReceived = max(0.0, $eff - (float) $step->completed_qty);
+            if ($capByReceived <= 0) {
+                return back()->with('error', 'This section has not received enough quantity yet. Ask the previous section to transfer more.');
+            }
+            $remaining = min($remaining, $capByReceived);
+        }
+
         $validated = $request->validate([
             'qty'         => ['required', 'numeric', 'min:0.01', $remaining > 0 ? 'max:' . $remaining : 'max:9999999'],
             'machine_id'  => 'nullable|exists:machines,id',
@@ -322,7 +334,9 @@ class ProductionController extends Controller
             }
         });
 
-        $this->syncWoSectionStatuses($wo->fresh(['sections.section', 'items', 'operationSheets.steps']));
+        // NO auto-forward. Logging output only records completion at THIS
+        // section — the job advances to the next section only when the
+        // supervisor explicitly transfers a quantity (see transfer()).
 
         return back()->with('success', 'Production logged.');
     }
@@ -351,9 +365,88 @@ class ProductionController extends Controller
             ]);
         });
 
-        $this->syncWoSectionStatuses($wo->fresh(['sections.section', 'items', 'operationSheets.steps']));
-
         return back()->with('success', 'Production log removed.');
+    }
+
+    /**
+     * Explicit partial forward: transfer a quantity of finished pieces from this
+     * section to the next production section in the routing. This is the ONLY way
+     * a job advances now — production logging never auto-forwards. The next
+     * section can only work on what it has received (received_qty).
+     */
+    public function transfer(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        if (!in_array($workOrderSection->status, ['ready', 'in_progress', 'rework'])) {
+            return back()->with('error', 'This section is not in a state that can transfer work.');
+        }
+
+        $workOrderSection->loadMissing(['workOrder.operationSheets.steps', 'section']);
+        $forwardable = $workOrderSection->forwardableQty();
+        if ($forwardable <= 0) {
+            return back()->with('error', 'Nothing to transfer yet — complete some pieces at this section first.');
+        }
+
+        $validated = $request->validate([
+            'qty'  => ['required', 'numeric', 'min:0.01', 'max:' . $forwardable],
+            'note' => 'nullable|string|max:1000',
+        ]);
+        $qty = (float) $validated['qty'];
+        $wo  = $workOrderSection->workOrder;
+        $now = now();
+
+        \DB::transaction(function () use ($workOrderSection, $wo, $qty, $validated, $now) {
+            // Next production section (skip any non-production stops left by legacy routing).
+            $next = WorkOrderSection::where('work_order_id', $wo->id)
+                ->where('sequence', '>', $workOrderSection->sequence)
+                ->orderBy('sequence')->first();
+            while ($next) {
+                $next->loadMissing('section');
+                if ($next->section && $next->section->type === 'production_shop') break;
+                $next->update(['status' => 'skipped', 'completed_at' => now()]);
+                $next = WorkOrderSection::where('work_order_id', $wo->id)
+                    ->where('sequence', '>', $next->sequence)
+                    ->orderBy('sequence')->first();
+            }
+
+            // Ledger: this section forwarded more; downstream received more.
+            $newForwarded = (float) $workOrderSection->forwarded_qty + $qty;
+            $target = $workOrderSection->sectionTargetQty();
+            $fullyForwarded = $target > 0 && $newForwarded >= $target - 0.001;
+
+            $workOrderSection->update([
+                'forwarded_qty' => $newForwarded,
+                'status'        => $fullyForwarded ? 'completed' : 'in_progress',
+                'started_at'    => $workOrderSection->started_at ?? $now,
+                'completed_at'  => $fullyForwarded ? ($workOrderSection->completed_at ?? $now) : null,
+                'completed_by'  => $fullyForwarded ? auth()->id() : $workOrderSection->completed_by,
+            ]);
+
+            if ($next) {
+                $next->update([
+                    'received_qty' => (float) ($next->received_qty ?? 0) + $qty,
+                    'status'       => in_array($next->status, ['pending']) ? 'ready' : $next->status,
+                    'started_at'   => $next->started_at,
+                ]);
+            } elseif ($fullyForwarded) {
+                // Last production section fully forwarded → hand off to QC.
+                $wo->update(['status' => 'qc_hold']);
+            }
+
+            SectionHandoff::create([
+                'work_order_id'   => $wo->id,
+                'from_section_id' => $workOrderSection->section_id,
+                'to_section_id'   => $next?->section_id ?? $workOrderSection->section_id,
+                'direction'       => 'forward',
+                'qty'             => $qty,
+                'note'            => $validated['note'] ?? null,
+                'transferred_by'  => auth()->id(),
+                'transferred_at'  => $now,
+            ]);
+        });
+
+        return back()->with('success', "Transferred {$qty} pcs to the next section.");
     }
 
     /**
@@ -471,6 +564,7 @@ class ProductionController extends Controller
             ->map(fn($h) => [
                 'id'              => $h->id,
                 'direction'       => $h->direction,
+                'qty'             => $h->qty !== null ? (float) $h->qty : null,
                 'note'            => $h->note,
                 'from_section'    => $h->fromSection ? ['name' => $h->fromSection->name, 'code' => $h->fromSection->code] : null,
                 'to_section'      => ['name' => $h->toSection->name, 'code' => $h->toSection->code],
@@ -527,6 +621,16 @@ class ProductionController extends Controller
                 // section's own completion, by quantity.
                 'weight_pct'       => (float) $workOrderSection->weight_pct,
                 'section_progress' => (int) round($workOrderSection->progressFraction() * 100),
+                // Partial-forward ledger.
+                'received_qty'     => $workOrderSection->effectiveReceivedQty(), // null = ungated (first section)
+                'forwarded_qty'    => (float) $workOrderSection->forwarded_qty,
+                'output_qty'       => $workOrderSection->sectionOutputQty(),
+                'forwardable_qty'  => $workOrderSection->forwardableQty(),
+                'target_qty'       => $workOrderSection->sectionTargetQty(),
+                'is_last'          => !WorkOrderSection::where('work_order_id', $workOrderSection->work_order_id)
+                                        ->where('sequence', '>', $workOrderSection->sequence)
+                                        ->whereHas('section', fn ($q) => $q->where('type', 'production_shop'))
+                                        ->exists(),
                 'work_order' => [
                     'id'         => $workOrderSection->workOrder->id,
                     'wo_number'  => $workOrderSection->workOrder->wo_number,
@@ -699,21 +803,23 @@ class ProductionController extends Controller
         $items = $wo->items;
         $sectionId = $wos->section_id;
 
-        // Per-item routing: an item appears at a section only when that section
-        // is its CURRENT pending step (lowest-sequence open step). An item with
-        // an open Fitting step but a still-pending Machine Shop step "lives"
-        // at Machine Shop — it only shows up at Fitting after MS is cleared.
+        // Partial-forward model: an item appears at a section whenever the WOS is
+        // active AND the item still has open (non-completed) steps at this
+        // section. With partial forwarding an item can legitimately be at two
+        // sections at once (e.g. 6 pcs already forwarded to Machine Shop while
+        // the remaining 4 are still at Mould) — so we no longer gate on the
+        // single "current" step. Section availability itself is gated upstream by
+        // the transfer that set this WOS to 'ready' + bumped its received_qty.
         $rows = collect();
         $hasAnyItemSheet = false;
         foreach ($items as $idx => $item) {
             $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
             if (!$sheet) continue;
             $hasAnyItemSheet = true;
-            $current = $sheet->steps
-                ->sortBy('sequence')
-                ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-            if (!$current || $current->section_id !== $sectionId) continue;
             $sectionSteps = $sheet->steps->where('section_id', $sectionId);
+            if ($sectionSteps->isEmpty()) continue;
+            $openHere = $sectionSteps->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+            if (!$openHere) continue;
             $rows->push($this->serializeWosForQueue($wos, [
                 'item' => [
                     'id'          => $item->id,

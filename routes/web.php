@@ -555,6 +555,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/queue', [ProductionController::class, 'queue'])->name('queue');
         Route::get('/wos/{workOrderSection}', [ProductionController::class, 'show'])->name('show');
         Route::post('/wos/{workOrderSection}/complete', [ProductionController::class, 'complete'])->name('complete');
+        // Partial forward — transfer a quantity of finished pieces to the next section.
+        Route::post('/wos/{workOrderSection}/transfer', [ProductionController::class, 'transfer'])->name('transfer');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
         // Shop in-charge assigns a step to one of the shop's sub-sections.

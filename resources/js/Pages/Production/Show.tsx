@@ -45,6 +45,7 @@ interface HandoffFile {
 interface Handoff {
     id: number;
     direction: 'forward' | 'backward' | 'rework_return';
+    qty: number | null;
     note: string | null;
     from_section: { name: string; code: string } | null;
     to_section: { name: string; code: string };
@@ -63,6 +64,12 @@ interface Wos {
     section: SectionLite;
     weight_pct: number;
     section_progress: number;
+    received_qty: number | null;
+    forwarded_qty: number;
+    output_qty: number;
+    forwardable_qty: number;
+    target_qty: number;
+    is_last: boolean;
     work_order: {
         id: number;
         wo_number: string;
@@ -183,10 +190,12 @@ const STATUS_BADGE: Record<string, string> = {
 export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [] }: Props) {
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
+    const [showTransfer, setShowTransfer] = useState(false);
 
     const canAct = ['ready', 'in_progress', 'rework'].includes(wos.status);
     const canSendBack = ['ready', 'in_progress'].includes(wos.status) && earlier_sections.length > 0;
     const isReworkMode = wos.status === 'rework';
+    const nf = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
     // Section can only be forwarded when every operation step (across every
     // item at this section) is closed. allSteps flattens across items.
@@ -237,6 +246,30 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         </span>
                                         {wos.work_order.due_date && <span><i className="fi fi-rr-calendar text-surface-400" /> Due {wos.work_order.due_date}</span>}
                                     </div>
+
+                                    {/* Partial-forward flow ledger */}
+                                    {wos.target_qty > 0 && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                            {wos.received_qty !== null && (
+                                                <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-100">
+                                                    <i className="fi fi-rr-inbox-in text-[9px]" /> Received {nf(wos.received_qty)} / {nf(wos.target_qty)}
+                                                </span>
+                                            )}
+                                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                <i className="fi fi-rr-box-check text-[9px]" /> Completed here {nf(wos.output_qty)}
+                                            </span>
+                                            {wos.forwarded_qty > 0 && (
+                                                <span className="px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">
+                                                    <i className="fi fi-rr-paper-plane text-[9px]" /> Transferred {nf(wos.forwarded_qty)}
+                                                </span>
+                                            )}
+                                            {wos.forwardable_qty > 0 && (
+                                                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100">
+                                                    <i className="fi fi-rr-time-forward text-[9px]" /> Ready to transfer {nf(wos.forwardable_qty)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     {/* Title row priority: scoped item description → WO product. */}
                                     {scoped_item ? (
                                         <p className="text-sm font-semibold text-surface-900 mt-1">{scoped_item.description ?? '—'}</p>
@@ -277,16 +310,28 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                     </button>
                                 )}
                                 {canAct && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowComplete(true)}
-                                        disabled={!allStepsDone}
-                                        title={allStepsDone ? '' : `${openSteps.length} operation step(s) still open. Close each step first.`}
-                                        className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <i className="fi fi-rr-check text-xs" />
-                                        {isReworkMode ? 'Complete Rework & Return' : 'Complete & Forward'}
-                                    </button>
+                                    isReworkMode ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowComplete(true)}
+                                            disabled={!allStepsDone}
+                                            title={allStepsDone ? '' : `${openSteps.length} operation step(s) still open. Close each step first.`}
+                                            className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <i className="fi fi-rr-check text-xs" /> Complete Rework & Return
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowTransfer(true)}
+                                            disabled={wos.forwardable_qty <= 0}
+                                            title={wos.forwardable_qty > 0 ? '' : 'No completed pieces to transfer yet. Log some output first.'}
+                                            className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <i className="fi fi-rr-paper-plane text-xs" />
+                                            {wos.is_last ? 'Transfer & Send to QC' : 'Transfer to next section'}
+                                        </button>
+                                    )
                                 )}
                             </div>
                         </div>
@@ -464,6 +509,14 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                     onClose={() => setShowSendBack(false)}
                 />
             )}
+            {showTransfer && (
+                <TransferModal
+                    wosId={wos.id}
+                    forwardable={wos.forwardable_qty}
+                    isLast={wos.is_last}
+                    onClose={() => setShowTransfer(false)}
+                />
+            )}
         </AppLayout>
     );
 }
@@ -573,7 +626,7 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         <div className="mt-2">
                             <div className="flex items-center justify-between text-[11px] mb-1">
                                 <span className="text-surface-600">
-                                    Produced <span className="font-bold text-surface-900">{fmtQty(step.completed_qty)}</span> / {fmtQty(step.target_qty)}
+                                    Completed <span className="font-bold text-surface-900">{fmtQty(step.completed_qty)}</span> / {fmtQty(step.target_qty)}
                                     {step.remaining_qty > 0 && <span className="text-amber-600"> · {fmtQty(step.remaining_qty)} left</span>}
                                 </span>
                                 <span className="font-bold text-surface-700">{pct}%</span>
@@ -624,7 +677,7 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         <div className="mt-3 p-3 rounded-xl border border-brand-200 bg-brand-50/40 space-y-2">
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 <div>
-                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Qty produced *</label>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Qty completed *</label>
                                     <input type="number" min="0" step="any" value={form.qty}
                                         onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
                                         max={step.remaining_qty || undefined}
@@ -637,14 +690,14 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                                         className="form-input w-full text-sm py-1.5" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Machine</label>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Machine <span className="text-surface-400 normal-case font-normal">(optional)</span></label>
                                     <select value={form.machine_id} onChange={e => setForm(f => ({ ...f, machine_id: e.target.value }))} className="form-select w-full text-sm py-1.5">
                                         <option value="">—</option>
                                         {machines.map(m => <option key={m.id} value={m.id}>{m.name}{m.code ? ` (${m.code})` : ''}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Operator</label>
+                                    <label className="text-[10px] font-semibold text-surface-500 uppercase">Operator <span className="text-surface-400 normal-case font-normal">(optional)</span></label>
                                     <select value={form.operator_id} onChange={e => setForm(f => ({ ...f, operator_id: e.target.value }))} className="form-select w-full text-sm py-1.5">
                                         <option value="">—</option>
                                         {operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -744,6 +797,9 @@ function HandoffRow({ h }: { h: Handoff }) {
                     </span>
                 )}
                 <span className="text-xs font-semibold text-surface-900">{h.to_section.name}</span>
+                {h.qty !== null && (
+                    <span className="badge badge-violet text-[10px]">{Number(h.qty).toLocaleString('en-IN', { maximumFractionDigits: 2 })} pcs</span>
+                )}
                 <span className="ml-auto text-[11px] text-surface-500">{h.transferred_at}</span>
             </div>
             <div className="text-[11px] text-surface-500 mt-1">
@@ -830,6 +886,54 @@ function CompleteModal({ wosId, isRework, onClose }: { wosId: number; isRework: 
                 <FilesInput files={files} setFiles={setFiles} />
             </div>
             <ModalFooter onClose={onClose} onSubmit={submit} submitting={submitting} submitLabel={isRework ? 'Complete Rework' : 'Complete & Forward'} />
+        </ModalShell>
+    );
+}
+
+function TransferModal({ wosId, forwardable, isLast, onClose }: { wosId: number; forwardable: number; isLast: boolean; onClose: () => void }) {
+    const nf = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const [qty, setQty] = useState(String(forwardable));
+    const [note, setNote] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const q = parseFloat(qty);
+    const valid = q > 0 && q <= forwardable + 0.001;
+
+    const submit = () => {
+        if (!valid) return;
+        setSubmitting(true);
+        router.post(`/production/wos/${wosId}/transfer`, { qty, note: note || undefined }, {
+            preserveScroll: true,
+            onFinish: () => setSubmitting(false),
+            onSuccess: onClose,
+        });
+    };
+
+    return (
+        <ModalShell title={isLast ? 'Transfer & Send to QC' : 'Transfer to Next Section'} onClose={onClose} disabled={submitting}>
+            <div className="p-5 space-y-4 overflow-y-auto">
+                <div className="text-sm text-surface-700">
+                    {isLast
+                        ? 'Send finished pieces from this section to QC. Only the quantity you transfer moves on — transfer the rest later.'
+                        : 'Send finished pieces to the next section. Only the quantity you transfer becomes available there — you can transfer the remaining pieces later.'}
+                </div>
+                <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-800">
+                    <i className="fi fi-rr-box-check text-xs" /> Ready to transfer: <span className="font-bold">{nf(forwardable)}</span> pcs
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Quantity to transfer <span className="text-red-500">*</span></label>
+                    <input type="number" min="0" step="any" max={forwardable} value={qty}
+                        onChange={(e) => setQty(e.target.value)} className="form-input"
+                        placeholder={`max ${nf(forwardable)}`} />
+                    {!valid && qty !== '' && <p className="form-error">Enter a quantity between 0 and {nf(forwardable)}.</p>}
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Handoff Note <span className="form-label-optional">optional</span></label>
+                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="form-input"
+                        style={{ resize: 'vertical' }} placeholder="Anything the next section should know…" />
+                </div>
+            </div>
+            <ModalFooter onClose={onClose} onSubmit={submit} submitting={submitting} submitDisabled={!valid}
+                submitLabel={isLast ? 'Transfer & Send to QC' : 'Transfer'} />
         </ModalShell>
     );
 }
