@@ -681,8 +681,11 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         </div>
                     )}
 
-                    {/* Live running timer (in_progress) */}
-                    {step.status === 'in_progress' && step.started_at_iso && (
+                    {/* Live running timer — only for legacy Start/Complete steps.
+                        In qty-mode a step spans many days of partial output, so a
+                        wall-clock timer since first log is misleading; actual time
+                        lives in each daily log's hours instead. */}
+                    {!hasQty && step.status === 'in_progress' && step.started_at_iso && (
                         <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200">
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
