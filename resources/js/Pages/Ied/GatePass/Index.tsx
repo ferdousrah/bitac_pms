@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<string, string> = {
     rejected: 'Rejected', completed: 'Completed', cancelled: 'Cancelled',
 };
 
-export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-passes', lockedDirection, canApprove = false }: any) {
+export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-passes', lockedDirection, canApprove = false, mySignatureUrl = null }: any) {
     const [search, setSearch]     = useState(filters.search || '');
     const [direction, setDir]     = useState(filters.direction || '');
     const [status, setStatus]     = useState(filters.status || '');
@@ -222,9 +222,15 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
                             <h3 className="text-base font-bold text-surface-900">Approve Gate Pass</h3>
                         </div>
                         <div className="p-5 space-y-3">
-                            <p className="text-sm text-surface-600">Sign below to approve. Any one approver finalises the pass (→ issued).</p>
+                            <p className="text-sm text-surface-600">Any one approver finalises the pass (→ issued).</p>
+                            {mySignatureUrl && (
+                                <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-2">
+                                    <div className="text-[11px] font-semibold text-emerald-700 mb-1">Your saved signature (used by default)</div>
+                                    <img src={mySignatureUrl} alt="saved signature" className="h-12 object-contain" />
+                                </div>
+                            )}
                             <div>
-                                <label className="form-label">Signature</label>
+                                <label className="form-label">{mySignatureUrl ? 'Draw to override (optional)' : 'Signature'}</label>
                                 <SignaturePad ref={sigRef} />
                             </div>
                         </div>

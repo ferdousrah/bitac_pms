@@ -52,7 +52,7 @@ const STATUS_CLS: Record<string, string> = {
     pending_approval: 'badge-amber', rejected: 'badge-red', draft: 'badge-slate',
 };
 
-export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canApprove = false }: any) {
+export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canApprove = false, mySignatureUrl = null }: any) {
     const [pdfOpen, setPdfOpen] = useState(false);
     const isIn = pass.direction === 'in';
     const isActive = pass.status === 'issued';
@@ -327,8 +327,14 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                             <h3 className="text-base font-bold text-surface-900">Approve {pass.pass_no}</h3>
                         </div>
                         <div className="p-5 space-y-3">
-                            <p className="text-sm text-surface-600">Sign below to approve &amp; issue this gate pass.</p>
-                            <div><label className="form-label">Signature</label><SignaturePad ref={sigRef} /></div>
+                            <p className="text-sm text-surface-600">Approve &amp; issue this gate pass.</p>
+                            {mySignatureUrl && (
+                                <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-2">
+                                    <div className="text-[11px] font-semibold text-emerald-700 mb-1">Your saved signature (used by default)</div>
+                                    <img src={mySignatureUrl} alt="saved signature" className="h-12 object-contain" />
+                                </div>
+                            )}
+                            <div><label className="form-label">{mySignatureUrl ? 'Draw to override (optional)' : 'Signature'}</label><SignaturePad ref={sigRef} /></div>
                         </div>
                         <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
                             <button type="button" onClick={() => setShowApprove(false)} disabled={busy} className="btn-outline">Cancel</button>

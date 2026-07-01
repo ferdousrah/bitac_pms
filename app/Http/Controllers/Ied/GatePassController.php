@@ -84,6 +84,7 @@ class GatePassController extends Controller
             // PCD gate passes need approval; only pool members see Approve/Reject.
             'requiresApproval'=> $this->isPcdContext(),
             'canApprove'      => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
+            'mySignatureUrl'  => auth()->user()->signature_url,
         ]);
     }
 
@@ -254,6 +255,7 @@ class GatePassController extends Controller
             ],
             'basePath'   => $this->basePath(),
             'canApprove' => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
+            'mySignatureUrl' => auth()->user()->signature_url,
         ]);
     }
 
@@ -359,6 +361,16 @@ class GatePassController extends Controller
         $sigPath        = $gatePass->signatureAbsolutePath()
                         ?? $gatePass->issuedBy?->signatureAbsolutePath();
 
+        // Approver signature — drawn on approval, else the approver's saved
+        // profile signature (same fallback pattern as the issuer).
+        $approverName    = $esc($gatePass->approvedBy?->name ?? '');
+        $approverSigPath = null;
+        if ($gatePass->approver_signature_path) {
+            $p = \Storage::disk('public')->path($gatePass->approver_signature_path);
+            $approverSigPath = is_file($p) ? $p : null;
+        }
+        $approverSigPath = $approverSigPath ?? $gatePass->approvedBy?->signatureAbsolutePath();
+
         // Memo block — top-left pass no, top-right date
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
@@ -422,19 +434,31 @@ class GatePassController extends Controller
             ? '<img src="' . $sigPath . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
             : '<div style="height: 40pt;"></div>';
 
+        // Approved-By block (only when the pass has been approved).
+        $approverSigImg = $approverSigPath
+            ? '<img src="' . $approverSigPath . '" style="height: 40pt; max-width: 140pt;" alt="approver signature" />'
+            : '<div style="height: 40pt;"></div>';
+        $approvedByCol = $gatePass->approvedBy
+            ? '<td width="30%" style="vertical-align: bottom; text-align: center;">'
+                . '<div style="margin-bottom: 4pt;">' . $approverSigImg . '</div>'
+                . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 130pt;">Approved By</div>'
+                . '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $approverName . '</div>'
+              . '</td>'
+            : '<td width="20%"></td>';
+
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
-            .   '<td width="40%" style="vertical-align: bottom; text-align: left;">'
+            .   '<td width="35%" style="vertical-align: bottom; text-align: left;">'
             .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Issued By (IED)</div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 130pt;">Issued By</div>'
             .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $issuerName . '</div>'
             .     ($issuerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $issuerTitle . '</div>' : '')
             .     ($issuerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $issuerCenter . '</div>' : '')
             .   '</td>'
-            .   '<td width="20%"></td>'
-            .   '<td width="40%" style="vertical-align: bottom; text-align: right;">'
+            .   $approvedByCol
+            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
             .     '<div style="height: 40pt;"></div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Customer Representative</div>'
+            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 150pt;">Customer Representative</div>'
             .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $esc($gatePass->customer_rep_name ?? '') . '</div>'
             .     ($gatePass->customer_rep_phone ? '<div style="font-size: 9pt; color: #4b5563;">' . $esc($gatePass->customer_rep_phone) . '</div>' : '')
             .   '</td>'
