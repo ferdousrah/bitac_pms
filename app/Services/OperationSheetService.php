@@ -159,10 +159,7 @@ class OperationSheetService
             }
         }
         if ($imgHtml !== '') {
-            $imageBlock = '<div style="margin-bottom: 14pt;">'
-                . '<div style="font-size: 9pt; font-weight: bold; margin-bottom: 4pt;">Reference — Drawings &amp; Samples</div>'
-                . '<div style="text-align: center;">' . $imgHtml . '</div>'
-                . '</div>';
+            $imageBlock = '<div style="text-align: center; margin-bottom: 14pt;">' . $imgHtml . '</div>';
         }
 
         // Operation routing table — English headers + section names.
