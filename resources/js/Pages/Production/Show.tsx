@@ -223,6 +223,16 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     // "Documents" card (op-sheet PDF + drawings/samples).
     const docItems = op_items.filter((b) => b.sheet_id || (b.references && b.references.length > 0));
 
+    // A piece can only be transferred once it clears EVERY operation here. If
+    // some operations are ahead of others, those extra pieces are "stuck" until
+    // the lagging operations catch up — surface that so nobody wonders why the
+    // section output (and Transfer) stays at 0.
+    const sectionMaxDone = allSteps.length ? Math.max(...allSteps.map((s) => s.completed_qty)) : 0;
+    const stuckQty = Math.max(0, sectionMaxDone - wos.output_qty);
+    const laggingOps = allSteps
+        .filter((s) => s.status !== 'skipped' && s.completed_qty < sectionMaxDone)
+        .map((s) => `${s.operation_name} (${nf(s.completed_qty)})`);
+
     return (
         <AppLayout header={
             scoped_item
@@ -281,6 +291,13 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                                     <i className="fi fi-rr-time-forward text-[9px]" /> Ready to transfer {nf(wos.forwardable_qty)}
                                                 </span>
                                             )}
+                                        </div>
+                                    )}
+                                    {/* Why pieces can't move yet — a lagging operation in this section */}
+                                    {stuckQty > 0 && laggingOps.length > 0 && (
+                                        <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                                            <i className="fi fi-rr-info text-[10px]" /> {nf(stuckQty)} pcs done on some operations can't be transferred yet —
+                                            a piece must clear <b>every</b> operation here first. Finish: <b>{laggingOps.join(', ')}</b>.
                                         </div>
                                     )}
                                     {/* Title row priority: scoped item description → WO product. */}
