@@ -3,6 +3,7 @@ import { Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 import ProductionMessageThread from '@/Components/Production/ProductionMessageThread';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 /** Live ticking elapsed time between a startIso and now. Re-renders every second. */
 function LiveElapsed({ startIso }: { startIso: string }) {
@@ -193,6 +194,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     const [showSendBack, setShowSendBack] = useState(false);
     const [showTransfer, setShowTransfer] = useState(false);
     const [showBottleneck, setShowBottleneck] = useState(false);
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({ open: false, url: null, title: '' });
 
     const canAct = ['ready', 'in_progress', 'rework'].includes(wos.status);
     const canSendBack = ['ready', 'in_progress'].includes(wos.status) && earlier_sections.length > 0;
@@ -219,11 +221,6 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                     <div className="card-body">
                         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                             <div className="flex items-start gap-4 flex-1 min-w-0">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-md ${
-                                    isReworkMode ? 'bg-rose-500' : 'bg-gradient-to-br from-brand-500 to-brand-700'
-                                }`}>
-                                    {wos.work_order.job_number ?? '#'}
-                                </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
                                         <h2 className="text-xl font-bold text-surface-900">Job# {wos.work_order.job_number}</h2>
@@ -482,20 +479,20 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                             <span className="text-sm font-semibold text-surface-700">Shared (WO-level)</span>
                                         )}
                                         {block.sheet_id && (
-                                            <div className="ml-auto flex items-center gap-2">
-                                                {block.sheet_number && (
-                                                    <span className="text-[10px] font-mono text-surface-400">Sheet {block.sheet_number}</span>
-                                                )}
-                                                <a
-                                                    href={`/production/op-sheets/${block.sheet_id}/pdf?preview=1`}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-brand-50 text-brand-700 border border-brand-100 hover:bg-brand-100 transition-colors"
-                                                    title="View the PCD operation sheet (PDF)"
-                                                >
-                                                    <i className="fi fi-rr-document text-[10px] leading-none" /> Operation Sheet
-                                                </a>
-                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPdfPopup({
+                                                    open: true,
+                                                    url: `/production/op-sheets/${block.sheet_id}/pdf?preview=base64`,
+                                                    title: 'Operation Sheet',
+                                                    subtitle: block.sheet_number ? `Sheet ${block.sheet_number}` : (block.item?.description ?? undefined),
+                                                })}
+                                                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-sm transition-colors"
+                                                title="View the PCD operation sheet (PDF)"
+                                            >
+                                                <i className="fi fi-rr-file-pdf text-xs leading-none" /> View Operation Sheet
+                                                {block.sheet_number && <span className="font-mono font-normal opacity-80">· {block.sheet_number}</span>}
+                                            </button>
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
@@ -572,6 +569,13 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
             {showBottleneck && (
                 <BottleneckModal wosId={wos.id} onClose={() => setShowBottleneck(false)} />
             )}
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.url}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup(s => ({ ...s, open: false }))}
+            />
         </AppLayout>
     );
 }
@@ -672,7 +676,7 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         )}
                         {step.machine && <span><i className="fi fi-rr-settings text-[10px]" /> {step.machine}</span>}
                         {step.operator && <span><i className="fi fi-rr-user text-[10px]" /> {step.operator}</span>}
-                        <span><i className="fi fi-rr-clock text-[10px]" /> est {step.estimated_hours.toFixed(1)}h</span>
+                        {step.estimated_hours > 0 && <span><i className="fi fi-rr-clock text-[10px]" /> est {step.estimated_hours.toFixed(1)}h</span>}
                         {step.actual_hours > 0 && <span className="text-emerald-600">· actual {step.actual_hours.toFixed(2)}h</span>}
                     </div>
 
