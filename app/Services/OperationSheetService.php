@@ -133,31 +133,35 @@ class OperationSheetService
             . '</tr>';
         $headerHtml .= '</table>';
 
-        // Sample photo / drawing block — sourced from the RFQ item attachments
-        // (uploaded during RFQ creation). Prefers sample photos over drawings;
-        // only embeds files mPDF can render (jpg/png). Multi-page PDF drawings
-        // are skipped — they'd need rasterisation which is out of scope here.
+        // Reference block — ALL sample photos + drawings the RFQ item carries
+        // (uploaded during RFQ creation). Every embeddable image (jpg/png/…) is
+        // shown, each labelled Sample / Drawing. Non-image files (multi-page PDF
+        // drawings) are skipped — they'd need rasterisation, out of scope here.
         $imageBlock = '';
-        $candidates = collect();
         $rfqItem = $item?->rfqItem;
+        $imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        $imgHtml = '';
         if ($rfqItem) {
-            $candidates = $candidates->merge($rfqItem->samplePhotos)->merge($rfqItem->drawings);
-        }
-        $imageTag = '';
-        foreach ($candidates as $file) {
-            $ext = strtolower(pathinfo($file->stored_path ?? '', PATHINFO_EXTENSION));
-            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
-                continue;
+            $refFiles = collect()
+                ->merge($rfqItem->samplePhotos->map(fn ($f) => ['file' => $f, 'kind' => 'Sample']))
+                ->merge($rfqItem->drawings->map(fn ($f) => ['file' => $f, 'kind' => 'Drawing']));
+            foreach ($refFiles as $row) {
+                $file = $row['file'];
+                $ext  = strtolower(pathinfo($file->stored_path ?? '', PATHINFO_EXTENSION));
+                if (!in_array($ext, $imgExts, true)) continue;
+                $abs = storage_path('app/public/' . ltrim($file->stored_path, '/'));
+                if (!is_file($abs)) continue;
+                $src = 'file://' . str_replace('\\', '/', $abs);
+                $imgHtml .= '<div style="display: inline-block; margin: 4pt 6pt; text-align: center; vertical-align: top;">'
+                    . '<img src="' . $src . '" style="max-height: 150pt; max-width: 170pt;" />'
+                    . '<div style="font-size: 8pt; color: #555; margin-top: 2pt;">' . $row['kind'] . '</div>'
+                    . '</div>';
             }
-            $abs = storage_path('app/public/' . ltrim($file->stored_path, '/'));
-            if (!is_file($abs)) continue;
-            $imageTag = '<img src="file://' . str_replace('\\', '/', $abs) . '" '
-                . 'style="max-height: 180pt; max-width: 280pt;" />';
-            break;
         }
-        if ($imageTag !== '') {
-            $imageBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-                . $imageTag
+        if ($imgHtml !== '') {
+            $imageBlock = '<div style="margin-bottom: 14pt;">'
+                . '<div style="font-size: 9pt; font-weight: bold; margin-bottom: 4pt;">Reference — Drawings &amp; Samples</div>'
+                . '<div style="text-align: center;">' . $imgHtml . '</div>'
                 . '</div>';
         }
 
