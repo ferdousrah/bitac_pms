@@ -312,7 +312,7 @@ class ProductionController extends Controller
             }
         }
 
-        $step->update(['sub_section_id' => $validated['sub_section_id'] ?: null]);
+        $step->update(['sub_section_id' => ($validated['sub_section_id'] ?? null) ?: null]);
 
         return back()->with('success', 'Sub-section updated.');
     }
