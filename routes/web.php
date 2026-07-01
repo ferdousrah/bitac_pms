@@ -565,6 +565,8 @@ Route::middleware(['auth'])->group(function () {
         // Shop-floor bottleneck flag (→ PCD reroute).
         Route::post('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'flagBottleneck'])->name('wos.bottleneck');
         Route::delete('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'clearBottleneck'])->name('wos.bottleneck.clear');
+        // View the PCD operation sheet PDF from the shop floor (production-permission gated).
+        Route::get('/op-sheets/{sheet}/pdf', [\App\Http\Controllers\OperationSheetController::class, 'pdf'])->name('op-sheet.pdf');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
         // Shop in-charge assigns a step to one of the shop's sub-sections.

@@ -481,10 +481,21 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         ) : (
                                             <span className="text-sm font-semibold text-surface-700">Shared (WO-level)</span>
                                         )}
-                                        {block.sheet_number && (
-                                            <span className="text-[10px] font-mono text-surface-400 ml-auto">
-                                                Sheet {block.sheet_number}
-                                            </span>
+                                        {block.sheet_id && (
+                                            <div className="ml-auto flex items-center gap-2">
+                                                {block.sheet_number && (
+                                                    <span className="text-[10px] font-mono text-surface-400">Sheet {block.sheet_number}</span>
+                                                )}
+                                                <a
+                                                    href={`/production/op-sheets/${block.sheet_id}/pdf?preview=1`}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-brand-50 text-brand-700 border border-brand-100 hover:bg-brand-100 transition-colors"
+                                                    title="View the PCD operation sheet (PDF)"
+                                                >
+                                                    <i className="fi fi-rr-document text-[10px] leading-none" /> Operation Sheet
+                                                </a>
+                                            </div>
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
