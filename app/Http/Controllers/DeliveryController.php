@@ -72,19 +72,24 @@ class DeliveryController extends Controller
 
     public function create(Request $request)
     {
-        $readyWos = WorkOrder::whereIn('status', ['qc_passed', 'ready_for_delivery'])
-            ->with(['product', 'customer'])->get()
+        // Any WO with QC-passed-but-undelivered qty can be (partially) shipped —
+        // not just fully-QC'd ones. deliverableQty = qcPassed − alreadyCommitted.
+        $readyWos = WorkOrder::whereIn('status', ['qc_hold', 'qc_passed', 'ready_for_delivery', 'partially_delivered'])
+            ->with(['product', 'customer', 'qcInspections', 'deliveryOrders'])->get()
             ->map(fn($wo) => [
                 'id'               => $wo->id,
                 'wo_number'        => $wo->wo_number,
                 'product'          => $wo->product->name ?? '',
                 'customer'         => $wo->customer->name ?? '',
-                'quantity'         => $wo->quantity,
+                'quantity'         => (float) $wo->quantity,
+                'deliverable'      => $wo->deliverableQty(),
                 'customer_address' => $wo->customer->address ?? '',
-            ]);
+            ])
+            ->filter(fn ($w) => $w['deliverable'] > 0.001)
+            ->values();
 
         $preselected = $request->query('work_order_id')
-            ? WorkOrder::with(['product', 'customer'])->find($request->query('work_order_id'))
+            ? WorkOrder::with(['product', 'customer', 'qcInspections', 'deliveryOrders'])->find($request->query('work_order_id'))
             : null;
 
         return Inertia::render('Delivery/Create', [
@@ -92,7 +97,8 @@ class DeliveryController extends Controller
             'workOrder'  => $preselected ? [
                 'id'               => $preselected->id,
                 'wo_number'        => $preselected->wo_number,
-                'quantity'         => $preselected->quantity,
+                'quantity'         => (float) $preselected->quantity,
+                'deliverable'      => $preselected->deliverableQty(),
                 'customer_address' => $preselected->customer->address ?? '',
             ] : null,
         ]);
@@ -112,6 +118,14 @@ class DeliveryController extends Controller
 
         $workOrder = WorkOrder::findOrFail($validated['work_order_id']);
 
+        // Can't schedule more than what's QC-passed & not already committed.
+        $deliverable = $workOrder->deliverableQty();
+        if ((float) $validated['quantity_delivered'] > $deliverable + 0.001) {
+            return back()->withInput()->withErrors([
+                'quantity_delivered' => 'Only ' . rtrim(rtrim(number_format($deliverable, 2), '0'), '.') . ' pc(s) are QC-passed and available to deliver.',
+            ]);
+        }
+
         $year    = now()->year;
         $count   = DeliveryOrder::whereYear('created_at', $year)->count();
         $challan = 'CH-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
@@ -123,7 +137,12 @@ class DeliveryController extends Controller
             'status'         => 'scheduled',
         ]);
 
-        $workOrder->update(['status' => 'ready_for_delivery']);
+        // Only mark the WHOLE WO "ready for delivery" once everything is
+        // committed to a delivery; a partial schedule leaves the status alone.
+        if ($workOrder->committedDeliveryQty() >= (float) $workOrder->quantity - 0.001
+            && !in_array($workOrder->status, ['partially_delivered', 'delivered'], true)) {
+            $workOrder->update(['status' => 'ready_for_delivery']);
+        }
 
         return redirect()->route('delivery.index')->with('success', "Delivery scheduled. Challan: {$challan}");
     }
@@ -199,8 +218,12 @@ class DeliveryController extends Controller
         ]);
 
         $delivery->update(['status' => 'delivered', 'delivered_at' => now()]);
-        $previousWoStatus = $delivery->workOrder->status;
-        $delivery->workOrder->update(['status' => 'delivered']);
+        $workOrder = $delivery->workOrder;
+        $previousWoStatus = $workOrder->status;
+        // Fully delivered only when the cumulative delivered qty covers the
+        // whole order; otherwise the job is PARTIALLY delivered (more to come).
+        $fully = $workOrder->fresh()->deliveredQty() >= (float) $workOrder->quantity - 0.001;
+        $workOrder->update(['status' => $fully ? 'delivered' : 'partially_delivered']);
 
         $invoice = $this->invoiceService->createFromDelivery($delivery);
 

@@ -11,6 +11,7 @@ const STATUS: Record<string, { badge: string; icon: string }> = {
     qc_hold:            { badge: 'bg-orange-50 text-orange-700 border-orange-200',    icon: 'fi-rr-shield-check' },
     qc_passed:          { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fi-rr-check-circle' },
     ready_for_delivery: { badge: 'bg-purple-50 text-purple-700 border-purple-200',   icon: 'fi-rr-truck-side' },
+    partially_delivered:{ badge: 'bg-amber-50 text-amber-700 border-amber-200',       icon: 'fi-rr-box' },
     delivered:          { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'fi-rr-box' },
     cancelled:          { badge: 'bg-red-50 text-red-700 border-red-200',            icon: 'fi-rr-cross' },
 };

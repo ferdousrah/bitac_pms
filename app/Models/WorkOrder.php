@@ -44,6 +44,7 @@ class WorkOrder extends Model
             'qc_hold'            => 'QC Hold',
             'qc_passed'          => 'QC Passed',
             'ready_for_delivery' => 'Ready for Delivery',
+            'partially_delivered'=> 'Partially Delivered',
             'delivered'          => 'Delivered',
             'cancelled'          => 'Cancelled',
             default              => ucfirst($this->status),
@@ -62,10 +63,44 @@ class WorkOrder extends Model
             'qc_hold'            => 'orange',
             'qc_passed'          => 'teal',
             'ready_for_delivery' => 'indigo',
+            'partially_delivered'=> 'amber',
             'delivered'          => 'green',
             'cancelled'          => 'red',
             default              => 'gray',
         };
+    }
+
+    // ── Partial QC / Delivery quantity ledger ────────────────────
+    /** Total quantity that has PASSED QC (across inspections). */
+    public function qcPassedQty(): float
+    {
+        // Fully-QC'd statuses = the whole order passed (covers legacy WOs whose
+        // inspections predate qty tracking).
+        if (in_array($this->status, ['qc_passed', 'ready_for_delivery', 'delivered'], true)) {
+            return (float) $this->quantity;
+        }
+        $insp = $this->relationLoaded('qcInspections') ? $this->qcInspections : $this->qcInspections()->get();
+        return (float) $insp->whereIn('result', ['pass', 'conditional'])->sum('qty_passed');
+    }
+
+    /** Quantity already delivered (completed delivery orders). */
+    public function deliveredQty(): float
+    {
+        $dos = $this->relationLoaded('deliveryOrders') ? $this->deliveryOrders : $this->deliveryOrders()->get();
+        return (float) $dos->where('status', 'delivered')->sum('quantity_delivered');
+    }
+
+    /** Quantity committed to delivery (scheduled OR delivered — not cancelled). */
+    public function committedDeliveryQty(): float
+    {
+        $dos = $this->relationLoaded('deliveryOrders') ? $this->deliveryOrders : $this->deliveryOrders()->get();
+        return (float) $dos->whereIn('status', ['scheduled', 'delivered'])->sum('quantity_delivered');
+    }
+
+    /** Quantity that has passed QC but isn't yet committed to a delivery. */
+    public function deliverableQty(): float
+    {
+        return max(0.0, $this->qcPassedQty() - $this->committedDeliveryQty());
     }
 
     public function section()      { return $this->belongsTo(Section::class); }

@@ -295,28 +295,26 @@ class QcController extends Controller
      */
     private function reconcileWorkOrderStatus(WorkOrder $workOrder): void
     {
-        $workOrder->loadMissing(['operationSheets']);
-        $sheets = $workOrder->operationSheets;
-        if ($sheets->isEmpty()) return;
+        // Quantity-based: the WO is fully QC-passed only once the passed qty
+        // covers the whole order. A PARTIAL pass leaves the status alone (it
+        // stays qc_hold / partially_delivered) — the passed portion is still
+        // deliverable via WorkOrder::deliverableQty(). This is what makes
+        // partial QC → partial delivery work.
+        $workOrder->loadMissing(['qcInspections']);
+        $ordered = (float) $workOrder->quantity;
+        $passed  = $workOrder->fresh()->qcPassedQty();
 
-        // Latest final inspection per sheet drives the verdict — re-inspection
-        // after rework supersedes the older fail.
-        $verdictPerSheet = [];
-        foreach ($sheets as $sheet) {
-            $final = $sheet->qcInspections()
-                ->where('inspection_type', 'final')
-                ->orderByDesc('inspected_at')
-                ->first();
-            $verdictPerSheet[$sheet->id] = $final?->result; // null if never inspected
+        if ($ordered > 0 && $passed >= $ordered - 0.001) {
+            if (!in_array($workOrder->status, ['qc_passed', 'ready_for_delivery', 'partially_delivered', 'delivered'], true)) {
+                $workOrder->update(['status' => 'qc_passed']);
+            }
+            return;
         }
 
-        $allPass = !empty($verdictPerSheet)
-            && collect($verdictPerSheet)->every(fn ($r) => in_array($r, ['pass', 'conditional']));
-        $anyFail = collect($verdictPerSheet)->contains('fail');
-
-        if ($allPass && $workOrder->status !== 'qc_passed') {
-            $workOrder->update(['status' => 'qc_passed']);
-        } elseif ($anyFail && $workOrder->status !== 'qc_hold') {
+        // Not fully passed yet. If there's an un-recovered failure and no passed
+        // qty at all, hold; otherwise leave the status as-is (partial in flight).
+        $hasFail = $workOrder->qcInspections()->where('result', 'fail')->exists();
+        if ($hasFail && $passed <= 0 && !in_array($workOrder->status, ['qc_hold', 'partially_delivered', 'delivered'], true)) {
             $workOrder->update(['status' => 'qc_hold']);
         }
     }

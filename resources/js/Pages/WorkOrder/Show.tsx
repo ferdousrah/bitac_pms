@@ -10,6 +10,7 @@ const statusBadge: Record<string, string> = {
     qc_hold: 'badge-amber',
     qc_passed: 'badge-green',
     ready_for_delivery: 'badge-blue',
+    partially_delivered: 'badge-amber',
     delivered: 'badge-green',
     cancelled: 'badge-red',
 };

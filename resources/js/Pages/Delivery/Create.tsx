@@ -5,13 +5,16 @@ import { FormEvent } from 'react';
 export default function DeliveryCreate({ workOrders, workOrder }: any) {
     const { data, setData, post, errors, processing } = useForm({
         work_order_id: workOrder?.id ?? '',
-        quantity_delivered: workOrder?.quantity ?? '',
+        quantity_delivered: workOrder?.deliverable ?? '',
         scheduled_date: '',
         delivery_address: workOrder?.customer_address ?? '',
         vehicle_number: '',
         driver_name: '',
         notes: '',
     });
+
+    const selectedWo = (workOrders ?? []).find((w: any) => String(w.id) === String(data.work_order_id)) ?? workOrder;
+    const maxQty = selectedWo?.deliverable;
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
@@ -34,14 +37,21 @@ export default function DeliveryCreate({ workOrders, workOrder }: any) {
                                 <label className="form-label">Work Order *</label>
                                 <select
                                     value={data.work_order_id}
-                                    onChange={(e) => setData('work_order_id', e.target.value)}
+                                    onChange={(e) => {
+                                        setData('work_order_id', e.target.value);
+                                        const wo = (workOrders ?? []).find((w: any) => String(w.id) === String(e.target.value));
+                                        if (wo) {
+                                            setData('quantity_delivered', wo.deliverable ?? '');
+                                            if (wo.customer_address) setData('delivery_address', wo.customer_address);
+                                        }
+                                    }}
                                     className="form-select"
                                     required
                                 >
                                     <option value="">Select work order...</option>
                                     {workOrders?.map((wo: any) => (
                                         <option key={wo.id} value={wo.id}>
-                                            {wo.wo_number} — {wo.product} ({wo.customer})
+                                            {wo.wo_number} — {wo.product} ({wo.customer}) · {wo.deliverable} of {wo.quantity} ready
                                         </option>
                                     ))}
                                 </select>
@@ -50,7 +60,7 @@ export default function DeliveryCreate({ workOrders, workOrder }: any) {
                                 )}
                                 {(!workOrders || workOrders.length === 0) && (
                                     <p className="form-hint text-amber-600">
-                                        <i className="fi fi-rr-info text-[10px]" /> No jobs are ready for delivery yet. A job appears here only after a passing <b>Final</b> QC inspection (→ status QC Passed).
+                                        <i className="fi fi-rr-info text-[10px]" /> No jobs have QC-passed qty ready to deliver. A job appears here once some quantity passes QC (partial QC is supported — only the passed qty is deliverable).
                                     </p>
                                 )}
                             </div>
@@ -61,11 +71,15 @@ export default function DeliveryCreate({ workOrders, workOrder }: any) {
                                     <input
                                         type="number"
                                         min="1"
+                                        max={maxQty ?? undefined}
                                         value={data.quantity_delivered}
                                         onChange={(e) => setData('quantity_delivered', e.target.value)}
                                         className="form-input"
                                         required
                                     />
+                                    {maxQty != null && (
+                                        <p className="text-[11px] text-surface-400 mt-1">{maxQty} pc(s) QC-passed &amp; available to deliver.</p>
+                                    )}
                                     {errors.quantity_delivered && (
                                         <p className="form-error">{errors.quantity_delivered}</p>
                                     )}

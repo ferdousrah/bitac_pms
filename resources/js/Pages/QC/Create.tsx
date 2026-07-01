@@ -15,6 +15,7 @@ export default function QCCreate({ sheets, preselected, checkpoints }: any) {
         operation_sheet_id: preselected?.id ?? '',
         inspection_type: 'in_process',
         result: 'pass',
+        qty_passed: preselected?.item?.quantity ?? '',
         notes: '',
         checklist: [] as any[],
     });
@@ -56,7 +57,11 @@ export default function QCCreate({ sheets, preselected, checkpoints }: any) {
                                     <label className="form-label">Item (Operation Sheet) *</label>
                                     <select
                                         value={data.operation_sheet_id}
-                                        onChange={e => setData('operation_sheet_id', e.target.value)}
+                                        onChange={e => {
+                                            setData('operation_sheet_id', e.target.value);
+                                            const s = (sheets ?? []).find((x: any) => String(x.id) === String(e.target.value));
+                                            if (s?.item?.quantity != null) setData('qty_passed', s.item.quantity);
+                                        }}
                                         className="form-select"
                                         required
                                     >
@@ -92,17 +97,31 @@ export default function QCCreate({ sheets, preselected, checkpoints }: any) {
                                 </div>
                             </div>
 
-                            <div className="form-group max-w-xs">
-                                <label className="form-label">Overall Result *</label>
-                                <select
-                                    value={data.result}
-                                    onChange={e => setData('result', e.target.value)}
-                                    className="form-select"
-                                >
-                                    <option value="pass">Ok</option>
-                                    <option value="fail">Not Ok</option>
-                                    <option value="conditional">N/A</option>
-                                </select>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">Overall Result *</label>
+                                    <select
+                                        value={data.result}
+                                        onChange={e => setData('result', e.target.value)}
+                                        className="form-select"
+                                    >
+                                        <option value="pass">Ok</option>
+                                        <option value="fail">Not Ok</option>
+                                        <option value="conditional">N/A</option>
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Quantity Passed *</label>
+                                    <input
+                                        type="number" min="0" step="any"
+                                        value={data.qty_passed}
+                                        onChange={e => setData('qty_passed', e.target.value)}
+                                        className="form-input"
+                                        placeholder={picked?.item ? `max ${picked.item.quantity}` : ''}
+                                    />
+                                    <p className="text-[11px] text-surface-400 mt-1">How many pieces passed this inspection. Only this qty is released to delivery (supports partial QC).</p>
+                                    {errors.qty_passed && <p className="form-error">{errors.qty_passed}</p>}
+                                </div>
                             </div>
                         </div>
                     </div>
