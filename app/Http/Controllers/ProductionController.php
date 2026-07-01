@@ -1124,6 +1124,9 @@ class ProductionController extends Controller
             'sequence'   => $wos->sequence,
             'status'     => $wos->status,
             'started_at' => $wos->started_at?->diffForHumans(),
+            // How much this section has received from upstream (null = ungated
+            // first section). Lets the queue show "5 / 10" instead of the full qty.
+            'received_qty' => $wos->effectiveReceivedQty(),
             'work_order' => [
                 'id'         => $wo->id,
                 'wo_number'  => $wo->wo_number,

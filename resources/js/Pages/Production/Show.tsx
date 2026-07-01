@@ -442,7 +442,9 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                                     {block.item.description ?? '—'}
                                                 </span>
                                                 <span className="text-[11px] text-surface-500">
-                                                    Qty {block.item.quantity} {block.item.unit}
+                                                    {wos.received_qty !== null
+                                                        ? `Received ${nf(wos.received_qty)} / ${block.item.quantity} ${block.item.unit}`
+                                                        : `Qty ${block.item.quantity} ${block.item.unit}`}
                                                 </span>
                                             </>
                                         ) : (
@@ -453,7 +455,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
-                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={sub_sections} />
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={sub_sections} receivedCap={wos.received_qty} />
                                     ))}
                                 </div>
                             ))}
@@ -633,7 +635,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     );
 }
 
-function OpStepRow({ step, canAct, machines, operators, subSections }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[] }) {
+function OpStepRow({ step, canAct, machines, operators, subSections, receivedCap }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[]; receivedCap: number | null }) {
     const [busy, setBusy] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const today = new Date().toISOString().slice(0, 10);
@@ -642,7 +644,12 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
     });
 
     const hasQty = step.target_qty > 0;
-    const pct = hasQty ? Math.min(100, Math.round((step.completed_qty / step.target_qty) * 100)) : 0;
+    // Downstream sections can only work what they've RECEIVED — cap the working
+    // target by the section's received qty (null = ungated first section).
+    const effTarget = receivedCap !== null ? Math.min(step.target_qty, receivedCap) : step.target_qty;
+    const effRemaining = Math.max(0, effTarget - step.completed_qty);
+    const isCapped = receivedCap !== null && effTarget < step.target_qty;
+    const pct = hasQty && effTarget > 0 ? Math.min(100, Math.round((step.completed_qty / effTarget) * 100)) : 0;
     const fmtQty = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
     const fire = (action: 'start' | 'complete' | 'reopen') => {
@@ -738,8 +745,9 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         <div className="mt-2">
                             <div className="flex items-center justify-between text-[11px] mb-1">
                                 <span className="text-surface-600">
-                                    Completed <span className="font-bold text-surface-900">{fmtQty(step.completed_qty)}</span> / {fmtQty(step.target_qty)}
-                                    {step.remaining_qty > 0 && <span className="text-amber-600"> · {fmtQty(step.remaining_qty)} left</span>}
+                                    Completed <span className="font-bold text-surface-900">{fmtQty(step.completed_qty)}</span> / {fmtQty(effTarget)}
+                                    {effRemaining > 0 && <span className="text-amber-600"> · {fmtQty(effRemaining)} left</span>}
+                                    {isCapped && <span className="text-surface-400"> (of {fmtQty(step.target_qty)} total)</span>}
                                 </span>
                                 <span className="font-bold text-surface-700">{pct}%</span>
                             </div>
@@ -795,8 +803,8 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                                     <label className="text-[10px] font-semibold text-surface-500 uppercase">Qty completed *</label>
                                     <input type="number" min="0" step="any" value={form.qty}
                                         onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
-                                        max={step.remaining_qty || undefined}
-                                        className="form-input w-full text-sm py-1.5" placeholder={`max ${fmtQty(step.remaining_qty)}`} />
+                                        max={effRemaining || undefined}
+                                        className="form-input w-full text-sm py-1.5" placeholder={`max ${fmtQty(effRemaining)}`} />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-semibold text-surface-500 uppercase">Date</label>
@@ -857,8 +865,9 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                     <div className="shrink-0 flex flex-col items-end gap-1.5">
                         {hasQty ? (
                             step.status !== 'completed' ? (
-                                <button type="button" onClick={() => setLogOpen(o => !o)} disabled={busy}
-                                    className="btn-primary btn-sm">
+                                <button type="button" onClick={() => setLogOpen(o => !o)} disabled={busy || effRemaining <= 0}
+                                    title={effRemaining <= 0 ? 'All received pieces are done — waiting for the previous section to transfer more.' : ''}
+                                    className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i className="fi fi-rr-plus text-xs" /> Log Output
                                 </button>
                             ) : (

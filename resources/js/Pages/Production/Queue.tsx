@@ -16,6 +16,7 @@ interface QueueJob {
     sequence: number;
     status: string;
     started_at: string | null;
+    received_qty: number | null;
     work_order: {
         id: number;
         wo_number: string;
@@ -288,7 +289,9 @@ function JobCard({ job }: { job: QueueJob }) {
                     <div className="flex items-center gap-3 mt-2 text-xs text-surface-500">
                         <span>
                             <i className="fi fi-rr-cube text-[10px]" />{' '}
-                            qty {job.item ? `${job.item.quantity} ${job.item.unit}` : job.work_order.quantity}
+                            {job.received_qty !== null
+                                ? <>received {job.received_qty} / {job.item ? job.item.quantity : job.work_order.quantity} {job.item?.unit ?? 'pcs'}</>
+                                : <>qty {job.item ? `${job.item.quantity} ${job.item.unit}` : job.work_order.quantity}</>}
                         </span>
                         {job.steps_total != null && (
                             <span>

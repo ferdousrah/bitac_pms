@@ -117,22 +117,23 @@ class HandleInertiaRequests extends Middleware
                     $wo        = $wos->workOrder;
                     $sectionId = $wos->section_id;
                     $itemRows  = 0;
-                    // Per-item routing: count items whose CURRENT pending step
-                    // (the lowest-sequence open step) lives at this section.
+                    // Partial-forward model: count items that have any OPEN step
+                    // at this section (matches ProductionController::expandWosForQueue,
+                    // so an item can be counted at two sections at once).
                     foreach ($wo->items as $item) {
                         $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
                         if (!$sheet) continue;
-                        $current = $sheet->steps
-                            ->sortBy('sequence')
+                        $openHere = $sheet->steps
+                            ->where('section_id', $sectionId)
                             ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-                        if ($current && $current->section_id === $sectionId) $itemRows++;
+                        if ($openHere) $itemRows++;
                     }
-                    // Legacy WO-wide sheets — current pending step at this section.
+                    // Legacy WO-wide sheets — any open step at this section.
                     foreach ($wo->operationSheets->whereNull('work_order_item_id') as $sheet) {
-                        $current = $sheet->steps
-                            ->sortBy('sequence')
+                        $openHere = $sheet->steps
+                            ->where('section_id', $sectionId)
                             ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-                        if ($current && $current->section_id === $sectionId) $itemRows++;
+                        if ($openHere) $itemRows++;
                     }
                     if ($itemRows > 0) {
                         $pendingBySection[$sectionId] = ($pendingBySection[$sectionId] ?? 0) + $itemRows;
