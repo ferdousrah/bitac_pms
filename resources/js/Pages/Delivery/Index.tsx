@@ -156,7 +156,7 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                         <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
                                                     </button>
                                                     {d.status !== 'delivered' && (
-                                                        <Link href={`/delivery/${d.id}/complete`} title="Mark delivery as complete"
+                                                        <Link href={`/delivery/${d.id}`} title="Mark delivery as complete"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
                                                             <i className="fi fi-rr-check text-sm leading-none" /> Complete
                                                         </Link>
