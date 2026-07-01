@@ -468,18 +468,12 @@ class ProductionController extends Controller
         $now = now();
 
         \DB::transaction(function () use ($workOrderSection, $wo, $qty, $validated, $now) {
-            // Next production section (skip any non-production stops left by legacy routing).
+            // The immediate next stop in the routing — production shop OR QC.
+            // (We no longer skip QC; if PCD routed to it, it receives the pieces.)
             $next = WorkOrderSection::where('work_order_id', $wo->id)
                 ->where('sequence', '>', $workOrderSection->sequence)
                 ->orderBy('sequence')->first();
-            while ($next) {
-                $next->loadMissing('section');
-                if ($next->section && $next->section->type === 'production_shop') break;
-                $next->update(['status' => 'skipped', 'completed_at' => now()]);
-                $next = WorkOrderSection::where('work_order_id', $wo->id)
-                    ->where('sequence', '>', $next->sequence)
-                    ->orderBy('sequence')->first();
-            }
+            $next?->loadMissing('section');
 
             // Ledger: this section forwarded more; downstream received more.
             $newForwarded = (float) $workOrderSection->forwarded_qty + $qty;
@@ -497,11 +491,19 @@ class ProductionController extends Controller
             if ($next) {
                 $next->update([
                     'received_qty' => (float) ($next->received_qty ?? 0) + $qty,
-                    'status'       => in_array($next->status, ['pending']) ? 'ready' : $next->status,
+                    // Receiving a transfer (re)activates a pending — or previously
+                    // wrongly-skipped — next section.
+                    'status'       => in_array($next->status, ['pending', 'skipped']) ? 'ready' : $next->status,
                     'started_at'   => $next->started_at,
                 ]);
+                // If the next stop is a QC / non-production inspection section,
+                // engage the QC module (partial — it inspects what it received).
+                if ($next->section && $next->section->type !== 'production_shop'
+                    && !in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'], true)) {
+                    $wo->update(['status' => 'qc_hold']);
+                }
             } elseif ($fullyForwarded) {
-                // Last production section fully forwarded → hand off to QC.
+                // No next section at all → straight to QC.
                 $wo->update(['status' => 'qc_hold']);
             }
 

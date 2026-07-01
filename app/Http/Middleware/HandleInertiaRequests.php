@@ -117,20 +117,43 @@ class HandleInertiaRequests extends Middleware
                     ->with(['workOrder.items', 'workOrder.operationSheets.steps'])
                     ->get();
 
+                // Count only ACTIONABLE work — an item with an open step that
+                // actually has input available now (its target isn't already met
+                // by what the shop received / the previous op completed). A shop
+                // that has done everything it received (waiting for more) drops
+                // off the badge until the upstream transfers more.
                 $shopCount = [];
                 $subCount  = [];
                 foreach ($activeWoSections as $wos) {
                     $wo = $wos->workOrder; $sectionId = $wos->section_id;
+                    $received = $wos->effectiveReceivedQty(); // null = ungated
                     $sheets = $wo->operationSheets;
                     $buckets = $wo->items->map(fn ($it) => $sheets->firstWhere('work_order_item_id', $it->id))
                         ->filter()
                         ->merge($sheets->whereNull('work_order_item_id'));
                     foreach ($buckets as $sheet) {
-                        $openSteps = $sheet->steps->where('section_id', $sectionId)
-                            ->filter(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-                        if ($openSteps->isEmpty()) continue;
-                        $shopCount[$sectionId] = ($shopCount[$sectionId] ?? 0) + 1;
-                        foreach ($openSteps->pluck('sub_section_id')->filter()->unique() as $sid) {
+                        $ordered = $sheet->steps->where('section_id', $sectionId)->sortBy('sequence')->values();
+                        if ($ordered->isEmpty()) continue;
+                        $prev = $received; // input available to the first op (null = ungated)
+                        $itemActionable = false;
+                        $actionableSubs = [];
+                        foreach ($ordered as $s) {
+                            $open = !in_array($s->status, ['completed', 'skipped']);
+                            if ($open) {
+                                $target = (float) ($s->target_qty ?? 0);
+                                $done   = (float) ($s->completed_qty ?? 0);
+                                $avail  = $target <= 0
+                                    ? 1.0 // no qty tracking → open == actionable
+                                    : ($prev === null ? $target - $done : min($target, (float) $prev) - $done);
+                                if ($avail > 0.0001) {
+                                    $itemActionable = true;
+                                    if ($s->sub_section_id) $actionableSubs[$s->sub_section_id] = true;
+                                }
+                            }
+                            $prev = (float) ($s->completed_qty ?? 0); // feeds the next op
+                        }
+                        if ($itemActionable) $shopCount[$sectionId] = ($shopCount[$sectionId] ?? 0) + 1;
+                        foreach (array_keys($actionableSubs) as $sid) {
                             $subCount[$sid] = ($subCount[$sid] ?? 0) + 1;
                         }
                     }
