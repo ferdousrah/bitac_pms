@@ -106,6 +106,7 @@ interface OpStep {
     target_qty: number;
     completed_qty: number;
     remaining_qty: number;
+    input_cap: number | null;
     status: 'pending' | 'in_progress' | 'completed' | 'skipped';
     started_at: string | null;
     started_at_iso: string | null;
@@ -462,7 +463,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
-                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={scopedSub ? [] : sub_sections} receivedCap={wos.received_qty} />
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={scopedSub ? [] : sub_sections} />
                                     ))}
                                 </div>
                             ))}
@@ -647,7 +648,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     );
 }
 
-function OpStepRow({ step, canAct, machines, operators, subSections, receivedCap }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[]; receivedCap: number | null }) {
+function OpStepRow({ step, canAct, machines, operators, subSections }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[] }) {
     const [busy, setBusy] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const today = new Date().toISOString().slice(0, 10);
@@ -656,11 +657,12 @@ function OpStepRow({ step, canAct, machines, operators, subSections, receivedCap
     });
 
     const hasQty = step.target_qty > 0;
-    // Downstream sections can only work what they've RECEIVED — cap the working
-    // target by the section's received qty (null = ungated first section).
-    const effTarget = receivedCap !== null ? Math.min(step.target_qty, receivedCap) : step.target_qty;
+    // A step can only work up to its INPUT cap: the shop's received qty (first
+    // op) or the previous operation's completed qty (later ops). null = ungated.
+    const cap = step.input_cap;
+    const effTarget = cap !== null ? Math.min(step.target_qty, cap) : step.target_qty;
     const effRemaining = Math.max(0, effTarget - step.completed_qty);
-    const isCapped = receivedCap !== null && effTarget < step.target_qty;
+    const isCapped = cap !== null && effTarget < step.target_qty;
     const pct = hasQty && effTarget > 0 ? Math.min(100, Math.round((step.completed_qty / effTarget) * 100)) : 0;
     const fmtQty = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -878,7 +880,7 @@ function OpStepRow({ step, canAct, machines, operators, subSections, receivedCap
                         {hasQty ? (
                             step.status !== 'completed' ? (
                                 <button type="button" onClick={() => setLogOpen(o => !o)} disabled={busy || effRemaining <= 0}
-                                    title={effRemaining <= 0 ? 'All received pieces are done — waiting for the previous section to transfer more.' : ''}
+                                    title={effRemaining <= 0 ? 'Waiting for more pieces from the previous operation / section.' : ''}
                                     className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i className="fi fi-rr-plus text-xs" /> Log Output
                                 </button>

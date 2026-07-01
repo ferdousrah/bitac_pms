@@ -339,17 +339,23 @@ class ProductionController extends Controller
             return back()->with('error', 'This section is already completed — cannot log production.');
         }
 
-        // Cap by what this section can still do: target remaining AND the
-        // quantity received from upstream (downstream sections can only work
-        // on pieces that have actually been transferred to them).
+        // Cap by target remaining AND the input available to this step:
+        //  - first step at the shop  → the shop's received qty (from the previous shop)
+        //  - later steps at the shop → the PREVIOUS operation's completed qty
+        //    (implicit sequential sub-section flow: an op can't get ahead of the op before it)
         $remaining = (float) $step->remaining_qty;
-        $eff = $wos->effectiveReceivedQty(); // null = ungated (first section / raw material)
-        if ($eff !== null) {
-            $capByReceived = max(0.0, $eff - (float) $step->completed_qty);
-            if ($capByReceived <= 0) {
-                return back()->with('error', 'This section has not received enough quantity yet. Ask the previous section to transfer more.');
+        $shopSteps = $sheet->steps->where('section_id', $step->section_id)->sortBy('sequence')->values();
+        $idx = $shopSteps->search(fn ($s) => $s->id === $step->id);
+        $prev = $idx > 0 ? $shopSteps[$idx - 1] : null;
+        $inputCap = $prev ? (float) $prev->completed_qty : $wos->effectiveReceivedQty(); // null = ungated
+        if ($inputCap !== null) {
+            $capByInput = max(0.0, $inputCap - (float) $step->completed_qty);
+            if ($capByInput <= 0) {
+                return back()->with('error', $prev
+                    ? "Waiting on the previous operation ({$prev->operation_name}) — it has only completed " . rtrim(rtrim(number_format($inputCap, 2), '0'), '.') . " pc(s) so far."
+                    : 'This section has not received enough quantity yet. Ask the previous section to transfer more.');
             }
-            $remaining = min($remaining, $capByReceived);
+            $remaining = min($remaining, $capByInput);
         }
 
         $validated = $request->validate([
@@ -949,7 +955,21 @@ class ProductionController extends Controller
                         ->values()->all();
                 };
 
-                $packStep = fn ($s) => [
+                // Intra-shop sequential gating: a step can only work as much as
+                // the PREVIOUS operation at this shop has completed. The first
+                // step's input is the shop's received qty (null = ungated).
+                $firstInput = $workOrderSection->effectiveReceivedQty();
+                $capForSheet = function ($sheet) use ($sectionId, $firstInput) {
+                    $ordered = $sheet->steps->where('section_id', $sectionId)->sortBy('sequence')->values();
+                    $map = [];
+                    foreach ($ordered as $i => $s) {
+                        $map[$s->id] = $i === 0 ? $firstInput : (float) $ordered[$i - 1]->completed_qty;
+                    }
+                    return $map;
+                };
+
+                $packStep = fn ($s, $cap = null) => [
+                    'input_cap'         => $cap,
                     'id'                => $s->id,
                     'sequence'          => $s->sequence,
                     'operation_name'    => $s->operation_name,
@@ -988,6 +1008,7 @@ class ProductionController extends Controller
                     // When scoped, skip every item except the selected one.
                     if ($scopedItemId && $item->id !== $scopedItemId) continue;
                     $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+                    $caps  = $sheet ? $capForSheet($sheet) : [];
                     $steps = $sheet
                         ? $sheet->steps->where('section_id', $sectionId)
                             ->when($scopedSubId, fn ($c) => $c->where('sub_section_id', $scopedSubId))
@@ -1004,13 +1025,14 @@ class ProductionController extends Controller
                         'sheet_id'     => $sheet?->id,
                         'sheet_number' => $sheet?->sheet_number,
                         'references'   => $refsFor($item),
-                        'steps'        => $steps->map($packStep)->values(),
+                        'steps'        => $steps->map(fn ($s) => $packStep($s, $caps[$s->id] ?? null))->values(),
                     ]);
                 }
                 // Legacy WO-wide sheets only render when not scoped to an item.
                 if (!$scopedItemId) {
                     $legacy = $wo->operationSheets->whereNull('work_order_item_id');
                     foreach ($legacy as $sheet) {
+                        $caps  = $capForSheet($sheet);
                         $steps = $sheet->steps->where('section_id', $sectionId)
                             ->when($scopedSubId, fn ($c) => $c->where('sub_section_id', $scopedSubId))
                             ->values();
@@ -1020,7 +1042,7 @@ class ProductionController extends Controller
                             'sheet_id'     => $sheet->id,
                             'sheet_number' => $sheet->sheet_number,
                             'references'   => [],
-                            'steps' => $steps->map($packStep)->values(),
+                            'steps' => $steps->map(fn ($s) => $packStep($s, $caps[$s->id] ?? null))->values(),
                         ]);
                     }
                 }
