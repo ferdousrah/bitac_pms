@@ -20,6 +20,7 @@ interface QueueJob {
     started_at: string | null;
     received_qty: number | null;
     sub_section_id: number | null;
+    ready_to_transfer?: boolean;
     work_order: {
         id: number;
         wo_number: string;
@@ -272,6 +273,9 @@ function JobCard({ job }: { job: QueueJob }) {
                         <span className={`badge ${STATUS_BADGE[job.status] ?? 'badge-slate'}`}>
                             {STATUS_LABEL[job.status] ?? job.status}
                         </span>
+                        {job.ready_to_transfer && (
+                            <span className="badge badge-amber"><i className="fi fi-rr-paper-plane text-[9px]" /> Ready to transfer</span>
+                        )}
                         <span className={`badge ${PRIORITY_BADGE[job.work_order.priority] ?? 'badge-slate'} capitalize`}>
                             {job.work_order.priority}
                         </span>

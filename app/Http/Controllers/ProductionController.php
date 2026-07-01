@@ -1132,6 +1132,12 @@ class ProductionController extends Controller
         // the remaining 4 are still at Mould) — so we no longer gate on the
         // single "current" step. Section availability itself is gated upstream by
         // the transfer that set this WOS to 'ready' + bumped its received_qty.
+        // Pieces finished here but NOT yet transferred downstream — the shop
+        // in-charge must still see the job to forward it, even after every op
+        // is marked completed. (Sub-section queues don't need this — transfer is
+        // the shop's job, not the sub-section's.)
+        $pendingTransfer = $wos->forwardableQty() > 0.0001;
+
         $rows = collect();
         $hasAnyItemSheet = false;
         foreach ($items as $idx => $item) {
@@ -1141,7 +1147,7 @@ class ProductionController extends Controller
             $sectionSteps = $sheet->steps->where('section_id', $sectionId);
             if ($sectionSteps->isEmpty()) continue;
             $openHere = $sectionSteps->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-            if (!$openHere) continue;
+            if (!$openHere && !$pendingTransfer) continue;
             $rows->push($this->serializeWosForQueue($wos, [
                 'item' => [
                     'id'          => $item->id,
@@ -1153,6 +1159,7 @@ class ProductionController extends Controller
                 'sheet_number'   => $sheet->sheet_number,
                 'steps_total'    => $sectionSteps->count(),
                 'steps_done'     => $sectionSteps->whereIn('status', ['completed', 'skipped'])->count(),
+                'ready_to_transfer' => !$openHere && $pendingTransfer,
             ]));
         }
 
@@ -1248,6 +1255,7 @@ class ProductionController extends Controller
             'steps_total'   => null,
             'steps_done'    => null,
             'sub_section_id'=> null,
+            'ready_to_transfer' => false,
         ], $itemContext);
     }
 }
