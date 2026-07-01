@@ -768,7 +768,8 @@ class ProductionController extends Controller
             'workOrder.product',
             'workOrder.rfq:id,job_type',
             'workOrder.sections.section',
-            'workOrder.items',
+            'workOrder.items.rfqItem.drawings',
+            'workOrder.items.rfqItem.samplePhotos',
             'workOrder.operationSheets.workOrderItem',
             'workOrder.operationSheets.steps' => fn($q) => $q->orderBy('sequence'),
             'workOrder.operationSheets.steps.machine',
@@ -902,6 +903,29 @@ class ProductionController extends Controller
             'op_items' => (function () use ($workOrderSection, $scopedItemId) {
                 $wo = $workOrderSection->workOrder;
                 $sectionId = $workOrderSection->section_id;
+
+                // Reference files IED/sales attached to the RFQ item — drawings &
+                // sample photos the op-sheet's "as per drawing/sample" points to.
+                $imgExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+                $mapFile = function ($f, $kind) use ($imgExt) {
+                    $ext = strtolower($f->extension ?? pathinfo($f->original_name ?? '', PATHINFO_EXTENSION));
+                    return [
+                        'id'        => $f->id,
+                        'url'       => $f->url,
+                        'filename'  => $f->original_name,
+                        'extension' => $ext ? strtoupper($ext) : null,
+                        'is_image'  => in_array($ext, $imgExt, true),
+                        'kind'      => $kind, // 'drawing' | 'sample'
+                    ];
+                };
+                $refsFor = function ($item) use ($mapFile) {
+                    $rfqItem = $item->rfqItem;
+                    if (!$rfqItem) return [];
+                    return collect($rfqItem->drawings ?? [])->map(fn ($f) => $mapFile($f, 'drawing'))
+                        ->merge(collect($rfqItem->samplePhotos ?? [])->map(fn ($f) => $mapFile($f, 'sample')))
+                        ->values()->all();
+                };
+
                 $packStep = fn ($s) => [
                     'id'                => $s->id,
                     'sequence'          => $s->sequence,
@@ -954,6 +978,7 @@ class ProductionController extends Controller
                         ],
                         'sheet_id'     => $sheet?->id,
                         'sheet_number' => $sheet?->sheet_number,
+                        'references'   => $refsFor($item),
                         'steps'        => $steps->map($packStep)->values(),
                     ]);
                 }
@@ -967,6 +992,7 @@ class ProductionController extends Controller
                             'item' => null,
                             'sheet_id'     => $sheet->id,
                             'sheet_number' => $sheet->sheet_number,
+                            'references'   => [],
                             'steps' => $steps->map($packStep)->values(),
                         ]);
                     }

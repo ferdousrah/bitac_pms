@@ -136,6 +136,15 @@ interface EarlierSection {
     status: string;
 }
 
+interface RefFile {
+    id: number;
+    url: string;
+    filename: string | null;
+    extension: string | null;
+    is_image: boolean;
+    kind: 'drawing' | 'sample';
+}
+
 interface OpItem {
     item: {
         id: number;
@@ -146,6 +155,7 @@ interface OpItem {
     } | null;
     sheet_id: number | null;
     sheet_number: string | null;
+    references?: RefFile[];
     steps: OpStep[];
 }
 
@@ -487,7 +497,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                                     title: 'Operation Sheet',
                                                     subtitle: block.sheet_number ? `Sheet ${block.sheet_number}` : (block.item?.description ?? undefined),
                                                 })}
-                                                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-sm transition-colors"
+                                                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-500 shadow-sm transition-colors"
                                                 title="View the PCD operation sheet (PDF)"
                                             >
                                                 <i className="fi fi-rr-file-pdf text-xs leading-none" /> View Operation Sheet
@@ -495,6 +505,16 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                             </button>
                                         )}
                                     </div>
+                                    {block.references && block.references.length > 0 && (
+                                        <div className="px-5 py-3 bg-amber-50/40 border-b border-surface-100">
+                                            <div className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-2">
+                                                <i className="fi fi-rr-paperclip text-[10px]" /> Reference — drawings &amp; samples
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {block.references.map((r) => <ReferenceChip key={`${r.kind}-${r.id}`} r={r} />)}
+                                            </div>
+                                        </div>
+                                    )}
                                     {block.steps.map((s) => (
                                         <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={sub_sections} />
                                     ))}
@@ -835,6 +855,35 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                         )}
                     </div>
                 )}
+            </div>
+        </div>
+    );
+}
+
+function ReferenceChip({ r }: { r: RefFile }) {
+    const kindColor = r.kind === 'drawing' ? 'text-violet-700' : 'text-emerald-700';
+    return (
+        <div className="flex items-center gap-2 rounded-xl border border-surface-200 bg-white p-1.5 pr-3 shadow-sm">
+            {r.is_image ? (
+                <a href={r.url} target="_blank" rel="noreferrer" title="View full image" className="shrink-0">
+                    <img src={r.url} alt={r.filename ?? ''} className="w-12 h-12 rounded-lg object-cover border border-surface-100" />
+                </a>
+            ) : (
+                <div className="w-12 h-12 rounded-lg bg-surface-50 border border-surface-100 flex items-center justify-center text-[9px] font-bold text-surface-500 shrink-0">
+                    {r.extension ?? 'FILE'}
+                </div>
+            )}
+            <div className="min-w-0">
+                <div className={`text-[10px] font-bold uppercase tracking-wide ${kindColor}`}>{r.kind}</div>
+                <div className="text-[11px] text-surface-700 truncate max-w-[140px]" title={r.filename ?? ''}>{r.filename ?? '—'}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                    <a href={r.url} target="_blank" rel="noreferrer" className="text-[10px] font-semibold text-brand-600 hover:text-brand-700">
+                        <i className="fi fi-rr-eye text-[9px]" /> View
+                    </a>
+                    <a href={r.url} download className="text-[10px] font-semibold text-surface-500 hover:text-surface-700">
+                        <i className="fi fi-rr-download text-[9px]" /> Download
+                    </a>
+                </div>
             </div>
         </div>
     );
