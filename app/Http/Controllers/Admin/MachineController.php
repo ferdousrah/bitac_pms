@@ -61,6 +61,17 @@ class MachineController extends Controller
             $q->where('status', $status);
         }
 
+        // Live "running job" lookup — which job(s) each machine is actively on
+        // right now (in-progress operation steps). Drives the running badge.
+        $runningJobs = \App\Models\OperationStep::where('status', 'in_progress')
+            ->whereNotNull('machine_id')
+            ->with('operationSheet.workOrder:id,job_number')
+            ->get()
+            ->groupBy('machine_id')
+            ->map(fn ($steps) => $steps
+                ->map(fn ($s) => $s->operationSheet?->workOrder?->job_number)
+                ->filter()->unique()->values()->all());
+
         $machines = $q->paginate(20)->withQueryString()
             ->through(fn($m) => [
                 'id'                 => $m->id,
@@ -70,6 +81,7 @@ class MachineController extends Controller
                 'status'             => $m->status,
                 'current_state'      => $m->current_state,
                 'state_color'        => $m->state_color,
+                'running_jobs'       => $runningJobs[$m->id] ?? [],
                 'health_score'       => $m->health_score,
                 'health_label'       => $m->health_label,
                 'health_color'       => $m->health_color,

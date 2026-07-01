@@ -56,6 +56,52 @@ class ProductionController extends Controller
                 ->values()
             : collect();
 
+        // ── Upcoming jobs — routed to this section but not yet arrived ──────
+        // Jobs whose WOS here is still 'pending' while an EARLIER section is
+        // already working them. They're in the pipeline heading this way; the
+        // supervisor can plan machines/material ahead. (Nothing has been
+        // transferred here yet — otherwise this WOS would be 'ready'/active.)
+        $upcoming = $section
+            ? WorkOrderSection::where('section_id', $section->id)
+                ->where('status', 'pending')
+                ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled', 'delivered']))
+                ->with(['workOrder.customer', 'workOrder.product', 'workOrder.sections.section', 'workOrder.operationSheets.steps'])
+                ->get()
+                ->map(function ($wos) {
+                    $wo = $wos->workOrder;
+                    // Where the job is right now — the active section before this one.
+                    $current = $wo->sections
+                        ->whereIn('status', ['in_progress', 'rework', 'ready'])
+                        ->where('sequence', '<', $wos->sequence)
+                        ->sortByDesc('sequence')
+                        ->first();
+                    if (!$current) return null; // not actually in the pipeline yet
+                    return [
+                        'wos_id'      => $wos->id,
+                        'wo_id'       => $wo->id,
+                        'job_number'  => $wo->job_number,
+                        'wo_number'   => $wo->wo_number,
+                        'customer'    => $wo->customer?->name,
+                        'product'     => $wo->product?->name,
+                        'quantity'    => (float) $wo->quantity,
+                        'due_date'    => $wo->due_date?->format('d M Y'),
+                        'is_overdue'  => $wo->is_overdue,
+                        'sequence'    => $wos->sequence,
+                        'progress'    => $wo->production_progress,
+                        'current'     => [
+                            'name'     => $current->section?->name,
+                            'code'     => $current->section?->code,
+                            'status'   => $current->status,
+                            'sequence' => $current->sequence,
+                        ],
+                        'stops_away'  => (int) $wos->sequence - (int) $current->sequence,
+                    ];
+                })
+                ->filter()
+                ->sortBy('stops_away')
+                ->values()
+            : collect();
+
         return Inertia::render('Production/Queue', [
             'section' => $section ? [
                 'id'      => $section->id,
@@ -64,6 +110,7 @@ class ProductionController extends Controller
                 'name_bn' => $section->name_bn,
             ] : null,
             'jobs'              => $jobs,
+            'upcoming'          => $upcoming,
             'available_sections'=> $availableSections,
             'can_switch'        => $canSwitch,
         ]);
@@ -338,6 +385,8 @@ class ProductionController extends Controller
         // section — the job advances to the next section only when the
         // supervisor explicitly transfers a quantity (see transfer()).
 
+        $this->syncMachineStates($wo->fresh('operationSheets'));
+
         return back()->with('success', 'Production logged.');
     }
 
@@ -364,6 +413,8 @@ class ProductionController extends Controller
                 'actual_hours'  => $step->productionLogs()->sum('hours') ?: null,
             ]);
         });
+
+        $this->syncMachineStates($wo->fresh('operationSheets'));
 
         return back()->with('success', 'Production log removed.');
     }
@@ -446,7 +497,179 @@ class ProductionController extends Controller
             ]);
         });
 
+        $this->syncMachineStates($workOrderSection->workOrder);
+
         return back()->with('success', "Transferred {$qty} pcs to the next section.");
+    }
+
+    /**
+     * Shop-floor "bottleneck" flag: the section's machines / manpower are tied
+     * up, so the job is waiting. Flags it for PCD to reroute (do a free
+     * section's work first) instead of the job sitting idle.
+     */
+    public function flagBottleneck(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+        $validated = $request->validate(['reason' => 'required|string|min:3|max:500']);
+        $workOrderSection->update([
+            'bottleneck_at'     => now(),
+            'bottleneck_reason' => $validated['reason'],
+            'bottleneck_by'     => auth()->id(),
+        ]);
+        return back()->with('success', 'Flagged for PCD — they can reroute this job.');
+    }
+
+    /** Clear the bottleneck flag (resource freed up, or PCD handled it). */
+    public function clearBottleneck(WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+        $workOrderSection->update(['bottleneck_at' => null, 'bottleneck_reason' => null, 'bottleneck_by' => null]);
+        return back()->with('success', 'Bottleneck flag cleared.');
+    }
+
+    /**
+     * The full production cycle of a work order — every routing section with its
+     * weight, qty ledger (received / produced / forwarded), operations, daily
+     * logs and handoffs, plus machine usage. A holistic, read-only timeline for
+     * PCD / management (the per-section Show page is the shop-floor action view).
+     */
+    public function cycle(WorkOrder $workOrder)
+    {
+        $workOrder->load([
+            'customer', 'product', 'rfq:id,job_type',
+            'sections.section',
+            'items',
+            'operationSheets.workOrderItem',
+            'operationSheets.steps' => fn ($q) => $q->orderBy('sequence'),
+            'operationSheets.steps.machine',
+            'operationSheets.steps.operator',
+            'operationSheets.steps.subSection',
+            'operationSheets.steps.productionLogs.machine',
+            'operationSheets.steps.productionLogs.operator',
+        ]);
+
+        // Item sequence lookup for labelling steps.
+        $itemSeq = [];
+        foreach ($workOrder->items->values() as $i => $it) $itemSeq[$it->id] = $i + 1;
+
+        $nf = fn ($n) => (float) $n;
+
+        $sections = $workOrder->sections->sortBy('sequence')->map(function ($wos) use ($workOrder, $itemSeq, $nf) {
+            $secId = $wos->section_id;
+
+            $steps = collect();
+            foreach ($workOrder->operationSheets as $sh) {
+                $label = $sh->work_order_item_id
+                    ? ('Item ' . ($itemSeq[$sh->work_order_item_id] ?? '?'))
+                    : 'Shared';
+                foreach ($sh->steps->where('section_id', $secId)->sortBy('sequence') as $s) {
+                    $steps->push([
+                        'id'             => $s->id,
+                        'item_label'     => $label,
+                        'operation_name' => $s->operation_name,
+                        'sub_section'    => $s->subSection?->name,
+                        'machine'        => $s->machine?->name,
+                        'operator'       => $s->operator?->name,
+                        'target_qty'     => $nf($s->target_qty ?? 0),
+                        'completed_qty'  => $nf($s->completed_qty ?? 0),
+                        'remaining_qty'  => $nf($s->remaining_qty),
+                        'status'         => $s->status,
+                        'logs'           => $s->productionLogs->sortByDesc('log_date')->map(fn ($l) => [
+                            'id'       => $l->id,
+                            'log_date' => $l->log_date?->format('d M Y'),
+                            'qty'      => $nf($l->qty),
+                            'machine'  => $l->machine?->name,
+                            'operator' => $l->operator?->name,
+                            'remarks'  => $l->remarks,
+                        ])->values(),
+                    ]);
+                }
+            }
+
+            // Forward handoffs OUT of this section.
+            $handoffs = SectionHandoff::with('toSection')
+                ->where('work_order_id', $workOrder->id)
+                ->where('from_section_id', $secId)
+                ->where('direction', 'forward')
+                ->orderBy('transferred_at')
+                ->get()
+                ->map(fn ($h) => [
+                    'qty'  => $h->qty !== null ? $nf($h->qty) : null,
+                    'to'   => $h->toSection?->name,
+                    'when' => $h->transferred_at?->format('d M Y, h:i A'),
+                ]);
+
+            return [
+                'id'            => $wos->id,
+                'sequence'      => $wos->sequence,
+                'section'       => ['name' => $wos->section?->name, 'code' => $wos->section?->code],
+                'weight_pct'    => $nf($wos->weight_pct),
+                'status'        => $wos->status,
+                'progress'      => (int) round($wos->progressFraction() * 100),
+                'received_qty'  => $wos->effectiveReceivedQty(),
+                'output_qty'    => $wos->sectionOutputQty(),
+                'forwarded_qty' => $nf($wos->forwarded_qty),
+                'target_qty'    => $wos->sectionTargetQty(),
+                'started_at'    => $wos->started_at?->format('d M Y, h:i A'),
+                'completed_at'  => $wos->completed_at?->format('d M Y, h:i A'),
+                'steps'         => $steps->values(),
+                'handoffs'      => $handoffs->values(),
+            ];
+        })->values();
+
+        // Machine usage across the whole job (from the daily logs).
+        $machineUsage = ProductionLog::with('machine')
+            ->where('work_order_id', $workOrder->id)
+            ->get()
+            ->groupBy('machine_id')
+            ->map(fn ($logs) => [
+                'machine' => $logs->first()->machine?->name ?? '— (unspecified) —',
+                'qty'     => (float) $logs->sum('qty'),
+                'hours'   => (float) $logs->sum('hours'),
+                'entries' => $logs->count(),
+            ])
+            ->sortByDesc('qty')
+            ->values();
+
+        return Inertia::render('Production/Cycle', [
+            'work_order' => [
+                'id'         => $workOrder->id,
+                'wo_number'  => $workOrder->wo_number,
+                'job_number' => $workOrder->job_number,
+                'customer'   => $workOrder->customer?->name,
+                'product'    => $workOrder->product?->name,
+                'quantity'   => (float) $workOrder->quantity,
+                'job_type'   => $workOrder->rfq?->job_type ?? 'regular',
+                'status'     => $workOrder->status,
+                'status_label' => $workOrder->status_label,
+                'due_date'   => $workOrder->due_date?->format('d M Y'),
+                'progress'   => $workOrder->production_progress,
+            ],
+            'sections'      => $sections,
+            'machine_usage' => $machineUsage,
+        ]);
+    }
+
+    /**
+     * Reconcile the operational state of machines touched by a WO's steps.
+     * A machine is 'running' while it has any in-progress operation step, else
+     * 'idle'. Manual states (maintenance / breakdown / offline / setup) are
+     * left untouched — the shop sets those deliberately.
+     */
+    private function syncMachineStates(\App\Models\WorkOrder $wo): void
+    {
+        $machineIds = \App\Models\OperationStep::whereIn(
+                'operation_sheet_id',
+                $wo->operationSheets()->pluck('id')
+            )->whereNotNull('machine_id')->distinct()->pluck('machine_id');
+
+        foreach ($machineIds as $mid) {
+            $m = \App\Models\Machine::find($mid);
+            if (!$m || in_array($m->current_state, ['maintenance', 'breakdown', 'offline', 'setup'], true)) continue;
+            $running = \App\Models\OperationStep::where('machine_id', $mid)->where('status', 'in_progress')->exists();
+            $target  = $running ? 'running' : 'idle';
+            if ($m->current_state !== $target) $m->changeState($target);
+        }
     }
 
     /**
@@ -631,6 +854,10 @@ class ProductionController extends Controller
                                         ->where('sequence', '>', $workOrderSection->sequence)
                                         ->whereHas('section', fn ($q) => $q->where('type', 'production_shop'))
                                         ->exists(),
+                'bottleneck'       => $workOrderSection->bottleneck_at ? [
+                    'reason' => $workOrderSection->bottleneck_reason,
+                    'at'     => $workOrderSection->bottleneck_at->format('d M Y, h:i A'),
+                ] : null,
                 'work_order' => [
                     'id'         => $workOrderSection->workOrder->id,
                     'wo_number'  => $workOrderSection->workOrder->wo_number,

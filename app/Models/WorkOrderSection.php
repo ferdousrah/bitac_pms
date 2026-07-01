@@ -9,6 +9,7 @@ class WorkOrderSection extends Model
     protected $fillable = [
         'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'status',
         'started_at', 'completed_at', 'completed_by', 'notes', 'work_hours', 'qc_notes', 'remarks',
+        'bottleneck_at', 'bottleneck_reason', 'bottleneck_by',
     ];
 
     protected function casts(): array
@@ -19,7 +20,23 @@ class WorkOrderSection extends Model
             'weight_pct'    => 'decimal:2',
             'received_qty'  => 'decimal:2',
             'forwarded_qty' => 'decimal:2',
+            'bottleneck_at' => 'datetime',
         ];
+    }
+
+    /**
+     * A section is LOCKED for rerouting once it has been touched — completed,
+     * skipped, actively worked, or holding/producing/forwarding quantity. Only
+     * pristine (pending/ready with nothing received/produced) sections can be
+     * freely reordered by PCD.
+     */
+    public function isReorderable(): bool
+    {
+        if (in_array($this->status, ['completed', 'skipped', 'in_progress', 'rework', 'awaiting_rework'], true)) return false;
+        if ($this->received_qty !== null && (float) $this->received_qty > 0) return false;
+        if ((float) $this->forwarded_qty > 0) return false;
+        if ($this->sectionOutputQty() > 0) return false;
+        return true;
     }
 
     /**
@@ -110,6 +127,7 @@ class WorkOrderSection extends Model
     public function workOrder()   { return $this->belongsTo(WorkOrder::class); }
     public function section()     { return $this->belongsTo(Section::class); }
     public function completedBy() { return $this->belongsTo(User::class, 'completed_by'); }
+    public function bottleneckBy(){ return $this->belongsTo(User::class, 'bottleneck_by'); }
 
     public function scopePending($query)    { return $query->where('status', 'pending'); }
     public function scopeReady($query)      { return $query->where('status', 'ready'); }

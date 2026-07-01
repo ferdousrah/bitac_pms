@@ -47,9 +47,26 @@ interface QueueJob {
     } | null;
 }
 
+interface UpcomingJob {
+    wos_id: number;
+    wo_id: number;
+    job_number: number | null;
+    wo_number: string;
+    customer: string | null;
+    product: string | null;
+    quantity: number;
+    due_date: string | null;
+    is_overdue: boolean;
+    sequence: number;
+    progress: number | null;
+    current: { name: string | null; code: string | null; status: string; sequence: number };
+    stops_away: number;
+}
+
 interface Props {
     section: SectionLite | null;
     jobs: QueueJob[];
+    upcoming: UpcomingJob[];
     available_sections: SectionLite[];
     can_switch: boolean;
 }
@@ -75,7 +92,7 @@ const PRIORITY_BADGE: Record<string, string> = {
     urgent: 'badge-red',
 };
 
-export default function ProductionQueue({ section, jobs, available_sections, can_switch }: Props) {
+export default function ProductionQueue({ section, jobs, upcoming, available_sections, can_switch }: Props) {
     if (!section) {
         return (
             <AppLayout header="Production">
@@ -169,8 +186,67 @@ export default function ProductionQueue({ section, jobs, available_sections, can
                         )}
                     </div>
                 </div>
+
+                {/* Upcoming jobs — routed here, still upstream */}
+                {upcoming.length > 0 && (
+                    <div className="card">
+                        <div className="card-header flex items-center justify-between">
+                            <div>
+                                <h2 className="text-base font-bold text-surface-900">Upcoming Jobs</h2>
+                                <p className="text-xs text-surface-400 mt-0.5">
+                                    Routed to {section.name} — currently being worked upstream. Plan machines &amp; material ahead.
+                                </p>
+                            </div>
+                            <span className="badge badge-slate">{upcoming.length} coming</span>
+                        </div>
+                        <div className="card-body p-0">
+                            <div className="divide-y divide-surface-100">
+                                {upcoming.map((u) => (
+                                    <UpcomingCard key={u.wos_id} u={u} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </AppLayout>
+    );
+}
+
+function UpcomingCard({ u }: { u: UpcomingJob }) {
+    const nf = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    return (
+        <div className="px-5 py-4 flex items-center gap-4">
+            {/* Distance chip */}
+            <div className="shrink-0 w-16 text-center">
+                <div className="text-lg font-bold text-surface-700 leading-none">{u.stops_away}</div>
+                <div className="text-[10px] text-surface-400 mt-0.5">stop{u.stops_away === 1 ? '' : 's'} away</div>
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-semibold text-surface-700">Job# {u.job_number ?? '—'}</span>
+                    <span className="badge badge-slate text-[10px]">Pending here</span>
+                    {u.is_overdue && <span className="badge badge-red text-[10px]">Overdue</span>}
+                    {u.progress != null && (
+                        <span className="text-[11px] text-surface-400">{u.progress}% job done</span>
+                    )}
+                </div>
+                <h3 className="text-sm font-semibold text-surface-900 mt-1">{u.customer ?? '—'}</h3>
+                {u.product && <p className="text-xs text-surface-500 mt-0.5 truncate">{u.product}</p>}
+                <div className="flex items-center gap-3 mt-2 text-xs text-surface-500 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-brand-600">
+                        <i className="fi fi-rr-marker text-[10px]" /> Now at <span className="font-semibold">{u.current.name ?? '—'}</span>
+                    </span>
+                    <span><i className="fi fi-rr-cube text-[10px]" /> qty {nf(u.quantity)}</span>
+                    {u.due_date && <span><i className="fi fi-rr-calendar text-[10px]" /> Due {u.due_date}</span>}
+                </div>
+            </div>
+            <div className="shrink-0">
+                <Link href={`/work-orders/${u.wo_id}`} className="btn-ghost btn-sm text-surface-500">
+                    <i className="fi fi-rr-eye text-xs leading-none" /> View
+                </Link>
+            </div>
+        </div>
     );
 }
 

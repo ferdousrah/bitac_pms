@@ -174,6 +174,11 @@ export default function MachinesIndex({ machines, fleet, sections = [], filters 
                                                     )}
                                                     {m.current_state}
                                                 </span>
+                                                {m.running_jobs && m.running_jobs.length > 0 && (
+                                                    <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                                                        Job# {m.running_jobs.join(', ')}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-2">

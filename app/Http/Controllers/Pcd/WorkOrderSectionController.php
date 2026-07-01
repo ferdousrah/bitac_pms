@@ -193,6 +193,93 @@ class WorkOrderSectionController extends Controller
     }
 
     /**
+     * Reroute form — reorder a LIVE job's remaining routing when a section is a
+     * bottleneck. Completed / in-progress / already-fed sections are locked;
+     * only pristine (pending/ready, nothing received or produced) sections can
+     * be reordered. Preserves everything already in flight (unlike @update,
+     * which wipes and recreates the routing for the initial setup).
+     */
+    public function rerouteForm(WorkOrder $workOrder)
+    {
+        $workOrder->load(['customer', 'sections.section', 'sections.bottleneckBy', 'operationSheets.steps']);
+
+        $sections = $workOrder->sections->sortBy('sequence')->map(fn ($w) => [
+            'id'          => $w->id,
+            'section'     => ['name' => $w->section?->name, 'code' => $w->section?->code],
+            'sequence'    => $w->sequence,
+            'status'      => $w->status,
+            'weight_pct'  => (float) $w->weight_pct,
+            'reorderable' => $w->isReorderable(),
+            'bottleneck'  => $w->bottleneck_at ? [
+                'reason' => $w->bottleneck_reason,
+                'by'     => $w->bottleneckBy?->name,
+                'at'     => $w->bottleneck_at->format('d M Y, h:i A'),
+            ] : null,
+        ])->values();
+
+        return Inertia::render('Pcd/Reroute', [
+            'work_order' => [
+                'id'         => $workOrder->id,
+                'wo_number'  => $workOrder->wo_number,
+                'job_number' => $workOrder->job_number,
+                'customer'   => $workOrder->customer?->name,
+            ],
+            'sections' => $sections,
+        ]);
+    }
+
+    /** Persist a new routing order for a live job (see rerouteForm). */
+    public function reroute(Request $request, WorkOrder $workOrder)
+    {
+        $validated = $request->validate([
+            'order'   => 'required|array|min:1',
+            'order.*' => 'integer',
+        ]);
+
+        $sections = $workOrder->sections()->with(['section', 'workOrder.operationSheets.steps'])->get()->keyBy('id');
+
+        // Locked (non-reorderable) sections keep their original relative order at
+        // the front; pristine ones are arranged per the submitted order.
+        $lockedIds       = $sections->filter(fn ($w) => !$w->isReorderable())->sortBy('sequence')->pluck('id')->values();
+        $pristineDesired = collect($validated['order'])->filter(fn ($id) => $sections->has($id) && $sections[$id]->isReorderable())->values();
+        $missingPristine = $sections->filter(fn ($w) => $w->isReorderable() && !$pristineDesired->contains($w->id))
+            ->sortBy('sequence')->pluck('id');
+        $finalOrder = $lockedIds->merge($pristineDesired)->merge($missingPristine);
+
+        DB::transaction(function () use ($finalOrder, $sections, $workOrder) {
+            $seq = 1;
+            foreach ($finalOrder as $id) {
+                $sections[$id]->update(['sequence' => $seq++]);
+            }
+
+            // Recompute pristine statuses along the new order: the entry section
+            // (or one already fed by a completed upstream) becomes 'ready', the
+            // rest wait as 'pending'. Locked sections are untouched.
+            $ordered = $workOrder->sections()->orderBy('sequence')->get();
+            $prev = null;
+            foreach ($ordered as $w) {
+                if (in_array($w->status, ['completed', 'skipped', 'in_progress', 'rework', 'awaiting_rework'], true)) {
+                    $prev = $w;
+                    continue;
+                }
+                $isEntry  = (int) $w->sequence === 1;
+                $fedByPrev = $prev && $prev->status === 'completed' && (float) $prev->forwarded_qty > 0;
+                $hasRecv  = $w->received_qty !== null && (float) $w->received_qty > 0;
+                $w->update(['status' => ($isEntry || $fedByPrev || $hasRecv) ? 'ready' : 'pending']);
+                $prev = $w;
+            }
+
+            // Reroute done — clear any bottleneck flags on this job.
+            $workOrder->sections()->update([
+                'bottleneck_at' => null, 'bottleneck_reason' => null, 'bottleneck_by' => null,
+            ]);
+        });
+
+        return redirect()->route('work-orders.show', $workOrder)
+            ->with('success', 'Routing rerouted.');
+    }
+
+    /**
      * Render the PCD Work Order form as a PDF on BITAC letterhead.
      *
      *   ?preview=base64 → JSON { data, filename, size } for the popup
@@ -299,9 +386,10 @@ class WorkOrderSectionController extends Controller
         $routingHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-bottom: 14pt;">';
         $routingHtml .= '<thead>'
             . '<tr>'
-            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 20%; vertical-align: middle;">Section</th>'
-            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 13%; vertical-align: middle;">Working Time / Hour</th>'
-            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 19%; vertical-align: middle;">Operation Hour / Task</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 18%; vertical-align: middle;">Section</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 9%; vertical-align: middle;">Weightage</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 12%; vertical-align: middle;">Working Time / Hour</th>'
+            .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; width: 17%; vertical-align: middle;">Operation Hour / Task</th>'
             .   '<th colspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt;">Receipt</th>'
             .   '<th rowspan="2" style="border: 0.75pt solid #000; padding: 4pt; font-size: 9.5pt; width: 18%; vertical-align: middle;">Remarks</th>'
             . '</tr>'
@@ -311,7 +399,7 @@ class WorkOrderSectionController extends Controller
             . '</tr>'
             . '</thead><tbody>';
         if ($sections->isEmpty()) {
-            $routingHtml .= '<tr><td colspan="6" style="border: 0.75pt solid #000; padding: 10pt; font-size: 9pt; color: #666; text-align: center; font-style: italic;">No sections assigned.</td></tr>';
+            $routingHtml .= '<tr><td colspan="7" style="border: 0.75pt solid #000; padding: 10pt; font-size: 9pt; color: #666; text-align: center; font-style: italic;">No sections assigned.</td></tr>';
         } else {
             foreach ($sections->values() as $s) {
                 $secName    = $s->section?->name ?? '—';
@@ -319,11 +407,13 @@ class WorkOrderSectionController extends Controller
                 $workHours  = $s->work_hours ?? '';
                 $remarks    = $s->remarks ?? '';
                 $signedDate = $s->completed_at?->format('d-m-Y') ?? '';
+                $weight     = (float) $s->weight_pct > 0 ? $fmt($s->weight_pct) . '%' : '';
 
                 $routingHtml .= '<tr style="vertical-align: top;">'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;">'
                     .   '<b><span class="bn">' . $esc($secName) . '</span></b>'
                     . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center;">' . $esc($weight) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center;"><span class="bn">' . nl2br($esc($workHours)) . '</span></td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt;"><span class="bn">' . nl2br($esc($operation)) . '</span></td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt; min-height: 22pt;">&nbsp;</td>'
@@ -334,7 +424,7 @@ class WorkOrderSectionController extends Controller
             // Trailing supplier-date row (Delivery Date).
             if ($workOrder->due_date) {
                 $routingHtml .= '<tr>'
-                    . '<td colspan="5" style="border: 0.75pt solid #000; padding: 6pt;">&nbsp;</td>'
+                    . '<td colspan="6" style="border: 0.75pt solid #000; padding: 6pt;">&nbsp;</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt; vertical-align: middle;">'
                     .   '<b>Delivery Date:</b><br>' . $esc($delivery)
                     . '</td>'

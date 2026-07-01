@@ -140,7 +140,20 @@ class WorkOrderController extends Controller
 
         $completionCert = \App\Models\CompletionCertificate::where('work_order_id', $workOrder->id)->first();
 
+        // Shop-floor bottleneck flags → PCD can reroute the remaining routing.
+        $bottlenecks = $workOrder->sections()->whereNotNull('bottleneck_at')
+            ->with(['section', 'bottleneckBy'])
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn ($w) => [
+                'section' => $w->section?->name,
+                'reason'  => $w->bottleneck_reason,
+                'by'      => $w->bottleneckBy?->name,
+                'at'      => $w->bottleneck_at?->format('d M Y, h:i A'),
+            ])->values();
+
         return Inertia::render('WorkOrder/Show', [
+            'bottlenecks' => $bottlenecks,
             'completion_certificate' => $completionCert ? [
                 'id'                    => $completionCert->id,
                 'certificate_number'    => $completionCert->certificate_number,

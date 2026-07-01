@@ -70,6 +70,7 @@ interface Wos {
     forwardable_qty: number;
     target_qty: number;
     is_last: boolean;
+    bottleneck: { reason: string; at: string } | null;
     work_order: {
         id: number;
         wo_number: string;
@@ -191,6 +192,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
     const [showTransfer, setShowTransfer] = useState(false);
+    const [showBottleneck, setShowBottleneck] = useState(false);
 
     const canAct = ['ready', 'in_progress', 'rework'].includes(wos.status);
     const canSendBack = ['ready', 'in_progress'].includes(wos.status) && earlier_sections.length > 0;
@@ -290,6 +292,9 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                 <Link href="/production/queue" className="btn-outline btn-sm">
                                     <i className="fi fi-rr-arrow-left text-xs" /> Queue
                                 </Link>
+                                <Link href={`/production/work-orders/${wos.work_order.id}/cycle`} className="btn-outline btn-sm">
+                                    <i className="fi fi-rr-time-past text-xs" /> Full cycle
+                                </Link>
                                 <Link
                                     href={`/maintenance-requests/create?section_id=${wos.section.id}`}
                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
@@ -300,6 +305,19 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                     <i className="fi fi-rr-wrench-simple text-xs leading-none" />
                                     Request Maintenance
                                 </Link>
+                                {canAct && !isReworkMode && !wos.bottleneck && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowBottleneck(true)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
+                                                   bg-orange-50 text-orange-800 border border-orange-200
+                                                   hover:bg-orange-100 hover:border-orange-300 transition-colors"
+                                        title="Section busy — flag for PCD to reroute"
+                                    >
+                                        <i className="fi fi-rr-traffic-cone text-xs leading-none" />
+                                        Flag Bottleneck
+                                    </button>
+                                )}
                                 {canSendBack && (
                                     <button
                                         type="button"
@@ -337,6 +355,29 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                         </div>
                     </div>
                 </div>
+
+                {/* Bottleneck banner — flagged for PCD rerouting */}
+                {wos.bottleneck && (
+                    <div className="card border-orange-300 bg-orange-50/60">
+                        <div className="card-body flex items-start gap-3">
+                            <i className="fi fi-rr-traffic-cone text-orange-500 text-lg leading-none mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-orange-900">Flagged as a bottleneck · {wos.bottleneck.at}</div>
+                                <div className="text-sm text-orange-800 mt-0.5">{wos.bottleneck.reason}</div>
+                                <div className="text-[11px] text-orange-600 mt-1">PCD has been notified — they can reroute this job so a free section works first.</div>
+                            </div>
+                            {canAct && (
+                                <button
+                                    type="button"
+                                    onClick={() => router.delete(`/production/wos/${wos.id}/bottleneck`, { preserveScroll: true })}
+                                    className="btn-ghost btn-sm text-orange-700 shrink-0"
+                                >
+                                    <i className="fi fi-rr-cross-small text-xs" /> Clear flag
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Rework banner */}
                 {rework_context && (
@@ -516,6 +557,9 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                     isLast={wos.is_last}
                     onClose={() => setShowTransfer(false)}
                 />
+            )}
+            {showBottleneck && (
+                <BottleneckModal wosId={wos.id} onClose={() => setShowBottleneck(false)} />
             )}
         </AppLayout>
     );
@@ -934,6 +978,41 @@ function TransferModal({ wosId, forwardable, isLast, onClose }: { wosId: number;
             </div>
             <ModalFooter onClose={onClose} onSubmit={submit} submitting={submitting} submitDisabled={!valid}
                 submitLabel={isLast ? 'Transfer & Send to QC' : 'Transfer'} />
+        </ModalShell>
+    );
+}
+
+function BottleneckModal({ wosId, onClose }: { wosId: number; onClose: () => void }) {
+    const [reason, setReason] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const valid = reason.trim().length >= 3;
+
+    const submit = () => {
+        if (!valid) return;
+        setSubmitting(true);
+        router.post(`/production/wos/${wosId}/bottleneck`, { reason }, {
+            preserveScroll: true,
+            onFinish: () => setSubmitting(false),
+            onSuccess: onClose,
+        });
+    };
+
+    return (
+        <ModalShell title="Flag as Bottleneck" onClose={onClose} disabled={submitting} accent="rose">
+            <div className="p-5 space-y-4 overflow-y-auto">
+                <div className="text-sm text-surface-700">
+                    Machines or manpower here tied up on other work? Flag this job so PCD can reroute it —
+                    let a free section do its part first instead of the job waiting.
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Reason <span className="text-red-500">*</span></label>
+                    <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className="form-input"
+                        style={{ resize: 'vertical' }} placeholder="e.g. All lathes running Job 37711 till Thursday — can't start this before then." />
+                    <p className="form-hint">Minimum 3 characters.</p>
+                </div>
+            </div>
+            <ModalFooter onClose={onClose} onSubmit={submit} submitting={submitting} submitDisabled={!valid}
+                submitLabel="Flag for PCD" submitAccent="red" />
         </ModalShell>
     );
 }

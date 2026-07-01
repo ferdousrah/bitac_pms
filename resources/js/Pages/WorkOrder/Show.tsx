@@ -27,7 +27,7 @@ const stepStatusBadge: Record<string, string> = {
     completed: 'badge-green',
 };
 
-export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate }: any) {
+export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate, bottlenecks = [] }: any) {
     const transition = (status: string) => {
         if (confirm(`Transition to "${status.replace(/_/g, ' ')}"?`)) {
             router.post(`/work-orders/${workOrder.id}/transition`, { status });
@@ -37,6 +37,29 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
     return (
         <AppLayout header={`Job# ${workOrder.job_number ?? '—'}`}>
             <div className="space-y-6 max-w-6xl animate-fade-in">
+
+                {/* Bottleneck alert — a section flagged this job; PCD can reroute */}
+                {bottlenecks.length > 0 && (
+                    <div className="card border-orange-300 bg-orange-50/60 animate-slide-up">
+                        <div className="card-body flex items-start gap-3">
+                            <i className="fi fi-rr-traffic-cone text-orange-500 text-lg leading-none mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-orange-900">
+                                    Bottleneck flagged — this job is waiting on a busy section
+                                </div>
+                                {bottlenecks.map((b: any, i: number) => (
+                                    <div key={i} className="text-sm text-orange-800 mt-1">
+                                        <span className="font-semibold">{b.section}:</span> {b.reason}
+                                        <span className="text-[11px] text-orange-600"> · {b.by} · {b.at}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <Link href={`/pcd/work-orders/${workOrder.id}/reroute`} className="btn-primary btn-sm shrink-0">
+                                <i className="fi fi-rr-shuffle text-xs" /> Reroute
+                            </Link>
+                        </div>
+                    </div>
+                )}
 
                 {/* Header Card */}
                 <div className="card animate-slide-up">
@@ -524,6 +547,12 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                 <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Actions</h3>
                             </div>
                             <div className="card-body space-y-2">
+                                <Link href={`/production/work-orders/${workOrder.id}/cycle`} className="btn-outline btn-sm w-full justify-center">
+                                    <i className="fi fi-rr-time-past text-xs leading-none" /> Production Cycle
+                                </Link>
+                                <Link href={`/pcd/work-orders/${workOrder.id}/reroute`} className="btn-outline btn-sm w-full justify-center">
+                                    <i className="fi fi-rr-shuffle text-xs leading-none" /> Reroute Sections
+                                </Link>
                                 {workOrder.item_operation_sheets?.some((row: any) => row.sheet) && (
                                     <Link href={`/mrp/${workOrder.id}`} className="btn-outline btn-sm w-full justify-center">
                                         <i className="fi fi-rr-calculator text-xs leading-none" /> Run MRP

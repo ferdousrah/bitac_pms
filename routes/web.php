@@ -441,6 +441,9 @@ Route::middleware(['auth'])->group(function () {
         // Section assignment
         Route::get('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'edit'])->name('sections.edit');
         Route::put('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'update'])->name('sections.update');
+        // Reroute a live job's remaining routing (bottleneck handling).
+        Route::get('work-orders/{workOrder}/reroute',   [WorkOrderSectionController::class, 'rerouteForm'])->name('reroute.form');
+        Route::put('work-orders/{workOrder}/reroute',   [WorkOrderSectionController::class, 'reroute'])->name('reroute');
         Route::get('work-orders/{workOrder}/pdf',       [WorkOrderSectionController::class, 'pdf'])->name('work-orders.pdf');
     });
 
@@ -554,9 +557,14 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('production')->middleware('permission:view production')->name('production.')->group(function () {
         Route::get('/queue', [ProductionController::class, 'queue'])->name('queue');
         Route::get('/wos/{workOrderSection}', [ProductionController::class, 'show'])->name('show');
+        // Holistic production-cycle timeline for a whole work order.
+        Route::get('/work-orders/{workOrder}/cycle', [ProductionController::class, 'cycle'])->name('cycle');
         Route::post('/wos/{workOrderSection}/complete', [ProductionController::class, 'complete'])->name('complete');
         // Partial forward — transfer a quantity of finished pieces to the next section.
         Route::post('/wos/{workOrderSection}/transfer', [ProductionController::class, 'transfer'])->name('transfer');
+        // Shop-floor bottleneck flag (→ PCD reroute).
+        Route::post('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'flagBottleneck'])->name('wos.bottleneck');
+        Route::delete('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'clearBottleneck'])->name('wos.bottleneck.clear');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
         // Shop in-charge assigns a step to one of the shop's sub-sections.
