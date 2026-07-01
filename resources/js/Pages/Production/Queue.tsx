@@ -8,6 +8,8 @@ interface SectionLite {
     name: string;
     code: string;
     name_bn?: string | null;
+    is_sub?: boolean;
+    parent_name?: string | null;
 }
 
 interface QueueJob {
@@ -17,6 +19,7 @@ interface QueueJob {
     status: string;
     started_at: string | null;
     received_qty: number | null;
+    sub_section_id: number | null;
     work_order: {
         id: number;
         wo_number: string;
@@ -124,11 +127,14 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                                 <i className="fi fi-rr-industry-windows" />
                             </div>
                             <div>
-                                <div className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Section Queue</div>
+                                <div className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+                                    {section.is_sub ? 'Sub-section Queue' : 'Section Queue'}
+                                </div>
                                 <h1 className="text-xl font-bold text-surface-900">{section.name}</h1>
                                 <div className="text-xs text-surface-500 mt-0.5">
                                     <span className="font-mono">{section.code}</span>
                                     {section.name_bn && <span> · {section.name_bn}</span>}
+                                    {section.is_sub && section.parent_name && <span className="text-violet-600"> · under {section.parent_name}</span>}
                                 </div>
                             </div>
                         </div>
@@ -153,7 +159,7 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                                     >
                                         {available_sections.map((s) => (
                                             <option key={s.id} value={s.id}>
-                                                {s.name} ({s.code})
+                                                {s.is_sub ? `   ↳ ${s.name}` : s.name} ({s.code})
                                             </option>
                                         ))}
                                     </select>
@@ -327,7 +333,7 @@ function JobCard({ job }: { job: QueueJob }) {
                 <div className="shrink-0">
                     <Link
                         href={job.item
-                            ? `/production/wos/${job.id}?item_id=${job.item.id}`
+                            ? `/production/wos/${job.id}?item_id=${job.item.id}${job.sub_section_id ? `&sub_section=${job.sub_section_id}` : ''}`
                             : `/production/wos/${job.id}`}
                         className="btn-outline btn-sm"
                     >

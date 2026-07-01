@@ -30,18 +30,29 @@ class ProductionController extends Controller
         $sectionId = (int) ($request->input('section') ?? $user->section_id ?? 0);
         $section   = $sectionId ? Section::find($sectionId) : null;
 
-        // Only top-level shops have a queue — sub-sections are internal to a shop.
-        $availableSections = Section::active()->shops()->topLevel()->orderBy('display_order')->get(['id', 'name', 'code', 'name_bn']);
+        // Switcher lists shops + their sub-sections (nested).
+        $availableSections = Section::active()->shops()->topLevel()
+            ->with(['children' => fn ($q) => $q->where('is_active', true)->orderBy('display_order')])
+            ->orderBy('display_order')->get()
+            ->flatMap(fn ($s) => collect([['id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'name_bn' => $s->name_bn, 'is_sub' => false]])
+                ->merge($s->children->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code, 'name_bn' => $c->name_bn, 'is_sub' => true])))
+            ->values();
 
-        // Non-admins can only see their own section
+        // Non-admins can only see their own section (may be a sub-section).
         $canSwitch = $user->hasAnyRole(['super_admin', 'admin']) || $user->can('manage users');
         if (!$canSwitch && $user->section_id) {
             $sectionId = (int) $user->section_id;
             $section   = Section::find($sectionId);
         }
 
+        // A sub-section (has parent_id) gets a STEP-based queue — items with open
+        // steps assigned to it, drawn from its PARENT shop's active WOS. A
+        // top-level shop gets the normal WOS-based queue (all its work).
+        $isSubSection = $section && $section->parent_id;
+        $queueSectionId = $isSubSection ? (int) $section->parent_id : ($section->id ?? null);
+
         $jobs = $section
-            ? WorkOrderSection::activeForSection($section->id)
+            ? WorkOrderSection::activeForSection($queueSectionId)
                 ->with([
                     'workOrder.customer',
                     'workOrder.product',
@@ -51,9 +62,9 @@ class ProductionController extends Controller
                     'section',
                 ])
                 ->get()
-                // Expand item-wise: every item with work at this section becomes
-                // its own row. A WO with 2 items at Machine Shop → 2 rows in the queue.
-                ->flatMap(fn($wos) => $this->expandWosForQueue($wos))
+                ->flatMap(fn($wos) => $isSubSection
+                    ? $this->expandWosForSubSection($wos, (int) $section->id)
+                    : $this->expandWosForQueue($wos))
                 ->values()
             : collect();
 
@@ -62,7 +73,7 @@ class ProductionController extends Controller
         // already working them. They're in the pipeline heading this way; the
         // supervisor can plan machines/material ahead. (Nothing has been
         // transferred here yet — otherwise this WOS would be 'ready'/active.)
-        $upcoming = $section
+        $upcoming = ($section && !$isSubSection)
             ? WorkOrderSection::where('section_id', $section->id)
                 ->where('status', 'pending')
                 ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled', 'delivered']))
@@ -105,10 +116,12 @@ class ProductionController extends Controller
 
         return Inertia::render('Production/Queue', [
             'section' => $section ? [
-                'id'      => $section->id,
-                'name'    => $section->name,
-                'code'    => $section->code,
-                'name_bn' => $section->name_bn,
+                'id'          => $section->id,
+                'name'        => $section->name,
+                'code'        => $section->code,
+                'name_bn'     => $section->name_bn,
+                'is_sub'      => (bool) $isSubSection,
+                'parent_name' => $isSubSection ? Section::find($section->parent_id)?->name : null,
             ] : null,
             'jobs'              => $jobs,
             'upcoming'          => $upcoming,
@@ -763,6 +776,11 @@ class ProductionController extends Controller
         // shows every item's work at this section.
         $scopedItemId = $request->integer('item_id') ?: null;
 
+        // Sub-section scope: explicit ?sub_section=X, or auto for a sub-section
+        // supervisor. When set, the page shows only that sub-section's steps and
+        // hides shop-level actions (transfer/send-back/flag are the shop's job).
+        $scopedSubId = $request->integer('sub_section') ?: $this->viewerSubSectionFor($workOrderSection);
+
         $workOrderSection->load([
             'workOrder.customer',
             'workOrder.product',
@@ -895,12 +913,17 @@ class ProductionController extends Controller
             'siblings_count' => $scopedItemId
                 ? (int) $workOrderSection->workOrder->items->count() - 1
                 : 0,
+            // When scoped to a sub-section, the page hides shop-level actions
+            // (transfer/send-back/flag) and shows only that sub-section's steps.
+            'scoped_sub_section' => $scopedSubId
+                ? ['id' => $scopedSubId, 'name' => Section::find($scopedSubId)?->name]
+                : null,
             // Item-wise: every WO item that has an operation sheet contributes
             // its own steps at this section. Supervisor sees one block per item,
             // can start/complete each independently. Legacy WOs with WO-wide
             // sheets (work_order_item_id NULL) get bucketed under a "shared" item.
             // When ?item_id is set, only that item's block is shipped.
-            'op_items' => (function () use ($workOrderSection, $scopedItemId) {
+            'op_items' => (function () use ($workOrderSection, $scopedItemId, $scopedSubId) {
                 $wo = $workOrderSection->workOrder;
                 $sectionId = $workOrderSection->section_id;
 
@@ -966,7 +989,9 @@ class ProductionController extends Controller
                     if ($scopedItemId && $item->id !== $scopedItemId) continue;
                     $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
                     $steps = $sheet
-                        ? $sheet->steps->where('section_id', $sectionId)->values()
+                        ? $sheet->steps->where('section_id', $sectionId)
+                            ->when($scopedSubId, fn ($c) => $c->where('sub_section_id', $scopedSubId))
+                            ->values()
                         : collect();
                     $result->push([
                         'item' => [
@@ -986,7 +1011,9 @@ class ProductionController extends Controller
                 if (!$scopedItemId) {
                     $legacy = $wo->operationSheets->whereNull('work_order_item_id');
                     foreach ($legacy as $sheet) {
-                        $steps = $sheet->steps->where('section_id', $sectionId)->values();
+                        $steps = $sheet->steps->where('section_id', $sectionId)
+                            ->when($scopedSubId, fn ($c) => $c->where('sub_section_id', $scopedSubId))
+                            ->values();
                         if ($steps->isEmpty()) continue;
                         $result->push([
                             'item' => null,
@@ -1039,8 +1066,25 @@ class ProductionController extends Controller
         $user = auth()->user();
         $canAll = $user->hasAnyRole(['super_admin', 'admin']) || $user->can('manage users');
         if ($canAll) return;
-        abort_unless($user->section_id && $user->section_id === $wos->section_id, 403,
+        abort_unless($user->section_id, 403, 'You are not the supervisor of this section.');
+        // Direct shop supervisor, OR a sub-section supervisor of a child of this shop.
+        if ($user->section_id === $wos->section_id) return;
+        $own = Section::find($user->section_id);
+        abort_unless($own && $own->parent_id === $wos->section_id, 403,
             'You are not the supervisor of this section.');
+    }
+
+    /**
+     * If the viewer is a sub-section supervisor whose sub-section is a child of
+     * this shop, return that sub-section id — used to scope the page to their
+     * work. Admins / shop supervisors get null (see the whole shop).
+     */
+    private function viewerSubSectionFor(WorkOrderSection $wos): ?int
+    {
+        $user = auth()->user();
+        if (!$user->section_id || $user->section_id === $wos->section_id) return null;
+        $own = Section::find($user->section_id);
+        return ($own && $own->parent_id === $wos->section_id) ? (int) $own->id : null;
     }
 
     /**
@@ -1096,6 +1140,40 @@ class ProductionController extends Controller
         return $rows;
     }
 
+    /**
+     * Sub-section queue rows — items with open steps ASSIGNED to $subId within
+     * this shop's active WOS. Each row carries sub_section_id so the "Open" link
+     * scopes the detail page to that sub-section's steps.
+     */
+    private function expandWosForSubSection(WorkOrderSection $wos, int $subId): \Illuminate\Support\Collection
+    {
+        $wo = $wos->workOrder;
+        $sectionId = $wos->section_id;
+        $rows = collect();
+        foreach ($wo->items as $idx => $item) {
+            $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+            if (!$sheet) continue;
+            $subSteps = $sheet->steps->where('section_id', $sectionId)->where('sub_section_id', $subId);
+            if ($subSteps->isEmpty()) continue;
+            $openHere = $subSteps->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+            if (!$openHere) continue;
+            $rows->push($this->serializeWosForQueue($wos, [
+                'item' => [
+                    'id'          => $item->id,
+                    'sequence'    => $idx + 1,
+                    'description' => $item->description,
+                    'quantity'    => (float) $item->quantity,
+                    'unit'        => $item->unit ?? 'pcs',
+                ],
+                'sheet_number'   => $sheet->sheet_number,
+                'steps_total'    => $subSteps->count(),
+                'steps_done'     => $subSteps->whereIn('status', ['completed', 'skipped'])->count(),
+                'sub_section_id' => $subId,
+            ]));
+        }
+        return $rows;
+    }
+
     private function serializeWosForQueue(WorkOrderSection $wos, array $itemContext = []): array
     {
         $wo = $wos->workOrder;
@@ -1141,10 +1219,11 @@ class ProductionController extends Controller
             'rework'     => $reworkBanner,
             // Item context (null when this WOS has no item-wise sheets) —
             // drives the per-item row UI on the queue.
-            'item'         => null,
-            'sheet_number' => null,
-            'steps_total'  => null,
-            'steps_done'   => null,
+            'item'          => null,
+            'sheet_number'  => null,
+            'steps_total'   => null,
+            'steps_done'    => null,
+            'sub_section_id'=> null,
         ], $itemContext);
     }
 }

@@ -88,64 +88,73 @@ class HandleInertiaRequests extends Middleware
             'productionSections' => function () use ($user, $hasSpatieRoles, $isSuperAdmin) {
                 if (!$user || !$hasSpatieRoles) return [];
                 if (!$user->can('view production')) return [];
-                // Only TOP-LEVEL shops appear as menu items — sub-sections are
-                // internal to a shop (no routing/queue of their own), so they'd
-                // be confusing as separate menus.
-                $q = \App\Models\Section::active()->shops()->topLevel()->orderBy('display_order');
-                if (!$isSuperAdmin && $user->section_id) {
-                    // A supervisor sitting on a sub-section sees its parent shop.
-                    $own = \App\Models\Section::find($user->section_id);
-                    $q->where('id', $own?->parent_id ?? $user->section_id);
-                }
-                $sections = $q->get(['id', 'name', 'code']);
 
-                // Count exactly what the queue page would render — one row per
-                // (active WOS × item that still has open steps at that section).
-                // This stays in sync with ProductionController::queue(), so the
-                // sidebar badge can't get out of sync with the body anymore.
+                // Which shops (and sub-sections) this user's sidebar lists:
+                //  - super-admin: every shop + its sub-sections.
+                //  - shop supervisor (section is top-level): that shop + its subs.
+                //  - sub-section supervisor: just their sub-section.
+                $ownSub = null;
+                $shopQ = \App\Models\Section::active()->shops()->topLevel()
+                    ->with(['children' => fn ($q) => $q->where('is_active', true)->orderBy('display_order')])
+                    ->orderBy('display_order');
+                if (!$isSuperAdmin && $user->section_id) {
+                    $own = \App\Models\Section::find($user->section_id);
+                    if ($own && $own->parent_id) {
+                        $ownSub = $own;                       // sub-section supervisor
+                        $shopQ->where('id', $own->parent_id); // (loaded for parent name only)
+                    } else {
+                        $shopQ->where('id', $user->section_id); // shop supervisor
+                    }
+                }
+                $shops = $shopQ->get(['id', 'name', 'code']);
+
+                // Counts: shop = items with any OPEN step there; sub-section =
+                // items with an OPEN step ASSIGNED to that sub-section. Matches
+                // ProductionController::queue so badges never drift.
                 $activeStatuses = ['ready', 'in_progress', 'rework', 'awaiting_rework'];
                 $activeWoSections = \App\Models\WorkOrderSection::query()
                     ->whereIn('status', $activeStatuses)
-                    ->with([
-                        'workOrder.items',
-                        'workOrder.operationSheets.steps',
-                    ])
+                    ->with(['workOrder.items', 'workOrder.operationSheets.steps'])
                     ->get();
 
-                $pendingBySection = [];
+                $shopCount = [];
+                $subCount  = [];
                 foreach ($activeWoSections as $wos) {
-                    $wo        = $wos->workOrder;
-                    $sectionId = $wos->section_id;
-                    $itemRows  = 0;
-                    // Partial-forward model: count items that have any OPEN step
-                    // at this section (matches ProductionController::expandWosForQueue,
-                    // so an item can be counted at two sections at once).
-                    foreach ($wo->items as $item) {
-                        $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
-                        if (!$sheet) continue;
-                        $openHere = $sheet->steps
-                            ->where('section_id', $sectionId)
-                            ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-                        if ($openHere) $itemRows++;
-                    }
-                    // Legacy WO-wide sheets — any open step at this section.
-                    foreach ($wo->operationSheets->whereNull('work_order_item_id') as $sheet) {
-                        $openHere = $sheet->steps
-                            ->where('section_id', $sectionId)
-                            ->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-                        if ($openHere) $itemRows++;
-                    }
-                    if ($itemRows > 0) {
-                        $pendingBySection[$sectionId] = ($pendingBySection[$sectionId] ?? 0) + $itemRows;
+                    $wo = $wos->workOrder; $sectionId = $wos->section_id;
+                    $sheets = $wo->operationSheets;
+                    $buckets = $wo->items->map(fn ($it) => $sheets->firstWhere('work_order_item_id', $it->id))
+                        ->filter()
+                        ->merge($sheets->whereNull('work_order_item_id'));
+                    foreach ($buckets as $sheet) {
+                        $openSteps = $sheet->steps->where('section_id', $sectionId)
+                            ->filter(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+                        if ($openSteps->isEmpty()) continue;
+                        $shopCount[$sectionId] = ($shopCount[$sectionId] ?? 0) + 1;
+                        foreach ($openSteps->pluck('sub_section_id')->filter()->unique() as $sid) {
+                            $subCount[$sid] = ($subCount[$sid] ?? 0) + 1;
+                        }
                     }
                 }
 
-                return $sections->map(fn ($s) => [
-                    'id'            => $s->id,
-                    'name'          => $s->name,
-                    'code'          => $s->code,
-                    'pending_count' => (int) ($pendingBySection[$s->id] ?? 0),
-                ])->toArray();
+                // Flatten to a nested list (shop then its sub-sections).
+                $out = [];
+                if ($ownSub) {
+                    $out[] = ['id' => $ownSub->id, 'name' => $ownSub->name, 'code' => $ownSub->code,
+                              'parent_id' => $ownSub->parent_id, 'is_sub' => true,
+                              'pending_count' => (int) ($subCount[$ownSub->id] ?? 0)];
+                } else {
+                    foreach ($shops as $s) {
+                        $out[] = ['id' => $s->id, 'name' => $s->name, 'code' => $s->code,
+                                  'parent_id' => null, 'is_sub' => false,
+                                  'pending_count' => (int) ($shopCount[$s->id] ?? 0)];
+                        foreach ($s->children as $c) {
+                            $out[] = ['id' => $c->id, 'name' => $c->name, 'code' => $c->code,
+                                      'parent_id' => $s->id, 'is_sub' => true,
+                                      'pending_count' => (int) ($subCount[$c->id] ?? 0)];
+                        }
+                    }
+                }
+                return $out;
             },
             'appSettings' => function () {
                 $s = app(SettingService::class);

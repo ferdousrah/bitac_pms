@@ -185,6 +185,7 @@ interface Props {
     machines?: OptionLite[];
     operators?: OptionLite[];
     sub_sections?: OptionLite[];
+    scoped_sub_section?: { id: number; name: string | null } | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -199,7 +200,8 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [] }: Props) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], scoped_sub_section = null }: Props) {
+    const scopedSub = scoped_sub_section;
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
     const [showTransfer, setShowTransfer] = useState(false);
@@ -258,6 +260,11 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         {wos.weight_pct > 0 && (
                                             <span className="badge badge-violet" title="This shop's share of the whole job, and how much of it is done">
                                                 <i className="fi fi-rr-chart-pie-alt text-[9px]" /> {wos.weight_pct.toFixed(2)}% of job · {wos.section_progress}% done
+                                            </span>
+                                        )}
+                                        {scopedSub && (
+                                            <span className="badge badge-violet" title="You're viewing only this sub-section's work">
+                                                <i className="fi fi-rr-corner-down-right text-[9px]" /> {scopedSub.name}
                                             </span>
                                         )}
                                     </div>
@@ -455,7 +462,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
-                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={sub_sections} receivedCap={wos.received_qty} />
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={scopedSub ? [] : sub_sections} receivedCap={wos.received_qty} />
                                     ))}
                                 </div>
                             ))}
@@ -511,7 +518,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                             <h3 className="text-sm font-bold text-surface-900">Actions</h3>
                         </div>
                         <div className="card-body space-y-2">
-                            {canAct && (
+                            {!scopedSub && canAct && (
                                 isReworkMode ? (
                                     <button type="button" onClick={() => setShowComplete(true)} disabled={!allStepsDone}
                                         title={allStepsDone ? '' : `${openSteps.length} operation step(s) still open. Close each step first.`}
@@ -526,17 +533,22 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                     </button>
                                 )
                             )}
-                            {canSendBack && (
+                            {!scopedSub && canSendBack && (
                                 <button type="button" onClick={() => setShowSendBack(true)}
                                     className="btn-outline btn-sm w-full justify-center border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400">
                                     <i className="fi fi-rr-undo-alt text-xs" /> Send Back
                                 </button>
                             )}
-                            {canAct && !isReworkMode && !wos.bottleneck && (
+                            {!scopedSub && canAct && !isReworkMode && !wos.bottleneck && (
                                 <button type="button" onClick={() => setShowBottleneck(true)}
                                     className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100 hover:border-orange-300 transition-colors">
                                     <i className="fi fi-rr-traffic-cone text-xs leading-none" /> Flag Bottleneck
                                 </button>
+                            )}
+                            {scopedSub && (
+                                <div className="text-[11px] text-surface-400 text-center px-2 py-1">
+                                    Transfers &amp; handoffs are handled by the shop in-charge.
+                                </div>
                             )}
                             <Link href={`/maintenance-requests/create?section_id=${wos.section.id}`}
                                 className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 transition-colors">

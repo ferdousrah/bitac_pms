@@ -203,18 +203,20 @@ export function filterNav(userPerms: string[], isSuperAdmin: boolean) {
 export function flatGroups(
     userPerms: string[],
     isSuperAdmin: boolean,
-    productionSections: Array<{ id: number; name: string; code: string; pending_count?: number }> = [],
+    productionSections: Array<{ id: number; name: string; code: string; pending_count?: number; is_sub?: boolean }> = [],
 ): NavGroup[] {
     // Build a copy of mainGroups with per-section items injected into Production
     // BEFORE filtering, so the Production group isn't dropped for being empty.
     const sectionItems: NavItem[] = productionSections.map(s => {
         const count = s.pending_count ?? 0;
+        // Sub-sections render indented under their parent shop ("↳ name").
+        const name = s.is_sub ? `↳ ${s.name}` : s.name;
         return {
             // Count appended to the label so it renders inline without
             // needing a separate badge slot in the layout.
-            label: count > 0 ? `${s.name} (${count})` : s.name,
+            label: count > 0 ? `${name} (${count})` : name,
             href: `/production/queue?section=${s.id}`,
-            icon: 'fi-rr-tools',
+            icon: s.is_sub ? 'fi-rr-corner-down-right' : 'fi-rr-tools',
             permission: 'view production',
         };
     });
