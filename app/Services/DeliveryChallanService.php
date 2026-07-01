@@ -60,11 +60,17 @@ class DeliveryChallanService
         // Items — pull from work order's quotation items, fall back to product line
         $rows = '';
         $items = $wo->quotation?->items ?? collect();
+        // A delivery ships a specific quantity (quantity_delivered) — for a
+        // single-item job that's what the challan must show, NOT the full ordered
+        // qty. (Multi-item per-line partial delivery is a future enhancement.)
+        $isSingleItem = $items->count() === 1;
         if ($items->isNotEmpty()) {
             $idx = 0;
             foreach ($items as $it) {
                 $idx++;
-                $qty = (float) ($it->quantity ?? 0);
+                $qty = $isSingleItem
+                    ? (float) $delivery->quantity_delivered
+                    : (float) ($it->quantity ?? 0);
                 $rows .= '<tr>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">' . str_pad($idx, 2, '0', STR_PAD_LEFT) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 9pt;">' . nl2br($esc($it->description ?? $it->product?->name ?? '—'), false) . '</td>'
