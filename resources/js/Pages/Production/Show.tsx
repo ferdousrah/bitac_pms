@@ -219,6 +219,10 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     const completedSteps = allSteps.filter((s) => s.status === 'completed').length;
     const stepProgressPct = allSteps.length === 0 ? 0 : Math.round((completedSteps / allSteps.length) * 100);
 
+    // Items with an operation sheet and/or reference files — drives the sidebar
+    // "Documents" card (op-sheet PDF + drawings/samples).
+    const docItems = op_items.filter((b) => b.sheet_id || (b.references && b.references.length > 0));
+
     return (
         <AppLayout header={
             scoped_item
@@ -295,70 +299,6 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                     )}
                                 </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                <Link href="/production/queue" className="btn-outline btn-sm">
-                                    <i className="fi fi-rr-arrow-left text-xs" /> Queue
-                                </Link>
-                                <Link href={`/production/work-orders/${wos.work_order.id}/cycle`} className="btn-outline btn-sm">
-                                    <i className="fi fi-rr-time-past text-xs" /> Full cycle
-                                </Link>
-                                <Link
-                                    href={`/maintenance-requests/create?section_id=${wos.section.id}`}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
-                                               bg-amber-50 text-amber-800 border border-amber-200
-                                               hover:bg-amber-100 hover:border-amber-300 transition-colors"
-                                    title="Report a machine problem"
-                                >
-                                    <i className="fi fi-rr-wrench-simple text-xs leading-none" />
-                                    Request Maintenance
-                                </Link>
-                                {canAct && !isReworkMode && !wos.bottleneck && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowBottleneck(true)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
-                                                   bg-orange-50 text-orange-800 border border-orange-200
-                                                   hover:bg-orange-100 hover:border-orange-300 transition-colors"
-                                        title="Section busy — flag for PCD to reroute"
-                                    >
-                                        <i className="fi fi-rr-traffic-cone text-xs leading-none" />
-                                        Flag Bottleneck
-                                    </button>
-                                )}
-                                {canSendBack && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowSendBack(true)}
-                                        className="btn-outline btn-sm border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400"
-                                    >
-                                        <i className="fi fi-rr-undo-alt text-xs" /> Send Back
-                                    </button>
-                                )}
-                                {canAct && (
-                                    isReworkMode ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowComplete(true)}
-                                            disabled={!allStepsDone}
-                                            title={allStepsDone ? '' : `${openSteps.length} operation step(s) still open. Close each step first.`}
-                                            className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <i className="fi fi-rr-check text-xs" /> Complete Rework & Return
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowTransfer(true)}
-                                            disabled={wos.forwardable_qty <= 0}
-                                            title={wos.forwardable_qty > 0 ? '' : 'No completed pieces to transfer yet. Log some output first.'}
-                                            className="btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <i className="fi fi-rr-paper-plane text-xs" />
-                                            {wos.is_last ? 'Transfer & Send to QC' : 'Transfer to next section'}
-                                        </button>
-                                    )
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -416,6 +356,9 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                     </div>
                 )}
 
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {/* ── Left column — routing, operations, queries, handoffs ── */}
+                <div className="lg:col-span-2 space-y-6">
                 {/* Routing strip */}
                 <div className="card">
                     <div className="card-header">
@@ -488,33 +431,10 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         ) : (
                                             <span className="text-sm font-semibold text-surface-700">Shared (WO-level)</span>
                                         )}
-                                        {block.sheet_id && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPdfPopup({
-                                                    open: true,
-                                                    url: `/production/op-sheets/${block.sheet_id}/pdf?preview=base64`,
-                                                    title: 'Operation Sheet',
-                                                    subtitle: block.sheet_number ? `Sheet ${block.sheet_number}` : (block.item?.description ?? undefined),
-                                                })}
-                                                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-500 shadow-sm transition-colors"
-                                                title="View the PCD operation sheet (PDF)"
-                                            >
-                                                <i className="fi fi-rr-file-pdf text-xs leading-none" /> View Operation Sheet
-                                                {block.sheet_number && <span className="font-mono font-normal opacity-80">· {block.sheet_number}</span>}
-                                            </button>
+                                        {block.sheet_number && (
+                                            <span className="ml-auto text-[10px] font-mono text-surface-400">Sheet {block.sheet_number}</span>
                                         )}
                                     </div>
-                                    {block.references && block.references.length > 0 && (
-                                        <div className="px-5 py-3 bg-amber-50/40 border-b border-surface-100">
-                                            <div className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-2">
-                                                <i className="fi fi-rr-paperclip text-[10px]" /> Reference — drawings &amp; samples
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {block.references.map((r) => <ReferenceChip key={`${r.kind}-${r.id}`} r={r} />)}
-                                            </div>
-                                        </div>
-                                    )}
                                     {block.steps.map((s) => (
                                         <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={sub_sections} />
                                     ))}
@@ -562,6 +482,102 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                         )}
                     </div>
                 </div>
+                </div>{/* left column */}
+
+                {/* ── Right column — actions + documents ── */}
+                <div className="space-y-6">
+                    {/* Actions */}
+                    <div className="card">
+                        <div className="card-header">
+                            <h3 className="text-sm font-bold text-surface-900">Actions</h3>
+                        </div>
+                        <div className="card-body space-y-2">
+                            {canAct && (
+                                isReworkMode ? (
+                                    <button type="button" onClick={() => setShowComplete(true)} disabled={!allStepsDone}
+                                        title={allStepsDone ? '' : `${openSteps.length} operation step(s) still open. Close each step first.`}
+                                        className="btn-primary btn-sm w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <i className="fi fi-rr-check text-xs" /> Complete Rework &amp; Return
+                                    </button>
+                                ) : (
+                                    <button type="button" onClick={() => setShowTransfer(true)} disabled={wos.forwardable_qty <= 0}
+                                        title={wos.forwardable_qty > 0 ? '' : 'No completed pieces to transfer yet. Log some output first.'}
+                                        className="btn-primary btn-sm w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <i className="fi fi-rr-paper-plane text-xs" /> {wos.is_last ? 'Transfer & Send to QC' : 'Transfer to next section'}
+                                    </button>
+                                )
+                            )}
+                            {canSendBack && (
+                                <button type="button" onClick={() => setShowSendBack(true)}
+                                    className="btn-outline btn-sm w-full justify-center border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400">
+                                    <i className="fi fi-rr-undo-alt text-xs" /> Send Back
+                                </button>
+                            )}
+                            {canAct && !isReworkMode && !wos.bottleneck && (
+                                <button type="button" onClick={() => setShowBottleneck(true)}
+                                    className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-100 hover:border-orange-300 transition-colors">
+                                    <i className="fi fi-rr-traffic-cone text-xs leading-none" /> Flag Bottleneck
+                                </button>
+                            )}
+                            <Link href={`/maintenance-requests/create?section_id=${wos.section.id}`}
+                                className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 transition-colors">
+                                <i className="fi fi-rr-wrench-simple text-xs leading-none" /> Request Maintenance
+                            </Link>
+                            <Link href={`/production/work-orders/${wos.work_order.id}/cycle`} className="btn-outline btn-sm w-full justify-center">
+                                <i className="fi fi-rr-time-past text-xs" /> Full Cycle
+                            </Link>
+                            <Link href="/production/queue" className="btn-ghost btn-sm w-full justify-center">
+                                <i className="fi fi-rr-arrow-left text-xs" /> Back to Queue
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Documents — operation sheet + reference drawings/samples */}
+                    {docItems.length > 0 && (
+                        <div className="card">
+                            <div className="card-header">
+                                <h3 className="text-sm font-bold text-surface-900">Documents</h3>
+                                <p className="text-xs text-surface-400 mt-0.5">Operation sheet &amp; references</p>
+                            </div>
+                            <div className="card-body space-y-4">
+                                {docItems.map((block, i) => (
+                                    <div key={block.item?.id ?? `doc-${i}`} className="space-y-2">
+                                        {docItems.length > 1 && block.item && (
+                                            <div className="flex items-center gap-2 text-[11px] text-surface-600">
+                                                <span className="badge badge-amber text-[10px]">Item {block.item.sequence}</span>
+                                                <span className="truncate">{block.item.description}</span>
+                                            </div>
+                                        )}
+                                        {block.sheet_id && (
+                                            <button type="button"
+                                                onClick={() => setPdfPopup({
+                                                    open: true,
+                                                    url: `/production/op-sheets/${block.sheet_id}/pdf?preview=base64`,
+                                                    title: 'Operation Sheet',
+                                                    subtitle: block.sheet_number ? `Sheet ${block.sheet_number}` : (block.item?.description ?? undefined),
+                                                })}
+                                                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-500 shadow-sm transition-colors">
+                                                <i className="fi fi-rr-file-pdf text-xs leading-none" /> View Operation Sheet
+                                                {block.sheet_number && <span className="font-mono font-normal opacity-80">· {block.sheet_number}</span>}
+                                            </button>
+                                        )}
+                                        {block.references && block.references.length > 0 && (
+                                            <div>
+                                                <div className="text-[10px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">
+                                                    <i className="fi fi-rr-paperclip text-[9px]" /> Reference — drawings &amp; samples
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {block.references.map((r) => <ReferenceChip key={`${r.kind}-${r.id}`} r={r} />)}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                </div>{/* grid */}
             </div>
 
             {showComplete && (
