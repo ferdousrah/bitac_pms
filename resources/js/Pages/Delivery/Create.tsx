@@ -48,6 +48,11 @@ export default function DeliveryCreate({ workOrders, workOrder }: any) {
                                 {errors.work_order_id && (
                                     <p className="form-error">{errors.work_order_id}</p>
                                 )}
+                                {(!workOrders || workOrders.length === 0) && (
+                                    <p className="form-hint text-amber-600">
+                                        <i className="fi fi-rr-info text-[10px]" /> No jobs are ready for delivery yet. A job appears here only after a passing <b>Final</b> QC inspection (→ status QC Passed).
+                                    </p>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

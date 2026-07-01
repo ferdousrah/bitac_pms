@@ -10,14 +10,23 @@ const resultBadge: Record<string, string> = {
     conditional: 'badge-amber',
 };
 
+// Inspection STAGE (not a status): Final is the one that completes QC and
+// releases the job to delivery — so it gets the strong green badge.
 const typeBadge: Record<string, string> = {
     incoming: 'badge-blue',
-    in_process: 'badge-purple',
-    'in-process': 'badge-purple',
-    final: 'badge-slate',
+    in_process: 'badge-amber',
+    'in-process': 'badge-amber',
+    final: 'badge-green',
 };
 
-const formatType = (t?: string) => (t ? t.replace(/_/g, ' ') : '--');
+const typeLabel: Record<string, string> = {
+    incoming: 'Incoming',
+    in_process: 'In-Process',
+    'in-process': 'In-Process',
+    final: 'Final',
+};
+
+const formatType = (t?: string) => (t ? (typeLabel[t] ?? t.replace(/_/g, ' ')) : '--');
 
 export default function QCIndex({ inspections, filters }: any) {
     const rows = inspections?.data ?? [];
@@ -94,7 +103,7 @@ export default function QCIndex({ inspections, filters }: any) {
                                         <SortableHeader label="ID" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-20" />
                                         <th>Job #</th>
                                         <th>Item</th>
-                                        <th>Type</th>
+                                        <th title="Inspection stage — a passing Final inspection completes QC and releases the job to delivery">Stage</th>
                                         <th>Inspector</th>
                                         <SortableHeader label="Result" column="result" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-28" />
                                         <SortableHeader label="Date" column="inspection_date" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/qc" filters={filters} className="w-28" />
