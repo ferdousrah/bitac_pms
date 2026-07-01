@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-import { useState, FormEvent } from 'react';
+import { useState, useRef, FormEvent } from 'react';
+import SignaturePad, { SignaturePadHandle } from '@/Components/SignaturePad';
 
 interface Pass {
     id: number;
@@ -11,8 +12,9 @@ interface Pass {
     customer_rep: string | null;
     pass_date: string | null;
     item_count: number;
-    status: 'draft' | 'issued' | 'cancelled';
+    status: string;
     issued_by: string | null;
+    approved_by?: string | null;
 }
 
 interface Props {
@@ -25,16 +27,45 @@ const DIRECTION_BADGE: Record<string, { label: string; cls: string }> = {
     out: { label: 'Gate-Out', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 const STATUS_BADGE: Record<string, string> = {
-    issued:    'badge-green',
-    draft:     'badge-slate',
-    cancelled: 'badge-red',
+    issued:            'badge-green',
+    draft:             'badge-slate',
+    pending_approval:  'badge-amber',
+    rejected:          'badge-red',
+    completed:         'badge-blue',
+    cancelled:         'badge-red',
+};
+const STATUS_LABEL: Record<string, string> = {
+    issued: 'Issued', draft: 'Draft', pending_approval: 'Pending Approval',
+    rejected: 'Rejected', completed: 'Completed', cancelled: 'Cancelled',
 };
 
-export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-passes', lockedDirection }: any) {
+export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-passes', lockedDirection, canApprove = false }: any) {
     const [search, setSearch]     = useState(filters.search || '');
     const [direction, setDir]     = useState(filters.direction || '');
     const [status, setStatus]     = useState(filters.status || '');
     const isOutOnly = lockedDirection === 'out';
+
+    // Approve / reject modal state (PCD approvers only).
+    const [approveId, setApproveId] = useState<number | null>(null);
+    const [rejectId, setRejectId]   = useState<number | null>(null);
+    const [reason, setReason]       = useState('');
+    const [busy, setBusy]           = useState(false);
+    const sigRef = useRef<SignaturePadHandle>(null);
+
+    const doApprove = () => {
+        if (approveId == null) return;
+        setBusy(true);
+        router.post(`${basePath}/${approveId}/approve`, { signature: sigRef.current?.toDataURL() ?? null }, {
+            preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setApproveId(null),
+        });
+    };
+    const doReject = () => {
+        if (rejectId == null || reason.trim().length < 3) return;
+        setBusy(true);
+        router.post(`${basePath}/${rejectId}/reject`, { rejection_reason: reason }, {
+            preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => { setRejectId(null); setReason(''); },
+        });
+    };
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
@@ -82,8 +113,10 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
                         <div className="flex gap-2">
                             <select value={status} onChange={e => setStatus(e.target.value)} className="form-input flex-1">
                                 <option value="">All status</option>
+                                <option value="pending_approval">Pending Approval</option>
                                 <option value="issued">Issued</option>
-                                <option value="draft">Draft</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="completed">Completed</option>
                                 <option value="cancelled">Cancelled</option>
                             </select>
                             <button type="submit" className="btn-primary">Search</button>
@@ -139,19 +172,36 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
                                                 <td className="text-center font-mono font-semibold">{p.item_count}</td>
                                                 <td className="text-xs text-surface-700">{p.pass_date}</td>
                                                 <td>
-                                                    <span className={`badge ${STATUS_BADGE[p.status] ?? 'badge-slate'} capitalize`}>
-                                                        {p.status}
+                                                    <span className={`badge ${STATUS_BADGE[p.status] ?? 'badge-slate'}`}>
+                                                        {STATUS_LABEL[p.status] ?? p.status}
                                                     </span>
+                                                    {p.status === 'issued' && p.approved_by && (
+                                                        <div className="text-[10px] text-surface-400 mt-0.5">by {p.approved_by}</div>
+                                                    )}
                                                 </td>
                                                 <td className="text-xs text-surface-500">{p.issued_by ?? '—'}</td>
                                                 <td className="text-right">
-                                                    <Link
-                                                        href={`${basePath}/${p.id}`}
-                                                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface-50 hover:bg-brand-50 hover:text-brand-700 text-surface-500 transition-colors"
-                                                        title="View"
-                                                    >
-                                                        <i className="fi fi-rr-eye text-xs leading-none" />
-                                                    </Link>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        {canApprove && p.status === 'pending_approval' && (
+                                                            <>
+                                                                <button type="button" onClick={() => setApproveId(p.id)}
+                                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700" title="Approve">
+                                                                    <i className="fi fi-rr-check text-xs leading-none" />
+                                                                </button>
+                                                                <button type="button" onClick={() => { setRejectId(p.id); setReason(''); }}
+                                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700" title="Reject">
+                                                                    <i className="fi fi-rr-cross-small text-sm leading-none" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        <Link
+                                                            href={`${basePath}/${p.id}`}
+                                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface-50 hover:bg-brand-50 hover:text-brand-700 text-surface-500 transition-colors"
+                                                            title="View"
+                                                        >
+                                                            <i className="fi fi-rr-eye text-xs leading-none" />
+                                                        </Link>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -162,6 +212,54 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
                     </div>
                 )}
             </div>
+
+            {/* Approve modal — signature required */}
+            {approveId != null && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setApproveId(null)}>
+                    <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b border-surface-100 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i className="fi fi-rr-check" /></div>
+                            <h3 className="text-base font-bold text-surface-900">Approve Gate Pass</h3>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <p className="text-sm text-surface-600">Sign below to approve. Any one approver finalises the pass (→ issued).</p>
+                            <div>
+                                <label className="form-label">Signature</label>
+                                <SignaturePad ref={sigRef} />
+                            </div>
+                        </div>
+                        <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
+                            <button type="button" onClick={() => setApproveId(null)} disabled={busy} className="btn-outline">Cancel</button>
+                            <button type="button" onClick={doApprove} disabled={busy} className="btn-primary bg-emerald-600 hover:bg-emerald-500 border-emerald-600">
+                                {busy ? 'Approving…' : 'Approve & Issue'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reject modal — reason required */}
+            {rejectId != null && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setRejectId(null)}>
+                    <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b border-surface-100 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><i className="fi fi-rr-cross-circle" /></div>
+                            <h3 className="text-base font-bold text-surface-900">Reject Gate Pass</h3>
+                        </div>
+                        <div className="p-5 space-y-2">
+                            <label className="form-label">Reason <span className="text-red-500">*</span></label>
+                            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className="form-input" style={{ resize: 'vertical' }} placeholder="Why is this pass rejected?" />
+                            <p className="form-hint">Minimum 3 characters.</p>
+                        </div>
+                        <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
+                            <button type="button" onClick={() => setRejectId(null)} disabled={busy} className="btn-outline">Cancel</button>
+                            <button type="button" onClick={doReject} disabled={busy || reason.trim().length < 3} className="btn bg-rose-600 hover:bg-rose-700 text-white">
+                                {busy ? 'Rejecting…' : 'Reject'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

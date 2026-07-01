@@ -366,6 +366,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{gatePass}/pdf',       [GatePassController::class, 'pdf'])->name('pdf');
         Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
+        // Approval — any one configured approver finalises (→ issued) or rejects.
+        Route::post('/{gatePass}/approve',  [GatePassController::class, 'approve'])->name('approve');
+        Route::post('/{gatePass}/reject',   [GatePassController::class, 'reject'])->name('reject');
     });
 
     // Pending Approvals
@@ -657,6 +660,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('users/{user}/activate', [UserController::class, 'activate'])
             ->middleware('permission:manage users')
             ->name('admin.users.activate');
+
+        // PCD gate-pass approver pool (any one approves a pass).
+        Route::middleware('permission:manage users')->group(function () {
+            Route::get('gate-pass-approvers',  [\App\Http\Controllers\Admin\GatePassApproverController::class, 'index'])->name('admin.gate-pass-approvers.index');
+            Route::post('gate-pass-approvers', [\App\Http\Controllers\Admin\GatePassApproverController::class, 'store'])->name('admin.gate-pass-approvers.store');
+            Route::delete('gate-pass-approvers/{approver}', [\App\Http\Controllers\Admin\GatePassApproverController::class, 'destroy'])->name('admin.gate-pass-approvers.destroy');
+        });
 
         Route::resource('roles', RoleController::class)
             ->middleware('permission:manage roles')

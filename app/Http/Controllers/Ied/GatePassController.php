@@ -39,16 +39,12 @@ class GatePassController extends Controller
 
     public function index(Request $request)
     {
-        $query = GatePass::with(['rfq.customer', 'issuedBy', 'items'])
+        $query = GatePass::with(['rfq.customer', 'issuedBy', 'items', 'approvedBy'])
             ->latest('pass_date')
             ->latest('id');
 
-        // PCD inbox is scoped to outbound passes — that's what production issues.
+        // PCD now issues BOTH gate-in and gate-out passes (was out-only).
         $lockedDirection = null;
-        if ($this->isPcdContext()) {
-            $query->where('direction', 'out');
-            $lockedDirection = 'out';
-        }
 
         if ($search = $request->input('search')) {
             $digits = preg_replace('/\D/', '', $search);
@@ -76,6 +72,7 @@ class GatePassController extends Controller
                 'item_count'      => $p->items->count(),
                 'status'          => $p->status,
                 'issued_by'       => $p->issuedBy?->name,
+                'approved_by'     => $p->approvedBy?->name,
             ]),
             'filters' => [
                 'search'    => $request->input('search', ''),
@@ -84,14 +81,17 @@ class GatePassController extends Controller
             ],
             'basePath'        => $this->basePath(),
             'lockedDirection' => $lockedDirection,
+            // PCD gate passes need approval; only pool members see Approve/Reject.
+            'requiresApproval'=> $this->isPcdContext(),
+            'canApprove'      => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
         ]);
     }
 
     public function create(Request $request)
     {
         $rfqId     = $request->query('rfq_id');
-        // PCD only ever issues outbound passes — force direction regardless of query.
-        $direction = $this->isPcdContext() ? 'out' : $request->query('direction', 'in');
+        // Both IED and PCD can issue gate-in and gate-out passes.
+        $direction = $request->query('direction', 'in');
 
         if (!in_array($direction, ['in', 'out'], true)) {
             abort(422, 'Invalid direction.');
@@ -120,7 +120,7 @@ class GatePassController extends Controller
                 'customer_ref' => $rfq->customer_ref_no,
             ] : null,
             'direction'        => $direction,
-            'directionLocked'  => $this->isPcdContext(),
+            'directionLocked'  => false,
             'prefilled_items'  => $prefilledItems,
             'pass'             => null,
             'basePath'         => $this->basePath(),
@@ -138,10 +138,6 @@ class GatePassController extends Controller
 
     public function store(Request $request)
     {
-        // Enforce direction on PCD context so the UI can't lie even if tampered with.
-        if ($this->isPcdContext()) {
-            $request->merge(['direction' => 'out']);
-        }
         $validated = $request->validate([
             'rfq_id'                   => 'nullable|exists:rfqs,id',
             'direction'                => 'required|in:in,out',
@@ -162,7 +158,10 @@ class GatePassController extends Controller
             'signature'                => 'nullable|string', // base64 data URL
         ]);
 
-        $pass = DB::transaction(function () use ($validated, $request) {
+        // PCD passes need approval first; IED passes issue directly.
+        $needsApproval = $this->isPcdContext();
+
+        $pass = DB::transaction(function () use ($validated, $request, $needsApproval) {
             $pass = GatePass::create([
                 'rfq_id'                  => $validated['rfq_id'] ?? null,
                 'pass_no'                 => GatePass::generatePassNo($validated['direction']),
@@ -177,7 +176,7 @@ class GatePassController extends Controller
                 'notes'                   => $validated['notes'] ?? null,
                 'issued_by'               => auth()->id(),
                 'issued_at'               => now(),
-                'status'                  => 'issued',
+                'status'                  => $needsApproval ? 'pending_approval' : 'issued',
             ]);
 
             foreach ($validated['items'] as $idx => $row) {
@@ -199,16 +198,21 @@ class GatePassController extends Controller
             return $pass;
         });
 
-        // Customer-portal: tell the customer their gate pass is ready to print.
-        \App\Services\CustomerNotifyService::gatePassIssued($pass->fresh(['customer', 'rfq.customer']));
+        // Only notify the customer once the pass is actually issued (IED). PCD
+        // passes wait for approval; the notification fires on approve().
+        if (!$needsApproval) {
+            \App\Services\CustomerNotifyService::gatePassIssued($pass->fresh(['customer', 'rfq.customer']));
+        }
 
         return redirect()->route("{$this->routePrefix()}.show", $pass)
-            ->with('success', "Gate Pass {$pass->pass_no} issued.");
+            ->with('success', $needsApproval
+                ? "Gate Pass {$pass->pass_no} submitted for approval."
+                : "Gate Pass {$pass->pass_no} issued.");
     }
 
     public function show(GatePass $gatePass)
     {
-        $gatePass->load(['rfq.customer', 'issuedBy.center', 'items.rfqItem']);
+        $gatePass->load(['rfq.customer', 'issuedBy.center', 'items.rfqItem', 'approvedBy', 'rejectedBy']);
 
         return Inertia::render('Ied/GatePass/Show', [
             'pass' => [
@@ -234,6 +238,11 @@ class GatePassController extends Controller
                 'cancelled_at'           => $gatePass->cancelled_at?->format('d M Y, H:i'),
                 'cancelled_by'           => $gatePass->cancelledBy?->name,
                 'cancellation_reason'    => $gatePass->cancellation_reason,
+                'approved_by'            => $gatePass->approvedBy?->name,
+                'approved_at'            => $gatePass->approved_at?->format('d M Y, H:i'),
+                'rejected_by'            => $gatePass->rejectedBy?->name,
+                'rejected_at'            => $gatePass->rejected_at?->format('d M Y, H:i'),
+                'rejection_reason'       => $gatePass->rejection_reason,
                 'items'                  => $gatePass->items->map(fn($i) => [
                     'id'             => $i->id,
                     'description'    => $i->description,
@@ -243,7 +252,8 @@ class GatePassController extends Controller
                 ])->values(),
                 'pdf_url'                => "{$this->basePath()}/{$gatePass->id}/pdf?preview=base64",
             ],
-            'basePath' => $this->basePath(),
+            'basePath'   => $this->basePath(),
+            'canApprove' => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
         ]);
     }
 
@@ -286,6 +296,49 @@ class GatePassController extends Controller
         \App\Services\CustomerNotifyService::gatePassCompleted($gatePass->fresh(['customer', 'rfq.customer']));
 
         return back()->with('success', "Gate Pass {$gatePass->pass_no} marked as completed.");
+    }
+
+    /**
+     * Approve a pending PCD gate pass. ANY ONE configured approver approving
+     * finalises it → issued. Captures the approver's signature.
+     */
+    public function approve(Request $request, GatePass $gatePass)
+    {
+        abort_unless($this->isPcdContext(), 403);
+        abort_unless(\App\Models\GatePassApprover::isApprover(auth()->id()), 403, 'You are not a gate pass approver.');
+        abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be approved.');
+
+        $validated = $request->validate(['signature' => 'nullable|string']);
+        $sig = $this->persistSignature($gatePass, $validated['signature'] ?? null);
+
+        $gatePass->update([
+            'status'                  => 'issued',
+            'approved_by'             => auth()->id(),
+            'approved_at'             => now(),
+            'approver_signature_path' => $sig ?: $gatePass->approver_signature_path,
+        ]);
+
+        \App\Services\CustomerNotifyService::gatePassIssued($gatePass->fresh(['customer', 'rfq.customer']));
+
+        return back()->with('success', "Gate Pass {$gatePass->pass_no} approved & issued.");
+    }
+
+    /** Reject a pending PCD gate pass with a reason. */
+    public function reject(Request $request, GatePass $gatePass)
+    {
+        abort_unless($this->isPcdContext(), 403);
+        abort_unless(\App\Models\GatePassApprover::isApprover(auth()->id()), 403, 'You are not a gate pass approver.');
+        abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be rejected.');
+
+        $validated = $request->validate(['rejection_reason' => 'required|string|max:1000']);
+        $gatePass->update([
+            'status'           => 'rejected',
+            'rejected_by'      => auth()->id(),
+            'rejected_at'      => now(),
+            'rejection_reason' => $validated['rejection_reason'],
+        ]);
+
+        return back()->with('success', "Gate Pass {$gatePass->pass_no} rejected.");
     }
 
     public function pdf(Request $request, GatePass $gatePass)

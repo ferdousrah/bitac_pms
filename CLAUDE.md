@@ -308,6 +308,13 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 🚪 PCD Gate Passes + Approval (2026-07)
+
+- **Gate passes** (`GatePass`, `Ied\GatePassController` — shared by IED & PCD via `isPcdContext()` = route `pcd.gate-passes.*`) support **both directions** (`in`/`out`; GIN-/GOUT- pass no). PCD is no longer out-only.
+- **PCD passes need approval; IED passes issue directly.** PCD `store` → status **`pending_approval`**; **any ONE** configured approver **approves** (→ `issued`, captures approver signature via `SignaturePad`) or **rejects** (reason). Routes `pcd.gate-passes.approve`/`.reject`. Status enum grew: `pending_approval`, `rejected` (+ existing draft/issued/completed/cancelled). New `gate_passes` cols: `approved_by/approved_at/approver_signature_path`, `rejected_by/rejected_at/rejection_reason`.
+- **Approver pool** = `gate_pass_approvers` table (any-one-approves model, no levels). Managed under **Users & Access → Gate Pass Approvers** (`Admin\GatePassApproverController`, `Admin/GatePassApprovers/Index.tsx`). `GatePassApprover::isApprover($userId)` gates the Approve/Reject buttons (controller passes `canApprove` to Index + Show).
+- Gate Pass Index/Show show status label/badges + Approve/Reject (signature modal / reason modal) for approvers on pending passes. Customer "gate pass issued" notification now fires on **approve** (not create) for PCD. `gate_pass_approvers` is **config → NOT in the SystemReset wipe list**.
+
 ## 🚀 Quick Commands
 
 ```bash

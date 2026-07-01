@@ -61,7 +61,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permission: 'view work-orders' },
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
-            { label: 'Gate-Out Passes',      href: '/pcd/gate-passes',           icon: 'fi-rr-sign-out-alt',    permission: 'view pcd' },
+            { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
         ],
     },
     {
@@ -140,6 +140,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Roles',          href: '/admin/roles',          icon: 'fi-rr-shield',         permission: 'manage roles' },
                 { label: 'Customers',      href: '/admin/customers',      icon: 'fi-rr-building',       permission: 'manage customers' },
                 { label: 'Approval Chain', href: '/admin/approval-chain', icon: 'fi-rr-workflow',       permission: 'manage users' },
+                { label: 'Gate Pass Approvers', href: '/admin/gate-pass-approvers', icon: 'fi-rr-shield-check', permission: 'manage users' },
             ],
         },
         {

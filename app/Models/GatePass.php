@@ -17,6 +17,8 @@ class GatePass extends Model
         'customer_rep_name', 'customer_rep_phone', 'customer_rep_id_number', 'vehicle_no',
         'pass_date', 'notes',
         'issued_by', 'issued_at', 'issuer_signature_path',
+        'approved_by', 'approved_at', 'approver_signature_path',
+        'rejected_by', 'rejected_at', 'rejection_reason',
         'status',
     ];
 
@@ -27,6 +29,8 @@ class GatePass extends Model
             'issued_at'    => 'datetime',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'approved_at'  => 'datetime',
+            'rejected_at'  => 'datetime',
         ];
     }
 
@@ -34,6 +38,8 @@ class GatePass extends Model
     public function customer()    { return $this->belongsTo(Customer::class); }
     public function items()       { return $this->hasMany(GatePassItem::class)->orderBy('sort_order'); }
     public function issuedBy()    { return $this->belongsTo(User::class, 'issued_by'); }
+    public function approvedBy()  { return $this->belongsTo(User::class, 'approved_by'); }
+    public function rejectedBy()  { return $this->belongsTo(User::class, 'rejected_by'); }
     public function completedBy() { return $this->belongsTo(User::class, 'completed_by'); }
     public function cancelledBy() { return $this->belongsTo(User::class, 'cancelled_by'); }
     public function center()      { return $this->belongsTo(Center::class); }

@@ -1,7 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import SignaturePad, { SignaturePadHandle } from '@/Components/SignaturePad';
 
 interface Item {
     id: number;
@@ -42,10 +43,40 @@ interface Props {
     pass: Pass;
 }
 
-export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: any) {
+const STATUS_LABEL: Record<string, string> = {
+    issued: 'Issued', draft: 'Draft', pending_approval: 'Pending Approval',
+    rejected: 'Rejected', completed: 'Completed', cancelled: 'Cancelled',
+};
+const STATUS_CLS: Record<string, string> = {
+    issued: 'badge-blue', completed: 'badge-green', cancelled: 'badge-red',
+    pending_approval: 'badge-amber', rejected: 'badge-red', draft: 'badge-slate',
+};
+
+export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canApprove = false }: any) {
     const [pdfOpen, setPdfOpen] = useState(false);
     const isIn = pass.direction === 'in';
     const isActive = pass.status === 'issued';
+
+    const [showApprove, setShowApprove] = useState(false);
+    const [showReject, setShowReject]   = useState(false);
+    const [reason, setReason]           = useState('');
+    const [busy, setBusy]               = useState(false);
+    const sigRef = useRef<SignaturePadHandle>(null);
+    const canAct = canApprove && pass.status === 'pending_approval';
+
+    const doApprove = () => {
+        setBusy(true);
+        router.post(`${basePath}/${pass.id}/approve`, { signature: sigRef.current?.toDataURL() ?? null }, {
+            preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setShowApprove(false),
+        });
+    };
+    const doReject = () => {
+        if (reason.trim().length < 3) return;
+        setBusy(true);
+        router.post(`${basePath}/${pass.id}/reject`, { rejection_reason: reason }, {
+            preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setShowReject(false),
+        });
+    };
 
     const cancel = () => {
         const reason = prompt(`Cancel Gate Pass ${pass.pass_no}?\n\nOptional reason:`, '');
@@ -78,13 +109,8 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
                                         }`}>
                                             {isIn ? 'Gate-In' : 'Gate-Out'}
                                         </span>
-                                        <span className={`badge capitalize ${
-                                            pass.status === 'issued' ? 'badge-blue'
-                                            : pass.status === 'completed' ? 'badge-green'
-                                            : pass.status === 'cancelled' ? 'badge-red'
-                                            : 'badge-slate'
-                                        }`}>
-                                            {pass.status}
+                                        <span className={`badge ${STATUS_CLS[pass.status] ?? 'badge-slate'}`}>
+                                            {STATUS_LABEL[pass.status] ?? pass.status}
                                         </span>
                                     </div>
                                     <p className="text-sm text-surface-600 mt-1">
@@ -95,6 +121,16 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
+                                {canAct && (
+                                    <>
+                                        <button onClick={() => setShowApprove(true)} className="btn-primary bg-emerald-600 hover:bg-emerald-500 border-emerald-600">
+                                            <i className="fi fi-rr-check text-xs leading-none" /> Approve
+                                        </button>
+                                        <button onClick={() => { setReason(''); setShowReject(true); }} className="btn bg-rose-600 hover:bg-rose-700 text-white">
+                                            <i className="fi fi-rr-cross-small text-sm leading-none" /> Reject
+                                        </button>
+                                    </>
+                                )}
                                 <button
                                     onClick={() => setPdfOpen(true)}
                                     className="btn-primary"
@@ -250,7 +286,78 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes' }: an
                         </div>
                     </div>
                 )}
+
+                {/* Pending approval banner */}
+                {pass.status === 'pending_approval' && (
+                    <div className="card border-amber-200 bg-amber-50/40">
+                        <div className="card-body flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-hourglass-end text-base" /></div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-bold text-amber-800">Waiting for approval</h4>
+                                <p className="text-xs text-amber-700/80 mt-0.5">Any one gate-pass approver can approve or reject this pass.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Approved / Rejected details */}
+                {pass.approved_by && pass.status !== 'pending_approval' && (
+                    <div className="card border-emerald-200 bg-emerald-50/40">
+                        <div className="card-body text-sm text-emerald-800">
+                            <i className="fi fi-rr-badge-check" /> Approved by <b>{pass.approved_by}</b> on {pass.approved_at}
+                        </div>
+                    </div>
+                )}
+                {pass.status === 'rejected' && (
+                    <div className="card border-rose-200 bg-rose-50/40">
+                        <div className="card-body text-sm text-rose-800">
+                            <div><i className="fi fi-rr-cross-circle" /> Rejected by <b>{pass.rejected_by ?? '—'}</b> on {pass.rejected_at}</div>
+                            {pass.rejection_reason && <div className="mt-1 text-surface-700 bg-white/60 border border-rose-100 rounded-lg px-3 py-2">{pass.rejection_reason}</div>}
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {/* Approve modal */}
+            {showApprove && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setShowApprove(false)}>
+                    <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b border-surface-100 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i className="fi fi-rr-check" /></div>
+                            <h3 className="text-base font-bold text-surface-900">Approve {pass.pass_no}</h3>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <p className="text-sm text-surface-600">Sign below to approve &amp; issue this gate pass.</p>
+                            <div><label className="form-label">Signature</label><SignaturePad ref={sigRef} /></div>
+                        </div>
+                        <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
+                            <button type="button" onClick={() => setShowApprove(false)} disabled={busy} className="btn-outline">Cancel</button>
+                            <button type="button" onClick={doApprove} disabled={busy} className="btn-primary bg-emerald-600 hover:bg-emerald-500 border-emerald-600">{busy ? 'Approving…' : 'Approve & Issue'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reject modal */}
+            {showReject && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setShowReject(false)}>
+                    <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b border-surface-100 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><i className="fi fi-rr-cross-circle" /></div>
+                            <h3 className="text-base font-bold text-surface-900">Reject {pass.pass_no}</h3>
+                        </div>
+                        <div className="p-5 space-y-2">
+                            <label className="form-label">Reason <span className="text-red-500">*</span></label>
+                            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className="form-input" style={{ resize: 'vertical' }} placeholder="Why is this pass rejected?" />
+                            <p className="form-hint">Minimum 3 characters.</p>
+                        </div>
+                        <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
+                            <button type="button" onClick={() => setShowReject(false)} disabled={busy} className="btn-outline">Cancel</button>
+                            <button type="button" onClick={doReject} disabled={busy || reason.trim().length < 3} className="btn bg-rose-600 hover:bg-rose-700 text-white">{busy ? 'Rejecting…' : 'Reject'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <PdfPopupModal
                 open={pdfOpen}
