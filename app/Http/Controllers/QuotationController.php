@@ -697,7 +697,10 @@ class QuotationController extends Controller
                         : null,
                 ] : null,
                 'created_at'      => $quotation->created_at->format('d M Y'),
-                'approvals'       => $quotation->approvals->sortBy('level')->map(function ($a) {
+                'approvals'       => (function () use ($quotation) {
+                  $sorted = $quotation->approvals->sortBy('level')->values();
+                  $total  = $sorted->count();
+                  return $sorted->map(function ($a, $idx) use ($total) {
                     $u = $a->approver;
                     $f = $a->forwardedTo;
                     // The signature shown on the chain is whichever was captured
@@ -706,6 +709,9 @@ class QuotationController extends Controller
                     return [
                         'id'       => $a->id,
                         'level'    => $a->level,
+                        // Role in the work cycle: first approver = Checked By,
+                        // last = Approved By (creator = Prepared By, separate).
+                        'label'    => \App\Support\ApprovalChainLabels::forIndex($idx, $total),
                         'decision' => $a->status === 'pending' ? null : $a->status,
                         'comments' => $a->remarks,
                         'acted_at' => $a->approved_at?->format('d M Y H:i'),
@@ -730,7 +736,8 @@ class QuotationController extends Controller
                         // Whether the *current viewer* is the assigned forwarded approver
                         'is_my_forward'  => $a->forwarded_to_user_id === auth()->id() && $a->status === 'pending',
                     ];
-                })->values(),
+                  });
+                })(),
                 'customer_responses' => $quotation->customerResponses->map(fn($r) => [
                     'id'              => $r->id,
                     'response_type'   => $r->response_type,

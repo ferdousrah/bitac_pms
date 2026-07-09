@@ -327,23 +327,13 @@ class CostEstimateController extends Controller
         // Use the same approval chain settings as quotations
         $settings = \App\Models\QuotationApprovalSetting::orderBy('level')->get();
 
-        // Pick labels based on the number of approvers in the chain.
-        // Last level is always "Approved By" (the final sign-off).
-        // 1 approver  → [Approved By]
-        // 2 approvers → [Checked By, Approved By]
-        // 3 approvers → [Prepared By, Checked By, Approved By]
-        // 4+ approvers → first ones get "Reviewer N" and last is "Approved By"
-        $chainLabels = function (int $total): array {
-            return match (true) {
-                $total <= 1 => ['Approved By'],
-                $total === 2 => ['Checked By', 'Approved By'],
-                $total === 3 => ['Prepared By', 'Checked By', 'Approved By'],
-                default => array_merge(
-                    array_map(fn($i) => "Reviewer {$i}", range(1, $total - 1)),
-                    ['Approved By']
-                ),
-            };
-        };
+        // Approval-chain labels. "Prepared By" is the CREATOR (not an approver),
+        // so the chain is: FIRST approver = "Checked By", LAST = "Approved By",
+        // any in-between = "Reviewer N".
+        //   1 approver  → [Approved By]
+        //   2 approvers → [Checked By, Approved By]
+        //   3 approvers → [Checked By, Reviewer 2, Approved By]
+        $chainLabels = fn (int $total): array => \App\Support\ApprovalChainLabels::forCount($total);
 
         if ($settings->isEmpty()) {
             // Fallback: use management users
@@ -1013,77 +1003,68 @@ class CostEstimateController extends Controller
         $summary .= '</tr>';
         $summary .= '</table>';
 
-        // ─── Signature blocks ──────────────────────────────────────────
-        // Prepared By is always rendered with the preparer's saved signature
-        // (if any). Approved By only renders an image once the estimate is
-        // approved AND the final approver has either drawn a signature on
-        // that approval row OR has a saved signature on their profile.
-        $preparer = $e->createdBy;
-        $preparerSig = $preparer?->signatureAbsolutePath();
-        $preparedByName   = $esc($preparer?->name ?? '—');
-        $preparedByTitle  = $esc($preparer?->designation ?? '');
-        $preparedByCenter = $esc($preparer?->center?->name ?? '');
-
-        // Final approval = latest 'approved' row (highest level wins for multi-step chains)
-        $finalApproval = $e->approvals
-            ->where('status', 'approved')
-            ->sortByDesc('level')
-            ->first();
-        $isApproved = $finalApproval !== null;
-        $approver        = $finalApproval?->approver;
-        $approverName    = $esc($approver?->name ?? '');
-        $approverTitle   = $esc($approver?->designation ?? '');
-        $approverCenter  = $esc($approver?->center?->name ?? '');
-        $approvedDate    = $finalApproval?->acted_at?->format('d/m/Y') ?? '';
-        $approverSig     = $finalApproval?->signatureAbsolutePath() ?? $approver?->signatureAbsolutePath();
-
+        // ─── Signatory grid: Prepared By · Checked By · Approved By ─────
+        // Prepared By = creator (saved signature). Checked By = first approver,
+        // Approved By = final approver — each shows the assigned person's name
+        // always, and their signature only once that step is approved.
         $sigImg = fn($absPath) => $absPath
-            ? '<img src="' . $absPath . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
-            : '<div style="height: 40pt;"></div>'; // empty space for hand signature
+            ? '<img src="' . $absPath . '" style="height: 38pt; max-width: 140pt;" alt="signature" />'
+            : '<div style="height: 38pt;"></div>';
 
-        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt; border-collapse: collapse;">'
-            . '<tr>'
-            // Prepared By — anchored to the left edge (BITAC paper convention)
-            .   '<td width="35%" style="vertical-align: bottom; text-align: left;">'
-            .     '<div style="margin-bottom: 4pt;">' . $sigImg($preparerSig) . '</div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Prepared By</div>'
-            .     '<div style="font-size: 10pt; color: #a349a4; margin-top: 2pt;">' . $preparedByName . '</div>'
-            .     ($preparedByTitle !== '' ? '<div style="font-size: 9pt; color: #a349a4; margin-top: 1pt;">' . $preparedByTitle . '</div>' : '')
-            .     ($preparedByCenter !== '' ? '<div style="font-size: 9pt; color: #a349a4;">' . $preparedByCenter . '</div>' : '')
-            .   '</td>'
-            // Spacer column
-            .   '<td width="30%"></td>'
-            // Approved By — anchored to the right edge
-            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
-            .     '<div style="margin-bottom: 4pt;">';
+        // Render one signatory cell.
+        $sigCell = function (string $role, ?string $sigAbs, bool $signed, ?object $person, ?string $date, string $align, bool $pendingNote) use ($sigImg, $esc) {
+            $name   = $esc($person?->name ?? '');
+            $title  = $esc($person?->designation ?? '');
+            $center = $esc($person?->center?->name ?? '');
+            $imgHtml = $signed
+                ? $sigImg($sigAbs)
+                : ($pendingNote
+                    ? '<div style="height: 38pt; text-align: center;"><span style="font-size: 8pt; font-style: italic; color: #94a3b8;">(Pending)</span></div>'
+                    : '<div style="height: 38pt;"></div>');
+            $html = '<td style="vertical-align: bottom; text-align: ' . $align . '; padding: 0 6pt;">'
+                . '<div style="margin-bottom: 4pt;">' . $imgHtml . '</div>'
+                . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 110pt;">' . $role . '</div>';
+            if ($name !== '') {
+                $html .= '<div style="font-size: 10pt; color: #a349a4; margin-top: 2pt;">' . $name . '</div>';
+                if ($title !== '')  $html .= '<div style="font-size: 9pt; color: #a349a4; margin-top: 1pt;">' . $title . '</div>';
+                if ($center !== '') $html .= '<div style="font-size: 9pt; color: #a349a4;">' . $center . '</div>';
+                if ($date)          $html .= '<div style="font-size: 8pt; color: #a349a4; margin-top: 1pt;">' . $esc($date) . '</div>';
+            }
+            return $html . '</td>';
+        };
 
-        if ($isApproved) {
-            $signatureBlock .= $sigImg($approverSig);
-        } else {
-            // Awaiting approval — empty space + italic "Pending approval" note
-            $signatureBlock .= '<div style="height: 40pt; display: flex; align-items: center; justify-content: center;">'
-                . '<span style="font-size: 8pt; font-style: italic; color: #94a3b8;">(Awaiting approval)</span>'
-                . '</div>';
+        $preparer = $e->createdBy;
+        // Checked By = first approver row; Approved By = final (last) approver row.
+        $checkedRow  = $e->approvals->firstWhere('label', 'Checked By');
+        $approvedRow = $e->approvals->firstWhere('label', 'Approved By')
+                    ?? $e->approvals->sortByDesc('level')->first();
+
+        $cells  = $sigCell('Prepared By', $preparer?->signatureAbsolutePath(), (bool) $preparer?->signatureAbsolutePath(), $preparer, null, 'left', false);
+        if ($checkedRow) {
+            $cells .= $sigCell(
+                'Checked By',
+                $checkedRow->signatureAbsolutePath() ?? $checkedRow->approver?->signatureAbsolutePath(),
+                $checkedRow->status === 'approved',
+                $checkedRow->approver,
+                $checkedRow->status === 'approved' ? ($checkedRow->acted_at?->format('d/m/Y') ?? '') : null,
+                'center',
+                true,
+            );
+        }
+        if ($approvedRow) {
+            $cells .= $sigCell(
+                'Approved By',
+                $approvedRow->signatureAbsolutePath() ?? $approvedRow->approver?->signatureAbsolutePath(),
+                $approvedRow->status === 'approved',
+                $approvedRow->approver,
+                $approvedRow->status === 'approved' ? ($approvedRow->acted_at?->format('d/m/Y') ?? '') : null,
+                'right',
+                true,
+            );
         }
 
-        $signatureBlock .=     '</div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 140pt;">Approved By</div>';
-        if ($isApproved) {
-            $signatureBlock .= '<div style="font-size: 10pt; color: #a349a4; margin-top: 2pt;">' . $approverName . '</div>';
-            if ($approverTitle !== '') {
-                $signatureBlock .= '<div style="font-size: 9pt; color: #a349a4; margin-top: 1pt;">' . $approverTitle . '</div>';
-            }
-            if ($approverCenter !== '') {
-                $signatureBlock .= '<div style="font-size: 9pt; color: #a349a4;">' . $approverCenter . '</div>';
-            }
-            if ($approvedDate !== '') {
-                $signatureBlock .= '<div style="font-size: 8pt; color: #a349a4; margin-top: 1pt;">' . $esc($approvedDate) . '</div>';
-            }
-        } else {
-            $signatureBlock .= '<div style="font-size: 8pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Not yet approved</div>';
-        }
-        $signatureBlock .=   '</td>'
-            . '</tr>'
+        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt; border-collapse: collapse; table-layout: fixed;">'
+            . '<tr>' . $cells . '</tr>'
             . '</table>';
 
         $bodyHtml = <<<HTML

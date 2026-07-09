@@ -308,6 +308,13 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## ✅ Approval Cycle Labels — Cost Estimate & Quotation (2026-07)
+
+- **Work cycle:** the doc is **Prepared By** its creator (NOT an approver), then the chain runs — **first approver = "Checked By"**, **last approver = "Approved By"**, any in-between = "Reviewer N". Single approver = just "Approved By".
+- Central helper **`App\Support\ApprovalChainLabels`** (`forCount(total)` / `forIndex(index,total)`) is the one source. Cost estimate `submitForApproval` stores these labels on `cost_estimate_approvals.label` (old code wrongly made the first of 3 "Prepared By" — fixed). Quotation approvals have no label column → the label is **derived by position** in `QuotationController@show` (`approvals[].label`) and shown on Quotation Show. A custom label set on `QuotationApprovalSetting` still overrides the default for cost estimates.
+- **Cost estimate PDF** (`exportSinglePdf`) now renders a **3-column signatory grid — Prepared By · Checked By · Approved By** (`$sigCell` helper): Prepared = creator (saved signature); Checked = the `Checked By` approval row (first approver); Approved = the `Approved By`/final row. Each shows the assigned person always + their signature/date once that step is approved (else "(Pending)"). Single-approver chains drop the Checked column.
+- **Quotation PDF/forwarding letter** still shows the **final approver** as the single signatory (formal customer-facing letter convention) — NOT the 3-grid.
+
 ## 🚪 PCD Gate Passes + Approval (2026-07)
 
 - **Gate passes** (`GatePass`, `Ied\GatePassController` — shared by IED & PCD via `isPcdContext()` = route `pcd.gate-passes.*`) support **both directions** (`in`/`out`; GIN-/GOUT- pass no). PCD is no longer out-only.

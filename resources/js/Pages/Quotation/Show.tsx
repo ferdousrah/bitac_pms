@@ -114,6 +114,9 @@ function ApprovalChain({ approvals }: { approvals: any[] }) {
                                 <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-white/70 text-[10px] font-bold text-surface-700">
                                     {a.level}
                                 </span>
+                                {a.label && (
+                                    <span className="text-xs font-bold text-surface-800">{a.label}</span>
+                                )}
                                 <div className="flex items-center gap-1.5">
                                     <i className={`${style.icon} text-sm leading-none`} />
                                     <span className={`text-xs font-bold capitalize ${style.text}`}>{style.label}</span>
