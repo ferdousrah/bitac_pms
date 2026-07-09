@@ -113,6 +113,7 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
     const [materialId, setMaterialId] = useState<number | ''>('');
     const [customDensity, setCustomDensity] = useState('');
     const [pieceCount, setPieceCount] = useState('1');
+    const [safetyFactor, setSafetyFactor] = useState('1');
 
     useEffect(() => {
         if (!open) return;
@@ -180,10 +181,13 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
     const weightPerPiece = volumeM3 * density;
     const pieces = parseInt(pieceCount) || 1;
     const totalWeight = weightPerPiece * pieces;
+    // Factor of Safety — final weight = total × FoS (defaults to 1 = no change).
+    const fos = parseFloat(safetyFactor) || 1;
+    const finalWeight = totalWeight * fos;
 
     const handleApply = () => {
-        if (totalWeight > 0 && onApply) {
-            onApply(totalWeight, selectedMaterial?.name);
+        if (finalWeight > 0 && onApply) {
+            onApply(finalWeight, selectedMaterial?.name);
             onClose();
         }
     };
@@ -362,11 +366,21 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                             )}
                         </div>
 
-                        <div className="form-group">
-                            <label className="form-label">Number of Pieces</label>
-                            <input type="number" min="1" value={pieceCount}
-                                onChange={e => setPieceCount(e.target.value)}
-                                className="form-input" />
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="form-group">
+                                <label className="form-label">Number of Pieces</label>
+                                <input type="number" min="1" value={pieceCount}
+                                    onChange={e => setPieceCount(e.target.value)}
+                                    className="form-input" />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Factor of Safety</label>
+                                <input type="number" min="0" step="any" value={safetyFactor}
+                                    onChange={e => setSafetyFactor(e.target.value)}
+                                    placeholder="1"
+                                    className="form-input" />
+                                <p className="text-[11px] text-surface-400 mt-1">Total weight is multiplied by this (1 = no change).</p>
+                            </div>
                         </div>
 
                         {/* Result */}
@@ -375,17 +389,28 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
                                 <ResultBlock label="Volume" value={`${volumeM3.toFixed(6)}`} unit="m³" />
                                 <ResultBlock label="Density" value={`${(density || 0).toFixed(0)}`} unit="kg/m³" />
                                 <ResultBlock label="Weight / piece" value={weightPerPiece.toFixed(3)} unit="kg" />
-                                <ResultBlock label="Total weight" value={totalWeight.toFixed(3)} unit="kg" highlight />
+                                <ResultBlock label="Total weight" value={totalWeight.toFixed(3)} unit="kg" highlight={fos === 1} />
                             </div>
+                            {fos !== 1 && (
+                                <div className="mt-4 pt-4 border-t border-amber-200 flex items-center justify-between">
+                                    <div className="text-xs text-surface-600">
+                                        Total <span className="font-mono font-semibold">{totalWeight.toFixed(3)}</span> × FoS <span className="font-mono font-semibold">{fos}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] font-semibold text-surface-500 uppercase tracking-wider">Final weight</div>
+                                        <div className="font-mono font-bold text-2xl text-amber-700">{finalWeight.toFixed(3)} <span className="text-sm">kg</span></div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* Footer */}
                     <div className="px-5 py-4 border-t border-surface-100 flex items-center gap-3 bg-surface-50">
                         {onApply && (
-                            <button onClick={handleApply} disabled={totalWeight <= 0} className="btn-primary">
+                            <button onClick={handleApply} disabled={finalWeight <= 0} className="btn-primary">
                                 <i className="fi fi-rr-check text-sm leading-none" />
-                                Use {totalWeight.toFixed(3)} kg
+                                Use {finalWeight.toFixed(3)} kg
                             </button>
                         )}
                         <button onClick={onClose} className="btn-outline">Close</button>
