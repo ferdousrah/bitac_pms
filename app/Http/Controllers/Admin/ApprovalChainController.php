@@ -85,10 +85,11 @@ class ApprovalChainController extends Controller
 
         // `level` has a UNIQUE index — assigning final levels directly collides
         // mid-swap (e.g. two rows briefly both level 1). Two-pass: park every row
-        // at a negative temp level first, then set the real 1..N levels.
+        // at a high temp level first (the column is UNSIGNED so temps must stay
+        // positive), then set the real 1..N levels.
         \Illuminate\Support\Facades\DB::transaction(function () use ($validated) {
             foreach ($validated['ids'] as $index => $id) {
-                QuotationApprovalSetting::where('id', $id)->update(['level' => -($index + 1)]);
+                QuotationApprovalSetting::where('id', $id)->update(['level' => 100 + $index + 1]);
             }
             foreach ($validated['ids'] as $index => $id) {
                 QuotationApprovalSetting::where('id', $id)->update(['level' => $index + 1]);
