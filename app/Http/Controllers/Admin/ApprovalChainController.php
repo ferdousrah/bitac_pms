@@ -83,9 +83,17 @@ class ApprovalChainController extends Controller
             'ids.*' => 'exists:quotation_approval_settings,id',
         ]);
 
-        foreach ($validated['ids'] as $index => $id) {
-            QuotationApprovalSetting::where('id', $id)->update(['level' => $index + 1]);
-        }
+        // `level` has a UNIQUE index — assigning final levels directly collides
+        // mid-swap (e.g. two rows briefly both level 1). Two-pass: park every row
+        // at a negative temp level first, then set the real 1..N levels.
+        \Illuminate\Support\Facades\DB::transaction(function () use ($validated) {
+            foreach ($validated['ids'] as $index => $id) {
+                QuotationApprovalSetting::where('id', $id)->update(['level' => -($index + 1)]);
+            }
+            foreach ($validated['ids'] as $index => $id) {
+                QuotationApprovalSetting::where('id', $id)->update(['level' => $index + 1]);
+            }
+        });
 
         return back()->with('success', 'Order updated.');
     }
