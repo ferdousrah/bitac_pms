@@ -204,6 +204,9 @@ Top→bottom: header band → **Production Routing hero** (live shop stepper: "X
 ### 7. PCD Work Order section-assign (`Pages/Pcd/SectionAssign.tsx`)
 BITAC paper-form layout for routing a job through shops. Editable by PCD: **Delivery date** (`due_date`), per-item **Quantity** + **Part No.** (`work_order_items.part_no`, added 2026-06) + description + PCD note, the section routing (drag-to-reorder), job number, department. The "Save Work Order" action card is `sticky bottom-4`. The routing card heading is just "Section". `WorkOrderSectionController@update` persists due_date + per-item qty/part_no; `@pdf` shows `part_no` (positional `n/total` fallback).
 
+### 8. IED inbox is `ied_pending`-only — never `abort()` on a stale state (2026-08)
+`IedWorkOrderInboxController@show/accept/reject` all guard `status === 'ied_pending'`. They used to `abort_unless(..., 422)`, which threw a raw Symfony exception page ("Only IED-pending work orders can be forwarded to PCD.") whenever someone re-submitted from a stale tab / back button / double-click, or opened an already-forwarded WO by URL — the action had actually succeeded the first time, but it *looked* like a crash. All three now `redirect()->route('ied.work-orders.index')->with('error', …)` naming the current `status_label`, so a duplicate submit reads as a normal flash toast (AppLayout renders shared `flash.error`). **Rule for any single-shot state transition: guard with a redirect + flash, not `abort()`.** The Show page renders only for `ied_pending` now, so no status gating is needed in `Ied/WorkOrders/Show.tsx` (it's the sole render site of that component).
+
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 
 > Conventions hammered out over many iterations — read before touching these areas.

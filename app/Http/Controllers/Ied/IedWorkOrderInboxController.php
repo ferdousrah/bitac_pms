@@ -60,6 +60,15 @@ class IedWorkOrderInboxController extends Controller
 
     public function show(WorkOrder $workOrder)
     {
+        // The inbox only handles WOs still awaiting IED acceptance. Anything
+        // already accepted/rejected (stale tab, bookmarked URL, browser back)
+        // is bounced back to the list instead of rendering an actionable page.
+        if ($workOrder->status !== 'ied_pending') {
+            return redirect()
+                ->route('ied.work-orders.index')
+                ->with('error', "WO {$workOrder->wo_number} has already been processed — it is now \"{$workOrder->status_label}\".");
+        }
+
         $workOrder->load([
             'customer', 'rfq.items.product', 'quotation', 'createdBy',
             'items.product', 'files',
@@ -119,8 +128,13 @@ class IedWorkOrderInboxController extends Controller
      */
     public function accept(Request $request, WorkOrder $workOrder)
     {
-        abort_unless($workOrder->status === 'ied_pending', 422,
-            'Only IED-pending work orders can be forwarded to PCD.');
+        // Double submit (stale tab / back button / double click) lands here with
+        // the WO already forwarded — flash a message instead of a 422 error page.
+        if ($workOrder->status !== 'ied_pending') {
+            return redirect()
+                ->route('ied.work-orders.index')
+                ->with('error', "WO {$workOrder->wo_number} was already processed — it is now \"{$workOrder->status_label}\". No changes were made.");
+        }
 
         $validated = $request->validate([
             'note'             => 'nullable|string|max:1000',
@@ -255,8 +269,11 @@ class IedWorkOrderInboxController extends Controller
      */
     public function reject(Request $request, WorkOrder $workOrder)
     {
-        abort_unless($workOrder->status === 'ied_pending', 422,
-            'Only IED-pending work orders can be rejected at this stage.');
+        if ($workOrder->status !== 'ied_pending') {
+            return redirect()
+                ->route('ied.work-orders.index')
+                ->with('error', "WO {$workOrder->wo_number} was already processed — it is now \"{$workOrder->status_label}\". No changes were made.");
+        }
 
         $validated = $request->validate([
             'reason' => 'required|string|max:1000',
