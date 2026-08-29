@@ -284,7 +284,7 @@ export default function RFQShow({ rfq }: any) {
                         {/* Job Items */}
                         <div className="card animate-slide-up">
                             <div className="card-header">
-                                <h3 className="text-sm font-bold text-surface-900">Job Items</h3>
+                                <h3 className="text-sm font-bold text-surface-900">Jobs</h3>
                                 <p className="text-xs text-surface-400 mt-0.5">{rfq.items?.length ?? 0} item(s) in this request</p>
                             </div>
                             <div className="card-body overflow-x-auto">
@@ -294,7 +294,7 @@ export default function RFQShow({ rfq }: any) {
                                         <thead>
                                             <tr>
                                                 <th>#</th>
-                                                <th>Part / Job Description</th>
+                                                <th>Job Description</th>
                                                 <th>Product Type</th>
                                                 <th>Quantity</th>
                                                 <th>Reference</th>

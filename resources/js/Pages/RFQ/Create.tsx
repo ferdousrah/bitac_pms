@@ -544,7 +544,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                     <i className="fi fi-rr-boxes text-blue-500 text-sm leading-none" />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-bold text-surface-900">Job Items</h3>
+                                    <h3 className="text-sm font-bold text-surface-900">Jobs</h3>
                                     <p className="text-xs text-surface-400">Each item can have its own reference drawing or sample</p>
                                 </div>
                             </div>
@@ -569,7 +569,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                         </div>
 
                                         <div className="form-group">
-                                            <label className="form-label text-xs">Part / Job Description *</label>
+                                            <label className="form-label text-xs">Job Description *</label>
                                             <textarea value={item.job_description}
                                                 onChange={e => setItemField(index, 'job_description', e.target.value)}
                                                 placeholder="e.g. Re-Metaling of Journal Bearing (Casting Deposition).&#10;Size: Ø320 × 350 mm, Materials: White Metal (Tin Base) with DP Test."

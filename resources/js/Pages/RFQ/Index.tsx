@@ -137,7 +137,7 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                         <SortableHeader label="RFQ #" column="id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-24" />
                                         <th className="w-32">Ref No.</th>
                                         <SortableHeader label="Customer" column="customer_id" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} />
-                                        <th>Job Items</th>
+                                        <th>Jobs</th>
                                         <SortableHeader label="Required By" column="required_by" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
                                         <SortableHeader label="Status" column="status" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
                                         <SortableHeader label="Job Type" column="job_type" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
