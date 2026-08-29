@@ -147,7 +147,6 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                         <th>Jobs</th>
                                         <SortableHeader label="Required By" column="required_by" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
                                         <SortableHeader label="Status" column="status" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
-                                        <SortableHeader label="Job Type" column="job_type" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/rfqs" filters={filters} className="w-28" />
                                         <th className="w-32 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -176,8 +175,8 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                     )}
                                                 </td>
                                                 <td>
-                                                    <div className="min-w-0">
-                                                        <div className="font-semibold text-surface-900 text-sm truncate">{rfq.customer}</div>
+                                                    <div className="min-w-0 max-w-[260px]">
+                                                        <div className="font-semibold text-surface-900 text-sm truncate" title={rfq.customer}>{rfq.customer}</div>
                                                         <div className="flex items-center gap-1.5 text-[10px] text-surface-400 mt-0.5">
                                                             <span>{rfq.item_count} item{rfq.item_count !== 1 && 's'}</span>
                                                             {rfq.job_category && (
@@ -197,7 +196,7 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                             {rfq.items_summary.slice(0, 2).map((item: any, i: number) => (
                                                                 <div key={i} className="flex items-center gap-1.5 text-xs">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-brand-400 shrink-0" />
-                                                                    <span className="text-surface-700 truncate max-w-[180px]">{item.description}</span>
+                                                                    <span className="text-surface-700 truncate max-w-[200px]" title={item.description}>{item.description}</span>
                                                                     <span className="text-surface-400 shrink-0">×{item.quantity} {item.unit}</span>
                                                                 </div>
                                                             ))}
@@ -229,17 +228,6 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    {rfq.job_type === 'rnd' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold uppercase tracking-wider">
-                                                            <i className="fi fi-rr-lab text-[9px] leading-none" /> R&amp;D
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
-                                                            <i className="fi fi-rr-tools text-[9px] leading-none" /> Regular
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td>
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <Link href={`/rfqs/${rfq.id}`} title="View RFQ details"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
@@ -263,8 +251,8 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                                     <i className="fi fi-rr-edit text-sm leading-none" /> Continue
                                                                 </Link>
                                                                 <button type="button" onClick={() => deleteDraft(rfq)} title="Delete this draft"
-                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
-                                                                    <i className="fi fi-rr-trash text-sm leading-none" /> Delete
+                                                                    className="inline-flex items-center justify-center p-1.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                                    <i className="fi fi-rr-trash text-sm leading-none" />
                                                                 </button>
                                                             </>
                                                         )}
