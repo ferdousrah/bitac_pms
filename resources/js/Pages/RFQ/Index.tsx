@@ -5,6 +5,7 @@ import SortableHeader from '@/Components/SortableHeader';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const statusConfig: Record<string, { badge: string; icon: string; label: string }> = {
+    draft:    { badge: 'bg-surface-100 text-surface-600 border-surface-200', icon: 'fi-rr-disk', label: 'Draft' },
     pending:  { badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'fi-rr-clock', label: 'Pending' },
     quoted:   { badge: 'bg-blue-50 text-blue-700 border-blue-200',   icon: 'fi-rr-check',  label: 'Quoted' },
     rejected: { badge: 'bg-red-50 text-red-700 border-red-200',      icon: 'fi-rr-cross',  label: 'Rejected' },
@@ -104,6 +105,7 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                             <select value={filters?.status ?? ''} onChange={e => applyFilters({ status: e.target.value })}
                                 className="form-select !py-2 text-sm w-full sm:w-36">
                                 <option value="">All Status</option>
+                                <option value="draft">📝 Draft</option>
                                 <option value="pending">⏳ Pending</option>
                                 <option value="quoted">✅ Quoted</option>
                                 <option value="rejected">❌ Rejected</option>
@@ -246,6 +248,12 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                             >
                                                                 <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
                                                             </button>
+                                                        )}
+                                                        {rfq.status === 'draft' && (
+                                                            <Link href={`/rfqs/${rfq.id}/edit`} title="Continue this draft"
+                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-brand-600 hover:bg-brand-500 transition-colors">
+                                                                <i className="fi fi-rr-edit text-sm leading-none" /> Continue
+                                                            </Link>
                                                         )}
                                                         {!rfq.has_quotation && rfq.status === 'pending' && (
                                                             <Link href={`/quotations/create?rfq_id=${rfq.id}`} title="Prepare quotation for this RFQ"

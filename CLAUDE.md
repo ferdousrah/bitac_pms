@@ -207,6 +207,27 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 ### 8. IED inbox is `ied_pending`-only — never `abort()` on a stale state (2026-08)
 `IedWorkOrderInboxController@show/accept/reject` all guard `status === 'ied_pending'`. They used to `abort_unless(..., 422)`, which threw a raw Symfony exception page ("Only IED-pending work orders can be forwarded to PCD.") whenever someone re-submitted from a stale tab / back button / double-click, or opened an already-forwarded WO by URL — the action had actually succeeded the first time, but it *looked* like a crash. All three now `redirect()->route('ied.work-orders.index')->with('error', …)` naming the current `status_label`, so a duplicate submit reads as a normal flash toast (AppLayout renders shared `flash.error`). **Rule for any single-shot state transition: guard with a redirect + flash, not `abort()`.** The Show page renders only for `ied_pending` now, so no status gating is needed in `Ied/WorkOrders/Show.tsx` (it's the sole render site of that component).
 
+## 📦 RFQ Parts & Drafts (2026-08)
+
+### Job item → Parts (positional part numbers)
+- A job item can be broken into the **parts** it covers. Table `rfq_item_parts` (`rfq_item_id`, `name`, `sort_order`), model `RfqItemPart`, relation `RfqItem::parts()`.
+- **Only the name is stored.** The **Part No. is positional** — `1/3`, `2/3`, `3/3` — derived from the row's index + sibling count, never typed and never persisted, so removing a part renumbers the rest with no gaps. Same `n/total` convention as `work_order_items.part_no`. Helper: `RfqItemPart::formatNo($index, $total)` (PHP) / `partNo(i, total)` (Create.tsx).
+- UI: a repeater directly under **Part / Job Description** in `Rfq/Create.tsx` (Add Part / remove, auto-numbered chip + name input). Rendered on `Rfq/Show.tsx` via the `PartsList` component (desktop table + mobile card). `edit()` ships `parts[].name`; `show()` ships `parts[].{id,name,part_no}`.
+- Persisted by `RfqController::syncItemParts()` — wipes and rewrites in order, **dropping blank names**. Called from `store()`, `update()` and `autosave()`.
+
+### RFQ drafts + autosave
+- `rfqs.status` widened **enum → varchar(20)** and gained **`draft`**. A draft is an RFQ that has NOT entered the pipeline: no `RfqCreated` event (so no auto-estimate/duplicate detection), no PCD notification. Those side effects live in `RfqController::announceNewRfq()`, fired on real create **and** when a draft is later submitted.
+- **`POST /rfqs/autosave`** (`rfqs.autosave`, declared BEFORE the resource so `rfqs/{rfq}` can't shadow it) — debounced 2.5s from the form, posted with `window.axios` (XSRF cookie handled automatically), returns JSON `{ok, rfq_id, saved_at}`.
+  - It **only ever writes drafts**. Passing an `rfq_id` whose RFQ has left draft returns **409 `not_draft`** and the client permanently stops autosaving.
+  - It **never touches files** — attachments only travel on an explicit save.
+  - Items are synced **by position** (update row i in place, create/delete the tail), NOT wiped and recreated like `update()` does, so a draft's already-attached drawings survive every autosave.
+  - Autosave starts only once `customer_id` is picked, so half-typed forms don't litter the DB with junk drafts.
+- **Form behaviour** (`Rfq/Create.tsx`): autosave runs when creating new OR editing a draft — never when editing a submitted RFQ. Once autosave has created a draft, `targetId = rfq?.id ?? draftId` so pressing **Create RFQ** PUTs into that same draft instead of creating a second RFQ. Buttons: **Save as Draft** (`save_as_draft=1`, full save incl. files, redirects back to the edit page) and **Create RFQ / Submit RFQ / Update RFQ** depending on state. A "Draft saved at HH:MM:SS" indicator sits next to them.
+- `formRules($isDraft, $forUpdate)` is the single rule set for create/edit — **drafts relax** `items` (nullable) and `items.*.quantity` (`nullable|min:0` vs `required|min:0.01`), and skip the "description or product required" check. Blank quantity stores `0`.
+- Index/Show carry a slate **Draft** badge, a `status=draft` filter, and a **Continue** action on draft rows.
+- `rfq_item_parts` is transactional → added to `SystemResetController::TABLES_TO_WIPE` + `Admin/System/Reset.tsx`.
+- ⚠️ Items arrays can arrive without a `product_id` key now that drafts are lenient — always read it as `($item['product_id'] ?? null) ?: null`.
+
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 
 > Conventions hammered out over many iterations — read before touching these areas.

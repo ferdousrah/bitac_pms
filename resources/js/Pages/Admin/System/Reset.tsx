@@ -12,7 +12,7 @@ interface Props {
 const GROUPS: { label: string; tables: string[] }[] = [
     {
         label: 'RFQs & Letters',
-        tables: ['rfqs', 'rfq_items', 'rfq_item_files', 'rfq_letters', 'rfq_automation_logs'],
+        tables: ['rfqs', 'rfq_items', 'rfq_item_parts', 'rfq_item_files', 'rfq_letters', 'rfq_automation_logs'],
     },
     {
         label: 'Cost Estimates',

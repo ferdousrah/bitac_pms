@@ -1,6 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { useForm } from '@inertiajs/react';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import FilePicker, { UserFileItem } from '@/Components/FilePicker/FilePicker';
 import SampleDescriptionAI from '@/Components/SampleDescriptionAI';
 import SearchableSelect from '@/Components/SearchableSelect';
@@ -14,6 +14,9 @@ const REFERENCE_OPTIONS = [
 
 const COMMON_UNITS = ['pcs', 'set', 'kg', 'nos', 'pair', 'lot'];
 
+// How long the form stays idle before an autosave fires.
+const AUTOSAVE_DEBOUNCE_MS = 2500;
+
 // Attached file entry: either a fresh upload (File) or a gallery pick
 type AttachedFile = {
     kind: 'upload';
@@ -26,9 +29,14 @@ type AttachedFile = {
     filename: string;
 };
 
+// A part within a job item. Only the name is captured — the part number is
+// positional (1/3, 2/3, 3/3) and recomputed whenever a row is added/removed.
+type Part = { name: string };
+
 type Item = {
     product_id: string;
     job_description: string;
+    parts: Part[];
     quantity: string;
     unit: string;
     notes: string;
@@ -39,9 +47,12 @@ type Item = {
     sample_photos: AttachedFile[];
 };
 
+const partNo = (index: number, total: number) => `${index + 1}/${Math.max(total, 1)}`;
+
 const emptyItem = (): Item => ({
     product_id: '',
     job_description: '',
+    parts: [],
     quantity: '1',
     unit: 'pcs',
     notes: '',
@@ -57,6 +68,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
         ? rfq.items.map((i: any) => ({
             product_id:         String(i.product_id ?? ''),
             job_description:    i.job_description ?? '',
+            parts:              (i.parts ?? []).map((p: any) => ({ name: p.name ?? '' })),
             quantity:           String(i.quantity ?? '1'),
             unit:               i.unit ?? 'pcs',
             notes:              i.notes ?? '',
@@ -152,6 +164,74 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
     const existingLetterUrl: string | null = rfq?.rfq_letter_url ?? null;
     const existingLetterExt: string | null = rfq?.rfq_letter_ext ?? null;
 
+    // ── Draft + autosave ────────────────────────────────────────────────
+    // A half-filled RFQ is parked as a draft so a power cut mid-entry does
+    // not lose the work. Autosave only ever writes drafts: a brand-new form
+    // (which creates one on the first save) or a draft being edited. Editing
+    // an already-submitted RFQ saves only when the user presses Update.
+    const editingDraft = rfq?.status === 'draft';
+    const [draftId, setDraftId] = useState<number | null>(editingDraft ? rfq.id : null);
+    const [autosaveOn, setAutosaveOn] = useState<boolean>(!rfq || editingDraft);
+    const [savedAt, setSavedAt] = useState<string | null>(null);
+    const [autosaving, setAutosaving] = useState(false);
+
+    // Only the fields autosave persists — attachments are deliberately left
+    // out, they are only sent on an explicit save.
+    const autosavePayload = useMemo(() => ({
+        customer_id:     data.customer_id,
+        job_category_id: data.job_category_id,
+        customer_ref_no: data.customer_ref_no,
+        job_type:        data.job_type,
+        required_by:     data.required_by,
+        notes:           data.notes,
+        items: data.items.map((it: Item) => ({
+            product_id:         it.product_id,
+            job_description:    it.job_description,
+            parts:              it.parts.filter(pt => pt.name.trim() !== ''),
+            quantity:           it.quantity,
+            unit:               it.unit,
+            notes:              it.notes,
+            reference_type:     it.reference_type,
+            sample_received:    it.sample_received,
+            sample_description: it.sample_description,
+        })),
+    }), [data]);
+
+    const serialized = JSON.stringify(autosavePayload);
+    // Seeded with the initial render so an untouched form never autosaves.
+    const lastSavedRef = useRef<string>(serialized);
+
+    useEffect(() => {
+        if (!autosaveOn) return;
+        // Customer is the one required field — until it is picked there is
+        // nothing worth persisting, and creating junk drafts helps no one.
+        if (!data.customer_id) return;
+        if (serialized === lastSavedRef.current) return;
+
+        const timer = setTimeout(async () => {
+            setAutosaving(true);
+            try {
+                // Axios (bootstrap.ts) sends the XSRF cookie for us.
+                const { data: res } = await (window as any).axios.post('/rfqs/autosave', {
+                    ...autosavePayload,
+                    rfq_id: draftId,
+                });
+                lastSavedRef.current = serialized;
+                if (res?.rfq_id) setDraftId(res.rfq_id);
+                setSavedAt(res?.saved_at ?? null);
+            } catch (e: any) {
+                // 409 = the RFQ left draft state (submitted in another tab).
+                // Anything else is transient — the next keystroke retries.
+                if (e?.response?.status === 409) setAutosaveOn(false);
+            } finally {
+                setAutosaving(false);
+            }
+        }, AUTOSAVE_DEBOUNCE_MS);
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [serialized, autosaveOn, draftId, data.customer_id]);
+
     function setItemField<K extends keyof Item>(index: number, field: K, value: Item[K]) {
         const updated = data.items.map((it, i) => i === index ? { ...it, [field]: value } : it);
         setData('items', updated);
@@ -164,6 +244,23 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
     function removeItem(index: number) {
         if (data.items.length === 1) return;
         setData('items', data.items.filter((_: any, i: number) => i !== index));
+    }
+
+    // Parts within an item. Part numbers are positional, so there is nothing
+    // to renumber here — the UI derives them from the array index.
+    function addPart(itemIndex: number) {
+        const it = data.items[itemIndex];
+        setItemField(itemIndex, 'parts', [...it.parts, { name: '' }]);
+    }
+
+    function removePart(itemIndex: number, partIndex: number) {
+        const it = data.items[itemIndex];
+        setItemField(itemIndex, 'parts', it.parts.filter((_: Part, i: number) => i !== partIndex));
+    }
+
+    function setPartName(itemIndex: number, partIndex: number, value: string) {
+        const it = data.items[itemIndex];
+        setItemField(itemIndex, 'parts', it.parts.map((pt: Part, i: number) => i === partIndex ? { ...pt, name: value } : pt));
     }
 
     // Transform form data: split AttachedFile[] into drawings[] (files) + drawing_file_ids[] (integers)
@@ -184,6 +281,8 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
             return {
                 product_id: item.product_id,
                 job_description: item.job_description,
+                // Blank rows are dropped server-side too, but don't ship noise
+                parts: item.parts.filter(pt => pt.name.trim() !== ''),
                 quantity: item.quantity,
                 unit: item.unit,
                 notes: item.notes,
@@ -199,21 +298,42 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
         return { ...d, items };
     };
 
-    const submit = (e: FormEvent) => {
-        e.preventDefault();
-        if (rfq) {
-            transform((d: any) => ({ ...transformItems(d), _method: 'put' }));
-            post(`/rfqs/${rfq.id}`, { forceFormData: true });
+    // Autosave may already have created a draft for a "new" RFQ — save into
+    // that row rather than creating a second one.
+    const targetId: number | null = rfq?.id ?? draftId;
+
+    const save = (asDraft: boolean) => {
+        const payload = (d: any) => ({ ...transformItems(d), save_as_draft: asDraft ? 1 : 0 });
+        if (targetId) {
+            transform((d: any) => ({ ...payload(d), _method: 'put' }));
+            post(`/rfqs/${targetId}`, { forceFormData: true });
         } else {
-            transform((d: any) => transformItems(d));
+            transform(payload);
             post('/rfqs', { forceFormData: true });
         }
     };
 
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        save(false);
+    };
+
     return (
-        <AppLayout header={rfq ? 'Edit RFQ' : 'New RFQ'}>
+        <AppLayout header={editingDraft ? 'Draft RFQ' : rfq ? 'Edit RFQ' : 'New RFQ'}>
             <div className="max-w-3xl animate-fade-in">
                 <form onSubmit={submit} className="space-y-6">
+
+                    {/* Draft notice — this RFQ has not entered the pipeline yet */}
+                    {editingDraft && (
+                        <div className="alert alert-info">
+                            <i className="fi fi-rr-disk text-blue-500 text-base leading-none shrink-0 mt-0.5" />
+                            <div className="text-xs text-blue-900">
+                                <span className="font-bold">This RFQ is a draft.</span> It is saved but has not been submitted —
+                                no cost estimate or notification has gone out. Your changes save automatically; press
+                                <span className="font-semibold"> Submit RFQ</span> when it is ready.
+                            </div>
+                        </div>
+                    )}
 
                     {/* ── Customer Details ──────────────────────────────── */}
                     <div className="card animate-slide-up">
@@ -474,6 +594,51 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                             )}
                                         </div>
 
+                                        {/* Parts — breaks this item into its individual parts.
+                                            Part No. is positional (1/3, 2/3, 3/3), never typed. */}
+                                        <div className="rounded-lg border border-surface-200 bg-white p-3 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fi fi-rr-cubes text-indigo-500 text-xs leading-none" />
+                                                    <span className="text-xs font-semibold text-surface-700">Parts</span>
+                                                    {item.parts.length > 0 && (
+                                                        <span className="badge badge-slate text-[10px]">{item.parts.length}</span>
+                                                    )}
+                                                </div>
+                                                <button type="button" onClick={() => addPart(index)}
+                                                    className="btn-ghost btn-xs text-indigo-600 hover:bg-indigo-50">
+                                                    <i className="fi fi-rr-plus text-[10px] leading-none" /> Add Part
+                                                </button>
+                                            </div>
+
+                                            {item.parts.length === 0 ? (
+                                                <p className="text-[11px] text-surface-400 italic">
+                                                    No parts added. Use this to break the item into individual parts — part numbers are assigned automatically.
+                                                </p>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {item.parts.map((pt: Part, pIndex: number) => (
+                                                        <div key={pIndex} className="flex items-center gap-2">
+                                                            <span
+                                                                className="shrink-0 w-12 text-center font-mono text-[11px] font-bold px-1.5 py-1.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100"
+                                                                title="Part No. — assigned automatically">
+                                                                {partNo(pIndex, item.parts.length)}
+                                                            </span>
+                                                            <input type="text" value={pt.name}
+                                                                onChange={e => setPartName(index, pIndex, e.target.value)}
+                                                                placeholder="Part name — e.g. Bearing housing"
+                                                                className="form-input flex-1 !py-1.5 text-sm" />
+                                                            <button type="button" onClick={() => removePart(index, pIndex)}
+                                                                className="btn-ghost btn-icon btn-xs text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                                                                title="Remove part">
+                                                                <i className="fi fi-rr-trash text-xs leading-none" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                             <div className="form-group">
                                                 <label className="form-label text-xs">
@@ -713,12 +878,35 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                     </div>
 
                     {/* ── Submit ────────────────────────────────────────── */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <button type="submit" disabled={processing} className="btn-primary">
                             <i className="fi fi-rr-check text-xs leading-none" />
-                            {processing ? 'Saving...' : rfq ? 'Update RFQ' : 'Create RFQ'}
+                            {processing ? 'Saving...' : (rfq && !editingDraft) ? 'Update RFQ' : editingDraft ? 'Submit RFQ' : 'Create RFQ'}
                         </button>
+                        {autosaveOn && (
+                            <button type="button" onClick={() => save(true)} disabled={processing} className="btn-outline">
+                                <i className="fi fi-rr-disk text-xs leading-none" />
+                                Save as Draft
+                            </button>
+                        )}
                         <a href="/rfqs" className="btn-outline">Cancel</a>
+
+                        {/* Autosave status — quiet until it has something to say */}
+                        {autosaveOn && (autosaving || savedAt) && (
+                            <span className="text-xs text-surface-400 inline-flex items-center gap-1.5">
+                                {autosaving ? (
+                                    <>
+                                        <i className="fi fi-rr-refresh text-[10px] leading-none animate-spin" />
+                                        Saving draft…
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fi fi-rr-cloud-check text-[10px] leading-none text-emerald-500" />
+                                        Draft saved at {savedAt}
+                                    </>
+                                )}
+                            </span>
+                        )}
                     </div>
                 </form>
 

@@ -83,6 +83,7 @@ class SystemResetController extends Controller
         // RFQ chain
         'rfq_letters',
         'rfq_automation_logs',
+        'rfq_item_parts',
         'rfq_item_files',
         'rfq_items',
         'rfqs',

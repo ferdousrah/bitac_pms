@@ -99,45 +99,24 @@ class RfqController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'customer_id'        => 'required|exists:customers,id',
-            'job_category_id'    => 'nullable|exists:job_categories,id',
-            'customer_ref_no'    => 'nullable|string|max:100',
-            'job_type'           => 'nullable|in:regular,rnd',
-            'required_by'        => 'nullable|date',
-            'notes'              => 'nullable|string|max:1000',
-            'rfq_letter'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
-            'rfq_letter_title'   => 'nullable|string|max:200',
-            'items'              => 'required|array|min:1',
-            'items.*.job_description' => 'nullable|string|max:500',
-            'items.*.product_id'      => 'nullable|exists:products,id',
-            'items.*.quantity'        => 'required|numeric|min:0.01',
-            'items.*.unit'            => 'nullable|string|max:20',
-            'items.*.notes'           => 'nullable|string|max:500',
-            // Per-item reference material
-            'items.*.reference_type'     => 'nullable|in:none,drawing,physical_sample,both',
-            'items.*.sample_received'    => 'nullable|boolean',
-            'items.*.sample_description' => 'nullable|string|max:1000',
-            // Multiple drawings per item: fresh uploads + gallery picks
-            'items.*.drawings'              => 'nullable|array',
-            'items.*.drawings.*'            => 'file|mimes:pdf,jpg,jpeg,png,dwg,dxf|max:10240',
-            'items.*.drawing_file_ids'      => 'nullable|array',
-            'items.*.drawing_file_ids.*'    => 'exists:user_files,id',
-            // Multiple sample photos per item
-            'items.*.sample_photos'         => 'nullable|array',
-            'items.*.sample_photos.*'       => 'file|mimes:jpg,jpeg,png,webp|max:5120',
-            'items.*.sample_photo_file_ids' => 'nullable|array',
-            'items.*.sample_photo_file_ids.*' => 'exists:user_files,id',
-        ]);
+        // A draft is a work-in-progress RFQ — it saves with whatever has been
+        // filled in so far and skips the notification/automation that firing a
+        // real RFQ triggers.
+        $isDraft = $request->boolean('save_as_draft');
 
-        // Each item must have at least a job_description or product_id
-        foreach ($validated['items'] as $idx => $item) {
-            if (empty($item['product_id']) && empty($item['job_description'])) {
-                return back()->withErrors(["items.{$idx}.job_description" => 'Enter a part description or select a product.'])->withInput();
+        $validated = $request->validate($this->formRules($isDraft));
+
+        // Each item must have at least a job_description or product_id.
+        // Drafts are exempt — they're unfinished by definition.
+        if (! $isDraft) {
+            foreach ($validated['items'] as $idx => $item) {
+                if (empty($item['product_id']) && empty($item['job_description'])) {
+                    return back()->withErrors(["items.{$idx}.job_description" => 'Enter a part description or select a product.'])->withInput();
+                }
             }
         }
 
-        $rfq = DB::transaction(function () use ($validated, $request) {
+        $rfq = DB::transaction(function () use ($validated, $request, $isDraft) {
             $rfq = Rfq::create([
                 'customer_id'        => $validated['customer_id'],
                 'job_category_id'    => $validated['job_category_id'] ?? null,
@@ -146,7 +125,7 @@ class RfqController extends Controller
                 'required_by'        => $validated['required_by'] ?? null,
                 'notes'              => $validated['notes'] ?? null,
                 'created_by'         => auth()->id(),
-                'status'             => 'pending',
+                'status'             => $isDraft ? 'draft' : 'pending',
             ]);
 
             if ($request->hasFile('rfq_letter')) {
@@ -156,17 +135,19 @@ class RfqController extends Controller
                 ]);
             }
 
-            foreach ($validated['items'] as $idx => $item) {
+            foreach ($validated['items'] ?? [] as $idx => $item) {
                 $rfqItem = $rfq->items()->create([
-                    'product_id'         => $item['product_id'] ?: null,
+                    'product_id'         => ($item['product_id'] ?? null) ?: null,
                     'job_description'    => $item['job_description'] ?? null,
-                    'quantity'           => $item['quantity'],
+                    'quantity'           => $item['quantity'] ?? 0,
                     'unit'               => $item['unit'] ?? 'pcs',
                     'notes'              => $item['notes'] ?? null,
                     'reference_type'     => $item['reference_type'] ?? 'none',
                     'sample_received'    => !empty($item['sample_received']),
                     'sample_description' => $item['sample_description'] ?? null,
                 ]);
+
+                $this->syncItemParts($rfqItem, $item['parts'] ?? []);
 
                 // Attach multiple drawings
                 $this->attachItemFiles(
@@ -197,27 +178,20 @@ class RfqController extends Controller
             return $rfq;
         });
 
-        // Dispatch RFQ automation events (auto-estimate + duplicate detection)
-        \App\Events\RfqCreated::dispatch($rfq->load('items', 'customer'));
+        // A draft hasn't been submitted yet — no automation, no notifications.
+        // Send the user back to the form so they can carry on where they were.
+        if ($isDraft) {
+            return redirect()->route('rfqs.edit', $rfq)->with('success', 'Draft saved.');
+        }
 
-        // Notify users who can view quotations (PCD section)
-        $customer = Customer::find($validated['customer_id']);
-        NotifyService::toPermission(
-            'view quotations',
-            'rfq_created',
-            'New RFQ Received',
-            "From {$customer?->name} — " . count($validated['items']) . ' item(s)',
-            '/rfqs',
-            'fi-rr-file-invoice',
-            'blue',
-        );
+        $this->announceNewRfq($rfq, $validated['customer_id'], count($validated['items'] ?? []));
 
         return redirect()->route('rfqs.index')->with('success', 'RFQ created successfully.');
     }
 
     public function show(Rfq $rfq)
     {
-        $rfq->load(['customer', 'jobCategory', 'items.product', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
+        $rfq->load(['customer', 'jobCategory', 'items.product', 'items.parts', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
 
         return Inertia::render('RFQ/Show', [
             'rfq' => [
@@ -254,6 +228,11 @@ class RfqController extends Controller
                     'quantity'           => $i->quantity,
                     'unit'               => $i->unit,
                     'notes'              => $i->notes,
+                    'parts'              => $i->parts->values()->map(fn($p, $idx) => [
+                        'id'      => $p->id,
+                        'name'    => $p->name,
+                        'part_no' => \App\Models\RfqItemPart::formatNo($idx, $i->parts->count()),
+                    ]),
                     'reference_type'     => $i->reference_type ?? 'none',
                     'drawings'           => $i->drawings->map(fn($f) => [
                         'id'            => $f->id,
@@ -296,7 +275,7 @@ class RfqController extends Controller
 
     public function edit(Rfq $rfq)
     {
-        $rfq->load(['items.product', 'items.drawings', 'items.samplePhotos']);
+        $rfq->load(['items.product', 'items.parts', 'items.drawings', 'items.samplePhotos']);
 
         return Inertia::render('RFQ/Create', [
             'rfq' => [
@@ -310,12 +289,14 @@ class RfqController extends Controller
                 'rfq_letter_url'     => $rfq->rfq_letter_path ? route('rfqs.letter', $rfq) : null,
                 'rfq_letter_title'   => $rfq->rfq_letter_title,
                 'rfq_letter_ext'     => $rfq->rfq_letter_path ? strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION)) : null,
+                'status'             => $rfq->status,
                 'items'              => $rfq->items->map(fn($i) => [
                     'product_id'         => $i->product_id,
                     'job_description'    => $i->job_description,
                     'quantity'           => $i->quantity,
                     'unit'               => $i->unit,
                     'notes'              => $i->notes,
+                    'parts'              => $i->parts->map(fn($p) => ['name' => $p->name])->values(),
                     'reference_type'     => $i->reference_type ?? 'none',
                     'existing_drawings'  => $i->drawings->map(fn($f) => [
                         'id'            => $f->id,
@@ -341,39 +322,23 @@ class RfqController extends Controller
 
     public function update(Request $request, Rfq $rfq)
     {
-        $validated = $request->validate([
-            'customer_id'        => 'required|exists:customers,id',
-            'job_category_id'    => 'nullable|exists:job_categories,id',
-            'customer_ref_no'    => 'nullable|string|max:100',
-            'job_type'           => 'nullable|in:regular,rnd',
-            'required_by'        => 'nullable|date',
-            'notes'              => 'nullable|string|max:1000',
-            'rfq_letter'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
-            'rfq_letter_title'   => 'nullable|string|max:200',
-            'remove_rfq_letter'  => 'nullable|boolean',
-            'items'              => 'required|array|min:1',
-            'items.*.job_description' => 'nullable|string|max:500',
-            'items.*.product_id'      => 'nullable|exists:products,id',
-            'items.*.quantity'        => 'required|numeric|min:0.01',
-            'items.*.unit'            => 'nullable|string|max:20',
-            'items.*.notes'           => 'nullable|string|max:500',
-            // Per-item reference material
-            'items.*.reference_type'     => 'nullable|in:none,drawing,physical_sample,both',
-            'items.*.sample_received'    => 'nullable|boolean',
-            'items.*.sample_description' => 'nullable|string|max:1000',
-            // Multiple drawings per item
-            'items.*.drawings'              => 'nullable|array',
-            'items.*.drawings.*'            => 'file|mimes:pdf,jpg,jpeg,png,dwg,dxf|max:10240',
-            'items.*.drawing_file_ids'      => 'nullable|array',
-            'items.*.drawing_file_ids.*'    => 'exists:user_files,id',
-            // Multiple sample photos per item
-            'items.*.sample_photos'         => 'nullable|array',
-            'items.*.sample_photos.*'       => 'file|mimes:jpg,jpeg,png,webp|max:5120',
-            'items.*.sample_photo_file_ids' => 'nullable|array',
-            'items.*.sample_photo_file_ids.*' => 'exists:user_files,id',
-        ]);
+        $isDraft   = $request->boolean('save_as_draft');
+        $wasDraft  = $rfq->status === 'draft';
+        // Saving a draft without the draft flag = the user pressed Submit,
+        // so this is the moment the RFQ actually enters the pipeline.
+        $isSubmit  = $wasDraft && ! $isDraft;
 
-        DB::transaction(function () use ($rfq, $validated, $request) {
+        $validated = $request->validate($this->formRules($isDraft, forUpdate: true));
+
+        if (! $isDraft) {
+            foreach ($validated['items'] as $idx => $item) {
+                if (empty($item['product_id']) && empty($item['job_description'])) {
+                    return back()->withErrors(["items.{$idx}.job_description" => 'Enter a part description or select a product.'])->withInput();
+                }
+            }
+        }
+
+        DB::transaction(function () use ($rfq, $validated, $request, $isSubmit) {
             $rfq->update([
                 'customer_id'        => $validated['customer_id'],
                 'job_category_id'    => $validated['job_category_id'] ?? null,
@@ -381,7 +346,7 @@ class RfqController extends Controller
                 'job_type'           => $validated['job_type'] ?? 'regular',
                 'required_by'        => $validated['required_by'] ?? null,
                 'notes'              => $validated['notes'] ?? null,
-            ]);
+            ] + ($isSubmit ? ['status' => 'pending'] : []));
 
             // RFQ letter: replace, remove, or just rename
             if ($request->hasFile('rfq_letter')) {
@@ -433,17 +398,19 @@ class RfqController extends Controller
             }
             $rfq->items()->delete(); // cascade deletes rfq_item_files
 
-            foreach ($validated['items'] as $idx => $item) {
+            foreach ($validated['items'] ?? [] as $idx => $item) {
                 $rfqItem = $rfq->items()->create([
-                    'product_id'         => $item['product_id'] ?: null,
+                    'product_id'         => ($item['product_id'] ?? null) ?: null,
                     'job_description'    => $item['job_description'] ?? null,
-                    'quantity'           => $item['quantity'],
+                    'quantity'           => $item['quantity'] ?? 0,
                     'unit'               => $item['unit'] ?? 'pcs',
                     'notes'              => $item['notes'] ?? null,
                     'reference_type'     => $item['reference_type'] ?? 'none',
                     'sample_received'    => !empty($item['sample_received']),
                     'sample_description' => $item['sample_description'] ?? null,
                 ]);
+
+                $this->syncItemParts($rfqItem, $item['parts'] ?? []);
 
                 $this->attachItemFiles($rfqItem, $request, "items.{$idx}.drawings", $item['drawing_file_ids'] ?? [], 'drawing');
                 $this->attachItemFiles($rfqItem, $request, "items.{$idx}.sample_photos", $item['sample_photo_file_ids'] ?? [], 'sample_photo');
@@ -457,7 +424,122 @@ class RfqController extends Controller
             }
         });
 
-        return redirect()->route('rfqs.show', $rfq)->with('success', 'RFQ updated.');
+        if ($isDraft) {
+            return redirect()->route('rfqs.edit', $rfq)->with('success', 'Draft saved.');
+        }
+
+        // A draft that has just been submitted gets the same treatment a
+        // freshly created RFQ does — it only reaches the pipeline now.
+        if ($isSubmit) {
+            $this->announceNewRfq($rfq, $validated['customer_id'], count($validated['items'] ?? []));
+        }
+
+        return redirect()->route('rfqs.show', $rfq)
+            ->with('success', $isSubmit ? 'RFQ submitted.' : 'RFQ updated.');
+    }
+
+    /**
+     * Background autosave for the RFQ form.
+     *
+     * Called on a debounce while the user types, so an unfinished request
+     * survives a power cut or a closed tab. It only ever writes DRAFTS and
+     * only ever writes scalar fields — attachments are left completely
+     * alone, because they're only submitted on an explicit save.
+     *
+     * Items are synced BY POSITION rather than wiped and recreated, so a
+     * draft that already has drawings attached keeps them across autosaves.
+     *
+     * Responds with JSON (not Inertia) — the form posts this with fetch and
+     * stays where it is.
+     */
+    public function autosave(Request $request)
+    {
+        $validated = $request->validate([
+            'rfq_id'                  => 'nullable|integer|exists:rfqs,id',
+            'customer_id'             => 'required|exists:customers,id',
+            'job_category_id'         => 'nullable|exists:job_categories,id',
+            'customer_ref_no'         => 'nullable|string|max:100',
+            'job_type'                => 'nullable|in:regular,rnd',
+            'required_by'             => 'nullable|date',
+            'notes'                   => 'nullable|string|max:1000',
+            'items'                   => 'nullable|array',
+            'items.*.job_description' => 'nullable|string|max:500',
+            'items.*.product_id'      => 'nullable|exists:products,id',
+            'items.*.quantity'        => 'nullable|numeric|min:0',
+            'items.*.unit'            => 'nullable|string|max:20',
+            'items.*.notes'           => 'nullable|string|max:500',
+            'items.*.parts'           => 'nullable|array',
+            'items.*.parts.*.name'    => 'nullable|string|max:255',
+            'items.*.reference_type'     => 'nullable|in:none,drawing,physical_sample,both',
+            'items.*.sample_received'    => 'nullable|boolean',
+            'items.*.sample_description' => 'nullable|string|max:1000',
+        ]);
+
+        $rfq = ! empty($validated['rfq_id']) ? Rfq::find($validated['rfq_id']) : null;
+
+        // Never autosave over a submitted RFQ — tell the client to stop.
+        if ($rfq && $rfq->status !== 'draft') {
+            return response()->json([
+                'ok'     => false,
+                'reason' => 'not_draft',
+            ], 409);
+        }
+
+        DB::transaction(function () use (&$rfq, $validated) {
+            $attrs = [
+                'customer_id'     => $validated['customer_id'],
+                'job_category_id' => $validated['job_category_id'] ?? null,
+                'customer_ref_no' => $validated['customer_ref_no'] ?? null,
+                'job_type'        => $validated['job_type'] ?? 'regular',
+                'required_by'     => $validated['required_by'] ?? null,
+                'notes'           => $validated['notes'] ?? null,
+            ];
+
+            if ($rfq) {
+                $rfq->update($attrs);
+            } else {
+                $rfq = Rfq::create($attrs + [
+                    'created_by' => auth()->id(),
+                    'status'     => 'draft',
+                ]);
+            }
+
+            // Sync items positionally so existing rows (and their attached
+            // files) survive; only genuinely removed rows are deleted.
+            $existing = $rfq->items()->orderBy('id')->get();
+            $submitted = array_values($validated['items'] ?? []);
+
+            foreach ($submitted as $idx => $item) {
+                $attrs = [
+                    'product_id'         => ($item['product_id'] ?? null) ?: null,
+                    'job_description'    => $item['job_description'] ?? null,
+                    'quantity'           => $item['quantity'] ?? 0,
+                    'unit'               => $item['unit'] ?? 'pcs',
+                    'notes'              => $item['notes'] ?? null,
+                    'reference_type'     => $item['reference_type'] ?? 'none',
+                    'sample_received'    => !empty($item['sample_received']),
+                    'sample_description' => $item['sample_description'] ?? null,
+                ];
+
+                $rfqItem = $existing[$idx] ?? null;
+                if ($rfqItem) {
+                    $rfqItem->update($attrs);
+                } else {
+                    $rfqItem = $rfq->items()->create($attrs);
+                }
+
+                $this->syncItemParts($rfqItem, $item['parts'] ?? []);
+            }
+
+            // Drop rows the user removed from the form
+            $existing->slice(count($submitted))->each->delete();
+        });
+
+        return response()->json([
+            'ok'       => true,
+            'rfq_id'   => $rfq->id,
+            'saved_at' => now()->format('H:i:s'),
+        ]);
     }
 
     public function destroy(Rfq $rfq)
@@ -679,6 +761,92 @@ HTML;
      * Attach multiple files to an RFQ item: fresh uploads + gallery-picked files.
      * Fresh uploads are stored AND registered in user_files gallery for future reuse.
      */
+    /**
+     * Fire the "a new RFQ has landed" side effects. Called when an RFQ is
+     * first submitted for real — either straight from create, or when a
+     * draft is finally submitted — never for a draft save.
+     */
+    private function announceNewRfq(Rfq $rfq, $customerId, int $itemCount): void
+    {
+        // Auto-estimate + duplicate detection
+        \App\Events\RfqCreated::dispatch($rfq->load('items', 'customer'));
+
+        // Notify users who can view quotations (PCD section)
+        $customer = Customer::find($customerId);
+        NotifyService::toPermission(
+            'view quotations',
+            'rfq_created',
+            'New RFQ Received',
+            "From {$customer?->name} — {$itemCount} item(s)",
+            '/rfqs',
+            'fi-rr-file-invoice',
+            'blue',
+        );
+    }
+
+    /**
+     * Validation rules for the RFQ create/edit form.
+     *
+     * Drafts are deliberately lenient — a draft exists precisely because the
+     * request isn't finished yet, so the fields a finished RFQ must have
+     * (a real quantity, at least one item) are only enforced on submit.
+     */
+    private function formRules(bool $isDraft = false, bool $forUpdate = false): array
+    {
+        return array_filter([
+            'customer_id'        => 'required|exists:customers,id',
+            'job_category_id'    => 'nullable|exists:job_categories,id',
+            'customer_ref_no'    => 'nullable|string|max:100',
+            'job_type'           => 'nullable|in:regular,rnd',
+            'required_by'        => 'nullable|date',
+            'notes'              => 'nullable|string|max:1000',
+            'rfq_letter'         => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'rfq_letter_title'   => 'nullable|string|max:200',
+            'remove_rfq_letter'  => $forUpdate ? 'nullable|boolean' : null,
+            'save_as_draft'      => 'nullable|boolean',
+            'items'              => $isDraft ? 'nullable|array' : 'required|array|min:1',
+            'items.*.job_description' => 'nullable|string|max:500',
+            'items.*.product_id'      => 'nullable|exists:products,id',
+            'items.*.quantity'        => $isDraft ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
+            'items.*.unit'            => 'nullable|string|max:20',
+            'items.*.notes'           => 'nullable|string|max:500',
+            // Parts this item breaks down into. Only the name is submitted —
+            // the part number is positional, derived on render.
+            'items.*.parts'           => 'nullable|array',
+            'items.*.parts.*.name'    => 'nullable|string|max:255',
+            // Per-item reference material
+            'items.*.reference_type'     => 'nullable|in:none,drawing,physical_sample,both',
+            'items.*.sample_received'    => 'nullable|boolean',
+            'items.*.sample_description' => 'nullable|string|max:1000',
+            // Multiple drawings per item: fresh uploads + gallery picks
+            'items.*.drawings'              => 'nullable|array',
+            'items.*.drawings.*'            => 'file|mimes:pdf,jpg,jpeg,png,dwg,dxf|max:10240',
+            'items.*.drawing_file_ids'      => 'nullable|array',
+            'items.*.drawing_file_ids.*'    => 'exists:user_files,id',
+            // Multiple sample photos per item
+            'items.*.sample_photos'         => 'nullable|array',
+            'items.*.sample_photos.*'       => 'file|mimes:jpg,jpeg,png,webp|max:5120',
+            'items.*.sample_photo_file_ids' => 'nullable|array',
+            'items.*.sample_photo_file_ids.*' => 'exists:user_files,id',
+        ]);
+    }
+
+    /**
+     * Replace an item's parts with the submitted list, preserving order.
+     * Blank names are dropped — an empty repeater row is not a part.
+     */
+    private function syncItemParts(\App\Models\RfqItem $rfqItem, array $parts): void
+    {
+        $rfqItem->parts()->delete();
+
+        $sort = 0;
+        foreach ($parts as $part) {
+            $name = trim((string) (is_array($part) ? ($part['name'] ?? '') : $part));
+            if ($name === '') continue;
+            $rfqItem->parts()->create(['name' => $name, 'sort_order' => $sort++]);
+        }
+    }
+
     private function attachItemFiles(\App\Models\RfqItem $rfqItem, Request $request, string $filesField, array $fileIds, string $type): void
     {
         $sortOrder = 0;

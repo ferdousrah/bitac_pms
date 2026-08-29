@@ -5,6 +5,7 @@ import FilePreviewModal, { PreviewableFile } from '@/Components/FilePicker/FileP
 import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const statusBadge: Record<string, string> = {
+    draft:    'badge-slate',
     pending:  'badge-amber',
     quoted:   'badge-blue',
     rejected: 'badge-red',
@@ -18,6 +19,26 @@ const quotationStatusBadge: Record<string, string> = {
     converted:        'badge-blue',
     rejected:         'badge-red',
 };
+
+/**
+ * The parts a job item breaks down into. Part numbers come from the server
+ * already in `n/total` form — they are positional, never stored.
+ */
+function PartsList({ parts }: { parts?: any[] }) {
+    if (!parts || parts.length === 0) return null;
+    return (
+        <ul className="mt-2 space-y-1">
+            {parts.map((p: any) => (
+                <li key={p.id} className="flex items-start gap-2 text-xs">
+                    <span className="shrink-0 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        {p.part_no}
+                    </span>
+                    <span className="text-surface-600 font-normal">{p.name}</span>
+                </li>
+            ))}
+        </ul>
+    );
+}
 
 /** Displays cost estimates attached to an RFQ item + Create/View buttons */
 function ItemEstimateCell({ item }: { item: any }) {
@@ -285,8 +306,9 @@ export default function RFQShow({ rfq }: any) {
                                             {rfq.items?.map((item: any, i: number) => (
                                                 <tr key={item.id}>
                                                     <td className="text-surface-400 font-mono align-top">{i + 1}</td>
-                                                    <td className="font-semibold text-surface-900 align-top whitespace-pre-line">
-                                                        {item.job_description || '--'}
+                                                    <td className="font-semibold text-surface-900 align-top">
+                                                        <div className="whitespace-pre-line">{item.job_description || '--'}</div>
+                                                        <PartsList parts={item.parts} />
                                                     </td>
                                                     <td className="text-surface-500 align-top">
                                                         {item.product ? (
@@ -324,6 +346,7 @@ export default function RFQShow({ rfq }: any) {
                                                 </span>
                                             </div>
                                             <div className="text-sm font-semibold text-surface-900 whitespace-pre-line">{item.job_description || '--'}</div>
+                                            <PartsList parts={item.parts} />
                                             {item.product && (
                                                 <div className="text-xs text-surface-500">
                                                     {item.product.name} <span className="text-surface-400">({item.product.code})</span>

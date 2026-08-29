@@ -21,6 +21,12 @@ class RfqItem extends Model
     public function rfq()     { return $this->belongsTo(Rfq::class); }
     public function product() { return $this->belongsTo(Product::class); }
 
+    /** Parts this job item is broken down into (numbered positionally). */
+    public function parts()
+    {
+        return $this->hasMany(RfqItemPart::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function files()
     {
         return $this->hasMany(RfqItemFile::class)->orderBy('sort_order');

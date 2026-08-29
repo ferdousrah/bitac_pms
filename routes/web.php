@@ -235,6 +235,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/files/move',                       [\App\Http\Controllers\UserFileController::class, 'moveFiles'])->name('files.move');
 
     // RFQ
+    // Declared before the resource so it isn't shadowed by rfqs/{rfq}.
+    Route::post('rfqs/autosave', [RfqController::class, 'autosave'])
+        ->middleware('permission:view rfqs')
+        ->name('rfqs.autosave');
     Route::resource('rfqs', RfqController::class)
         ->middleware('permission:view rfqs');
     Route::get('rfqs/{rfq}/pdf', [RfqController::class, 'exportPdf'])
