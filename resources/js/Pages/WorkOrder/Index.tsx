@@ -101,8 +101,8 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                                                     </Link>
                                                 </td>
                                                 <td>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="font-semibold text-surface-900 text-sm truncate">{wo.customer}</span>
+                                                    <div className="flex items-center gap-1.5 max-w-[280px]">
+                                                        <span className="font-semibold text-surface-900 text-sm truncate" title={wo.customer}>{wo.customer}</span>
                                                         {wo.job_category && (
                                                             <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-semibold uppercase tracking-wide">
                                                                 {wo.job_category}

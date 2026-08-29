@@ -151,8 +151,8 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                                     </Link>
                                                 </td>
                                                 <td>
-                                                    <div className="font-semibold text-surface-900 text-sm">{e.job_name}</div>
-                                                    <div className="text-xs text-surface-400 mt-0.5">{e.customer ?? e.company_name ?? '—'}</div>
+                                                    <div className="font-semibold text-surface-900 text-sm truncate max-w-[280px]" title={e.job_name}>{e.job_name}</div>
+                                                    <div className="text-xs text-surface-400 mt-0.5 truncate max-w-[280px]" title={e.customer ?? e.company_name ?? ''}>{e.customer ?? e.company_name ?? '—'}</div>
                                                     {e.rfq_id && (
                                                         <div className="mt-1 flex items-center gap-1.5">
                                                             <Link href={`/rfqs/${e.rfq_id}`} className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1">
