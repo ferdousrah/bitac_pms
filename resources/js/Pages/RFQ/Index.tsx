@@ -22,6 +22,13 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
         }, { preserveState: true, replace: true });
     };
     const handleSearch = (e: React.FormEvent) => { e.preventDefault(); applyFilters(); };
+
+    // Drafts never reached the pipeline, so they can just be thrown away.
+    const deleteDraft = (rfq: any) => {
+        const label = rfq.customer_name ?? rfq.customer?.name ?? `RFQ #${rfq.id}`;
+        if (!confirm(`Delete this draft for ${label}? It will be removed along with anything attached to it. This cannot be undone.`)) return;
+        router.delete(`/rfqs/${rfq.id}`, { preserveScroll: true });
+    };
     const clearFilters = () => { setSearch(''); router.get('/rfqs', {}, { preserveState: true, replace: true }); };
     const hasFilters = search || filters?.status || filters?.customer_id || filters?.job_type;
 
@@ -250,10 +257,16 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                             </button>
                                                         )}
                                                         {rfq.status === 'draft' && (
-                                                            <Link href={`/rfqs/${rfq.id}/edit`} title="Continue this draft"
-                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-brand-600 hover:bg-brand-500 transition-colors">
-                                                                <i className="fi fi-rr-edit text-sm leading-none" /> Continue
-                                                            </Link>
+                                                            <>
+                                                                <Link href={`/rfqs/${rfq.id}/edit`} title="Continue this draft"
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-brand-600 hover:bg-brand-500 transition-colors">
+                                                                    <i className="fi fi-rr-edit text-sm leading-none" /> Continue
+                                                                </Link>
+                                                                <button type="button" onClick={() => deleteDraft(rfq)} title="Delete this draft"
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                                    <i className="fi fi-rr-trash text-sm leading-none" /> Delete
+                                                                </button>
+                                                            </>
                                                         )}
                                                         {!rfq.has_quotation && rfq.status === 'pending' && (
                                                             <Link href={`/quotations/create?rfq_id=${rfq.id}`} title="Prepare quotation for this RFQ"

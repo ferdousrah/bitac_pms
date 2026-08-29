@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import FilePicker, { UserFileItem } from '@/Components/FilePicker/FilePicker';
 import SampleDescriptionAI from '@/Components/SampleDescriptionAI';
@@ -316,6 +316,14 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
     const submit = (e: FormEvent) => {
         e.preventDefault();
         save(false);
+    };
+
+    // Throwing away a draft — it never entered the pipeline, so nothing
+    // downstream can be depending on it.
+    const deleteDraft = () => {
+        if (!targetId) return;
+        if (!confirm('Delete this draft? It will be removed along with anything attached to it. This cannot be undone.')) return;
+        router.delete(`/rfqs/${targetId}`);
     };
 
     return (
@@ -890,6 +898,13 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                             </button>
                         )}
                         <a href="/rfqs" className="btn-outline">Cancel</a>
+                        {autosaveOn && targetId && (
+                            <button type="button" onClick={deleteDraft} disabled={processing}
+                                className="btn-ghost text-red-600 hover:text-red-700 hover:bg-red-50">
+                                <i className="fi fi-rr-trash text-xs leading-none" />
+                                Delete Draft
+                            </button>
+                        )}
 
                         {/* Autosave status — quiet until it has something to say */}
                         {autosaveOn && (autosaving || savedAt) && (

@@ -542,10 +542,57 @@ class RfqController extends Controller
         ]);
     }
 
+    /**
+     * Delete an RFQ and the files it owns.
+     *
+     * Refuses once anything downstream has been raised against it — a
+     * quotation or cost estimate would be orphaned. Following the rule for
+     * single-shot state transitions, that refusal is a redirect + flash,
+     * never an abort().
+     */
     public function destroy(Rfq $rfq)
     {
-        $rfq->delete();
-        return redirect()->route('rfqs.index')->with('success', 'RFQ deleted.');
+        $blockers = [];
+        if ($rfq->quotations()->exists()) {
+            $blockers[] = 'a quotation';
+        }
+        if (\App\Models\CostEstimate::where('rfq_id', $rfq->id)->exists()) {
+            $blockers[] = 'a cost estimate';
+        }
+        if (\App\Models\WorkOrder::where('rfq_id', $rfq->id)->exists()) {
+            $blockers[] = 'a work order';
+        }
+
+        if ($blockers) {
+            return redirect()->route('rfqs.index')->with(
+                'error',
+                "RFQ #{$rfq->id} can't be deleted — " . implode(' and ', $blockers) . ' has already been raised against it.'
+            );
+        }
+
+        $label = $rfq->status === 'draft' ? 'Draft' : 'RFQ';
+
+        DB::transaction(function () use ($rfq) {
+            // Drop the files this RFQ owns. Gallery picks (user_file_id set)
+            // are shared with the user's file library — unlink the row only,
+            // never the underlying file.
+            $rfq->load('items.files');
+            foreach ($rfq->items as $item) {
+                foreach ($item->files as $file) {
+                    if (! $file->user_file_id && $file->stored_path) {
+                        Storage::disk('public')->delete($file->stored_path);
+                    }
+                }
+            }
+            if ($rfq->rfq_letter_path) {
+                Storage::disk('public')->delete($rfq->rfq_letter_path);
+            }
+
+            // rfq_items (and their files + parts) cascade from the FKs.
+            $rfq->delete();
+        });
+
+        return redirect()->route('rfqs.index')->with('success', "{$label} deleted.");
     }
 
     /**
