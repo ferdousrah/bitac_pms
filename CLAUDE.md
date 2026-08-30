@@ -229,6 +229,18 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `rfq_item_parts` is transactional → added to `SystemResetController::TABLES_TO_WIPE` + `Admin/System/Reset.tsx`.
 - ⚠️ Items arrays can arrive without a `product_id` key now that drafts are lenient — always read it as `($item['product_id'] ?? null) ?: null`.
 
+## 🔁 Quotation Revisions — changing an approved quotation (2026-08)
+
+> An approved quotation is never edited in place. It is superseded by a new version.
+
+- **The real-world flow:** BITAC approves a quotation → sends it → the customer asks for a lower price → a new version goes out at the new price. `edit()`/`update()` deliberately only accept `draft` (or `pending_approval` for an approver making a small correction), so a price change after approval MUST go through a revision.
+- **`createRevision()`** makes a new **v(n+1) draft**, marks the parent `superseded`, and links them via `parent_quotation_id` (the revision chain UI reads this).
+- **`REVISABLE_STATUSES`** = `approved`, `sent_to_customer`, `revision_requested`, `customer_rejected`. It used to be `revision_requested` ONLY, which meant a price could not be reworked unless a customer response had been formally recorded first. `canCreateRevision` in `show()` reads the same constant — keep them in step. Not revisable: `draft`/`pending_approval` (just edit it), `customer_accepted`, `superseded`.
+- ⚠️ **The revision must copy EVERYTHING.** It originally copied only header/total columns and **not the line items**, so a revision opened with zero items — and since `update()` requires `items|min:1`, the whole quotation had to be retyped. It now carries items, `terms`, forwarding letter + subject, `recipient_block`, `memo_no`, customer ref, `discount`/`discount_type`, `job_category_id`, and the **tax config** (`tax_rate`, `tax_amount`, `show_tax_breakdown`) — dropping the tax config silently changes what the printed price means. If you add a column to `quotations`, decide whether a revision should carry it.
+- `memo_date` is deliberately **left NULL** on a revision so the re-quotation prints its own date; `memo_no` is copied verbatim because the PDF appends the revision number from `version` (`…028.51(2)`), per the official-letter convention.
+- Refusal is a redirect + flash naming the current status, not an `abort()`.
+- The revision then goes through approval again from scratch, and `sendToCustomer` requires `approved`, so a re-quotation cannot reach the customer un-approved.
+
 ## 📄 Direct Quotation & Copying a Quotation (2026-08)
 
 ### Work that starts at the quotation, not an RFQ

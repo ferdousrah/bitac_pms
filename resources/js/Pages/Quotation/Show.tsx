@@ -214,7 +214,7 @@ export default function QuotationShow({
     quotation, revisions = [], rfqAttachments = [], comments = [], attachments = [],
     sourceEstimates = [], forwardableUsers = [], customers = [], sourcePricingGroup = null,
     canSubmitForApproval, canApprove, canReject, canRequestChanges, canSendToCustomer, canConvert,
-    canRecordResponse, canCreateRevision,
+    canRecordResponse, canCreateRevision, revisionRequested = false,
 }: any) {
     // Unit prices are stored VAT/Tax-inclusive. When the preparer opts to itemise
     // VAT/Tax, line items are shown EX-tax so they reconcile with the additive
@@ -368,7 +368,13 @@ export default function QuotationShow({
     };
 
     const createRevision = () => {
-        if (!confirm('Create a new revision (v' + (Math.max(...quotation.revision_chain.map((q: any) => q.version)) + 1) + ') and supersede this version?')) return;
+        const next = Math.max(...quotation.revision_chain.map((q: any) => q.version)) + 1;
+        if (!confirm(
+            `Create revision v${next}?
+
+It starts as a draft with this quotation's items, prices, terms and letter already filled in. `
+            + `This version becomes superseded, and v${next} goes through approval again before it can be sent.`
+        )) return;
         revisionForm.post(`/quotations/${quotation.id}/revision`);
     };
 
@@ -774,8 +780,15 @@ export default function QuotationShow({
                                             <i className="fi fi-rr-rotate-right text-amber-600 text-base leading-none" />
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-bold text-amber-900">Customer requested revision</h4>
-                                            <p className="text-xs text-amber-700 mt-0.5">Create a new version with the requested changes. The new version will go through approval again.</p>
+                                            <h4 className="text-sm font-bold text-amber-900">
+                                                {revisionRequested ? 'Customer requested revision' : 'Need to change this quotation?'}
+                                            </h4>
+                                            <p className="text-xs text-amber-700 mt-0.5">
+                                                {revisionRequested
+                                                    ? 'Create a new version with the requested changes.'
+                                                    : 'An approved quotation cannot be edited in place. Create a new version instead — typically to lower the price after the customer negotiates.'}
+                                                {' '}The new version copies everything from this one, so you only change what moved, and it goes through approval again.
+                                            </p>
                                         </div>
                                     </div>
                                     <button onClick={createRevision} disabled={revisionForm.processing}

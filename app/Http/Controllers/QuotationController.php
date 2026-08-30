@@ -1110,7 +1110,10 @@ class QuotationController extends Controller
             'canRequestChanges'  => $pendingApproval && $user->can('reject quotations'),
             'canSendToCustomer'  => $quotation->status === 'approved' && $user->can('convert quotations'),
             'canRecordResponse'  => in_array($quotation->status, ['sent_to_customer', 'revision_requested']) && $user->can('convert quotations'),
-            'canCreateRevision'  => $quotation->status === 'revision_requested' && $user->can('create quotation-revision'),
+            'canCreateRevision'  => in_array($quotation->status, self::REVISABLE_STATUSES, true) && $user->can('create quotation-revision'),
+            // Drives the wording — a formally recorded request reads differently
+            // from the preparer revising a quotation off their own bat.
+            'revisionRequested'  => $quotation->status === 'revision_requested',
             'canConvert'         => in_array($quotation->status, ['approved', 'sent_to_customer', 'customer_accepted']) && $user->can('convert quotations') && !$quotation->workOrder,
             // Users this approver can forward their pending row to — anyone
             // with `approve quotations` who isn't already in the active chain
@@ -2157,35 +2160,95 @@ HTML;
     /**
      * Create a new revision of a quotation (after customer requested changes).
      */
+    /** Statuses a quotation can be revised from. */
+    private const REVISABLE_STATUSES = [
+        'approved',           // approved but the price is being reworked before/after sending
+        'sent_to_customer',   // already with the customer — they asked for a better price
+        'revision_requested', // customer response formally recorded as a revision request
+        'customer_rejected',  // rejected on price; re-offer at a new one
+    ];
+
+    /**
+     * Start a new version of a quotation.
+     *
+     * The common case is the customer asking for a lower price after the
+     * quotation has been approved and sent. The revision is a fresh DRAFT
+     * that carries EVERYTHING across — line items, terms, the forwarding
+     * letter, the tax configuration — so the preparer only changes the
+     * price and resubmits, rather than rebuilding the document.
+     *
+     * The parent is superseded, and the new version goes through approval
+     * again on its own merits.
+     */
     public function createRevision(Quotation $quotation)
     {
-        abort_unless($quotation->status === 'revision_requested', 422,
-            'Only quotations with a revision request can be revised.');
+        if (! in_array($quotation->status, self::REVISABLE_STATUSES, true)) {
+            return redirect()->route('quotations.show', $quotation)->with(
+                'error',
+                "A quotation cannot be revised while it is \"{$quotation->status}\"."
+            );
+        }
 
-        $newQuotation = Quotation::create([
-            'rfq_id'              => $quotation->rfq_id,
-            'customer_id'         => $quotation->customer_id,
-            'parent_quotation_id' => $quotation->id,
-            'version'             => $this->quotationService->getNextVersion($quotation->rfq_id),
-            'material_cost'       => $quotation->material_cost,
-            'labour_cost'         => $quotation->labour_cost,
-            'overhead_cost'       => $quotation->overhead_cost,
-            'profit_margin'       => $quotation->profit_margin,
-            'discount'            => $quotation->discount,
-            'vat_rate'            => $quotation->vat_rate,
-            'vat_amount'          => $quotation->vat_amount,
-            'total_amount'        => $quotation->total_amount,
-            'validity_days'       => $quotation->validity_days,
-            'notes'               => $quotation->notes,
-            'status'              => 'draft',
-            'created_by'          => auth()->id(),
-        ]);
+        $quotation->load('items');
 
-        // Mark the parent as superseded
-        $quotation->update(['status' => 'superseded']);
+        $newQuotation = DB::transaction(function () use ($quotation) {
+            $copy = Quotation::create([
+                'rfq_id'              => $quotation->rfq_id,
+                'customer_id'         => $quotation->customer_id,
+                'job_category_id'     => $quotation->job_category_id,
+                'parent_quotation_id' => $quotation->id,
+                'version'             => $this->quotationService->getNextVersion($quotation->rfq_id),
+                'material_cost'       => $quotation->material_cost,
+                'labour_cost'         => $quotation->labour_cost,
+                'overhead_cost'       => $quotation->overhead_cost,
+                'profit_margin'       => $quotation->profit_margin,
+                'discount'            => $quotation->discount,
+                'discount_type'       => $quotation->discount_type,
+                'vat_rate'            => $quotation->vat_rate,
+                'vat_amount'          => $quotation->vat_amount,
+                // Tax config travels with the revision — losing it would
+                // silently change what the printed price means.
+                'tax_rate'            => $quotation->tax_rate,
+                'tax_amount'          => $quotation->tax_amount,
+                'show_tax_breakdown'  => (bool) $quotation->show_tax_breakdown,
+                'total_amount'        => $quotation->total_amount,
+                'validity_days'       => $quotation->validity_days,
+                'notes'               => $quotation->notes,
+                'terms'               => $quotation->terms,
+                'forwarding_letter'         => $quotation->forwarding_letter,
+                'forwarding_letter_subject' => $quotation->forwarding_letter_subject,
+                'recipient_block'     => $quotation->recipient_block,
+                // The memo number is reused verbatim; the PDF appends the
+                // revision number to it (…028.51(2)) from `version`.
+                'memo_no'             => $quotation->memo_no,
+                // Left blank on purpose so the re-quotation carries its own
+                // date rather than reprinting the original's.
+                'memo_date'           => null,
+                'customer_ref_no'     => $quotation->customer_ref_no,
+                'customer_ref_date'   => $quotation->customer_ref_date,
+                'status'              => 'draft',
+                'created_by'          => auth()->id(),
+            ]);
+
+            // Without these the revision opens empty and the whole quotation
+            // has to be retyped.
+            foreach ($quotation->items as $item) {
+                $copy->items()->create([
+                    'description' => $item->description,
+                    'quantity'    => $item->quantity,
+                    'unit_price'  => $item->unit_price,
+                    'amount'      => $item->amount,
+                ]);
+            }
+
+            // Mark the parent as superseded
+            $quotation->update(['status' => 'superseded']);
+
+            return $copy;
+        });
 
         return redirect()->route('quotations.edit', $newQuotation)
-            ->with('success', "Revision v{$newQuotation->version} created. Edit and submit for approval.");
+            ->with('success', "Revision v{$newQuotation->version} created with the previous figures. Adjust the price and submit for approval.");
     }
 
     public function convertToWorkOrder(Request $request, Quotation $quotation)
