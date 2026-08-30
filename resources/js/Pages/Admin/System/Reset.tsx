@@ -40,7 +40,7 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Gate Passes',
-        tables: ['gate_passes', 'gate_pass_items', 'gate_pass_condition_notes'],
+        tables: ['gate_passes', 'gate_pass_items', 'gate_pass_returns', 'gate_pass_condition_notes'],
     },
     {
         label: 'Feedback & Service Requests',

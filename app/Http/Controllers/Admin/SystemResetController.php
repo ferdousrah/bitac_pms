@@ -66,6 +66,7 @@ class SystemResetController extends Controller
         // Gate passes (IED)
         'gate_pass_condition_notes',
         'gate_pass_items',
+        'gate_pass_returns',
         'gate_passes',
 
         // Quotation chain

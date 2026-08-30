@@ -37,6 +37,7 @@ class GatePass extends Model
     public function rfq()         { return $this->belongsTo(Rfq::class); }
     public function customer()    { return $this->belongsTo(Customer::class); }
     public function items()       { return $this->hasMany(GatePassItem::class)->orderBy('sort_order'); }
+    public function returns()     { return $this->hasMany(GatePassReturn::class)->latest('returned_on')->latest('id'); }
     public function issuedBy()    { return $this->belongsTo(User::class, 'issued_by'); }
     public function approvedBy()  { return $this->belongsTo(User::class, 'approved_by'); }
     public function rejectedBy()  { return $this->belongsTo(User::class, 'rejected_by'); }
@@ -48,6 +49,21 @@ class GatePass extends Model
      * Auto-generate next pass number — prefix depends on direction.
      * GIN-2026-0001 for gate-in, GOUT-2026-0001 for gate-out.
      */
+    /**
+     * Where this pass stands on returns: 'none', 'partial' or 'full'.
+     * Goods that went out on a pass come back (and vice versa), item by item.
+     */
+    public function returnState(): string
+    {
+        $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+        if ($items->isEmpty()) return 'none';
+
+        $returned = (float) $items->sum('returned_qty');
+        if ($returned <= 0) return 'none';
+
+        return $items->every(fn ($i) => $i->isFullyReturned()) ? 'full' : 'partial';
+    }
+
     public static function generatePassNo(string $direction): string
     {
         $prefix = $direction === 'in' ? 'GIN' : 'GOUT';

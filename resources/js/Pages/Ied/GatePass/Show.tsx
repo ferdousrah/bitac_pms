@@ -26,7 +26,7 @@ interface Pass {
     customer_rep_id_number: string | null;
     vehicle_no: string | null;
     notes: string | null;
-    status: 'draft' | 'issued' | 'completed' | 'cancelled';
+    status: 'draft' | 'pending_approval' | 'issued' | 'partially_returned' | 'completed' | 'cancelled' | 'rejected';
     issued_by: string | null;
     issued_at: string | null;
     completed_at: string | null;
@@ -61,6 +61,28 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
     const [showReject, setShowReject]   = useState(false);
     const [reason, setReason]           = useState('');
     const [busy, setBusy]               = useState(false);
+
+    // ── Recording goods going back ──
+    // Whatever came in on a pass eventually leaves again (and the reverse),
+    // usually a few pieces at a time, so returns are per item and partial.
+    const canReturn = ['issued', 'partially_returned'].includes(pass.status);
+    const [returnOpen, setReturnOpen] = useState(false);
+    const [returnOn, setReturnOn] = useState(new Date().toISOString().slice(0, 10));
+    const [returnNote, setReturnNote] = useState('');
+    const [returnQty, setReturnQty] = useState<Record<number, string>>({});
+
+    const submitReturn = () => {
+        const items = pass.items
+            .map((it: any) => ({ id: it.id, quantity: returnQty[it.id] ?? '' }))
+            .filter((r: any) => Number(r.quantity) > 0);
+        if (items.length === 0) return;
+        setBusy(true);
+        router.post(`${basePath}/${pass.id}/return`, { returned_on: returnOn, note: returnNote, items }, {
+            preserveScroll: true,
+            onFinish: () => setBusy(false),
+            onSuccess: () => { setReturnOpen(false); setReturnQty({}); setReturnNote(''); },
+        });
+    };
     const sigRef = useRef<SignaturePadHandle>(null);
     const canAct = canApprove && pass.status === 'pending_approval';
 
@@ -107,7 +129,7 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${
                                             isIn ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                                         }`}>
-                                            {isIn ? 'Gate-In' : 'Gate-Out'}
+                                            {isIn ? 'Gate Pass In' : 'Gate Pass Out'}
                                         </span>
                                         <span className={`badge ${STATUS_CLS[pass.status] ?? 'badge-slate'}`}>
                                             {STATUS_LABEL[pass.status] ?? pass.status}
@@ -187,6 +209,8 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                                     <th className="text-left px-3 py-2">Description</th>
                                     <th className="text-right px-3 py-2 w-20">Qty</th>
                                     <th className="text-left px-3 py-2 w-16">Unit</th>
+                                    <th className="text-right px-3 py-2 w-24">Returned</th>
+                                    <th className="text-right px-3 py-2 w-24">Still out</th>
                                     <th className="text-left px-3 py-2">Condition</th>
                                 </tr>
                             </thead>
@@ -197,13 +221,120 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                                         <td className="px-3 py-2 text-surface-900 align-top whitespace-pre-line">{it.description}</td>
                                         <td className="px-3 py-2 text-right font-mono align-top">{it.quantity}</td>
                                         <td className="px-3 py-2 text-surface-700 align-top">{it.unit}</td>
-                                        <td className="px-3 py-2 text-xs text-surface-600 align-top whitespace-pre-line">{it.condition_note ?? '—'}</td>
+                                        <td className="px-3 py-2 text-right font-mono align-top">
+                                            {Number(it.returned_qty ?? 0) > 0
+                                                ? <span className="text-emerald-700 font-semibold">{it.returned_qty}</span>
+                                                : <span className="text-surface-300">—</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-mono align-top">
+                                            {Number(it.outstanding ?? it.quantity) > 0
+                                                ? <span className="text-amber-700 font-semibold">{it.outstanding ?? it.quantity}</span>
+                                                : <span className="text-emerald-600 text-xs font-semibold">all back</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-xs text-surface-600 align-top whitespace-pre-line">
+                                            {it.condition_note ?? '—'}
+                                            {/* Each return keeps its own note */}
+                                            {(it.returns ?? []).length > 0 && (
+                                                <ul className="mt-1.5 space-y-1">
+                                                    {it.returns.map((r: any) => (
+                                                        <li key={r.id} className="text-[11px] text-surface-500 flex items-start gap-1.5">
+                                                            <i className="fi fi-rr-undo text-[9px] leading-none mt-1 text-emerald-500" />
+                                                            <span>
+                                                                <span className="font-semibold text-surface-700">{r.quantity} {it.unit}</span>
+                                                                {' back on '}{r.returned_on}
+                                                                {r.recorded_by && <span className="text-surface-400"> · {r.recorded_by}</span>}
+                                                                {r.note && <span className="block italic text-surface-500">{r.note}</span>}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                {/* Record what has gone back */}
+                {canReturn && (
+                    <div className="card border-2 border-emerald-200 bg-emerald-50/20">
+                        <div className="card-header flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-bold text-surface-900">
+                                    {isIn ? 'Return goods to the party' : 'Record goods coming back'}
+                                </h3>
+                                <p className="text-xs text-surface-400 mt-0.5">
+                                    Item by item, and a few pieces at a time if that is how they go. The pass closes
+                                    itself once everything is back.
+                                </p>
+                            </div>
+                            {!returnOpen && (
+                                <button type="button" onClick={() => setReturnOpen(true)} className="btn-primary btn-sm shrink-0">
+                                    <i className="fi fi-rr-undo text-xs leading-none" /> Record Return
+                                </button>
+                            )}
+                        </div>
+
+                        {returnOpen && (
+                            <div className="card-body space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="form-group !mb-0">
+                                        <label className="form-label">Return date</label>
+                                        <input type="date" value={returnOn} onChange={e => setReturnOn(e.target.value)} className="form-input" />
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="text-[10px] uppercase tracking-wider text-surface-400 font-bold border-b border-surface-100">
+                                                <th className="text-left px-2 py-2">Item</th>
+                                                <th className="text-right px-2 py-2 w-24">Still out</th>
+                                                <th className="text-right px-2 py-2 w-32">Returning now</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-surface-50">
+                                            {pass.items.map((it: any) => {
+                                                const out = Number(it.outstanding ?? it.quantity);
+                                                return (
+                                                    <tr key={it.id}>
+                                                        <td className="px-2 py-2 text-surface-800">{it.description}</td>
+                                                        <td className="px-2 py-2 text-right font-mono text-surface-600">{out} {it.unit}</td>
+                                                        <td className="px-2 py-2">
+                                                            <input type="number" min="0" max={out} step="0.01"
+                                                                disabled={out <= 0}
+                                                                value={returnQty[it.id] ?? ''}
+                                                                onChange={e => setReturnQty({ ...returnQty, [it.id]: e.target.value })}
+                                                                placeholder={out <= 0 ? 'all back' : '0'}
+                                                                className="form-input text-right font-mono !py-1.5 disabled:bg-surface-50" />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Note <span className="form-label-optional">(optional)</span></label>
+                                    <textarea value={returnNote} onChange={e => setReturnNote(e.target.value)} rows={2}
+                                        placeholder="Condition on return, who collected it, anything worth recording…"
+                                        className="form-textarea" />
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2">
+                                    <button type="button" onClick={() => setReturnOpen(false)} disabled={busy} className="btn-ghost btn-sm">Cancel</button>
+                                    <button type="button" onClick={submitReturn} disabled={busy} className="btn-primary btn-sm">
+                                        <i className="fi fi-rr-undo text-xs leading-none" />
+                                        {busy ? 'Saving…' : 'Save Return'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {pass.notes && (
                     <div className="card">
@@ -369,7 +500,7 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                 open={pdfOpen}
                 pdfUrl={pdfOpen ? pass.pdf_url : null}
                 title={pass.pass_no}
-                subtitle={`${isIn ? 'Gate-In' : 'Gate-Out'} · ${pass.rfq_customer ?? ''}`}
+                subtitle={`${isIn ? 'Gate Pass In' : 'Gate Pass Out'} · ${pass.customer ?? pass.rfq_customer ?? ''}`}
                 onClose={() => setPdfOpen(false)}
             />
         </AppLayout>

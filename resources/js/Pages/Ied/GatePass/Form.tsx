@@ -26,7 +26,7 @@ interface Item {
     condition_note: string;
 }
 
-export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [], customers = [] }: any) {
+export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [], customers = [], suggestedPassNo = '' }: any) {
     const isIn = direction === 'in';
     const conditionOptions = (condition_notes ?? []).map((l: string) => ({ value: l, label: l }));
     const customerOptions = (customers ?? []).map((c: any) => ({
@@ -38,6 +38,8 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
     const { data, setData, post, processing, errors } = useForm<any>({
         rfq_id:                 rfq?.id ?? '',
         direction,
+        // Auto-generated, but the issuer can type their own number.
+        pass_no:                suggestedPassNo ?? '',
         pass_date:              new Date().toISOString().slice(0, 10),
         customer_id:            rfq?.customer?.id ?? '',
         party_name:             rfq?.customer?.name ?? '',
@@ -83,7 +85,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
     };
 
     return (
-        <AppLayout header={`New ${isIn ? 'Gate-In' : 'Gate-Out'} Pass`}>
+        <AppLayout header={`New ${isIn ? 'Gate Pass In' : 'Gate Pass Out'}`}>
             <div className="max-w-5xl space-y-6 animate-fade-in">
                 {/* Header banner */}
                 <div className={`rounded-2xl border p-5 ${isIn ? 'bg-emerald-50/60 border-emerald-200' : 'bg-amber-50/60 border-amber-200'}`}>
@@ -93,7 +95,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                         </div>
                         <div>
                             <h1 className="text-lg font-bold text-surface-900">
-                                {isIn ? 'Gate-In Pass — Sample Entry' : 'Gate-Out Pass — Sample Return'}
+                                {isIn ? 'Gate Pass In — goods entering BITAC' : 'Gate Pass Out — goods leaving BITAC'}
                             </h1>
                             <p className="text-xs text-surface-700 mt-1">
                                 {isIn
@@ -199,7 +201,19 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                     placeholder="e.g. DHA-METRO-GA 12-3456"
                                 />
                             </div>
-                            <div className="form-group sm:col-span-2 max-w-xs">
+                            <div className="form-group max-w-xs">
+                                <label className="form-label">Pass No.</label>
+                                <input
+                                    type="text"
+                                    value={data.pass_no}
+                                    onChange={e => setData('pass_no', e.target.value)}
+                                    className="form-input font-mono"
+                                    placeholder="Auto"
+                                />
+                                <p className="form-hint">Generated automatically — overwrite it to use your own number.</p>
+                                {errors.pass_no && <p className="form-error">{errors.pass_no as any}</p>}
+                            </div>
+                            <div className="form-group max-w-xs">
                                 <label className="form-label">Pass Date</label>
                                 <input
                                     type="date"
@@ -340,7 +354,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                             className={isIn ? 'btn-success' : 'btn-primary'}
                         >
                             <i className="fi fi-rr-disk text-xs leading-none" />
-                            {processing ? 'Issuing…' : `Issue ${isIn ? 'Gate-In' : 'Gate-Out'} Pass`}
+                            {processing ? 'Issuing…' : `Issue ${isIn ? 'Gate Pass In' : 'Gate Pass Out'}`}
                         </button>
                     </div>
                 </form>

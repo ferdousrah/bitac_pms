@@ -15,16 +15,18 @@ interface Pass {
     status: string;
     issued_by: string | null;
     approved_by?: string | null;
+    return_state?: 'none' | 'partial' | 'full';
 }
 
 interface Props {
     passes: { data: Pass[]; current_page: number; last_page: number; from: number; to: number; total: number; links: any[] };
-    filters: { search: string; direction: string; status: string };
+    filters: { search: string; direction: string; status: string; date_from: string; date_to: string; customer_id: string };
+    customers?: { id: number; name: string }[];
 }
 
 const DIRECTION_BADGE: Record<string, { label: string; cls: string }> = {
-    in:  { label: 'Gate-In',  cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    out: { label: 'Gate-Out', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    in:  { label: 'Gate Pass In',  cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    out: { label: 'Gate Pass Out', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 const STATUS_BADGE: Record<string, string> = {
     issued:            'badge-green',
@@ -33,16 +35,21 @@ const STATUS_BADGE: Record<string, string> = {
     rejected:          'badge-red',
     completed:         'badge-blue',
     cancelled:         'badge-red',
+    partially_returned:'badge-amber',
 };
 const STATUS_LABEL: Record<string, string> = {
     issued: 'Issued', draft: 'Draft', pending_approval: 'Pending Approval',
     rejected: 'Rejected', completed: 'Completed', cancelled: 'Cancelled',
+    partially_returned: 'Partially Returned',
 };
 
-export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-passes', lockedDirection, canApprove = false, mySignatureUrl = null }: any) {
+export default function GatePassIndex({ passes, filters, customers = [], basePath = '/ied/gate-passes', lockedDirection, canApprove = false, mySignatureUrl = null }: any) {
     const [search, setSearch]     = useState(filters.search || '');
     const [direction, setDir]     = useState(filters.direction || '');
     const [status, setStatus]     = useState(filters.status || '');
+    const [dateFrom, setDateFrom] = useState(filters.date_from || '');
+    const [dateTo, setDateTo]     = useState(filters.date_to || '');
+    const [customerId, setCustomerId] = useState(filters.customer_id || '');
     const isOutOnly = lockedDirection === 'out';
 
     // Approve / reject modal state (PCD approvers only).
@@ -69,15 +76,22 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
-        router.get(basePath, { search, direction, status }, { preserveState: true });
+        router.get(basePath, { search, direction, status, date_from: dateFrom, date_to: dateTo, customer_id: customerId },
+            { preserveState: true });
     };
 
+    const clearFilters = () => {
+        setSearch(''); setDir(''); setStatus(''); setDateFrom(''); setDateTo(''); setCustomerId('');
+        router.get(basePath, {}, { preserveState: true });
+    };
+    const hasFilters = !!(search || direction || status || dateFrom || dateTo || customerId);
+
     return (
-        <AppLayout header={isOutOnly ? 'Gate-Out Passes' : 'Gate Passes'}>
+        <AppLayout header={isOutOnly ? 'Gate Pass Out' : 'Gate Passes'}>
             <div className="space-y-6 animate-fade-in">
                 <div className="page-header">
                     <div>
-                        <h1 className="page-title">{isOutOnly ? 'Gate-Out Passes' : 'Gate Passes'}</h1>
+                        <h1 className="page-title">{isOutOnly ? 'Gate Pass Out' : 'Gate Passes'}</h1>
                         <p className="page-subtitle">
                             {isOutOnly
                                 ? `Outbound passes for sample / production items leaving the floor · ${passes.total} total`
@@ -87,11 +101,11 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
                     <div className="flex items-center gap-2">
                         {!isOutOnly && (
                             <Link href={`${basePath}/create?direction=in`} className="btn-outline">
-                                <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> New Gate-In
+                                <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> New Gate Pass In
                             </Link>
                         )}
                         <Link href={`${basePath}/create?direction=out`} className="btn-primary">
-                            <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> New Gate-Out
+                            <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> New Gate Pass Out
                         </Link>
                     </div>
                 </div>
@@ -107,19 +121,44 @@ export default function GatePassIndex({ passes, filters, basePath = '/ied/gate-p
                         />
                         <select value={direction} onChange={e => setDir(e.target.value)} className="form-input">
                             <option value="">All directions</option>
-                            <option value="in">Gate-In only</option>
-                            <option value="out">Gate-Out only</option>
+                            <option value="in">Gate Pass In</option>
+                            <option value="out">Gate Pass Out</option>
                         </select>
-                        <div className="flex gap-2">
-                            <select value={status} onChange={e => setStatus(e.target.value)} className="form-input flex-1">
-                                <option value="">All status</option>
-                                <option value="pending_approval">Pending Approval</option>
-                                <option value="issued">Issued</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                            <button type="submit" className="btn-primary">Search</button>
+                        <select value={status} onChange={e => setStatus(e.target.value)} className="form-input">
+                            <option value="">All status</option>
+                            <option value="pending_approval">Pending Approval</option>
+                            <option value="issued">Issued</option>
+                            <option value="partially_returned">Partially Returned</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+
+                        {/* Company */}
+                        <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="form-input sm:col-span-2">
+                            <option value="">All companies</option>
+                            {(customers ?? []).map((c: any) => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+
+                        {/* Pass date range */}
+                        <div className="flex items-center gap-2">
+                            <label className="text-[11px] text-surface-400 shrink-0">From</label>
+                            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="form-input" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-[11px] text-surface-400 shrink-0">To</label>
+                            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="form-input" />
+                        </div>
+
+                        <div className="flex gap-2 sm:col-span-2">
+                            <button type="submit" className="btn-primary flex-1">Search</button>
+                            {hasFilters && (
+                                <button type="button" onClick={clearFilters} className="btn-ghost text-red-600 hover:bg-red-50">
+                                    Clear
+                                </button>
+                            )}
                         </div>
                     </div>
                 </form>

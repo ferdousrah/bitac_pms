@@ -296,6 +296,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{gatePass}/pdf',  [GatePassController::class, 'pdf'])->name('pdf');
         Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
+        // Goods going back out again, item by item.
+        Route::post('/{gatePass}/return',   [GatePassController::class, 'recordReturn'])->name('return');
     });
 
     // ─── IED Stakeholder Forms ──────────────────────────────
@@ -370,6 +372,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{gatePass}/pdf',       [GatePassController::class, 'pdf'])->name('pdf');
         Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
+        Route::post('/{gatePass}/return',   [GatePassController::class, 'recordReturn'])->name('return');
         // Approval — any one configured approver finalises (→ issued) or rejects.
         Route::post('/{gatePass}/approve',  [GatePassController::class, 'approve'])->name('approve');
         Route::post('/{gatePass}/reject',   [GatePassController::class, 'reject'])->name('reject');

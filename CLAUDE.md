@@ -402,6 +402,15 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Cost estimate PDF** (`exportSinglePdf`) now renders a **3-column signatory grid — Prepared By · Checked By · Approved By** (`$sigCell` helper): Prepared = creator (saved signature); Checked = the `Checked By` approval row (first approver); Approved = the `Approved By`/final row. Each shows the assigned person always + their signature/date once that step is approved (else "(Pending)"). Single-approver chains drop the Checked column.
 - **Quotation PDF/forwarding letter** still shows the **final approver** as the single signatory (formal customer-facing letter convention) — NOT the 3-grid.
 
+## 🚪 Gate Pass Returns, Manual Numbers & Filters (2026-08)
+
+- **Returns are itemwise and partial.** Whatever comes in on a pass goes back out again (and the reverse), often a few pieces at a time. New table **`gate_pass_returns`** (`gate_pass_id`, `gate_pass_item_id`, `quantity`, `returned_on`, `note`, `recorded_by`) — an item can have many, each with its own note. `gate_pass_items.returned_qty` is the denormalised running total, kept in step by `GatePassItem::syncReturnedQty()`.
+- **`POST {ied|pcd}/gate-passes/{gatePass}/return`** → `GatePassController@recordReturn`. It **caps each quantity at `outstandingQty()`** so more can never come back than went out, ignores zero rows, and refuses (redirect + flash) if the pass is not `issued`/`partially_returned` or if nothing was entered.
+- **Status follows the returns:** `GatePass::returnState()` gives `none` | `partial` | `full`. Partial → new status **`partially_returned`** (status widened enum → varchar(30)); full → the pass auto-**`completed`** with `completed_at`/`completed_by` stamped. Model helpers: `GatePassItem::outstandingQty()` / `isFullyReturned()`.
+- **Pass number is auto but editable.** `create()` ships `suggestedPassNo` (from `GatePass::generatePassNo()`), the form pre-fills it, and `store()` takes `pass_no` as `nullable|…|unique:gate_passes,pass_no`, falling back to the generated one when blank. So BITAC can carry a number from their own register.
+- **Index filters:** search + direction + status as before, plus **date range** (`date_from`/`date_to` over `pass_date`) and **company** (`customer_id`, matching the pass's own `customer_id` OR its RFQ's customer, since a pass can get its customer either way). Pagination uses `withQueryString()` so filters survive paging.
+- **Labels are "Gate Pass In" / "Gate Pass Out"** everywhere in `Pages/Ied/GatePass/*` (Index, Form, Show) — these components are shared by IED and PCD, so both follow. ⚠️ The **customer portal still says "Gate-In"/"Gate-Out"** (`Customer/Documents/Index.tsx`, `Customer/WorkOrders/Show.tsx`, `Customer/Complaints/Show.tsx`) — deliberately left, change it if the customer-facing wording should match.
+
 ## 🚪 PCD Gate Passes + Approval (2026-07)
 
 - **Gate passes** (`GatePass`, `Ied\GatePassController` — shared by IED & PCD via `isPcdContext()` = route `pcd.gate-passes.*`) support **both directions** (`in`/`out`; GIN-/GOUT- pass no). PCD is no longer out-only.

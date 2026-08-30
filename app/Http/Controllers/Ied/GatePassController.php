@@ -60,13 +60,27 @@ class GatePassController extends Controller
         if ($direction = $request->input('direction')) $query->where('direction', $direction);
         if ($status    = $request->input('status'))    $query->where('status',    $status);
 
+        // Date range over the pass date.
+        if ($from = $request->input('date_from')) $query->whereDate('pass_date', '>=', $from);
+        if ($to   = $request->input('date_to'))   $query->whereDate('pass_date', '<=', $to);
+
+        // Company — a pass can name its customer directly or inherit it from
+        // the RFQ, so match either.
+        if ($customerId = $request->input('customer_id')) {
+            $query->where(function ($q) use ($customerId) {
+                $q->where('customer_id', $customerId)
+                  ->orWhereHas('rfq', fn ($r) => $r->where('customer_id', $customerId));
+            });
+        }
+
         return Inertia::render('Ied/GatePass/Index', [
-            'passes' => $query->paginate(20)->through(fn($p) => [
+            'passes' => $query->paginate(20)->withQueryString()->through(fn($p) => [
                 'id'              => $p->id,
                 'pass_no'         => $p->pass_no,
                 'direction'       => $p->direction,
                 'rfq_id'          => $p->rfq_id,
-                'customer'        => $p->rfq?->customer?->name,
+                'customer'        => $p->customer?->name ?? $p->rfq?->customer?->name ?? $p->party_name,
+                'return_state'    => $p->returnState(),
                 'customer_rep'    => $p->customer_rep_name,
                 'pass_date'       => $p->pass_date?->format('d/m/Y'),
                 'item_count'      => $p->items->count(),
@@ -75,10 +89,16 @@ class GatePassController extends Controller
                 'approved_by'     => $p->approvedBy?->name,
             ]),
             'filters' => [
-                'search'    => $request->input('search', ''),
-                'direction' => $request->input('direction', ''),
-                'status'    => $request->input('status', ''),
+                'search'      => $request->input('search', ''),
+                'direction'   => $request->input('direction', ''),
+                'status'      => $request->input('status', ''),
+                'date_from'   => $request->input('date_from', ''),
+                'date_to'     => $request->input('date_to', ''),
+                'customer_id' => $request->input('customer_id', ''),
             ],
+            // For the company filter.
+            'customers' => \App\Models\Customer::where('is_active', true)
+                ->orderBy('name')->get(['id', 'name']),
             'basePath'        => $this->basePath(),
             'lockedDirection' => $lockedDirection,
             // PCD gate passes need approval; only pool members see Approve/Reject.
@@ -122,6 +142,9 @@ class GatePassController extends Controller
             ] : null,
             'direction'        => $direction,
             'directionLocked'  => false,
+            // Pre-filled on the form and editable — the issuer can override it
+            // with a number from BITAC's own register.
+            'suggestedPassNo'  => GatePass::generatePassNo($direction),
             'prefilled_items'  => $prefilledItems,
             'pass'             => null,
             'basePath'         => $this->basePath(),
@@ -141,6 +164,9 @@ class GatePassController extends Controller
     {
         $validated = $request->validate([
             'rfq_id'                   => 'nullable|exists:rfqs,id',
+            // Auto-generated on the form but editable — BITAC sometimes needs
+            // the pass to carry a number from their own register.
+            'pass_no'                  => 'nullable|string|max:40|unique:gate_passes,pass_no',
             'direction'                => 'required|in:in,out',
             'pass_date'                => 'required|date',
             'customer_id'              => 'nullable|exists:customers,id',
@@ -165,7 +191,7 @@ class GatePassController extends Controller
         $pass = DB::transaction(function () use ($validated, $request, $needsApproval) {
             $pass = GatePass::create([
                 'rfq_id'                  => $validated['rfq_id'] ?? null,
-                'pass_no'                 => GatePass::generatePassNo($validated['direction']),
+                'pass_no'                 => trim((string) ($validated['pass_no'] ?? '')) ?: GatePass::generatePassNo($validated['direction']),
                 'direction'               => $validated['direction'],
                 'pass_date'               => $validated['pass_date'],
                 'customer_id'             => $validated['customer_id'] ?? null,
@@ -213,7 +239,10 @@ class GatePassController extends Controller
 
     public function show(GatePass $gatePass)
     {
-        $gatePass->load(['rfq.customer', 'issuedBy.center', 'items.rfqItem', 'approvedBy', 'rejectedBy']);
+        $gatePass->load([
+            'rfq.customer', 'customer', 'issuedBy.center', 'items.rfqItem',
+            'items.returns.recordedBy', 'approvedBy', 'rejectedBy',
+        ]);
 
         return Inertia::render('Ied/GatePass/Show', [
             'pass' => [
@@ -248,9 +277,21 @@ class GatePassController extends Controller
                     'id'             => $i->id,
                     'description'    => $i->description,
                     'quantity'       => (float) $i->quantity,
+                    'returned_qty'   => (float) $i->returned_qty,
+                    'outstanding'    => $i->outstandingQty(),
                     'unit'           => $i->unit,
                     'condition_note' => $i->condition_note,
+                    // Every return recorded against this item, newest first.
+                    'returns'        => $i->returns->map(fn($r) => [
+                        'id'          => $r->id,
+                        'quantity'    => (float) $r->quantity,
+                        'returned_on' => $r->returned_on?->format('d/m/Y'),
+                        'note'        => $r->note,
+                        'recorded_by' => $r->recordedBy?->name,
+                    ])->values(),
                 ])->values(),
+                'return_state'           => $gatePass->returnState(),
+                'customer'               => $gatePass->customer?->name ?? $gatePass->rfq?->customer?->name ?? $gatePass->party_name,
                 'pdf_url'                => "{$this->basePath()}/{$gatePass->id}/pdf?preview=base64",
             ],
             'basePath'   => $this->basePath(),
@@ -304,6 +345,81 @@ class GatePassController extends Controller
      * Approve a pending PCD gate pass. ANY ONE configured approver approving
      * finalises it → issued. Captures the approver's signature.
      */
+    /**
+     * Record goods going back — item by item, and partial by nature.
+     *
+     * Whatever came in on a gate pass eventually leaves again (and the
+     * reverse), often a few pieces at a time. Each return carries its own
+     * note, and the pass closes itself once every item is fully back.
+     */
+    public function recordReturn(Request $request, GatePass $gatePass)
+    {
+        if (! in_array($gatePass->status, ['issued', 'partially_returned'], true)) {
+            return back()->with('error',
+                "Only an issued pass can take returns — this one is \"{$gatePass->status}\".");
+        }
+
+        $validated = $request->validate([
+            'returned_on'      => 'required|date',
+            'note'             => 'nullable|string|max:1000',
+            'items'            => 'required|array|min:1',
+            'items.*.id'       => 'required|exists:gate_pass_items,id',
+            'items.*.quantity' => 'nullable|numeric|min:0',
+        ]);
+
+        $gatePass->load('items');
+        $recorded = 0;
+
+        DB::transaction(function () use ($gatePass, $validated, &$recorded) {
+            foreach ($validated['items'] as $row) {
+                $qty = (float) ($row['quantity'] ?? 0);
+                if ($qty <= 0) continue;
+
+                $item = $gatePass->items->firstWhere('id', (int) $row['id']);
+                if (! $item) continue;
+
+                // Never accept more back than went out.
+                $qty = min($qty, $item->outstandingQty());
+                if ($qty <= 0) continue;
+
+                \App\Models\GatePassReturn::create([
+                    'gate_pass_id'      => $gatePass->id,
+                    'gate_pass_item_id' => $item->id,
+                    'quantity'          => $qty,
+                    'returned_on'       => $validated['returned_on'],
+                    'note'              => $validated['note'] ?? null,
+                    'recorded_by'       => auth()->id(),
+                ]);
+
+                $item->syncReturnedQty();
+                $recorded++;
+            }
+
+            // Everything back = the pass has run its course.
+            $gatePass->load('items');
+            $state = $gatePass->returnState();
+            if ($state === 'full') {
+                $gatePass->update([
+                    'status'       => 'completed',
+                    'completed_at' => now(),
+                    'completed_by' => auth()->id(),
+                ]);
+            } elseif ($state === 'partial') {
+                $gatePass->update(['status' => 'partially_returned']);
+            }
+        });
+
+        if ($recorded === 0) {
+            return back()->with('error', 'Nothing to return — enter a quantity against at least one item.');
+        }
+
+        $state = $gatePass->fresh('items')->returnState();
+
+        return back()->with('success', $state === 'full'
+            ? "All items returned. Gate Pass {$gatePass->pass_no} is now complete."
+            : "Return recorded against {$recorded} item(s) on Gate Pass {$gatePass->pass_no}.");
+    }
+
     public function approve(Request $request, GatePass $gatePass)
     {
         abort_unless($this->isPcdContext(), 403);
