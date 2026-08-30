@@ -1,6 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
-import { FormEvent, useMemo, useState, useCallback, useRef } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import WeightCalculator from '@/Components/Widgets/WeightCalculator';
 import HtCalculator from '@/Components/Widgets/HtCalculator';
 import SearchableSelect from '@/Components/SearchableSelect';
@@ -135,6 +135,92 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, rfqItemPart, 
         }
     };
 
+    /**
+     * Bring another estimate's lines into this one, re-priced to TODAY'S
+     * catalogue and to the pricing group currently selected — an old
+     * estimate's rates are historical and must not be copied blindly.
+     */
+    const repriceLines = (lines: any[], group: string) => (lines ?? []).map((line: any) => {
+        const adjusted = { ...line };
+
+        // For operations: re-apply rate based on current pricing group
+        if (line.operation_id) {
+            const op = operations.find((o: any) => o.id === line.operation_id);
+            if (op) {
+                const rate = opRateForGroup(op, group);
+                adjusted.rate = String(rate ?? line.rate);
+            }
+        }
+
+        // For materials: use current catalog rate (may have changed since the old estimate)
+        if (line.material_id) {
+            const mat = materials.find((mm: any) => mm.id === line.material_id);
+            if (mat) {
+                adjusted.rate = String(mat.rate_per_kg ?? line.rate);
+            }
+        }
+
+        return adjusted;
+    });
+
+    // ── Copy from an existing estimate ──
+    // BITAC repeats the same kinds of job constantly, so re-keying every
+    // material and machining line is the main time sink. This pulls a past
+    // estimate's cost structure and lines in; everything that belongs to the
+    // job being costed (name, customer, quantity, part no) is left alone.
+    const [copyOpen, setCopyOpen] = useState(false);
+    const [copyQuery, setCopyQuery] = useState('');
+    const [copyResults, setCopyResults] = useState<any[]>([]);
+    const [copyLoading, setCopyLoading] = useState(false);
+    const [copyApplying, setCopyApplying] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!copyOpen) return;
+        let cancelled = false;
+        setCopyLoading(true);
+        const t = setTimeout(async () => {
+            try {
+                const { data: res } = await axios.get('/api/cost-estimates/copy-search', {
+                    params: { q: copyQuery },
+                });
+                if (!cancelled) setCopyResults(res.results ?? []);
+            } catch {
+                if (!cancelled) setCopyResults([]);
+            } finally {
+                if (!cancelled) setCopyLoading(false);
+            }
+        }, 300);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [copyOpen, copyQuery]);
+
+    const applyCopy = async (sourceId: number) => {
+        setCopyApplying(sourceId);
+        try {
+            const { data: src } = await axios.get(`/api/cost-estimates/${sourceId}/copy-source`);
+            setData({
+                ...data,
+                overhead_pct:     src.overhead_pct ?? data.overhead_pct,
+                vat_pct:          src.vat_pct ?? data.vat_pct,
+                tax_pct:          src.tax_pct ?? data.tax_pct,
+                times_multiplier: src.times_multiplier ?? data.times_multiplier,
+                extra_cost:       src.extra_cost ?? data.extra_cost,
+                // Only fill sizes if this estimate has none of its own.
+                actual_size:      data.actual_size || src.actual_size || '',
+                materials_size:   data.materials_size || src.materials_size || '',
+                lines:            repriceLines(src.lines, data.pricing_group),
+            });
+            setCopyOpen(false);
+            setCopyQuery('');
+            setTimeout(() => {
+                document.getElementById('section-material')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 200);
+        } catch {
+            /* leave the modal open so the user can retry */
+        } finally {
+            setCopyApplying(null);
+        }
+    };
+
     const applyFromSimilar = async () => {
         if (!similarMatch) return;
         const m = similarMatch;
@@ -148,31 +234,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, rfqItemPart, 
         await new Promise(r => setTimeout(r, 600));
 
         // Apply structure (overhead, vat, sizes) but keep user's job_quantity & pricing_group
-        // Re-calculate operation rates based on current pricing group
-        const currentGroup = data.pricing_group;
-        const adjustedLines = (m.lines ?? []).map((line: any) => {
-            const adjusted = { ...line };
-
-            // For operations: re-apply rate based on current pricing group
-            if (line.operation_id) {
-                const op = operations.find((o: any) => o.id === line.operation_id);
-                if (op) {
-                    const rate = opRateForGroup(op, currentGroup);
-                    adjusted.rate = String(rate ?? line.rate);
-                }
-            }
-
-            // For materials: use current catalog rate (may have changed since the old estimate)
-            if (line.material_id) {
-                const mat = materials.find((m: any) => m.id === line.material_id);
-                if (mat) {
-                    adjusted.rate = String(mat.rate_per_kg ?? line.rate);
-                }
-            }
-
-            // Keep quantity as reference but user can adjust
-            return adjusted;
-        });
+        const adjustedLines = repriceLines(m.lines, data.pricing_group);
 
         setData({
             ...data,
@@ -404,6 +466,16 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, rfqItemPart, 
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
+                                {/* Copy an existing costing — pick the source yourself */}
+                                <button type="button" onClick={() => setCopyOpen(true)}
+                                    title="Pick a past estimate and copy its cost lines into this one"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
+                                               bg-indigo-50 text-indigo-700 border border-indigo-200
+                                               hover:bg-indigo-100 hover:border-indigo-300 transition-all">
+                                    <i className="fi fi-rr-copy text-sm leading-none" />
+                                    Copy from Existing
+                                </button>
+
                                 {/* AI: Find Similar Job */}
                                 <button type="button" onClick={findSimilarJob} disabled={similarLoading}
                                     title="AI finds a similar past estimate to pre-fill this form"
@@ -1035,6 +1107,89 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, rfqItemPart, 
                 onApply={onHtApplied}
                 materials={materials}
             />
+            {/* Copy-from-existing picker */}
+            {copyOpen && (
+                <>
+                    <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm" onClick={() => setCopyOpen(false)} />
+                    <div className="fixed inset-0 z-[81] flex items-start justify-center p-4 pt-20 pointer-events-none">
+                        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-premium-lg pointer-events-auto flex flex-col max-h-[70vh]">
+                            <div className="px-5 py-4 border-b border-surface-100 flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="text-sm font-bold text-surface-900">Copy from an existing estimate</h3>
+                                    <p className="text-xs text-surface-400 mt-0.5">
+                                        Brings in the cost lines and structure. The job name, customer, quantity and part
+                                        number stay as they are, and rates are refreshed to the current catalogue and
+                                        pricing group {data.pricing_group}.
+                                    </p>
+                                </div>
+                                <button type="button" onClick={() => setCopyOpen(false)} className="btn-ghost btn-icon shrink-0">
+                                    <i className="fi fi-rr-cross-small text-sm leading-none" />
+                                </button>
+                            </div>
+
+                            <div className="px-5 py-3 border-b border-surface-100">
+                                <div className="relative">
+                                    <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 text-xs" />
+                                    <input type="text" autoFocus value={copyQuery}
+                                        onChange={e => setCopyQuery(e.target.value)}
+                                        placeholder="Search by estimate no, job name, customer or part no..."
+                                        className="form-input !pl-9 !py-2 text-sm w-full" />
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto px-3 py-2">
+                                {copyLoading ? (
+                                    <div className="py-8 text-center text-xs text-surface-400">
+                                        <i className="fi fi-rr-spinner animate-spin text-sm leading-none" /> Searching…
+                                    </div>
+                                ) : copyResults.length === 0 ? (
+                                    <div className="py-8 text-center text-xs text-surface-400">
+                                        No estimates with cost lines found.
+                                    </div>
+                                ) : (
+                                    <ul className="space-y-1">
+                                        {copyResults.map((r: any) => (
+                                            <li key={r.id}>
+                                                <button type="button" disabled={copyApplying !== null}
+                                                    onClick={() => applyCopy(r.id)}
+                                                    className="w-full text-left px-3 py-2.5 rounded-xl border border-surface-200
+                                                               hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors
+                                                               disabled:opacity-50 flex items-center gap-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-mono text-[11px] font-bold text-brand-600">{r.estimate_no}</span>
+                                                            {r.part_no && (
+                                                                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                                    {r.part_no}
+                                                                </span>
+                                                            )}
+                                                            <span className="text-[10px] text-surface-400">{r.line_count} lines · group {r.pricing_group}</span>
+                                                        </div>
+                                                        <div className="text-sm font-semibold text-surface-900 truncate mt-0.5" title={r.job_name}>
+                                                            {r.job_name}
+                                                        </div>
+                                                        <div className="text-[11px] text-surface-500 truncate">
+                                                            {r.customer || '—'} · {r.created_at}
+                                                        </div>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <div className="text-sm font-bold text-surface-800">
+                                                            ৳{Number(r.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                        </div>
+                                                        <div className="text-[10px] text-indigo-600 font-semibold">
+                                                            {copyApplying === r.id ? 'Copying…' : 'Copy'}
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </AppLayout>
     );
 }

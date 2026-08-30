@@ -401,6 +401,14 @@ Route::middleware(['auth'])->group(function () {
     // Cost Estimate AI helpers
     Route::get('api/cost-estimates/rate-suggestions', [\App\Http\Controllers\CostEstimateAiController::class, 'rateSuggestions'])
         ->name('cost-estimates.rate-suggestions');
+    // Copy an existing costing into a new estimate — declared before the
+    // find-similar route's neighbours so {costEstimate} can't swallow it.
+    Route::get('api/cost-estimates/copy-search', [CostEstimateController::class, 'copySearch'])
+        ->middleware('permission:view cost-estimates')
+        ->name('cost-estimates.copy-search');
+    Route::get('api/cost-estimates/{costEstimate}/copy-source', [CostEstimateController::class, 'copySource'])
+        ->middleware('permission:view cost-estimates')
+        ->name('cost-estimates.copy-source');
     Route::get('api/cost-estimates/find-similar', [\App\Http\Controllers\CostEstimateAiController::class, 'findSimilar'])
         ->name('cost-estimates.find-similar');
 

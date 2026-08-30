@@ -243,6 +243,14 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Under-quote guard:** a `parts`-mode job with `missing > 0` is collected into the `uncostedJobs` prop and the quotation form shows an amber warning naming each job and how many parts are uncosted. The price shown genuinely is short until they're costed.
 - **Entry point:** RFQ Show lists each part with its qty and either its estimate amount (link) or a **+ Estimate** button → `/cost-estimates/create?rfq_item_part_id=N`. The estimate form derives `rfq_item_id` from the part, prefills `job_quantity` from the part's quantity, and stamps the positional `part_no` (`3/3`). The Cost Estimate column shows the job roll-up ("sum of N parts") plus the not-costed warning.
 - `grand_total_override` still applies **per part**, and flows into the sum.
+### Copying a costing (don't re-key the same job type)
+- **"Copy from Existing"** button on the estimate form opens a searchable picker of past estimates (`GET api/cost-estimates/copy-search?q=`, matches estimate_no / job_name / company_name / part_no / customer, and only returns estimates that HAVE lines). Selecting one calls `GET api/cost-estimates/{costEstimate}/copy-source` and pulls in the cost structure + all lines.
+- **What is copied:** `overhead_pct`, `vat_pct`, `tax_pct`, `times_multiplier`, `extra_cost`, all cost lines, and the sizes *only if this estimate has none yet*.
+- **What is NOT copied** (it belongs to the job being costed): job_name, customer, job_quantity, part_no, grand_total_override, and every RFQ/part link.
+- **Rates are refreshed, never copied blindly** — `repriceLines(lines, group)` re-reads each material's current `rate_per_kg` and each operation's rate for the CURRENTLY selected pricing group. An old estimate's rates are historical. This helper is shared with the existing AI "Fill from Similar Job" flow, which used to inline the same logic.
+- This is distinct from the AI auto-suggest (`find-similar`), which guesses a match from the typed job name; the copy picker is the explicit "I know which one I want" path.
+- ⚠️ There is **no duplicate-estimate action**, deliberately: the form has no UI to change an estimate's `rfq_item_id`/`rfq_item_part_id`, so a duplicated row would be stuck on the source's part. Copying INTO a new estimate (whose target is already correct) sidesteps that.
+
 ### Approval: per-estimate OR job-wise (the preparer chooses)
 - Both routes exist and neither replaces the other:
   - `POST cost-estimates/{costEstimate}/submit-approval` — just this estimate, `approval_batch` stays NULL.

@@ -811,6 +811,85 @@ class CostEstimateController extends Controller
     }
 
     /** Treat blank/zero override as "no override" so the auto value reapplies. */
+    /**
+     * Search past estimates to copy a costing from.
+     *
+     * BITAC repeats the same kinds of job constantly, so re-keying every
+     * material and machining line is the main time sink. This backs the
+     * "Copy from existing estimate" picker on the estimate form.
+     */
+    public function copySearch(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        $query = CostEstimate::with('customer:id,name')
+            ->select(['id', 'estimate_no', 'job_name', 'company_name', 'customer_id', 'part_no',
+                      'pricing_group', 'job_quantity', 'grand_total', 'status', 'created_at'])
+            ->latest('id');
+
+        if ($q !== '') {
+            $query->where(function ($w) use ($q) {
+                $w->where('estimate_no', 'like', "%{$q}%")
+                  ->orWhere('job_name', 'like', "%{$q}%")
+                  ->orWhere('company_name', 'like', "%{$q}%")
+                  ->orWhere('part_no', 'like', "%{$q}%")
+                  ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$q}%"));
+            });
+        }
+
+        // Only estimates that actually carry a costing are worth copying.
+        $query->whereHas('lines');
+
+        return response()->json([
+            'results' => $query->limit(20)->get()->map(fn ($e) => [
+                'id'            => $e->id,
+                'estimate_no'   => $e->estimate_no,
+                'job_name'      => $e->job_name,
+                'customer'      => $e->customer?->name ?? $e->company_name,
+                'part_no'       => $e->part_no,
+                'pricing_group' => $e->pricing_group,
+                'job_quantity'  => $e->job_quantity,
+                'grand_total'   => (float) $e->grand_total,
+                'status'        => $e->status,
+                'created_at'    => $e->created_at?->format('d M Y'),
+                'line_count'    => $e->lines()->count(),
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * The copyable content of one estimate: the cost structure and its lines.
+     *
+     * Deliberately does NOT include what belongs to the job being costed —
+     * job name, customer, quantity, part number and any grand-total override
+     * stay with the new estimate.
+     */
+    public function copySource(CostEstimate $costEstimate)
+    {
+        $costEstimate->load('lines');
+
+        return response()->json([
+            'estimate_no'      => $costEstimate->estimate_no,
+            'job_name'         => $costEstimate->job_name,
+            'overhead_pct'     => (float) $costEstimate->overhead_pct,
+            'vat_pct'          => (float) $costEstimate->vat_pct,
+            'tax_pct'          => (float) ($costEstimate->tax_pct ?? 0),
+            'times_multiplier' => (float) $costEstimate->times_multiplier,
+            'extra_cost'       => (float) $costEstimate->extra_cost,
+            'actual_size'      => $costEstimate->actual_size,
+            'materials_size'   => $costEstimate->materials_size,
+            'lines'            => $costEstimate->lines->map(fn ($l) => [
+                'section'      => $l->section,
+                'material_id'  => $l->material_id,
+                'operation_id' => $l->operation_id,
+                'description'  => $l->description,
+                'quantity'     => (string) $l->quantity,
+                'unit'         => $l->unit,
+                'rate'         => (string) $l->rate,
+            ])->values(),
+        ]);
+    }
+
     private function normalizeOverride($value): ?float
     {
         if ($value === null || $value === '' || $value === false) return null;
