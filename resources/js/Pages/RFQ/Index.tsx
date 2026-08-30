@@ -159,6 +159,13 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                     <Link href={`/rfqs/${rfq.id}`} className="block">
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">#{rfq.id}</span>
+                                                            {/* Nobody keyed this one in — it was created behind a direct quotation. */}
+                                                            {rfq.source === 'direct_quotation' && (
+                                                                <span title="Created automatically from a direct quotation"
+                                                                    className="inline-flex items-center px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200 text-[9px] font-bold uppercase tracking-wider">
+                                                                    Direct
+                                                                </span>
+                                                            )}
                                                             {rfq.job_type === 'rnd' && (
                                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold uppercase tracking-wider">
                                                                     R&amp;D

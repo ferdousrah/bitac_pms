@@ -5,6 +5,7 @@ import QuotationTermsAI from '@/Components/QuotationTermsAI';
 import ForwardingLetterAI from '@/Components/ForwardingLetterAI';
 import RichTextEditor from '@/Components/RichTextEditor';
 import { useAiEnabled } from '@/lib/useAiEnabled';
+import SearchableSelect from '@/Components/SearchableSelect';
 
 const fmt = (v: number) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -19,6 +20,7 @@ interface LineItem {
 
 export default function QuotationCreate({
     rfq,
+    customers = [],
     kickoffNote,
     vatRate: defaultVatRate = 15,
     defaultTaxRate = 0,
@@ -59,6 +61,9 @@ export default function QuotationCreate({
         discount:           String(existing?.discount ?? '0'),
         forwarding_letter_subject: existing?.forwarding_letter_subject ?? '',
         forwarding_letter:  existing?.forwarding_letter ?? '',
+        // Only used when starting from scratch — with an RFQ the customer
+        // comes from it.
+        customer_id:        rfq?.customer_id ?? '',
         customer_ref_no:    existing?.customer_ref_no ?? defaultCustomerRefNo ?? '',
         customer_ref_date:  existing?.customer_ref_date ?? defaultCustomerRefDate ?? '',
         recipient_block:    existing?.recipient_block ?? defaultRecipient ?? '',
@@ -118,6 +123,16 @@ export default function QuotationCreate({
         const next = [...(data.items as LineItem[])];
         next[index] = { ...next[index], ...patch };
         setData('items', next);
+    };
+
+    // A direct quotation has no RFQ to seed its lines, so they are typed here.
+    const addItem = () => {
+        setData('items', [...(data.items as LineItem[]),
+            { description: '', quantity: 1, unit: 'pcs', unit_price: '' }]);
+    };
+
+    const removeItem = (index: number) => {
+        setData('items', (data.items as LineItem[]).filter((_, i) => i !== index));
     };
 
     // Live totals — unit prices are inclusive of BOTH VAT and Tax (mirrors the
@@ -222,13 +237,33 @@ export default function QuotationCreate({
                             </div>
                         </div>
                         <div className="card-body space-y-4">
-                            {rfq && (
+                            {rfq ? (
                                 <div className="alert alert-info">
                                     <i className="fi fi-rr-info text-blue-500 text-base leading-none mt-0.5 shrink-0" />
                                     <div className="flex-1">
                                         <div className="font-semibold text-sm">RFQ #{rfq.id} — {rfq.customer?.name}</div>
                                         <p className="text-xs text-blue-600 mt-0.5">{initialItems.length} item{initialItems.length === 1 ? '' : 's'}</p>
                                     </div>
+                                </div>
+                            ) : !isEdit && (
+                                // Direct quotation — no RFQ was ever raised, so the
+                                // customer is picked here and an RFQ is created behind it.
+                                <div className="form-group">
+                                    <label className="form-label">Customer *</label>
+                                    <SearchableSelect
+                                        value={data.customer_id}
+                                        onChange={(v) => setData('customer_id', v as any)}
+                                        options={(customers ?? []).map((c: any) => ({ value: c.id, label: c.name }))}
+                                        placeholder="Search & select customer…"
+                                        clearable={false}
+                                        required
+                                    />
+                                    {errors.customer_id && <p className="form-error">{errors.customer_id as any}</p>}
+                                    <p className="form-hint">
+                                        No RFQ was selected, so this is a direct quotation. An RFQ is created behind it
+                                        automatically from the line items below, so the job can be costed and turned
+                                        into a work order as usual.
+                                    </p>
                                 </div>
                             )}
 
@@ -341,7 +376,7 @@ export default function QuotationCreate({
 
                     {/* Line Items */}
                     <div className="card">
-                        <div className="card-header">
+                        <div className="card-header flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
                                     <i className="fi fi-rr-list text-emerald-500 text-sm leading-none" />
@@ -351,11 +386,14 @@ export default function QuotationCreate({
                                     <p className="text-xs text-surface-400">Set the unit price for each item — amount updates live</p>
                                 </div>
                             </div>
+                            <button type="button" onClick={addItem} className="btn-outline btn-sm">
+                                <i className="fi fi-rr-plus text-xs leading-none" /> Add Item
+                            </button>
                         </div>
                         <div className="card-body">
                             {(data.items as LineItem[]).length === 0 ? (
                                 <div className="py-10 text-center text-xs text-surface-400">
-                                    No line items found. Select an RFQ first.
+                                    No line items yet. Add one to quote a job directly, or start from an RFQ.
                                 </div>
                             ) : (
                                 <div className="overflow-x-auto -mx-5">
@@ -367,7 +405,8 @@ export default function QuotationCreate({
                                                 <th className="text-right px-3 py-2 w-24">Qty</th>
                                                 <th className="text-left px-3 py-2 w-20">Unit</th>
                                                 <th className="text-right px-3 py-2 w-36">Unit Price</th>
-                                                <th className="text-right px-5 py-2 w-36">Amount</th>
+                                                <th className="text-right px-3 py-2 w-36">Amount</th>
+                                                <th className="px-3 py-2 w-10"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-surface-100">
@@ -422,8 +461,15 @@ export default function QuotationCreate({
                                                             required
                                                         />
                                                     </td>
-                                                    <td className="px-5 py-3 text-right font-mono font-bold text-surface-900 tabular-nums">
+                                                    <td className="px-3 py-3 text-right font-mono font-bold text-surface-900 tabular-nums">
                                                         {fmt(lineAmounts[idx] ?? 0)}
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right">
+                                                        <button type="button" onClick={() => removeItem(idx)}
+                                                            title="Remove this line"
+                                                            className="btn-ghost btn-icon btn-xs text-red-500 hover:text-red-700 hover:bg-red-50">
+                                                            <i className="fi fi-rr-trash text-xs leading-none" />
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}

@@ -229,6 +229,23 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `rfq_item_parts` is transactional → added to `SystemResetController::TABLES_TO_WIPE` + `Admin/System/Reset.tsx`.
 - ⚠️ Items arrays can arrive without a `product_id` key now that drafts are lenient — always read it as `($item['product_id'] ?? null) ?: null`.
 
+## 📄 Direct Quotation & Copying a Quotation (2026-08)
+
+### Work that starts at the quotation, not an RFQ
+- `quotations.rfq_id` stays **NOT NULL** — everything downstream (part-wise costing, work orders, gate passes, RFQ letters, the customer portal) is anchored to an RFQ, and cost estimates specifically hang off `rfq_item` / `rfq_item_part`. So a quotation ALWAYS has an RFQ.
+- What changed is who types it: `QuotationController@store` now takes `rfq_id` as **nullable** plus a `customer_id` (`required_without:rfq_id`). With no RFQ it calls **`createBackingRfq()`**, which creates the RFQ and mirrors the quotation's lines into `rfq_items` (description → `job_description`, qty, unit). The job can then be split into parts and costed exactly like any other.
+- Those RFQs carry **`rfqs.source = 'direct_quotation'`** (the column was widened enum → varchar(30)) and show a teal **Direct** badge in the RFQ list, so it's clear nobody keyed them in.
+- The quotation form shows a **customer picker** instead of the RFQ banner when there's no RFQ, and Line Items gained **Add Item** / per-row remove so lines can be typed from scratch.
+
+### Copying a quotation onto another customer
+- The same job often comes back from a different company. **`POST quotations/{quotation}/duplicate`** (`duplicateForCustomer`, button on Quotation Show) clones the whole chain for a new customer: a fresh RFQ → its job items → their **parts** → the **cost estimate behind each part** (via `copyEstimate()`) → a new **v1 draft** quotation. The source is never touched.
+- **Pricing group is the switch, and it decides everything:**
+  - **Left as-is → an exact copy.** Line rates are copied verbatim, `grand_total_override` is carried over, and the quotation's unit prices are copied straight across. Totals match the original to the paisa.
+  - **A different group → re-priced.** Operation lines take that group's `rate_group_*`, material lines take the current catalogue `rate_per_kg`, the override is dropped (it rounded a number that no longer applies), estimates are recalculated, and each quotation line's `unit_price` is re-derived as `jobCostBreakdown()['total'] / quantity`.
+- ⚠️ **Customers have no pricing-group column**, so the group cannot be inferred from the target customer — the preparer picks it in the copy dialog. Don't add auto-detection without adding that field first.
+- The copy gets its own `recipient_block` built from the new customer; memo no / customer ref are deliberately left blank for the new letter. Copied estimates land as `draft` / `not_submitted` so they go through approval on their own merits.
+- **Not copied:** RFQ file attachments (drawings, sample photos). Uploaded files would need physical duplication; add it deliberately if wanted.
+
 ## 💰 Part-wise Cost Estimating (2026-08) — READ BEFORE TOUCHING PRICING
 
 > The money path. Get this wrong and quotations go out under-priced.

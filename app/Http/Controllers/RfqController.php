@@ -71,6 +71,7 @@ class RfqController extends Controller
                 'item_count'      => $r->items->count(),
                 'required_by'     => $r->required_by?->format('d/m/Y'),
                 'status'          => $r->status,
+                'source'          => $r->source,
                 'created_by'      => $r->createdBy?->name ?? '—',
                 'created_at'      => $r->created_at->format('d/m/Y'),
                 'has_quotation'   => $r->latestQuotation !== null,

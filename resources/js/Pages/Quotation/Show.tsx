@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState, FormEvent } from 'react';
 import RichTextEditor from '@/Components/RichTextEditor';
+import SearchableSelect from '@/Components/SearchableSelect';
 import RevisionTimeline from '@/Components/RevisionTimeline';
 import ApprovalActionModal, { ApprovalAction } from '@/Components/ApprovalActionModal';
 import JobTypeBadge from '@/Components/JobTypeBadge';
@@ -211,7 +212,7 @@ function ApprovalChain({ approvals }: { approvals: any[] }) {
 /* ─── Main ────────────────────────────────────────────────────────────── */
 export default function QuotationShow({
     quotation, revisions = [], rfqAttachments = [], comments = [], attachments = [],
-    sourceEstimates = [], forwardableUsers = [],
+    sourceEstimates = [], forwardableUsers = [], customers = [], sourcePricingGroup = null,
     canSubmitForApproval, canApprove, canReject, canRequestChanges, canSendToCustomer, canConvert,
     canRecordResponse, canCreateRevision,
 }: any) {
@@ -354,6 +355,16 @@ export default function QuotationShow({
                 responseForm.reset();
             },
         });
+    };
+
+    // ── Copy this quotation onto another customer ──
+    // The same job often comes back from a different company; this clones the
+    // RFQ, its parts, the costing behind them and the quotation itself.
+    const [copyOpen, setCopyOpen] = useState(false);
+    const copyForm = useForm({ customer_id: '', pricing_group: sourcePricingGroup ?? '' });
+    const submitCopy = (e: React.FormEvent) => {
+        e.preventDefault();
+        copyForm.post(`/quotations/${quotation.id}/duplicate`);
     };
 
     const createRevision = () => {
@@ -1060,6 +1071,14 @@ export default function QuotationShow({
                                     </Link>
                                 )}
 
+                                {/* The same job coming back from a different company */}
+                                <button type="button" onClick={() => setCopyOpen(true)}
+                                    title="Copy this quotation, its parts and its costing onto another customer"
+                                    className="btn-outline w-full text-teal-700 border-teal-200 hover:bg-teal-50">
+                                    <i className="fi fi-rr-copy text-sm leading-none" />
+                                    Copy to Another Customer
+                                </button>
+
                                 {sourceEstimates.length > 0 && (
                                     <button
                                         type="button"
@@ -1473,6 +1492,63 @@ export default function QuotationShow({
                                 </div>
                             </form>
                         </div>
+                    </div>
+                </>
+            )}
+            {/* Copy to another customer */}
+            {copyOpen && (
+                <>
+                    <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm" onClick={() => !copyForm.processing && setCopyOpen(false)} />
+                    <div className="fixed inset-0 z-[81] flex items-start justify-center p-4 pt-24 pointer-events-none">
+                        <form onSubmit={submitCopy} className="w-full max-w-lg bg-white rounded-2xl shadow-premium-lg pointer-events-auto">
+                            <div className="px-5 py-4 border-b border-surface-100">
+                                <h3 className="text-sm font-bold text-surface-900">Copy to another customer</h3>
+                                <p className="text-xs text-surface-400 mt-0.5">
+                                    Creates a new RFQ, copies this job's parts and cost estimates onto it, and raises a
+                                    fresh draft quotation. Nothing on this quotation changes.
+                                </p>
+                            </div>
+
+                            <div className="px-5 py-4 space-y-4">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Copy to customer *</label>
+                                    <SearchableSelect
+                                        value={copyForm.data.customer_id}
+                                        onChange={(v) => copyForm.setData('customer_id', v as any)}
+                                        options={(customers ?? []).map((c: any) => ({ value: c.id, label: c.name }))}
+                                        placeholder="Search & select customer…"
+                                        clearable={false}
+                                    />
+                                    {copyForm.errors.customer_id && <p className="form-error">{copyForm.errors.customer_id as any}</p>}
+                                </div>
+
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Pricing group</label>
+                                    <select value={copyForm.data.pricing_group}
+                                        onChange={e => copyForm.setData('pricing_group', e.target.value)}
+                                        className="form-select">
+                                        <option value="">Same as this quotation — copy prices exactly</option>
+                                        <option value="A">A — re-price the costing</option>
+                                        <option value="B">B — re-price the costing</option>
+                                        <option value="C">C — re-price the costing</option>
+                                        <option value="STUDENT">Student — re-price the costing</option>
+                                        <option value="PUBLIC">Public — re-price the costing</option>
+                                    </select>
+                                    <p className="form-hint">
+                                        Leave as-is for an identical copy. Pick a group and the copied estimates are
+                                        re-priced to it, and the quotation's unit prices follow the new job costs.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="px-5 py-3 border-t border-surface-100 flex items-center justify-end gap-2">
+                                <button type="button" onClick={() => setCopyOpen(false)} disabled={copyForm.processing} className="btn-ghost btn-sm">Cancel</button>
+                                <button type="submit" disabled={copyForm.processing || !copyForm.data.customer_id} className="btn-primary btn-sm">
+                                    <i className="fi fi-rr-copy text-xs leading-none" />
+                                    {copyForm.processing ? 'Copying…' : 'Copy Quotation'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </>
             )}

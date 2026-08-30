@@ -467,6 +467,10 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Quotations
+    // Copy an existing quotation onto another customer, chain and all.
+    Route::post('quotations/{quotation}/duplicate', [QuotationController::class, 'duplicateForCustomer'])
+        ->middleware('permission:create quotations')
+        ->name('quotations.duplicate');
     Route::resource('quotations', QuotationController::class)
         ->middleware('permission:view quotations');
     Route::delete('quotation-files/{file}', [QuotationController::class, 'deleteFile'])

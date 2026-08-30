@@ -11,6 +11,7 @@ use App\Services\QuotationService;
 use App\Services\WorkOrderService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class QuotationController extends Controller
@@ -310,6 +311,7 @@ class QuotationController extends Controller
             'items.*.description'     => 'required|string|max:255',
             'items.*.quantity'        => 'required|numeric|min:0',
             'items.*.unit_price'      => 'required|numeric|min:0',
+            'items.*.unit'            => 'nullable|string|max:20',
             'memo_no'                 => 'nullable|string|max:80',
             'memo_date'               => 'nullable|date',
             'customer_ref_no'         => 'nullable|string|max:100',
@@ -432,7 +434,10 @@ class QuotationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'rfq_id'                  => 'required|exists:rfqs,id',
+            // Optional: a quotation can start from scratch, in which case a
+            // backing RFQ is created for it and customer_id says who for.
+            'rfq_id'                  => 'nullable|exists:rfqs,id',
+            'customer_id'             => 'required_without:rfq_id|nullable|exists:customers,id',
             'vat_rate'                => 'required|numeric|min:0|max:100',
             'tax_rate'                => 'nullable|numeric|min:0|max:100',
             'show_tax_breakdown'      => 'boolean',
@@ -461,7 +466,13 @@ class QuotationController extends Controller
             'forwarding_letter'       => 'nullable|string',
         ]);
 
-        $rfq = Rfq::findOrFail($validated['rfq_id']);
+        // Started from an RFQ, or started from nothing — either way the
+        // quotation hangs off an RFQ, because everything downstream (costing,
+        // work orders, gate passes, the customer portal) is anchored to one.
+        $rfq = ! empty($validated['rfq_id'])
+            ? Rfq::findOrFail($validated['rfq_id'])
+            : $this->createBackingRfq($validated['customer_id'], $validated['items']);
+        $validated['rfq_id'] = $rfq->id;
 
         // BITAC quotations: Unit Price is VAT-INCLUSIVE. The line total IS the grand total
         // (no separate VAT row on the quote). We still record vat_rate + the EMBEDDED VAT
@@ -584,6 +595,266 @@ class QuotationController extends Controller
             ->with('success', $saveAsDraft ? 'Quotation saved as draft.' : 'Quotation created and sent for approval.');
     }
 
+    /**
+     * Create the RFQ that sits behind a quotation started from scratch.
+     *
+     * The job items mirror the quotation's lines, so the RFQ is a faithful
+     * record of what was quoted and can be costed part-wise later exactly
+     * like any other. Marked `direct_quotation` so the RFQ list shows that
+     * nobody keyed it in by hand.
+     */
+    private function createBackingRfq($customerId, array $items): Rfq
+    {
+        return DB::transaction(function () use ($customerId, $items) {
+            $rfq = Rfq::create([
+                'customer_id' => $customerId,
+                'status'      => 'pending',
+                'source'      => 'direct_quotation',
+                'created_by'  => auth()->id(),
+                'notes'       => 'Created automatically from a direct quotation.',
+            ]);
+
+            foreach ($items as $item) {
+                $rfq->items()->create([
+                    'job_description' => $item['description'],
+                    'quantity'        => $item['quantity'],
+                    'unit'            => $item['unit'] ?? 'pcs',
+                ]);
+            }
+
+            return $rfq;
+        });
+    }
+
+    /**
+     * Copy a quotation onto ANOTHER customer.
+     *
+     * The same job often comes back from a different company. This clones the
+     * whole chain for the new customer — a fresh RFQ with the same jobs and
+     * parts, the cost estimates behind them, and a new v1 quotation — so the
+     * work never has to be keyed in twice. Nothing on the source is touched.
+     *
+     * Pricing group: keep the source's and the copy is identical to the
+     * original. Choose a different one and the copied estimates are re-priced
+     * to it and the quotation's unit prices are re-derived from the new job
+     * costs, because a different group genuinely means a different price.
+     */
+    public function duplicateForCustomer(Request $request, Quotation $quotation)
+    {
+        $validated = $request->validate([
+            'customer_id'   => 'required|exists:customers,id',
+            'pricing_group' => 'nullable|in:A,B,C,STUDENT,PUBLIC',
+        ]);
+
+        $quotation->load(['items', 'rfq.items.parts.costEstimates', 'rfq.items.costEstimates']);
+        $sourceRfq = $quotation->rfq;
+
+        if (! $sourceRfq) {
+            return back()->with('error', 'This quotation has no RFQ behind it, so there is nothing to copy.');
+        }
+
+        $customer  = Customer::findOrFail($validated['customer_id']);
+        $newGroup  = $validated['pricing_group'] ?? null;
+
+        $new = DB::transaction(function () use ($quotation, $sourceRfq, $customer, $newGroup) {
+            // 1. A fresh RFQ for the new customer, mirroring the source's jobs.
+            $rfq = Rfq::create([
+                'customer_id'     => $customer->id,
+                'job_category_id' => $sourceRfq->job_category_id,
+                'job_type'        => $sourceRfq->job_type ?? 'regular',
+                'status'          => 'pending',
+                'source'          => 'staff',
+                'created_by'      => auth()->id(),
+                'notes'           => "Copied from Quotation #{$quotation->id} (RFQ #{$sourceRfq->id}).",
+            ]);
+
+            $repriced = 0;
+            foreach ($sourceRfq->items as $srcItem) {
+                $item = $rfq->items()->create([
+                    'product_id'         => $srcItem->product_id,
+                    'job_description'    => $srcItem->job_description,
+                    'quantity'           => $srcItem->quantity,
+                    'unit'               => $srcItem->unit,
+                    'notes'              => $srcItem->notes,
+                    'reference_type'     => $srcItem->reference_type ?? 'none',
+                    'sample_received'    => (bool) $srcItem->sample_received,
+                    'sample_description' => $srcItem->sample_description,
+                ]);
+
+                // 2. Parts, and the estimate behind each one.
+                foreach ($srcItem->parts as $srcPart) {
+                    $part = $item->parts()->create([
+                        'name'       => $srcPart->name,
+                        'quantity'   => $srcPart->quantity,
+                        'unit'       => $srcPart->unit,
+                        'sort_order' => $srcPart->sort_order,
+                    ]);
+
+                    if ($srcEst = $srcPart->effectiveEstimate()) {
+                        $this->copyEstimate($srcEst, $rfq->id, $item->id, $part->id, $customer, $newGroup);
+                        $repriced++;
+                    }
+                }
+
+                // A job costed as a whole rather than part by part.
+                if ($srcItem->parts->isEmpty()) {
+                    $srcEst = $srcItem->itemLevelEstimates()->first();
+                    if ($srcEst) {
+                        $this->copyEstimate($srcEst, $rfq->id, $item->id, null, $customer, $newGroup);
+                        $repriced++;
+                    }
+                }
+            }
+
+            // 3. The quotation itself. Keeping the source's pricing group means
+            //    an identical copy; a new group means the price follows the
+            //    freshly costed jobs.
+            $lines = [];
+            $gross = 0.0;
+            foreach ($quotation->items as $idx => $srcLine) {
+                $unitPrice = (float) $srcLine->unit_price;
+                $qty       = (float) $srcLine->quantity;
+
+                if ($newGroup) {
+                    $item = $rfq->items()->orderBy('id')->skip($idx)->first();
+                    $cost = $item?->jobCostBreakdown();
+                    if ($cost && $cost['mode'] !== 'none' && $qty > 0) {
+                        $unitPrice = round($cost['total'] / $qty, 2);
+                    }
+                }
+
+                $amount = round($qty * $unitPrice, 2);
+                $gross += $amount;
+                $lines[] = ['description' => $srcLine->description, 'quantity' => $qty,
+                            'unit_price' => $unitPrice, 'amount' => $amount];
+            }
+
+            // VAT & Tax are embedded in the unit price — extract, never add on top.
+            $vatRate = (float) $quotation->vat_rate;
+            $taxRate = (float) $quotation->tax_rate;
+            $base    = ($vatRate + $taxRate) > 0 ? $gross / (1 + ($vatRate + $taxRate) / 100) : $gross;
+
+            $copy = Quotation::create([
+                'rfq_id'          => $rfq->id,
+                'customer_id'     => $customer->id,
+                'job_category_id' => $rfq->job_category_id,
+                'version'         => 1,
+                'material_cost'   => round($gross - round($base * $vatRate / 100, 2) - round($base * $taxRate / 100, 2), 2),
+                'labour_cost'     => 0,
+                'overhead_cost'   => 0,
+                'profit_margin'   => 0,
+                'discount'        => 0,
+                'vat_rate'        => $vatRate,
+                'vat_amount'      => $vatRate > 0 ? round($base * $vatRate / 100, 2) : 0,
+                'tax_rate'        => $taxRate,
+                'tax_amount'      => $taxRate > 0 ? round($base * $taxRate / 100, 2) : 0,
+                'show_tax_breakdown' => (bool) $quotation->show_tax_breakdown,
+                'total_amount'    => round($gross, 2),
+                'validity_days'   => $quotation->validity_days,
+                'notes'           => $quotation->notes,
+                'terms'           => $quotation->terms,
+                'forwarding_letter'         => $quotation->forwarding_letter,
+                'forwarding_letter_subject' => $quotation->forwarding_letter_subject,
+                // The new customer needs their own letter header and reference.
+                'recipient_block' => trim(implode("\n", array_filter([
+                    $customer->contact_person, $customer->name, $customer->address,
+                ]))),
+                'status'          => 'draft',
+                'created_by'      => auth()->id(),
+            ]);
+
+            foreach ($lines as $line) {
+                $copy->items()->create($line);
+            }
+
+            return ['quotation' => $copy, 'estimates' => $repriced];
+        });
+
+        $msg = "Copied to {$customer->name} as a new draft quotation";
+        if ($new['estimates'] > 0) {
+            $msg .= $newGroup
+                ? " — {$new['estimates']} cost estimate(s) copied and re-priced for group {$newGroup}."
+                : " — {$new['estimates']} cost estimate(s) copied.";
+        } else {
+            $msg .= '.';
+        }
+
+        return redirect()->route('quotations.edit', $new['quotation'])->with('success', $msg);
+    }
+
+    /**
+     * Clone one cost estimate onto a copied job/part.
+     *
+     * Rates are never copied blindly: materials re-read their current
+     * catalogue rate and operations the rate for the pricing group in force,
+     * because an old estimate's rates are historical. A manual grand-total
+     * override is only carried over when the group is unchanged — otherwise
+     * it was a rounding of a number that no longer applies.
+     */
+    private function copyEstimate(
+        CostEstimate $source, int $rfqId, int $rfqItemId, ?int $partId, Customer $customer, ?string $newGroup
+    ): CostEstimate {
+        $group = $newGroup ?: $source->pricing_group;
+
+        $copy = CostEstimate::create([
+            'estimate_no'      => CostEstimate::generateEstimateNo(),
+            'rfq_id'           => $rfqId,
+            'rfq_item_id'      => $rfqItemId,
+            'rfq_item_part_id' => $partId,
+            'customer_id'      => $customer->id,
+            'company_name'     => $customer->name,
+            'job_name'         => $source->job_name,
+            'part_no'          => $source->part_no,
+            'actual_size'      => $source->actual_size,
+            'materials_size'   => $source->materials_size,
+            'pricing_group'    => $group,
+            'overhead_pct'     => $source->overhead_pct,
+            'vat_pct'          => $source->vat_pct,
+            'tax_pct'          => $source->tax_pct,
+            'times_multiplier' => $source->times_multiplier,
+            'job_quantity'     => $source->job_quantity,
+            'extra_cost'       => $source->extra_cost,
+            'grand_total_override' => $newGroup ? null : $source->grand_total_override,
+            'material_cost' => 0, 'machining_cost' => 0, 'surface_cost' => 0, 'other_cost' => 0,
+            'net_cost' => 0, 'overhead_amount' => 0, 'vat_amount' => 0, 'tax_amount' => 0,
+            'total' => 0, 'grand_total' => 0,
+            'status'           => 'draft',
+            'approval_status'  => 'not_submitted',
+            'notes'            => "Copied from {$source->estimate_no}.",
+            'created_by'       => auth()->id(),
+        ]);
+
+        $groupColumn = 'rate_group_' . strtolower($group);
+        foreach ($source->lines as $line) {
+            $rate = (float) $line->rate;
+
+            // Rates are only recomputed when the pricing group is being
+            // changed. Keeping the group means an exact copy, which is what
+            // "copy this quotation" is understood to mean.
+            if ($newGroup && $line->operation_id) {
+                $op = \App\Models\MachiningOperation::find($line->operation_id);
+                if ($op && $op->{$groupColumn} !== null) $rate = (float) $op->{$groupColumn};
+            } elseif ($newGroup && $line->material_id) {
+                $mat = \App\Models\Material::find($line->material_id);
+                if ($mat && $mat->rate_per_kg !== null) $rate = (float) $mat->rate_per_kg;
+            }
+
+            $copy->lines()->create([
+                'section'      => $line->section,
+                'material_id'  => $line->material_id,
+                'operation_id' => $line->operation_id,
+                'description'  => $line->description,
+                'quantity'     => $line->quantity,
+                'unit'         => $line->unit,
+                'rate'         => $rate,
+                'amount'       => round((float) $line->quantity * $rate, 2),
+                'sequence'     => $line->sequence,
+            ]);
+        }
+
+        return $copy->recalculate();
+    }
+
     public function show(Quotation $quotation)
     {
         $quotation->load([
@@ -655,6 +926,10 @@ class QuotationController extends Controller
         ]);
 
         return Inertia::render('Quotation/Show', [
+            // For the "copy to another customer" dialog.
+            'customers'   => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'sourcePricingGroup' => CostEstimate::where('rfq_id', $quotation->rfq_id)
+                ->orderByDesc('id')->value('pricing_group'),
             'quotation' => [
                 'id'              => $quotation->id,
                 'version'         => $quotation->version,
