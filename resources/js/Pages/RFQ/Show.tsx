@@ -26,14 +26,28 @@ const quotationStatusBadge: Record<string, string> = {
  */
 function PartsList({ parts }: { parts?: any[] }) {
     if (!parts || parts.length === 0) return null;
+    const fmt = (n: number) => `৳${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     return (
         <ul className="mt-2 space-y-1">
             {parts.map((p: any) => (
-                <li key={p.id} className="flex items-start gap-2 text-xs">
+                <li key={p.id} className="flex items-center gap-2 text-xs">
                     <span className="shrink-0 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
                         {p.part_no}
                     </span>
-                    <span className="text-surface-600 font-normal">{p.name}</span>
+                    <span className="text-surface-600 font-normal truncate max-w-[160px]" title={p.name}>{p.name}</span>
+                    <span className="shrink-0 text-surface-400">×{p.quantity} {p.unit}</span>
+                    {p.estimate ? (
+                        <Link href={`/cost-estimates/${p.estimate.id}`}
+                            className="shrink-0 ml-auto font-semibold text-emerald-700 hover:underline"
+                            title={`${p.estimate.estimate_no} · ${p.estimate.status}`}>
+                            {fmt(p.estimate.grand_total)}
+                        </Link>
+                    ) : (
+                        <Link href={`/cost-estimates/create?rfq_item_part_id=${p.id}`}
+                            className="shrink-0 ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-200 font-semibold hover:bg-brand-100">
+                            <i className="fi fi-rr-plus text-[9px] leading-none" /> Estimate
+                        </Link>
+                    )}
                 </li>
             ))}
         </ul>
@@ -44,6 +58,27 @@ function PartsList({ parts }: { parts?: any[] }) {
 function ItemEstimateCell({ item }: { item: any }) {
     const estimates = item.cost_estimates || [];
     const fmt = (n: number) => `৳${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    const cost = item.job_cost;
+
+    // Part-wise costing: the job's cost is the sum of its parts' estimates.
+    // The parts themselves (and the links to cost them) live in the
+    // description column, so this cell just reports the roll-up.
+    if (cost?.mode === 'parts') {
+        return (
+            <div className="space-y-1">
+                <div className="font-bold text-surface-900 text-sm">{fmt(cost.total)}</div>
+                <div className="text-[10px] text-surface-400">
+                    sum of {cost.costed} part{cost.costed !== 1 && 's'}
+                </div>
+                {cost.missing > 0 && (
+                    <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
+                        <i className="fi fi-rr-triangle-warning text-[9px] leading-none" />
+                        {cost.missing} part{cost.missing !== 1 && 's'} not costed
+                    </div>
+                )}
+            </div>
+        );
+    }
     const statusColor: Record<string, string> = {
         draft:     'bg-amber-100 text-amber-700',
         finalized: 'bg-emerald-100 text-emerald-700',

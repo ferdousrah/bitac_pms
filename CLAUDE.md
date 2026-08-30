@@ -229,6 +229,22 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `rfq_item_parts` is transactional → added to `SystemResetController::TABLES_TO_WIPE` + `Admin/System/Reset.tsx`.
 - ⚠️ Items arrays can arrive without a `product_id` key now that drafts are lenient — always read it as `($item['product_id'] ?? null) ?: null`.
 
+## 💰 Part-wise Cost Estimating (2026-08) — READ BEFORE TOUCHING PRICING
+
+> The money path. Get this wrong and quotations go out under-priced.
+
+- **A job is costed PART BY PART.** Each `rfq_item_parts` row gets its own cost estimate (`cost_estimates.rfq_item_part_id`, nullable). NULL = a whole-job estimate — what jobs without parts use, and what every pre-2026-08 estimate is.
+- **Part quantity is ABSOLUTE** — the total pieces for the whole order, not the count per job unit (`rfq_item_parts.quantity` + `unit`, entered on the RFQ form). So **job cost = plain Σ of its part estimates**; it is NEVER multiplied by the job quantity again.
+- **`RfqItem::jobCostBreakdown()` is the single source of truth.** Returns `mode` (`parts` | `item` | `none`), `total`, per-part rows, `costed`, `missing`. Rules:
+  - parts exist AND ≥1 is costed → `parts`, total = Σ of each part's **newest non-draft** estimate (`RfqItemPart::effectiveEstimate()`; falls back to newest draft). A re-estimate of one part replaces it — never double counts.
+  - otherwise → `item`, the newest item-level estimate (`RfqItem::itemLevelEstimates()`, which filters `whereNull('rfq_item_part_id')` so part estimates can't be picked up as job ones).
+  - nothing costed → `none`, total 0.
+- **Quotation is JOB-wise only — parts never reach the customer.** `QuotationController@create` builds one line per RFQ item with `unit_price = jobCostBreakdown()['total'] / rfq_item.quantity`, so `qty × unit_price` equals the job total exactly. ⚠️ It used to take the **single latest** estimate per item; with parts that silently quoted one part of a multi-part job. Never reintroduce a `->first()` over an item's estimates here.
+- **Under-quote guard:** a `parts`-mode job with `missing > 0` is collected into the `uncostedJobs` prop and the quotation form shows an amber warning naming each job and how many parts are uncosted. The price shown genuinely is short until they're costed.
+- **Entry point:** RFQ Show lists each part with its qty and either its estimate amount (link) or a **+ Estimate** button → `/cost-estimates/create?rfq_item_part_id=N`. The estimate form derives `rfq_item_id` from the part, prefills `job_quantity` from the part's quantity, and stamps the positional `part_no` (`3/3`). The Cost Estimate column shows the job roll-up ("sum of N parts") plus the not-costed warning.
+- `grand_total_override` still applies **per part**, and flows into the sum.
+- **Still job-level, not yet built:** approval. Each part estimate currently keeps its own approval chain; the agreed design is ONE approval per job covering all its part estimates.
+
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 
 > Conventions hammered out over many iterations — read before touching these areas.

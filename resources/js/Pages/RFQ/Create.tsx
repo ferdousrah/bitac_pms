@@ -31,7 +31,9 @@ type AttachedFile = {
 
 // A part within a job item. Only the name is captured — the part number is
 // positional (1/3, 2/3, 3/3) and recomputed whenever a row is added/removed.
-type Part = { name: string };
+type Part = { name: string; quantity: string; unit: string };
+
+const emptyPart = (unit: string): Part => ({ name: '', quantity: '1', unit });
 
 type Item = {
     product_id: string;
@@ -68,7 +70,11 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
         ? rfq.items.map((i: any) => ({
             product_id:         String(i.product_id ?? ''),
             job_description:    i.job_description ?? '',
-            parts:              (i.parts ?? []).map((p: any) => ({ name: p.name ?? '' })),
+            parts:              (i.parts ?? []).map((p: any) => ({
+                                    name:     p.name ?? '',
+                                    quantity: String(p.quantity ?? '1'),
+                                    unit:     p.unit ?? (i.unit ?? 'pcs'),
+                                })),
             quantity:           String(i.quantity ?? '1'),
             unit:               i.unit ?? 'pcs',
             notes:              i.notes ?? '',
@@ -250,7 +256,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
     // to renumber here — the UI derives them from the array index.
     function addPart(itemIndex: number) {
         const it = data.items[itemIndex];
-        setItemField(itemIndex, 'parts', [...it.parts, { name: '' }]);
+        setItemField(itemIndex, 'parts', [...it.parts, emptyPart(it.unit || 'pcs')]);
     }
 
     function removePart(itemIndex: number, partIndex: number) {
@@ -258,9 +264,9 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
         setItemField(itemIndex, 'parts', it.parts.filter((_: Part, i: number) => i !== partIndex));
     }
 
-    function setPartName(itemIndex: number, partIndex: number, value: string) {
+    function setPartField<K extends keyof Part>(itemIndex: number, partIndex: number, field: K, value: Part[K]) {
         const it = data.items[itemIndex];
-        setItemField(itemIndex, 'parts', it.parts.map((pt: Part, i: number) => i === partIndex ? { ...pt, name: value } : pt));
+        setItemField(itemIndex, 'parts', it.parts.map((pt: Part, i: number) => i === partIndex ? { ...pt, [field]: value } : pt));
     }
 
     // Transform form data: split AttachedFile[] into drawings[] (files) + drawing_file_ids[] (integers)
@@ -282,7 +288,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                 product_id: item.product_id,
                 job_description: item.job_description,
                 // Blank rows are dropped server-side too, but don't ship noise
-                parts: item.parts.filter(pt => pt.name.trim() !== ''),
+                parts: item.parts.filter((pt: Part) => pt.name.trim() !== ''),
                 quantity: item.quantity,
                 unit: item.unit,
                 notes: item.notes,
@@ -609,6 +615,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                                 <div className="flex items-center gap-2">
                                                     <i className="fi fi-rr-cubes text-indigo-500 text-xs leading-none" />
                                                     <span className="text-xs font-semibold text-surface-700">Parts</span>
+                                                    <span className="text-[10px] text-surface-400">quantity = total pieces for the order</span>
                                                     {item.parts.length > 0 && (
                                                         <span className="badge badge-slate text-[10px]">{item.parts.length}</span>
                                                     )}
@@ -621,7 +628,8 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
 
                                             {item.parts.length === 0 ? (
                                                 <p className="text-[11px] text-surface-400 italic">
-                                                    No parts added. Use this to break the item into individual parts — part numbers are assigned automatically.
+                                                    No parts added. Use this to break the job into individual parts — part numbers are assigned automatically,
+                                                    and each part is cost-estimated separately.
                                                 </p>
                                             ) : (
                                                 <div className="space-y-2">
@@ -633,9 +641,18 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                                                 {partNo(pIndex, item.parts.length)}
                                                             </span>
                                                             <input type="text" value={pt.name}
-                                                                onChange={e => setPartName(index, pIndex, e.target.value)}
+                                                                onChange={e => setPartField(index, pIndex, 'name', e.target.value)}
                                                                 placeholder="Part name — e.g. Bearing housing"
                                                                 className="form-input flex-1 !py-1.5 text-sm" />
+                                                            <input type="number" min="0" step="0.01" value={pt.quantity}
+                                                                onChange={e => setPartField(index, pIndex, 'quantity', e.target.value)}
+                                                                title="Total pieces for the whole order"
+                                                                className="form-input w-20 !py-1.5 text-sm shrink-0" />
+                                                            <select value={pt.unit}
+                                                                onChange={e => setPartField(index, pIndex, 'unit', e.target.value)}
+                                                                className="form-select w-20 !py-1.5 text-sm shrink-0">
+                                                                {COMMON_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                                            </select>
                                                             <button type="button" onClick={() => removePart(index, pIndex)}
                                                                 className="btn-ghost btn-icon btn-xs text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
                                                                 title="Remove part">

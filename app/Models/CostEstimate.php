@@ -10,7 +10,7 @@ class CostEstimate extends Model
     use HasCenter;
 
     protected $fillable = [
-        'estimate_no', 'rfq_id', 'rfq_item_id', 'center_id', 'quotation_id', 'customer_id',
+        'estimate_no', 'rfq_id', 'rfq_item_id', 'rfq_item_part_id', 'center_id', 'quotation_id', 'customer_id',
         'job_category_id',
         'company_name', 'job_name', 'part_no', 'actual_size', 'materials_size',
         'pricing_group', 'overhead_pct', 'vat_pct', 'tax_pct', 'times_multiplier', 'job_quantity',
@@ -43,6 +43,7 @@ class CostEstimate extends Model
 
     public function rfq()       { return $this->belongsTo(Rfq::class); }
     public function rfqItem()   { return $this->belongsTo(RfqItem::class); }
+    public function rfqItemPart() { return $this->belongsTo(RfqItemPart::class); }
     public function quotation() { return $this->belongsTo(Quotation::class); }
     public function customer()    { return $this->belongsTo(Customer::class); }
     public function jobCategory() { return $this->belongsTo(JobCategory::class); }

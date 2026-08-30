@@ -26,6 +26,7 @@ export default function QuotationCreate({
     defaultTerms = [],
     defaultCustomerRefNo = '',
     defaultCustomerRefDate = '',
+    uncostedJobs = [],
     existing = null,
 }: any) {
     // Edit mode flips the form to PUT-to-update instead of POST-to-create.
@@ -175,6 +176,33 @@ export default function QuotationCreate({
                             <p className="text-sm text-indigo-900 mt-1 whitespace-pre-wrap leading-relaxed">
                                 {kickoffNote}
                             </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* A part-wise job whose parts are not all costed would be quoted
+                    short — the price only covers the parts that have estimates. */}
+                {uncostedJobs.length > 0 && (
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                        <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                            <i className="fi fi-rr-triangle-warning text-amber-600 text-sm leading-none" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">
+                                Some parts have not been cost-estimated
+                            </div>
+                            <p className="text-sm text-amber-900 mt-1 leading-relaxed">
+                                The price below only covers the parts that have an estimate, so it is lower than the
+                                real job cost. Cost the remaining parts on the RFQ before sending this quotation.
+                            </p>
+                            <ul className="mt-2 space-y-0.5">
+                                {uncostedJobs.map((j: any, i: number) => (
+                                    <li key={i} className="text-xs text-amber-800">
+                                        <span className="font-semibold">{j.description}</span>
+                                        {' — '}{j.missing} of {j.part_count} part{j.part_count !== 1 && 's'} not costed
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     </div>
                 )}

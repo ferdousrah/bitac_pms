@@ -94,7 +94,19 @@ class CostEstimateController extends Controller
         // Prefer per-item creation: ?rfq_item_id=X
         $rfqItem = null;
         $rfq = null;
-        if ($request->query('rfq_item_id')) {
+        $rfqItemPart = null;
+
+        // Costing ONE part of a job: the part carries its own quantity, and
+        // its part number is positional so it is derived, never typed.
+        if ($request->query('rfq_item_part_id')) {
+            $rfqItemPart = \App\Models\RfqItemPart::with(['rfqItem.rfq.customer', 'rfqItem.product', 'rfqItem.parts'])
+                ->find($request->query('rfq_item_part_id'));
+            if ($rfqItemPart) {
+                $rfqItem = $rfqItemPart->rfqItem;
+                $rfq     = $rfqItem?->rfq;
+            }
+        }
+        if (!$rfqItem && $request->query('rfq_item_id')) {
             $rfqItem = \App\Models\RfqItem::with(['rfq.customer', 'product'])->find($request->query('rfq_item_id'));
             if ($rfqItem) $rfq = $rfqItem->rfq;
         } elseif ($request->query('rfq_id')) {
@@ -114,6 +126,17 @@ class CostEstimateController extends Controller
                     'quantity'    => $i->quantity,
                     'unit'        => $i->unit,
                 ]),
+            ] : null,
+            // When set, the form is costing this single part of the job.
+            'rfqItemPart' => $rfqItemPart ? [
+                'id'       => $rfqItemPart->id,
+                'name'     => $rfqItemPart->name,
+                'quantity' => (float) $rfqItemPart->quantity,
+                'unit'     => $rfqItemPart->unit,
+                'part_no'  => \App\Models\RfqItemPart::formatNo(
+                    max(0, $rfqItemPart->rfqItem->parts->search(fn ($p) => $p->id === $rfqItemPart->id)),
+                    $rfqItemPart->rfqItem->parts->count()
+                ),
             ] : null,
             'rfqItem'    => $rfqItem ? [
                 'id'              => $rfqItem->id,
@@ -140,6 +163,14 @@ class CostEstimateController extends Controller
             // If rfq_item_id given, auto-populate rfq_id + job_category_id from the parent RFQ
             $rfqId = $validated['rfq_id'] ?? null;
             $jobCategoryId = null;
+            // A part estimate inherits its job item (and therefore its RFQ)
+            // from the part, so the caller only has to pass the part.
+            if (!empty($validated['rfq_item_part_id'])) {
+                $part = \App\Models\RfqItemPart::with('rfqItem.rfq')->find($validated['rfq_item_part_id']);
+                if ($part) {
+                    $validated['rfq_item_id'] = $part->rfq_item_id;
+                }
+            }
             if (!empty($validated['rfq_item_id'])) {
                 $item = \App\Models\RfqItem::with('rfq')->find($validated['rfq_item_id']);
                 if ($item) {
@@ -156,6 +187,7 @@ class CostEstimateController extends Controller
                 'rfq_id'           => $rfqId,
                 // estimate_no injected by createEstimateWithRetry with retry on duplicates.
                 'rfq_item_id'      => $validated['rfq_item_id'] ?? null,
+                'rfq_item_part_id' => $validated['rfq_item_part_id'] ?? null,
                 'customer_id'      => $validated['customer_id'] ?? null,
                 'job_category_id'  => $jobCategoryId,
                 'company_name'     => $validated['company_name'] ?? null,
@@ -743,6 +775,9 @@ class CostEstimateController extends Controller
         return $request->validate([
             'rfq_id'           => 'nullable|exists:rfqs,id',
             'rfq_item_id'      => 'nullable|exists:rfq_items,id',
+            // Set when this estimate covers ONE part of the job rather than
+            // the whole job. Null = whole-job estimate (the old behaviour).
+            'rfq_item_part_id' => 'nullable|exists:rfq_item_parts,id',
             'customer_id'      => 'nullable|exists:customers,id',
             'company_name'     => 'nullable|string|max:200',
             'job_name'         => 'required|string|max:200',

@@ -191,7 +191,7 @@ class RfqController extends Controller
 
     public function show(Rfq $rfq)
     {
-        $rfq->load(['customer', 'jobCategory', 'items.product', 'items.parts', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
+        $rfq->load(['customer', 'jobCategory', 'items.product', 'items.parts.costEstimates', 'items.drawings', 'items.samplePhotos', 'items.costEstimates', 'createdBy', 'quotations', 'gatePasses.items']);
 
         return Inertia::render('RFQ/Show', [
             'rfq' => [
@@ -228,11 +228,31 @@ class RfqController extends Controller
                     'quantity'           => $i->quantity,
                     'unit'               => $i->unit,
                     'notes'              => $i->notes,
-                    'parts'              => $i->parts->values()->map(fn($p, $idx) => [
-                        'id'      => $p->id,
-                        'name'    => $p->name,
-                        'part_no' => \App\Models\RfqItemPart::formatNo($idx, $i->parts->count()),
-                    ]),
+                    'parts'              => $i->parts->values()->map(function ($p, $idx) use ($i) {
+                        $est = $p->effectiveEstimate();
+                        return [
+                            'id'       => $p->id,
+                            'name'     => $p->name,
+                            'quantity' => (float) $p->quantity,
+                            'unit'     => $p->unit,
+                            'part_no'  => \App\Models\RfqItemPart::formatNo($idx, $i->parts->count()),
+                            'estimate' => $est ? [
+                                'id'          => $est->id,
+                                'estimate_no' => $est->estimate_no,
+                                'status'      => $est->status,
+                                'grand_total' => (float) $est->grand_total,
+                            ] : null,
+                        ];
+                    }),
+                    'job_cost'           => (function () use ($i) {
+                        $c = $i->jobCostBreakdown();
+                        return [
+                            'mode'    => $c['mode'],
+                            'total'   => $c['total'],
+                            'costed'  => $c['costed'],
+                            'missing' => $c['missing'],
+                        ];
+                    })(),
                     'reference_type'     => $i->reference_type ?? 'none',
                     'drawings'           => $i->drawings->map(fn($f) => [
                         'id'            => $f->id,
@@ -296,7 +316,11 @@ class RfqController extends Controller
                     'quantity'           => $i->quantity,
                     'unit'               => $i->unit,
                     'notes'              => $i->notes,
-                    'parts'              => $i->parts->map(fn($p) => ['name' => $p->name])->values(),
+                    'parts'              => $i->parts->map(fn($p) => [
+                        'name'     => $p->name,
+                        'quantity' => $p->quantity,
+                        'unit'     => $p->unit,
+                    ])->values(),
                     'reference_type'     => $i->reference_type ?? 'none',
                     'existing_drawings'  => $i->drawings->map(fn($f) => [
                         'id'            => $f->id,
@@ -468,8 +492,10 @@ class RfqController extends Controller
             'items.*.quantity'        => 'nullable|numeric|min:0',
             'items.*.unit'            => 'nullable|string|max:20',
             'items.*.notes'           => 'nullable|string|max:500',
-            'items.*.parts'           => 'nullable|array',
-            'items.*.parts.*.name'    => 'nullable|string|max:255',
+            'items.*.parts'             => 'nullable|array',
+            'items.*.parts.*.name'      => 'nullable|string|max:255',
+            'items.*.parts.*.quantity'  => 'nullable|numeric|min:0',
+            'items.*.parts.*.unit'      => 'nullable|string|max:20',
             'items.*.reference_type'     => 'nullable|in:none,drawing,physical_sample,both',
             'items.*.sample_received'    => 'nullable|boolean',
             'items.*.sample_description' => 'nullable|string|max:1000',
@@ -859,8 +885,10 @@ HTML;
             'items.*.notes'           => 'nullable|string|max:500',
             // Parts this item breaks down into. Only the name is submitted —
             // the part number is positional, derived on render.
-            'items.*.parts'           => 'nullable|array',
-            'items.*.parts.*.name'    => 'nullable|string|max:255',
+            'items.*.parts'             => 'nullable|array',
+            'items.*.parts.*.name'      => 'nullable|string|max:255',
+            'items.*.parts.*.quantity'  => 'nullable|numeric|min:0',
+            'items.*.parts.*.unit'      => 'nullable|string|max:20',
             // Per-item reference material
             'items.*.reference_type'     => 'nullable|in:none,drawing,physical_sample,both',
             'items.*.sample_received'    => 'nullable|boolean',
@@ -890,7 +918,14 @@ HTML;
         foreach ($parts as $part) {
             $name = trim((string) (is_array($part) ? ($part['name'] ?? '') : $part));
             if ($name === '') continue;
-            $rfqItem->parts()->create(['name' => $name, 'sort_order' => $sort++]);
+            $rfqItem->parts()->create([
+                'name'       => $name,
+                // Absolute piece count for the whole order — the part's cost
+                // estimate is raised against this quantity.
+                'quantity'   => is_array($part) ? (($part['quantity'] ?? null) !== null ? (float) $part['quantity'] : 1) : 1,
+                'unit'       => is_array($part) ? (($part['unit'] ?? null) ?: $rfqItem->unit ?: 'pcs') : ($rfqItem->unit ?: 'pcs'),
+                'sort_order' => $sort++,
+            ]);
         }
     }
 

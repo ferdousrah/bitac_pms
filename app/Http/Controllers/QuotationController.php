@@ -76,29 +76,43 @@ class QuotationController extends Controller
     public function create(Request $request)
     {
         $rfqId = $request->query('rfq_id');
-        $rfq   = $rfqId ? Rfq::with(['customer', 'items.product', 'items.costEstimates'])->findOrFail($rfqId) : null;
+        $rfq   = $rfqId ? Rfq::with([
+            'customer', 'items.product', 'items.costEstimates', 'items.parts.costEstimates',
+        ])->findOrFail($rfqId) : null;
 
-        // For each RFQ item, find the latest finalized cost estimate (if any)
-        // and pre-fill the unit price (VAT-INCLUSIVE) so it matches the estimate's per-unit total.
-        $items = $rfq ? $rfq->items->map(function ($i) {
-            $estimate = $i->costEstimates
-                ->where('status', '!=', 'draft')
-                ->sortByDesc('id')
-                ->first() ?? $i->costEstimates->sortByDesc('id')->first();
+        // One quotation line per JOB — parts are an internal costing device and
+        // never reach the customer. The job's cost comes from
+        // RfqItem::jobCostBreakdown(), which sums the part estimates when the
+        // job is costed part-wise and falls back to a whole-job estimate
+        // otherwise. Taking a single estimate here (as this used to) would
+        // silently quote only one part of a multi-part job.
+        $uncosted = [];
+        $items = $rfq ? $rfq->items->map(function ($i) use (&$uncosted) {
+            $cost = $i->jobCostBreakdown();
 
             // BITAC quotations follow the convention: Unit Price is INCLUDING VAT & TAX
             // (no separate VAT row — see sample re-quotation 36.06.2692.028.51.028(2).26.92).
-            // Derive the per-unit price from the estimate's grand_total / job_quantity
-            // so a manual grand-total override (e.g. rounded ৳604,800 → ৳600,000)
-            // flows through to the quotation. With no override grand_total ==
-            // total × job_quantity, so this equals the per-unit `total`.
+            // The job total already honours each estimate's manual grand-total
+            // override, so a rounded figure flows straight through.
             $unitPrice = null;
-            if ($estimate) {
-                $estQty = (int) $estimate->job_quantity;
-                $unitPrice = $estQty > 0
-                    ? round((float) $estimate->grand_total / $estQty, 2)
-                    : round((float) $estimate->total, 2);
+            if ($cost['mode'] !== 'none') {
+                $jobQty = (float) $i->quantity;
+                $unitPrice = $jobQty > 0
+                    ? round($cost['total'] / $jobQty, 2)
+                    : round($cost['total'], 2);
             }
+
+            // Flag a job whose parts are only partly costed — the total would
+            // be short and the preparer needs to know before sending.
+            if ($cost['mode'] === 'parts' && $cost['missing'] > 0) {
+                $uncosted[] = [
+                    'description' => $i->job_description ?? $i->product?->name ?? "Item #{$i->id}",
+                    'missing'     => $cost['missing'],
+                    'part_count'  => $cost['part_count'],
+                ];
+            }
+
+            $estimate = $cost['estimate'];
 
             return [
                 'rfq_item_id'  => $i->id,
@@ -106,6 +120,11 @@ class QuotationController extends Controller
                 'quantity'     => (float) $i->quantity,
                 'unit'         => $i->unit,
                 'unit_price'   => $unitPrice,
+                // Where the money came from, so the form can show its provenance.
+                'cost_mode'    => $cost['mode'],
+                'job_cost'     => $cost['mode'] !== 'none' ? $cost['total'] : null,
+                'part_count'   => $cost['part_count'],
+                'costed_parts' => $cost['costed'],
                 'estimate_no'  => $estimate?->estimate_no,
                 'estimate_id'  => $estimate?->id,
             ];
@@ -168,6 +187,9 @@ class QuotationController extends Controller
             // preparer can override either field on the quotation form if needed.
             'defaultCustomerRefNo'   => $rfq?->customer_ref_no ?? '',
             'defaultCustomerRefDate' => $rfq?->created_at?->format('Y-m-d') ?? '',
+            // Jobs whose parts are only partly costed — quoting these as-is
+            // would under-charge, so the form warns before the preparer sends.
+            'uncostedJobs'           => $uncosted,
         ]);
     }
 
