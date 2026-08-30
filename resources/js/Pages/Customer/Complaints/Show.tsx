@@ -118,7 +118,7 @@ export default function CustomerComplaintShow({ complaint }: any) {
                                 <div className="flex items-center justify-between gap-3 flex-wrap">
                                     <div>
                                         <div className="font-semibold text-amber-900">
-                                            <i className="fi fi-rr-shield-check text-[11px]" /> Sample Return Gate-In Pass
+                                            <i className="fi fi-rr-shield-check text-[11px]" /> Sample Return Gate Pass In
                                         </div>
                                         <div className="text-amber-800 mt-1">
                                             Pass No: <b className="font-mono">{complaint.gate_pass.pass_no}</b> · {String(complaint.gate_pass.status).replace(/_/g, ' ')}
@@ -192,7 +192,7 @@ export default function CustomerComplaintShow({ complaint }: any) {
                 pdfUrl={showGatePdf && complaint.gate_pass
                     ? `/customer/documents/gate-pass/${complaint.gate_pass.id}?preview=base64`
                     : null}
-                title={complaint.gate_pass ? `Gate-In Pass ${complaint.gate_pass.pass_no}` : 'Gate Pass'}
+                title={complaint.gate_pass ? `Gate Pass In ${complaint.gate_pass.pass_no}` : 'Gate Pass'}
                 subtitle={`Ref ${complaint.reference_number}`}
                 onClose={() => setShowGatePdf(false)}
             />

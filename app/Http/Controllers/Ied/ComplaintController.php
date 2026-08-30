@@ -408,7 +408,7 @@ class ComplaintController extends Controller
      *   2. Creates rework orders for the chosen section(s) — reusing
      *      ReworkOrderService so the section queue + WOS routing all
      *      "just work" the same way as in-house NCR rework
-     *   3. Auto-issues a Gate-In Pass so the customer can return the
+     *   3. Auto-issues a Gate Pass In so the customer can return the
      *      defective sample(s)
      *   4. Flips complaint status to accepted_for_rework with audit stamps
      *   5. Notifies the customer
@@ -457,7 +457,7 @@ class ComplaintController extends Controller
                 auth()->id(),
             );
 
-            // (3) Gate-In Pass for the defective sample return
+            // (3) Gate Pass In for the defective sample return
             $gatePass = null;
             $rfqId = $wo->rfq_id ?? $wo->quotation?->rfq_id;
             if ($rfqId) {
@@ -506,7 +506,7 @@ class ComplaintController extends Controller
             // skip silently
         }
 
-        return back()->with('success', 'Submission approved for rework. NCR raised, sections notified, Gate-In pass issued.');
+        return back()->with('success', 'Submission approved for rework. NCR raised, sections notified, Gate Pass In issued.');
     }
 
     /** Change just the status (without sending a response — for triage). */

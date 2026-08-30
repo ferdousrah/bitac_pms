@@ -166,11 +166,11 @@ class CustomerNotifyService
         // picker). Fall back to the linked RFQ's customer for legacy passes.
         $customer = $gatePass->customer ?? $gatePass->rfq?->customer;
         if (! $customer) return;
-        $direction = $gatePass->direction === 'in' ? 'Gate-In' : 'Gate-Out';
+        $direction = $gatePass->direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out';
         self::send(
             $customer,
             'gate_pass_issued',
-            "{$direction} pass issued",
+            "{$direction} issued",
             "Pass #{$gatePass->pass_no} has been issued. You can print it from the documents page.",
             "/customer/documents",
             'fi-rr-shield', 'indigo',

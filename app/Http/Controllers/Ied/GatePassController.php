@@ -14,8 +14,8 @@ class GatePassController extends Controller
 {
     /**
      * Whether the current request is hitting the PCD-side routes. PCD users
-     * only need Gate-Out (sample/finished items going out). IED owns the full
-     * set (Gate-In + Gate-Out).
+     * only need Gate Pass Out (sample/finished items going out). IED owns the
+     * full set (in + out).
      */
     private function isPcdContext(): bool
     {
@@ -123,7 +123,7 @@ class GatePassController extends Controller
             : null;
 
         // Pre-fill items from the RFQ — preparer can edit/remove before issuing.
-        // For Gate-Out, condition note placeholder differs ("returned condition").
+        // For a Gate Pass Out, the condition note placeholder differs ("returned condition").
         $prefilledItems = $rfq
             ? $rfq->items->map(fn($i) => [
                 'rfq_item_id'    => $i->id,

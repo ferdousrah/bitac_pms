@@ -222,7 +222,7 @@ class CustomerDocumentController extends Controller
 
     /**
      * Customer-scoped Gate Pass PDF.
-     * Used when IED auto-issues a Gate-In Pass against a customer complaint —
+     * Used when IED auto-issues a Gate Pass In against a customer complaint —
      * the customer needs to print/show it at BITAC's gate to bring the
      * defective part back. Ownership: the related complaint must belong to
      * this customer.

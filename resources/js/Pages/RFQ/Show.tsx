@@ -427,10 +427,10 @@ export default function RFQShow({ rfq }: any) {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Link href={`/ied/gate-passes/create?rfq_id=${rfq.id}&direction=in`} className="btn-outline btn-sm">
-                                        <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> Gate-In
+                                        <i className="fi fi-rr-sign-in-alt text-xs leading-none" /> Gate Pass In
                                     </Link>
                                     <Link href={`/ied/gate-passes/create?rfq_id=${rfq.id}&direction=out`} className="btn-primary btn-sm">
-                                        <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> Gate-Out
+                                        <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> Gate Pass Out
                                     </Link>
                                 </div>
                             </div>

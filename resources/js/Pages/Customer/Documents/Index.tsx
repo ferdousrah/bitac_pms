@@ -58,7 +58,7 @@ export default function CustomerDocumentsIndex({ workOrders, standaloneGatePasse
                                     <div key={gp.id}
                                         onClick={() => openPdf({
                                             url: `/customer/documents/gate-pass/${gp.id}?preview=base64`,
-                                            title: `${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} Pass ${gp.pass_no}`,
+                                            title: `${gp.direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out'} ${gp.pass_no}`,
                                             subtitle: gp.customer_ref_no ? `Ref: ${gp.customer_ref_no}` : `RFQ #${gp.rfq_id}`,
                                         })}
                                         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surface-50/70 transition-colors"
@@ -71,7 +71,7 @@ export default function CustomerDocumentsIndex({ workOrders, standaloneGatePasse
                                             <div className="flex items-center gap-1.5">
                                                 <span className="font-mono text-xs font-bold text-surface-900">{gp.pass_no}</span>
                                                 <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-surface-100 text-surface-600">
-                                                    {gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'}
+                                                    {gp.direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out'}
                                                 </span>
                                             </div>
                                             <div className="text-[10px] text-surface-400 mt-0.5">
@@ -265,11 +265,11 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                             key={gp.id}
                             onClick={() => onPreview({
                                 url: `/customer/documents/gate-pass/${gp.id}?preview=base64`,
-                                title: `${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} Pass ${gp.pass_no}`,
+                                title: `${gp.direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out'} ${gp.pass_no}`,
                                 subtitle: jobLabel,
                             })}
                             label={gp.pass_no}
-                            sub={`${gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'} · ${gp.pass_date ?? gp.issued_at ?? ''}`}
+                            sub={`${gp.direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out'} · ${gp.pass_date ?? gp.issued_at ?? ''}`}
                             badge={gp.status}
                             ext="PDF"
                         />

@@ -139,7 +139,7 @@ export default function IedComplaintShow({ complaint, candidateSections = [], as
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <i className="fi fi-rr-shield-check text-amber-700 text-[11px]" />
-                                                    <span className="text-amber-900">Gate-In Pass auto-issued for sample return:</span>
+                                                    <span className="text-amber-900">Gate Pass In auto-issued for sample return:</span>
                                                     <Link href={`/ied/gate-passes/${complaint.gate_pass.id}`} className="font-mono font-semibold text-amber-800 hover:underline">
                                                         {complaint.gate_pass.pass_no}
                                                     </Link>
@@ -312,7 +312,7 @@ function ApproveReworkCard({ complaintId, candidateSections, hasWorkOrder }: any
                 </div>
                 <div>
                     <h3 className="text-sm font-bold text-surface-900">Approve for Rework</h3>
-                    <p className="text-xs text-surface-400 mt-0.5">Routes the job back to production with an NCR + auto-issued Gate-In pass</p>
+                    <p className="text-xs text-surface-400 mt-0.5">Routes the job back to production with an NCR + auto-issued Gate Pass In</p>
                 </div>
             </div>
             <div className="card-body space-y-4">

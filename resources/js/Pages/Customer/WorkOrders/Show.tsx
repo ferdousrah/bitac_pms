@@ -439,7 +439,7 @@ export default function CustomerWorkOrderShow({ workOrder }: any) {
                                                 <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
                                                     gp.direction === 'in' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
                                                 }`}>
-                                                    {gp.direction === 'in' ? 'Gate-In' : 'Gate-Out'}
+                                                    {gp.direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out'}
                                                 </span>
                                             </div>
                                             <p className="text-[11px] text-surface-400 mt-0.5">
