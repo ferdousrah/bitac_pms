@@ -123,7 +123,7 @@ export default function CenterEdit({ center }: { center: Center }) {
                         </div>
                     </div>
                     <div className="card-body space-y-4">
-                        <Field label="English caption (italic small text above the Bangla name)" error={errors.caption_en}>
+                        <Field label="English caption" error={errors.caption_en} hint="Shown on the public portfolio site. Not printed on the letterhead.">
                             <input className="form-input" value={data.caption_en} onChange={e => setData('caption_en', e.target.value)} placeholder="BITAC – A Center of Excellence" />
                         </Field>
                         <Field label="Center name in Bangla *" error={errors.name_bn} hint="The big bold line in the header.">
@@ -151,7 +151,7 @@ export default function CenterEdit({ center }: { center: Center }) {
                                 <input className="form-input font-mono" value={data.website} onChange={e => setData('website', e.target.value)} placeholder="www.bitac.gov.bd" />
                             </Field>
                         </div>
-                        <Field label="Letterhead accent color" error={errors.letterhead_color} hint="Used for the header/footer separator lines and English caption.">
+                        <Field label="Letterhead accent color" error={errors.letterhead_color} hint="Not used on the letterhead — its inks match the printed stationery. Kept for other documents.">
                             <div className="flex items-center gap-2">
                                 <input type="color" value={data.letterhead_color} onChange={e => setData('letterhead_color', e.target.value)} className="w-12 h-9 rounded border border-surface-200 cursor-pointer" />
                                 <input className="form-input font-mono w-32" value={data.letterhead_color} onChange={e => setData('letterhead_color', e.target.value)} />
