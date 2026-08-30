@@ -336,6 +336,31 @@ class CostEstimateController extends Controller
             'rfqAttachments'  => $rfqAttachments,
             'rfqLetter'       => $rfqLetter,
             'comments'        => $comments,
+            // Job-wise submission context. An estimate raised against a part
+            // can be sent on its own OR together with the job's other parts.
+            'jobSubmission'   => (function () use ($costEstimate) {
+                if (! $costEstimate->rfq_item_part_id || ! $costEstimate->rfqItem) return null;
+
+                $item = $costEstimate->rfqItem->load('parts.costEstimates');
+                $estimates = $item->parts
+                    ->map(fn ($p) => $p->effectiveEstimate())
+                    ->filter();
+
+                return [
+                    'rfq_item_id'   => $item->id,
+                    'job_name'      => $item->job_description,
+                    'part_count'    => $item->parts->count(),
+                    'estimate_count'=> $estimates->count(),
+                    'submittable'   => $estimates->where('approval_status', 'not_submitted')->count(),
+                    'uncosted'      => $item->parts->count() - $estimates->count(),
+                    'job_total'     => $item->jobCostBreakdown()['total'],
+                ];
+            })(),
+            // How many estimates a decision on this one will cover. >1 means
+            // it was submitted job-wise and is approved/rejected as a whole.
+            'batchSize'       => $costEstimate->approval_batch
+                ? CostEstimate::where('approval_batch', $costEstimate->approval_batch)->count()
+                : 1,
             'canSubmit'       => $costEstimate->approval_status === 'not_submitted'
                                 && $costEstimate->status === 'draft'
                                 && ($isCreator || $isSuperAdmin),
@@ -344,27 +369,19 @@ class CostEstimateController extends Controller
         ]);
     }
 
-    public function submitForApproval(CostEstimate $costEstimate)
+    /**
+     * Create the pending approval rows for an estimate.
+     *
+     * Uses the same chain as quotations. "Prepared By" is the CREATOR, not an
+     * approver, so the chain is: FIRST approver = "Checked By", LAST =
+     * "Approved By", any in-between = "Reviewer N".
+     *   1 approver  → [Approved By]
+     *   2 approvers → [Checked By, Approved By]
+     *   3 approvers → [Checked By, Reviewer 2, Approved By]
+     */
+    private function buildApprovalChain(CostEstimate $costEstimate): void
     {
-        abort_unless($costEstimate->approval_status === 'not_submitted', 422, 'Already submitted.');
-
-        // Only the preparer (creator) — or a super admin — can submit for approval.
-        $user = auth()->user();
-        $isCreator = $costEstimate->created_by === $user->id;
-        $isSuperAdmin = method_exists($user, 'hasRole') && $user->hasRole('super_admin');
-        if (!$isCreator && !$isSuperAdmin) {
-            return back()->with('error', 'Only the preparer can submit this estimate for approval.');
-        }
-
-        // Use the same approval chain settings as quotations
         $settings = \App\Models\QuotationApprovalSetting::orderBy('level')->get();
-
-        // Approval-chain labels. "Prepared By" is the CREATOR (not an approver),
-        // so the chain is: FIRST approver = "Checked By", LAST = "Approved By",
-        // any in-between = "Reviewer N".
-        //   1 approver  → [Approved By]
-        //   2 approvers → [Checked By, Approved By]
-        //   3 approvers → [Checked By, Reviewer 2, Approved By]
         $chainLabels = fn (int $total): array => \App\Support\ApprovalChainLabels::forCount($total);
 
         if ($settings->isEmpty()) {
@@ -382,23 +399,40 @@ class CostEstimateController extends Controller
                 ]);
                 $level++;
             }
-        } else {
-            $labels = $chainLabels($settings->count());
-            foreach ($settings as $i => $setting) {
-                \App\Models\CostEstimateApproval::create([
-                    'cost_estimate_id' => $costEstimate->id,
-                    'approver_id'      => $setting->approver_id,
-                    'level'            => $setting->level,
-                    // Prefer setting's own label if it looks custom (not the default "Level X Approval")
-                    'label'            => ($setting->label && !preg_match('/^Level \d+/', $setting->label))
-                                            ? $setting->label
-                                            : ($labels[$i] ?? "Level {$setting->level}"),
-                    'status'           => 'pending',
-                ]);
-            }
+            return;
         }
 
-        $costEstimate->update(['approval_status' => 'pending_approval']);
+        $labels = $chainLabels($settings->count());
+        foreach ($settings as $i => $setting) {
+            \App\Models\CostEstimateApproval::create([
+                'cost_estimate_id' => $costEstimate->id,
+                'approver_id'      => $setting->approver_id,
+                'level'            => $setting->level,
+                // Prefer setting's own label if it looks custom (not the default "Level X Approval")
+                'label'            => ($setting->label && !preg_match('/^Level \d+/', $setting->label))
+                                        ? $setting->label
+                                        : ($labels[$i] ?? "Level {$setting->level}"),
+                'status'           => 'pending',
+            ]);
+        }
+    }
+
+    public function submitForApproval(CostEstimate $costEstimate)
+    {
+        abort_unless($costEstimate->approval_status === 'not_submitted', 422, 'Already submitted.');
+
+        // Only the preparer (creator) — or a super admin — can submit for approval.
+        $user = auth()->user();
+        $isCreator = $costEstimate->created_by === $user->id;
+        $isSuperAdmin = method_exists($user, 'hasRole') && $user->hasRole('super_admin');
+        if (!$isCreator && !$isSuperAdmin) {
+            return back()->with('error', 'Only the preparer can submit this estimate for approval.');
+        }
+
+        $this->buildApprovalChain($costEstimate);
+
+        // Submitted on its own, so it belongs to no job batch.
+        $costEstimate->update(['approval_status' => 'pending_approval', 'approval_batch' => null]);
 
         // Notify approvers
         $ids = $costEstimate->approvals()->pluck('approver_id')->toArray();
@@ -413,106 +447,206 @@ class CostEstimateController extends Controller
         return back()->with('success', 'Submitted for approval.');
     }
 
+    /**
+     * Submit a whole JOB for approval — every part estimate of the job goes
+     * in together under one batch id, and an approver's single decision
+     * covers all of them.
+     *
+     * The per-estimate route still exists; the preparer chooses which to use.
+     * Only each part's EFFECTIVE (newest) estimate is submitted, so superseded
+     * revisions are never sent for approval.
+     */
+    public function submitJobForApproval(Request $request, \App\Models\RfqItem $rfqItem)
+    {
+        $rfqItem->load('parts.costEstimates');
+
+        $candidates = collect();
+        foreach ($rfqItem->parts as $part) {
+            if ($est = $part->effectiveEstimate()) {
+                $candidates->push($est);
+            }
+        }
+
+        if ($candidates->isEmpty()) {
+            return back()->with('error', 'None of this job\'s parts have a cost estimate yet.');
+        }
+
+        // Anything already in flight or decided is left alone — re-submitting
+        // it would duplicate its approval chain.
+        $submittable = $candidates->where('approval_status', 'not_submitted');
+        $skipped     = $candidates->count() - $submittable->count();
+
+        if ($submittable->isEmpty()) {
+            return back()->with('error', 'Every estimate on this job has already been submitted for approval.');
+        }
+
+        $batch = (string) \Illuminate\Support\Str::uuid();
+        $total = 0.0;
+
+        DB::transaction(function () use ($submittable, $batch, &$total) {
+            foreach ($submittable as $estimate) {
+                $this->buildApprovalChain($estimate);
+                $estimate->update([
+                    'approval_status' => 'pending_approval',
+                    'approval_batch'  => $batch,
+                ]);
+                $total += (float) $estimate->grand_total;
+            }
+        });
+
+        // One notification for the job, not one per part.
+        $first = $submittable->first();
+        $ids = \App\Models\CostEstimateApproval::whereIn('cost_estimate_id', $submittable->pluck('id'))
+            ->pluck('approver_id')->unique()->values()->all();
+        if (!empty($ids)) {
+            $jobName = $rfqItem->job_description ?: "Job #{$rfqItem->id}";
+            \App\Services\NotifyService::send($ids, 'estimate_approval', 'Job Cost Needs Approval',
+                "{$jobName} — {$submittable->count()} part estimate(s), total ৳" . number_format($total)
+                . ". Approving covers the whole job.",
+                "/cost-estimates/{$first->id}", 'fi-rr-calculator', 'amber');
+        }
+
+        foreach ($submittable as $estimate) {
+            app(\App\Services\RevisionTracker::class)->trackEstimate($estimate->fresh(), 'submitted_for_approval');
+        }
+
+        $msg = "Job submitted for approval — {$submittable->count()} part estimate(s).";
+        if ($skipped > 0) {
+            $msg .= " {$skipped} already in approval and left as-is.";
+        }
+
+        return back()->with('success', $msg);
+    }
+
     public function approveEstimate(Request $request, CostEstimate $costEstimate)
     {
-        $approval = $costEstimate->approvals()
-            ->where('approver_id', auth()->id())
-            ->where('status', 'pending')
-            ->first();
+        // An estimate submitted as part of a job batch is decided as a whole:
+        // one click approves every part estimate that went in with it. An
+        // estimate submitted on its own has no batch, so this is just itself.
+        $targets = $costEstimate->approvalBatchMembers();
+        $remark  = $request->input('remarks');
+        $done    = 0;
 
-        if (!$approval) {
+        foreach ($targets as $target) {
+            $approval = $target->approvals()
+                ->where('approver_id', auth()->id())
+                ->where('status', 'pending')
+                ->first();
+
+            // Skip siblings this approver has already actioned rather than
+            // failing the whole batch.
+            if (!$approval) continue;
+
+            $approval->update([
+                'status'  => 'approved',
+                'remarks' => $remark,
+                'acted_at'=> now(),
+            ]);
+
+            // Capture the inline-drawn signature if one was provided. Falls back
+            // to user.signature_path at PDF-render time.
+            $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+            if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+
+            // Check if all levels approved
+            $allApproved = $target->approvals()->where('status', '!=', 'approved')->doesntExist();
+            if ($allApproved) {
+                $target->update(['approval_status' => 'approved', 'status' => 'finalized']);
+            }
+
+            app(\App\Services\RevisionTracker::class)->trackEstimate(
+                $target->fresh(),
+                'approved',
+                $remark
+            );
+
+            // Notify the preparer (creator) that the estimate was approved
+            if ($target->created_by) {
+                $body = $allApproved
+                    ? "Your cost estimate {$target->estimate_no} has been fully approved."
+                    : "Your cost estimate {$target->estimate_no} was approved by " . auth()->user()->name . ".";
+                if ($remark) $body .= "\nNote: \"{$remark}\"";
+
+                \App\Services\NotifyService::send(
+                    $target->created_by,
+                    'estimate_approved',
+                    'Cost Estimate Approved',
+                    $body,
+                    "/cost-estimates/{$target->id}",
+                    'fi-rr-check-circle',
+                    'green'
+                );
+            }
+
+            $done++;
+        }
+
+        if ($done === 0) {
             return back()->with('error', 'No pending approval found for you on this estimate. It may have already been actioned.');
         }
 
-        $approval->update([
-            'status'  => 'approved',
-            'remarks' => $request->input('remarks'),
-            'acted_at'=> now(),
-        ]);
-
-        // Capture the inline-drawn signature if one was provided. Falls back
-        // to user.signature_path at PDF-render time.
-        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
-        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
-
-        // Check if all levels approved
-        $allApproved = $costEstimate->approvals()->where('status', '!=', 'approved')->doesntExist();
-        if ($allApproved) {
-            $costEstimate->update(['approval_status' => 'approved', 'status' => 'finalized']);
-        }
-
-        app(\App\Services\RevisionTracker::class)->trackEstimate(
-            $costEstimate->fresh(),
-            'approved',
-            $request->input('remarks')
-        );
-
-        // Notify the preparer (creator) that the estimate was approved
-        if ($costEstimate->created_by) {
-            $remark = $request->input('remarks');
-            $body = $allApproved
-                ? "Your cost estimate {$costEstimate->estimate_no} has been fully approved."
-                : "Your cost estimate {$costEstimate->estimate_no} was approved by " . auth()->user()->name . ".";
-            if ($remark) $body .= "\nNote: \"{$remark}\"";
-
-            \App\Services\NotifyService::send(
-                $costEstimate->created_by,
-                'estimate_approved',
-                'Cost Estimate Approved',
-                $body,
-                "/cost-estimates/{$costEstimate->id}",
-                'fi-rr-check-circle',
-                'green'
-            );
-        }
-
-        return back()->with('success', 'Estimate approved.');
+        return back()->with('success', $done > 1
+            ? "Job approved — {$done} part estimates."
+            : 'Estimate approved.');
     }
 
     public function rejectEstimate(Request $request, CostEstimate $costEstimate)
     {
         $request->validate(['remarks' => 'required|string|max:1000']);
 
-        $approval = $costEstimate->approvals()
-            ->where('approver_id', auth()->id())
-            ->where('status', 'pending')
-            ->first();
+        // Like approval, a rejection covers the whole job batch when the
+        // estimate was submitted as part of one.
+        $targets = $costEstimate->approvalBatchMembers();
+        $remark  = $request->input('remarks');
+        $done    = 0;
 
-        if (!$approval) {
+        foreach ($targets as $target) {
+            $approval = $target->approvals()
+                ->where('approver_id', auth()->id())
+                ->where('status', 'pending')
+                ->first();
+
+            if (!$approval) continue;
+
+            $approval->update([
+                'status'  => 'rejected',
+                'remarks' => $remark,
+                'acted_at'=> now(),
+            ]);
+            $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+            if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+
+            $target->update(['approval_status' => 'rejected']);
+
+            app(\App\Services\RevisionTracker::class)->trackEstimate(
+                $target->fresh(),
+                'rejected',
+                $remark
+            );
+
+            // Notify the preparer that their estimate was rejected
+            if ($target->created_by) {
+                \App\Services\NotifyService::send(
+                    $target->created_by,
+                    'estimate_rejected',
+                    'Cost Estimate Rejected',
+                    "Your cost estimate {$target->estimate_no} was rejected by " . auth()->user()->name . ".\nReason: \"{$remark}\"",
+                    "/cost-estimates/{$target->id}",
+                    'fi-rr-cross-circle',
+                    'red'
+                );
+            }
+
+            $done++;
+        }
+
+        if ($done === 0) {
             return back()->with('error', 'No pending approval found for you on this estimate. It may have already been actioned.');
         }
 
-        $approval->update([
-            'status'  => 'rejected',
-            'remarks' => $request->input('remarks'),
-            'acted_at'=> now(),
-        ]);
-        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
-        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
-
-        $costEstimate->update(['approval_status' => 'rejected']);
-
-        app(\App\Services\RevisionTracker::class)->trackEstimate(
-            $costEstimate->fresh(),
-            'rejected',
-            $request->input('remarks')
-        );
-
-        // Notify the preparer that their estimate was rejected
-        if ($costEstimate->created_by) {
-            $remark = $request->input('remarks');
-            \App\Services\NotifyService::send(
-                $costEstimate->created_by,
-                'estimate_rejected',
-                'Cost Estimate Rejected',
-                "Your cost estimate {$costEstimate->estimate_no} was rejected by " . auth()->user()->name . ".\nReason: \"{$remark}\"",
-                "/cost-estimates/{$costEstimate->id}",
-                'fi-rr-cross-circle',
-                'red'
-            );
-        }
-
-        return back()->with('success', 'Estimate rejected.');
+        return back()->with('success', $done > 1
+            ? "Job rejected — {$done} part estimates."
+            : 'Estimate rejected.');
     }
 
     /**
@@ -523,38 +657,50 @@ class CostEstimateController extends Controller
     {
         $request->validate(['remarks' => 'required|string|max:1000']);
 
-        $approval = $costEstimate->approvals()
-            ->where('approver_id', auth()->id())
-            ->where('status', 'pending')
-            ->first();
+        // Sending a job batch back to the preparer sends all of it back —
+        // costing one part differently usually changes the job's total.
+        $targets = $costEstimate->approvalBatchMembers();
+        $done    = 0;
 
-        if (!$approval) {
-            return back()->with('error', 'No pending approval found for you on this estimate. It may have already been actioned.');
+        foreach ($targets as $target) {
+            $approval = $target->approvals()
+                ->where('approver_id', auth()->id())
+                ->where('status', 'pending')
+                ->first();
+
+            if (!$approval) continue;
+
+            // Keep a history note on the approval record
+            $approval->update([
+                'status'  => 'rejected', // in DB it's rejected, but with a "changes requested" flavor via notes
+                'remarks' => '[Changes Requested] ' . $request->input('remarks'),
+                'acted_at'=> now(),
+            ]);
+            $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+            if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+
+            // Send back to draft so preparer can edit and resubmit. The batch
+            // is cleared too — resubmitting is a fresh decision.
+            $target->update([
+                'approval_status' => 'not_submitted',
+                'status'          => 'draft',
+                'approval_batch'  => null,
+            ]);
+
+            // Clear approvals so the chain restarts when resubmitted
+            $target->approvals()->delete();
+
+            app(\App\Services\RevisionTracker::class)->trackEstimate(
+                $target->fresh(),
+                'changes_requested',
+                $request->input('remarks')
+            );
+            $done++;
         }
 
-        // Keep a history note on the approval record
-        $approval->update([
-            'status'  => 'rejected', // in DB it's rejected, but with a "changes requested" flavor via notes
-            'remarks' => '[Changes Requested] ' . $request->input('remarks'),
-            'acted_at'=> now(),
-        ]);
-        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
-        if ($sigPath) $approval->update(['signature_path' => $sigPath]);
-
-        // Send back to draft so preparer can edit and resubmit
-        $costEstimate->update([
-            'approval_status' => 'not_submitted',
-            'status'          => 'draft',
-        ]);
-
-        // Clear approvals so the chain restarts when resubmitted
-        $costEstimate->approvals()->delete();
-
-        app(\App\Services\RevisionTracker::class)->trackEstimate(
-            $costEstimate->fresh(),
-            'changes_requested',
-            $request->input('remarks')
-        );
+        if ($done === 0) {
+            return back()->with('error', 'No pending approval found for you on this estimate. It may have already been actioned.');
+        }
 
         // Notify the preparer that corrections are needed
         if ($costEstimate->created_by) {
@@ -570,7 +716,9 @@ class CostEstimateController extends Controller
             );
         }
 
-        return back()->with('success', 'Changes requested. The estimate is back with the preparer.');
+        return back()->with('success', $done > 1
+            ? "Changes requested. All {$done} part estimates are back with the preparer."
+            : 'Changes requested. The estimate is back with the preparer.');
     }
 
     public function edit(CostEstimate $costEstimate)

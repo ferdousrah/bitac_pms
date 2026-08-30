@@ -243,7 +243,16 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Under-quote guard:** a `parts`-mode job with `missing > 0` is collected into the `uncostedJobs` prop and the quotation form shows an amber warning naming each job and how many parts are uncosted. The price shown genuinely is short until they're costed.
 - **Entry point:** RFQ Show lists each part with its qty and either its estimate amount (link) or a **+ Estimate** button → `/cost-estimates/create?rfq_item_part_id=N`. The estimate form derives `rfq_item_id` from the part, prefills `job_quantity` from the part's quantity, and stamps the positional `part_no` (`3/3`). The Cost Estimate column shows the job roll-up ("sum of N parts") plus the not-costed warning.
 - `grand_total_override` still applies **per part**, and flows into the sum.
-- **Still job-level, not yet built:** approval. Each part estimate currently keeps its own approval chain; the agreed design is ONE approval per job covering all its part estimates.
+### Approval: per-estimate OR job-wise (the preparer chooses)
+- Both routes exist and neither replaces the other:
+  - `POST cost-estimates/{costEstimate}/submit-approval` — just this estimate, `approval_batch` stays NULL.
+  - `POST cost-estimates/job/{rfqItem}/submit-approval` (`submitJobForApproval`) — every part estimate of the job goes in together under one shared `cost_estimates.approval_batch` uuid.
+- Job-wise submit only takes each part's **effective (newest)** estimate, so superseded revisions are never sent, and it **skips** estimates already in approval rather than duplicating their chain (it says how many it skipped).
+- **A decision applies to the whole batch.** `approveEstimate` / `rejectEstimate` / `requestChangesEstimate` all loop over `CostEstimate::approvalBatchMembers()` (just `[$this]` when `approval_batch` is NULL), so one click decides every part estimate submitted with it. Siblings the approver already actioned are skipped, not failed. Request-changes also clears `approval_batch` — resubmitting is a fresh decision.
+- Each estimate still keeps its own `cost_estimate_approvals` rows, so the PDF signatory grid and `ApprovalChainLabels` are untouched.
+- The chain builder was extracted to `CostEstimateController::buildApprovalChain()` — both submit paths use it; don't inline it again.
+- UI: the estimate Show page offers **Submit** and (for a part estimate whose job has >1 submittable estimate) **Submit Whole Job (N)**, warning in the confirm if some parts are uncosted. When `batchSize > 1` an indigo note tells the approver their decision covers all N.
+- ⚠️ **`approval_status` was missing from `CostEstimate::$fillable`** — every `update(['approval_status' => …])` was silently dropped by mass-assignment protection, so estimates never left `not_submitted` (Submit stayed clickable and could stack duplicate chains). Fixed; keep it in `$fillable`.
 
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 

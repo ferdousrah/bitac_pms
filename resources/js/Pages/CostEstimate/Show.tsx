@@ -28,7 +28,7 @@ const APPROVAL_STATUS: Record<string, { dot: string; text: string; label: string
 const fmt = (v: any) => Number(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (v: any) => Number(v ?? 0).toLocaleString('en-IN');
 
-export default function CostEstimateShow({ estimate, revisions = [], rfqAttachments = [], rfqLetter = null, comments = [], canSubmit, canApprove, canReject }: any) {
+export default function CostEstimateShow({ estimate, revisions = [], rfqAttachments = [], rfqLetter = null, comments = [], canSubmit, canApprove, canReject, jobSubmission = null, batchSize = 1 }: any) {
     const currentVersion = revisions[0]?.revision_no ?? null;
     const sectionLines = (section: string) => estimate.lines.filter((l: any) => l.section === section);
 
@@ -322,13 +322,46 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                             iconColor="amber"
                             className="animate-slide-up lg:col-span-2"
                             headerRight={canSubmit ? (
-                                <button onClick={(e) => { e.stopPropagation(); router.post(`/cost-estimates/${estimate.id}/submit-approval`); }}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 transition-colors">
-                                    <i className="fi fi-rr-paper-plane text-[11px] leading-none" /> Submit
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                    <button onClick={(e) => { e.stopPropagation(); router.post(`/cost-estimates/${estimate.id}/submit-approval`); }}
+                                        title="Send only this estimate for approval"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 transition-colors">
+                                        <i className="fi fi-rr-paper-plane text-[11px] leading-none" /> Submit
+                                    </button>
+                                    {/* A part estimate can instead go together with the rest of
+                                        its job, so one approval decision covers the job. */}
+                                    {jobSubmission && jobSubmission.submittable > 1 && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const warn = jobSubmission.uncosted > 0
+                                                    ? `\n\nNote: ${jobSubmission.uncosted} part(s) of this job have no estimate yet and will not be included.`
+                                                    : '';
+                                                if (!confirm(`Send all ${jobSubmission.submittable} part estimates of this job for approval together?${warn}`)) return;
+                                                router.post(`/cost-estimates/job/${jobSubmission.rfq_item_id}/submit-approval`);
+                                            }}
+                                            title="Send every part estimate of this job together — one decision approves the job"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors">
+                                            <i className="fi fi-rr-layers text-[11px] leading-none" /> Submit Whole Job ({jobSubmission.submittable})
+                                        </button>
+                                    )}
+                                </div>
                             ) : null}
                         >
                             <div className="px-5 py-4 space-y-2.5">
+                                {/* Submitted job-wise: one decision here covers every part
+                                    estimate that went in with it. */}
+                                {batchSize > 1 && (
+                                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-indigo-50 border border-indigo-200">
+                                        <i className="fi fi-rr-layers text-indigo-600 text-xs leading-none mt-0.5" />
+                                        <div className="text-[11px] text-indigo-900 leading-relaxed">
+                                            Submitted as a <span className="font-bold">whole job</span> — approving or
+                                            rejecting here applies to all <span className="font-bold">{batchSize}</span> part
+                                            estimates of this job at once.
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Prepared By */}
                                 <ApprovalRow
                                     label="Prepared By"

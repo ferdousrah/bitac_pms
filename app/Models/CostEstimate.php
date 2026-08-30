@@ -17,7 +17,11 @@ class CostEstimate extends Model
         'material_cost', 'machining_cost', 'surface_cost', 'other_cost',
         'net_cost', 'overhead_amount', 'extra_cost', 'vat_amount', 'tax_amount', 'total', 'grand_total',
         'grand_total_override',
-        'status', 'notes', 'created_by',
+        // approval_status was missing here, so every
+        // update(['approval_status' => ...]) in the controller was silently
+        // dropped by mass-assignment protection and the estimate never left
+        // 'not_submitted'.
+        'status', 'approval_status', 'approval_batch', 'notes', 'created_by',
     ];
 
     protected function casts(): array
@@ -51,6 +55,20 @@ class CostEstimate extends Model
     public function lines()     { return $this->hasMany(CostEstimateLine::class)->orderBy('section')->orderBy('sequence'); }
 
     public function approvals()      { return $this->hasMany(CostEstimateApproval::class)->orderBy('level'); }
+
+    /**
+     * Every estimate submitted for approval in the same batch as this one —
+     * this estimate included. A single estimate submitted on its own has no
+     * batch, so this is just itself.
+     */
+    public function approvalBatchMembers()
+    {
+        if (! $this->approval_batch) {
+            return collect([$this]);
+        }
+
+        return static::where('approval_batch', $this->approval_batch)->orderBy('id')->get();
+    }
 
     public function materialLines()  { return $this->lines()->where('section', 'material'); }
     public function machiningLines() { return $this->lines()->where('section', 'machining'); }
