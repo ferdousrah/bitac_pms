@@ -122,8 +122,8 @@ class BitacLetterhead
 
     /**
      * Ink colours of the printed BITAC letterhead. These are fixed features
-     * of the official stationery, not per-centre branding — `letterhead_color`
-     * stays available for document accents elsewhere.
+     * of the official stationery, not per-centre branding. The rule beneath
+     * the block uses the centre's own `letterhead_color`.
      */
     private const TITLE_INK    = '#5b2d90';  // deep violet — centre name
     private const MINISTRY_INK = '#c00000';  // red — ministry line
@@ -134,9 +134,9 @@ class BitacLetterhead
      *
      * Mirrors the printed letterhead: national emblem on the left, BITAC gear
      * on the right, and five centred lines between them — centre name, the
-     * ministry, the government, the address, then the phone/website line.
-     * The address and contacts belong HERE (not the footer) exactly as they
-     * do on the real stationery.
+     * ministry, the government, the address, then the phone/website line,
+     * closed off by a rule across the full width. The address and contacts
+     * belong HERE (not the footer) exactly as they do on the real stationery.
      */
     private function headerHtml(?Center $center, string $language = 'bn'): string
     {
@@ -146,6 +146,9 @@ class BitacLetterhead
         $title = self::TITLE_INK;
         $red   = self::MINISTRY_INK;
         $ink   = self::BODY_INK;
+        // The rule that closes the letterhead block. Per-centre so a centre
+        // can match its own stationery.
+        $rule  = $center?->letterhead_color ?: '#1e40af';
 
         if ($language === 'en') {
             // English-only letterhead — same shape, English wording.
@@ -159,7 +162,7 @@ class BitacLetterhead
                 ? '<div style="font-size: 8.5pt; color: ' . $ink . '; margin-top: 1pt;">' . $contactEn . '</div>' : '';
 
             return <<<HTML
-<table width="100%" cellspacing="0" cellpadding="0">
+<table width="100%" cellspacing="0" cellpadding="0" style="border-bottom: 1pt solid {$rule}; padding-bottom: 3pt;">
     <tr>
         <td width="70" align="center" style="vertical-align: middle;">{$leftLogo}</td>
         <td align="center" style="vertical-align: middle; padding: 0 6pt;">
@@ -188,7 +191,7 @@ HTML;
             ? '<div style="font-family: siyamrupali; font-size: 8.5pt; color: ' . $ink . '; margin-top: 1pt;">' . $contactBn . '</div>' : '';
 
         return <<<HTML
-<table width="100%" cellspacing="0" cellpadding="0">
+<table width="100%" cellspacing="0" cellpadding="0" style="border-bottom: 1pt solid {$rule}; padding-bottom: 3pt;">
     <tr>
         <td width="70" align="center" style="vertical-align: middle;">{$leftLogo}</td>
         <td align="center" style="vertical-align: middle; padding: 0 6pt;">

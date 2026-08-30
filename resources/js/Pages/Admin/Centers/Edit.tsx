@@ -151,7 +151,7 @@ export default function CenterEdit({ center }: { center: Center }) {
                                 <input className="form-input font-mono" value={data.website} onChange={e => setData('website', e.target.value)} placeholder="www.bitac.gov.bd" />
                             </Field>
                         </div>
-                        <Field label="Letterhead accent color" error={errors.letterhead_color} hint="Not used on the letterhead — its inks match the printed stationery. Kept for other documents.">
+                        <Field label="Letterhead accent color" error={errors.letterhead_color} hint="The rule under the letterhead block. The name/ministry inks are fixed to match the printed stationery.">
                             <div className="flex items-center gap-2">
                                 <input type="color" value={data.letterhead_color} onChange={e => setData('letterhead_color', e.target.value)} className="w-12 h-9 rounded border border-surface-200 cursor-pointer" />
                                 <input className="form-input font-mono w-32" value={data.letterhead_color} onChange={e => setData('letterhead_color', e.target.value)} />
