@@ -8,7 +8,14 @@ WORKDIR /app
 
 # Install only what's needed for the asset build
 COPY package*.json ./
-RUN npm ci --no-audit --no-fund
+# The registry fetch runs in parallel with the PHP stage's apt-get (which pulls
+# LibreOffice), so on a busy or flaky link npm's defaults — 2 retries, short
+# timeouts — give up and fail the whole deploy. Retry harder and wait longer.
+RUN npm config set fetch-retries 5 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm config set fetch-timeout 600000 \
+ && npm ci --no-audit --no-fund
 
 # Copy the rest and build
 COPY . .
