@@ -349,6 +349,16 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                             ) : null}
                         >
                             <div className="px-5 py-4 space-y-2.5">
+                                {jobSubmission && (
+                                    <Link href={`/cost-estimates/job/${jobSubmission.rfq_item_id}`}
+                                        className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-surface-50 border border-surface-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors">
+                                        <span className="text-[11px] text-surface-700">
+                                            Part of <span className="font-semibold">{jobSubmission.job_name}</span> —
+                                            job total <span className="font-semibold">৳{Number(jobSubmission.job_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-indigo-600 shrink-0">Job costing →</span>
+                                    </Link>
+                                )}
                                 {/* Submitted job-wise: one decision here covers every part
                                     estimate that went in with it. */}
                                 {batchSize > 1 && (

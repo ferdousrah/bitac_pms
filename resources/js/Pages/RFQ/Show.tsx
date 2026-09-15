@@ -34,7 +34,7 @@ function PartsList({ parts }: { parts?: any[] }) {
                     <span className="shrink-0 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
                         {p.part_no}
                     </span>
-                    <span className="text-surface-600 font-normal truncate max-w-[160px]" title={p.name}>{p.name}</span>
+                    <span className="text-surface-600 font-normal flex-1 min-w-[5rem] break-words" title={p.name}>{p.name}</span>
                     <span className="shrink-0 text-surface-400">×{p.quantity} {p.unit}</span>
                     {p.estimate ? (
                         <Link href={`/cost-estimates/${p.estimate.id}`}
@@ -76,6 +76,12 @@ function ItemEstimateCell({ item }: { item: any }) {
                         {cost.missing} part{cost.missing !== 1 && 's'} not costed
                     </div>
                 )}
+                <div>
+                    <Link href={`/cost-estimates/job/${item.id}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
+                        <i className="fi fi-rr-calculator text-[10px] leading-none" /> Job costing
+                    </Link>
+                </div>
             </div>
         );
     }
