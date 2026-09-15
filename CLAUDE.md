@@ -242,6 +242,12 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - Refusal is a redirect + flash naming the current status, not an `abort()`.
 - The revision then goes through approval again from scratch, and `sendToCustomer` requires `approved`, so a re-quotation cannot reach the customer un-approved.
 
+### Deleting a draft quotation (`QuotationController@destroy`)
+- **Only `draft`** can be deleted (anything submitted/approved/sent is revised, never deleted); refusal is a redirect + flash. Allowed for the creator, a super admin, or anyone with `edit quotations`. UI: trash icon on draft rows in the Quotation list, **Delete** in the Draft card on Show, **Delete Draft** on the edit form — all `confirm()` first.
+- Items, file rows, approvals and customer responses cascade; physical attachments are removed from the `public` disk.
+- ⚠️ **Deleting a revision (v2+) hands the chain back to its parent.** Creating the revision set the parent `superseded`, and superseded can't be revised — so without this the quotation would be stuck with nothing live. The prior status isn't stored, so `statusBeforeSupersede()` derives it from the parent's own record: newest customer response (rejected → `customer_rejected`, revision_requested → `revision_requested`, accepted → `customer_accepted`), else `sent_to_customer_at` → `sent_to_customer`, else a fully approved chain → `approved`, else `draft` (the request-changes path wipes the chain mid-approval). Logged as a `revision_discarded` revision event.
+- A draft started as a **direct quotation** also removes its auto-created RFQ (`source = direct_quotation`), but only if nothing else hangs off it — no other quotation, cost estimate, work order or gate pass.
+
 ## 📄 Direct Quotation & Copying a Quotation (2026-08)
 
 ### Work that starts at the quotation, not an RFQ

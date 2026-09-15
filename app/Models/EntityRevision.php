@@ -45,6 +45,7 @@ class EntityRevision extends Model
             'sent_to_customer'        => ['icon' => 'fi-rr-paper-plane',   'color' => 'indigo',  'label' => 'Sent to Customer'],
             'customer_accepted'       => ['icon' => 'fi-rr-thumbs-up',     'color' => 'emerald', 'label' => 'Customer Accepted'],
             'customer_rejected'       => ['icon' => 'fi-rr-thumbs-down',   'color' => 'red',     'label' => 'Customer Rejected'],
+            'revision_discarded'      => ['icon' => 'fi-rr-undo',          'color' => 'slate',   'label' => 'Draft Revision Discarded'],
             default                   => ['icon' => 'fi-rr-file',          'color' => 'slate',   'label' => ucfirst(str_replace('_', ' ', $event))],
         };
     }

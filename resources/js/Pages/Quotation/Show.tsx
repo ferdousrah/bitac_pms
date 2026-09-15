@@ -643,6 +643,18 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 shadow-md transition-all hover:-translate-y-0.5">
                                                     <i className="fi fi-rr-paper-plane text-sm leading-none" /> Submit for Approval
                                                 </button>
+                                                <button type="button"
+                                                    onClick={() => {
+                                                        const note = quotation.version > 1
+                                                            ? ' The previous version will become live again.'
+                                                            : '';
+                                                        if (!confirm('Delete this draft quotation? Its line items and attachments are removed too. This cannot be undone.' + note)) return;
+                                                        router.delete(`/quotations/${quotation.id}`);
+                                                    }}
+                                                    title="Delete this draft"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-red-600 bg-white hover:bg-red-50 border border-red-200 transition-all">
+                                                    <i className="fi fi-rr-trash text-sm leading-none" /> Delete
+                                                </button>
                                             </div>
                                         </div>
                                     </div>

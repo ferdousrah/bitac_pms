@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo } from 'react';
 import QuotationTermsAI from '@/Components/QuotationTermsAI';
 import ForwardingLetterAI from '@/Components/ForwardingLetterAI';
@@ -869,6 +869,16 @@ export default function QuotationCreate({
                                     {processing ? 'Saving...' : 'Save Changes'}
                                 </button>
                                 <Link href={`/quotations/${existing.id}`} className="btn-ghost">Cancel</Link>
+                                {existing.status === 'draft' && (
+                                    <button type="button" disabled={processing}
+                                        onClick={() => {
+                                            if (!confirm('Delete this draft quotation? Its line items and attachments are removed too. This cannot be undone.')) return;
+                                            router.delete(`/quotations/${existing.id}`);
+                                        }}
+                                        className="btn-ghost text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto">
+                                        <i className="fi fi-rr-trash text-xs leading-none" /> Delete Draft
+                                    </button>
+                                )}
                             </>
                         ) : (
                             <>

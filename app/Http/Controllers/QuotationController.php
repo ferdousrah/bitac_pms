@@ -253,6 +253,7 @@ class QuotationController extends Controller
             'existing' => [
                 'id'                => $quotation->id,
                 'version'           => $quotation->version,
+                'status'            => $quotation->status,
                 'vat_rate'          => (float) $quotation->vat_rate,
                 'tax_rate'          => (float) ($quotation->tax_rate ?? 0),
                 'show_tax_breakdown' => (bool) $quotation->show_tax_breakdown,
@@ -1125,6 +1126,107 @@ class QuotationController extends Controller
                     ->get(['id', 'name', 'designation'])
                 : [],
         ]);
+    }
+
+    /**
+     * Delete a DRAFT quotation.
+     *
+     * Only drafts: anything that has been submitted, approved or sent is part
+     * of the record and is revised or superseded, never deleted. Refusals are
+     * a redirect + flash, not an abort.
+     *
+     * Two things a draft can leave behind are put right:
+     *  - A draft that is a REVISION (v2+) superseded its parent when it was
+     *    created. Deleting it hands the chain back to the parent, restored to
+     *    the status its own record supports — otherwise the quotation would be
+     *    stuck superseded with nothing live, and superseded can't be revised.
+     *  - A draft started as a direct quotation created an RFQ behind itself.
+     *    If nothing else has been built on that RFQ, it goes too.
+     */
+    public function destroy(Quotation $quotation)
+    {
+        if ($quotation->status !== 'draft') {
+            return redirect()->route('quotations.show', $quotation)->with('error',
+                "Only draft quotations can be deleted — this one is \"{$quotation->status}\". Create a revision instead.");
+        }
+
+        $user = auth()->user();
+        $isCreator = (int) $quotation->created_by === (int) $user->id;
+        $isAdmin   = method_exists($user, 'hasRole') && $user->hasRole('super_admin');
+        if (! $isCreator && ! $isAdmin && ! $user->can('edit quotations')) {
+            return redirect()->route('quotations.show', $quotation)->with('error',
+                'You can only delete draft quotations you prepared.');
+        }
+
+        $quotation->load(['files', 'parent', 'rfq']);
+        $label = "Quotation #{$quotation->id} v{$quotation->version}";
+        $restored = null;
+        $rfqRemoved = false;
+
+        DB::transaction(function () use ($quotation, &$restored, &$rfqRemoved) {
+            $parent = $quotation->parent;
+            $rfq    = $quotation->rfq;
+
+            foreach ($quotation->files as $file) {
+                if ($file->stored_path) {
+                    \Storage::disk('public')->delete($file->stored_path);
+                }
+            }
+
+            // items, files rows, approvals and customer responses cascade.
+            $quotation->delete();
+
+            if ($parent && $parent->status === 'superseded') {
+                $restored = $this->statusBeforeSupersede($parent);
+                $parent->update(['status' => $restored]);
+                app(\App\Services\RevisionTracker::class)->trackQuotation(
+                    $parent->fresh(), 'revision_discarded',
+                    "Draft revision deleted; restored to {$restored}."
+                );
+            }
+
+            // A direct quotation's RFQ existed only to carry it.
+            if ($rfq && $rfq->source === 'direct_quotation'
+                && ! $rfq->quotations()->exists()
+                && ! CostEstimate::where('rfq_id', $rfq->id)->exists()
+                && ! \App\Models\WorkOrder::where('rfq_id', $rfq->id)->exists()
+                && ! $rfq->gatePasses()->exists()) {
+                $rfq->delete();
+                $rfqRemoved = true;
+            }
+        });
+
+        $msg = "{$label} deleted.";
+        if ($restored) $msg .= " The previous version is live again ({$restored}).";
+        if ($rfqRemoved) $msg .= ' Its auto-created RFQ was removed too.';
+
+        return redirect()->route('quotations.index')->with('success', $msg);
+    }
+
+    /**
+     * Work out what a superseded quotation was before a revision replaced it,
+     * from its own record (the prior status itself is not stored):
+     *  - a recorded customer response decides it, newest first;
+     *  - otherwise, sent to the customer → sent_to_customer;
+     *  - otherwise, a fully approved chain → approved;
+     *  - otherwise it was mid-approval when changes were requested (that path
+     *    wipes the chain), so it goes back to draft for the preparer.
+     */
+    private function statusBeforeSupersede(Quotation $q): string
+    {
+        $response = \App\Models\CustomerResponse::where('quotation_id', $q->id)->latest('id')->value('response_type');
+        if ($response === 'rejected')           return 'customer_rejected';
+        if ($response === 'revision_requested') return 'revision_requested';
+        if ($response === 'accepted')           return 'customer_accepted';
+
+        if ($q->sent_to_customer_at) return 'sent_to_customer';
+
+        $approvals = $q->approvals()->get();
+        if ($approvals->isNotEmpty() && $approvals->every(fn ($a) => $a->status === 'approved')) {
+            return 'approved';
+        }
+
+        return 'draft';
     }
 
     public function deleteFile(\App\Models\QuotationFile $file)
