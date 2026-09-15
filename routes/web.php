@@ -425,6 +425,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('cost-estimates/job/{rfqItem}/pdf', [\App\Http\Controllers\JobCostingController::class, 'pdf'])
         ->middleware('permission:view cost-estimates')
         ->name('cost-estimates.job.pdf');
+    Route::get('cost-estimates/job/{rfqItem}/edit', [\App\Http\Controllers\JobCostingController::class, 'edit'])
+        ->middleware('permission:view cost-estimates')
+        ->name('cost-estimates.job.edit');
+    Route::put('cost-estimates/job/{rfqItem}', [\App\Http\Controllers\JobCostingController::class, 'update'])
+        ->middleware('permission:view cost-estimates')
+        ->name('cost-estimates.job.update');
     // Job-wise alternative: sends every part estimate of the job in one batch.
     Route::post('cost-estimates/job/{rfqItem}/submit-approval', [CostEstimateController::class, 'submitJobForApproval'])
         ->middleware('permission:view cost-estimates')

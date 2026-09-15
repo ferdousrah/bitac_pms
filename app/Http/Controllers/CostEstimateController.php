@@ -158,62 +158,7 @@ class CostEstimateController extends Controller
     public function store(Request $request)
     {
         $validated = $this->validateEstimate($request);
-
-        $estimate = DB::transaction(function () use ($validated) {
-            // If rfq_item_id given, auto-populate rfq_id + job_category_id from the parent RFQ
-            $rfqId = $validated['rfq_id'] ?? null;
-            $jobCategoryId = null;
-            // A part estimate inherits its job item (and therefore its RFQ)
-            // from the part, so the caller only has to pass the part.
-            if (!empty($validated['rfq_item_part_id'])) {
-                $part = \App\Models\RfqItemPart::with('rfqItem.rfq')->find($validated['rfq_item_part_id']);
-                if ($part) {
-                    $validated['rfq_item_id'] = $part->rfq_item_id;
-                }
-            }
-            if (!empty($validated['rfq_item_id'])) {
-                $item = \App\Models\RfqItem::with('rfq')->find($validated['rfq_item_id']);
-                if ($item) {
-                    $rfqId = $item->rfq_id;
-                    $jobCategoryId = $item->rfq?->job_category_id;
-                }
-            } elseif ($rfqId) {
-                $jobCategoryId = \App\Models\Rfq::find($rfqId)?->job_category_id;
-            }
-
-            // Retry-on-conflict for the estimate_no — concurrent submits can
-            // race and both compute the same next number before either commits.
-            $estimate = $this->createEstimateWithRetry([
-                'rfq_id'           => $rfqId,
-                // estimate_no injected by createEstimateWithRetry with retry on duplicates.
-                'rfq_item_id'      => $validated['rfq_item_id'] ?? null,
-                'rfq_item_part_id' => $validated['rfq_item_part_id'] ?? null,
-                'customer_id'      => $validated['customer_id'] ?? null,
-                'job_category_id'  => $jobCategoryId,
-                'company_name'     => $validated['company_name'] ?? null,
-                'job_name'         => $validated['job_name'],
-                'part_no'          => $validated['part_no'] ?? null,
-                'actual_size'      => $validated['actual_size'] ?? null,
-                'materials_size'   => $validated['materials_size'] ?? null,
-                'pricing_group'    => $validated['pricing_group'],
-                'overhead_pct'     => $validated['overhead_pct'] ?? 0,
-                'extra_cost'       => $validated['extra_cost'] ?? 0,
-                'vat_pct'          => $validated['vat_pct'] ?? 15,
-                'tax_pct'          => $validated['tax_pct'] ?? 0,
-                'times_multiplier' => $validated['times_multiplier'] ?? 1,
-                'job_quantity'     => $validated['job_quantity'] ?? 1,
-                'grand_total_override' => $this->normalizeOverride($validated['grand_total_override'] ?? null),
-                'notes'            => $validated['notes'] ?? null,
-                'status'           => 'draft',
-                'created_by'       => auth()->id(),
-            ]);
-
-            $this->saveLines($estimate, $validated['lines'] ?? []);
-            $estimate->recalculate();
-            return $estimate;
-        });
-
-        app(\App\Services\RevisionTracker::class)->trackEstimate($estimate->fresh(), 'created');
+        $estimate  = app(\App\Services\CostEstimateWriter::class)->create($validated);
 
         return redirect()->route('cost-estimates.show', $estimate)->with('success', 'Cost estimate saved.');
     }
@@ -737,46 +682,19 @@ class CostEstimateController extends Controller
 
     public function update(Request $request, CostEstimate $costEstimate)
     {
-        $validated = $this->validateEstimate($request);
+        $validated  = $this->validateEstimate($request);
+        $resetsApproval = \App\Services\CostEstimateWriter::editResetsApproval($costEstimate);
 
-        DB::transaction(function () use ($costEstimate, $validated) {
-            $costEstimate->update([
-                'customer_id'      => $validated['customer_id'] ?? null,
-                'company_name'     => $validated['company_name'] ?? null,
-                'job_name'         => $validated['job_name'],
-                'part_no'          => $validated['part_no'] ?? null,
-                'actual_size'      => $validated['actual_size'] ?? null,
-                'materials_size'   => $validated['materials_size'] ?? null,
-                'pricing_group'    => $validated['pricing_group'],
-                'overhead_pct'     => $validated['overhead_pct'] ?? 0,
-                'extra_cost'       => $validated['extra_cost'] ?? 0,
-                'vat_pct'          => $validated['vat_pct'] ?? 15,
-                'tax_pct'          => $validated['tax_pct'] ?? 0,
-                'times_multiplier' => $validated['times_multiplier'] ?? 1,
-                'job_quantity'     => $validated['job_quantity'] ?? 1,
-                'grand_total_override' => $this->normalizeOverride($validated['grand_total_override'] ?? null),
-                'notes'            => $validated['notes'] ?? null,
-            ]);
+        $changed = app(\App\Services\CostEstimateWriter::class)
+            ->update($costEstimate, $validated, $request->input('change_reason'));
 
-            $costEstimate->lines()->delete();
-            $this->saveLines($costEstimate, $validated['lines'] ?? []);
-            $costEstimate->recalculate();
-        });
+        $message = ! $changed
+            ? 'No changes to save.'
+            : ($resetsApproval
+                ? 'Cost estimate updated. Its approval was reset — submit it for approval again.'
+                : 'Cost estimate updated.');
 
-        // Track revision — if it was previously submitted, treat as resubmission
-        $wasRejectedOrChanges = EntityRevision::where('entity_type', 'cost_estimate')
-            ->where('entity_id', $costEstimate->id)
-            ->whereIn('event', ['rejected', 'changes_requested'])
-            ->exists();
-
-        $event = $wasRejectedOrChanges ? 'resubmitted' : 'updated';
-        app(\App\Services\RevisionTracker::class)->trackEstimate(
-            $costEstimate->fresh(),
-            $event,
-            $request->input('change_reason')
-        );
-
-        return redirect()->route('cost-estimates.show', $costEstimate)->with('success', 'Cost estimate updated.');
+        return redirect()->route('cost-estimates.show', $costEstimate)->with('success', $message);
     }
 
     public function destroy(CostEstimate $costEstimate)
@@ -890,56 +808,7 @@ class CostEstimateController extends Controller
         ]);
     }
 
-    private function normalizeOverride($value): ?float
-    {
-        if ($value === null || $value === '' || $value === false) return null;
-        $f = (float) $value;
-        return $f > 0 ? $f : null;
-    }
-
-    /**
-     * Create a CostEstimate with retry-on-conflict for the auto-generated
-     * estimate_no. Two concurrent submits can both compute "EST-2026-0002"
-     * before either commits, so on UniqueConstraintViolationException we
-     * regenerate and try again — up to 5 times.
-     */
-    private function createEstimateWithRetry(array $payload): CostEstimate
-    {
-        $attempts = 0;
-        while (true) {
-            try {
-                $payload['estimate_no'] = CostEstimate::generateEstimateNo();
-                return CostEstimate::create($payload);
-            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-                if (++$attempts >= 5 || !str_contains((string) $e->getMessage(), 'estimate_no')) {
-                    throw $e;
-                }
-                usleep(50_000); // 50ms back-off
-            }
-        }
-    }
-
-    private function saveLines(CostEstimate $estimate, array $lines): void
-    {
-        foreach ($lines as $idx => $line) {
-            if (empty($line['description']) && empty($line['material_id']) && empty($line['operation_id'])) {
-                continue;
-            }
-            $estimate->lines()->create([
-                'section'      => $line['section'],
-                'material_id'  => $line['material_id'] ?? null,
-                'operation_id' => $line['operation_id'] ?? null,
-                'description'  => $line['description'] ?? '',
-                'quantity'     => (float) ($line['quantity'] ?? 0),
-                'unit'         => $line['unit'] ?? 'pcs',
-                'rate'         => (float) ($line['rate'] ?? 0),
-                'amount'       => (float) ($line['quantity'] ?? 0) * (float) ($line['rate'] ?? 0),
-                'sequence'     => $idx,
-            ]);
-        }
-    }
-
-    private function serializeEstimate(CostEstimate $e): array
+    public static function serializeEstimate(CostEstimate $e): array
     {
         return [
             'id'               => $e->id,
@@ -999,37 +868,7 @@ class CostEstimateController extends Controller
 
     private function validateEstimate(Request $request): array
     {
-        return $request->validate([
-            'rfq_id'           => 'nullable|exists:rfqs,id',
-            'rfq_item_id'      => 'nullable|exists:rfq_items,id',
-            // Set when this estimate covers ONE part of the job rather than
-            // the whole job. Null = whole-job estimate (the old behaviour).
-            'rfq_item_part_id' => 'nullable|exists:rfq_item_parts,id',
-            'customer_id'      => 'nullable|exists:customers,id',
-            'company_name'     => 'nullable|string|max:200',
-            'job_name'         => 'required|string|max:200',
-            'part_no'          => 'nullable|string|max:50',
-            'actual_size'      => 'nullable|string|max:100',
-            'materials_size'   => 'nullable|string|max:100',
-            'pricing_group'    => 'required|in:A,B,C,STUDENT,PUBLIC',
-            'overhead_pct'     => 'nullable|numeric|min:0|max:1000',
-            'extra_cost'       => 'nullable|numeric|min:0',
-            'vat_pct'          => 'nullable|numeric|min:0|max:100',
-            'tax_pct'          => 'nullable|numeric|min:0|max:100',
-            'times_multiplier' => 'nullable|numeric|min:0|max:100',
-            'job_quantity'     => 'nullable|integer|min:1',
-            // Manual rounding override (e.g. ৳250,500 → ৳250,000). Null/0 = use auto.
-            'grand_total_override' => 'nullable|numeric|min:0',
-            'notes'            => 'nullable|string|max:1000',
-            'lines'                 => 'nullable|array',
-            'lines.*.section'       => 'required|in:material,machining,surface,other',
-            'lines.*.material_id'   => 'nullable|exists:materials,id',
-            'lines.*.operation_id'  => 'nullable|exists:machining_operations,id',
-            'lines.*.description'   => 'nullable|string|max:255',
-            'lines.*.quantity'      => 'nullable|numeric|min:0',
-            'lines.*.unit'          => 'nullable|string|max:20',
-            'lines.*.rate'          => 'nullable|numeric|min:0',
-        ]);
+        return $request->validate(\App\Services\CostEstimateWriter::rules());
     }
 
     // ─── Export: Excel ────────────────────────────────────────────────

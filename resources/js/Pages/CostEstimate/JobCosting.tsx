@@ -62,6 +62,9 @@ export default function JobCosting({ job }: any) {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <Link href={`/cost-estimates/job/${job.rfq_item_id}/edit`} className="btn-primary btn-sm">
+                                <i className="fi fi-rr-edit text-xs leading-none" /> Edit all parts
+                            </Link>
                             <button type="button" onClick={() => setPdfOpen(true)} className="btn-outline btn-sm">
                                 <i className="fi fi-rr-file-pdf text-xs leading-none" /> PDF
                             </button>

@@ -3,6 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\CostEstimate;
+use App\Models\Customer;
+use App\Models\MachiningOperation;
+use App\Models\Material;
+use App\Services\CostEstimateWriter;
+use Illuminate\Support\Facades\DB;
 use App\Models\RfqItem;
 use App\Models\RfqItemPart;
 use Illuminate\Http\Request;
@@ -30,6 +35,195 @@ class JobCostingController extends Controller
         return Inertia::render('CostEstimate/JobCosting', [
             'job' => $this->summary($rfqItem),
         ]);
+    }
+
+    /**
+     * Edit every part's estimate of a job on one page.
+     *
+     * Each part carries its full estimate (lines, rates, multipliers). Parts
+     * with no estimate yet come with sensible defaults and can be started
+     * from here. A job costed as a whole edits its single item-level estimate.
+     */
+    public function edit(RfqItem $rfqItem)
+    {
+        $rfqItem->load(['rfq.customer', 'product', 'parts.costEstimates.lines']);
+        $customer = $rfqItem->rfq?->customer;
+        $parts    = $rfqItem->parts->values();
+
+        // A new part estimate inherits the costing structure of its siblings
+        // so the preparer isn't re-entering overhead / VAT / group each time.
+        $sibling = $parts->map(fn ($p) => $p->effectiveEstimate())->filter()->first();
+
+        $blank = fn (string $partNo, float $qty) => [
+            'customer_id'      => $customer?->id,
+            'company_name'     => $customer?->name ?? '',
+            'job_name'         => $rfqItem->job_description ?? $rfqItem->product?->name ?? '',
+            'part_no'          => $partNo,
+            'actual_size'      => '',
+            'materials_size'   => '',
+            'pricing_group'    => $sibling?->pricing_group ?? 'B',
+            'overhead_pct'     => $sibling ? (float) $sibling->overhead_pct : 25,
+            'extra_cost'       => 0,
+            'vat_pct'          => $sibling ? (float) $sibling->vat_pct : 15,
+            'tax_pct'          => $sibling ? (float) ($sibling->tax_pct ?? 0) : 0,
+            'times_multiplier' => 1,
+            'job_quantity'     => max(1, (int) round($qty)),
+            'grand_total_override' => '',
+            'notes'            => '',
+            'lines'            => [],
+        ];
+
+        $entries = [];
+        if ($parts->isNotEmpty()) {
+            foreach ($parts as $idx => $part) {
+                $partNo = RfqItemPart::formatNo($idx, $parts->count());
+                $entries[] = $this->editorEntry($part->effectiveEstimate(), $blank($partNo, (float) $part->quantity), [
+                    'part_id'  => $part->id,
+                    'part_no'  => $partNo,
+                    'name'     => $part->name,
+                    'quantity' => (float) $part->quantity,
+                    'unit'     => $part->unit,
+                ]);
+            }
+        } else {
+            $estimate = $rfqItem->itemLevelEstimates()->with('lines')->first();
+            $entries[] = $this->editorEntry($estimate, $blank('', (float) $rfqItem->quantity), [
+                'part_id'  => null,
+                'part_no'  => '—',
+                'name'     => $rfqItem->job_description ?? 'Whole job',
+                'quantity' => (float) $rfqItem->quantity,
+                'unit'     => $rfqItem->unit,
+            ]);
+        }
+
+        return Inertia::render('CostEstimate/JobCostingEdit', [
+            'job' => [
+                'rfq_item_id'     => $rfqItem->id,
+                'rfq_id'          => $rfqItem->rfq_id,
+                'job_description' => $rfqItem->job_description ?? $rfqItem->product?->name ?? "Job #{$rfqItem->id}",
+                'customer'        => $customer?->name ?? '—',
+                'job_quantity'    => (float) $rfqItem->quantity,
+                'job_unit'        => $rfqItem->unit ?? 'pcs',
+            ],
+            'entries'    => $entries,
+            'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
+            'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
+                ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
+            'customers'  => Customer::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * Save the edited estimates of a job in one go.
+     *
+     * Only estimates the page marks as changed (or newly started) are sent,
+     * and the writer skips anything identical anyway — so saving never
+     * touches an estimate that wasn't edited, and never resets an approval
+     * that still stands. All-or-nothing: one invalid part saves nothing.
+     */
+    public function update(Request $request, RfqItem $rfqItem)
+    {
+        $rules = [
+            'estimates'                  => 'required|array|min:1',
+            'estimates.*.id'             => 'nullable|integer|exists:cost_estimates,id',
+        ];
+        foreach (CostEstimateWriter::rules() as $key => $rule) {
+            $rules["estimates.*.{$key}"] = $rule;
+        }
+        $validated = $request->validate($rules, [], [
+            'estimates.*.job_name'      => 'job name',
+            'estimates.*.pricing_group' => 'pricing group',
+        ]);
+
+        // Cast: some PDO drivers hand ids back as strings, which would make
+        // the strict ownership check below reject every part.
+        $partIds = array_map('intval', $rfqItem->parts()->pluck('id')->all());
+        $writer  = app(CostEstimateWriter::class);
+        $counts  = ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'reset' => 0];
+
+        DB::transaction(function () use ($validated, $rfqItem, $partIds, $writer, &$counts) {
+            foreach ($validated['estimates'] as $row) {
+                // Everything saved here must belong to THIS job.
+                if (! empty($row['rfq_item_part_id']) && ! in_array((int) $row['rfq_item_part_id'], $partIds, true)) {
+                    abort(422, 'A part in this request does not belong to the job.');
+                }
+
+                if (! empty($row['id'])) {
+                    $estimate = CostEstimate::findOrFail($row['id']);
+                    if ((int) $estimate->rfq_item_id !== (int) $rfqItem->id) {
+                        abort(422, 'An estimate in this request does not belong to the job.');
+                    }
+                    // The part link is structural — never moved by an edit.
+                    $row['rfq_item_part_id'] = $estimate->rfq_item_part_id;
+                    $row['rfq_item_id']      = $estimate->rfq_item_id;
+
+                    $resets = CostEstimateWriter::editResetsApproval($estimate);
+                    if ($writer->update($estimate, $row, 'edited from Job Costing')) {
+                        $counts['updated']++;
+                        if ($resets) $counts['reset']++;
+                    } else {
+                        $counts['unchanged']++;
+                    }
+                } else {
+                    $row['rfq_item_id'] = $rfqItem->id;
+                    $writer->create($row);
+                    $counts['created']++;
+                }
+            }
+        });
+
+        $parts = [];
+        if ($counts['updated'])   $parts[] = "{$counts['updated']} updated";
+        if ($counts['created'])   $parts[] = "{$counts['created']} created";
+        if ($counts['unchanged']) $parts[] = "{$counts['unchanged']} unchanged";
+        $msg = $parts ? 'Job costing saved — ' . implode(', ', $parts) . '.' : 'No changes to save.';
+        if ($counts['reset']) {
+            $msg .= " Approval was reset on {$counts['reset']} estimate(s); submit them for approval again.";
+        }
+
+        return redirect()->route('cost-estimates.job', $rfqItem)->with('success', $msg);
+    }
+
+    /** One editor block: the estimate (or defaults) plus its part context. */
+    private function editorEntry(?CostEstimate $estimate, array $defaults, array $part): array
+    {
+        if ($estimate) {
+            $estimate->loadMissing(['lines', 'rfq', 'rfqItem.product', 'customer', 'createdBy']);
+            $data = \App\Http\Controllers\CostEstimateController::serializeEstimate($estimate);
+        }
+
+        return $part + [
+            'estimate_id'     => $estimate?->id,
+            'estimate_no'     => $estimate?->estimate_no,
+            'approval_status' => $estimate?->approval_status ?? null,
+            'grand_total'     => $estimate ? (float) $estimate->grand_total : null,
+            'data'            => $estimate ? [
+                'customer_id'      => $data['customer_id'],
+                'company_name'     => $data['company_name'] ?? '',
+                'job_name'         => $data['job_name'],
+                'part_no'          => $data['part_no'] ?? '',
+                'actual_size'      => $data['actual_size'] ?? '',
+                'materials_size'   => $data['materials_size'] ?? '',
+                'pricing_group'    => $data['pricing_group'],
+                'overhead_pct'     => (float) $data['overhead_pct'],
+                'extra_cost'       => (float) $data['extra_cost'],
+                'vat_pct'          => (float) $data['vat_pct'],
+                'tax_pct'          => (float) $data['tax_pct'],
+                'times_multiplier' => (float) $data['times_multiplier'],
+                'job_quantity'     => (int) $data['job_quantity'],
+                'grand_total_override' => $data['grand_total_override'] !== null ? (float) $data['grand_total_override'] : '',
+                'notes'            => $data['notes'] ?? '',
+                'lines'            => collect($data['lines'])->map(fn ($l) => [
+                    'section'      => $l['section'],
+                    'material_id'  => $l['material_id'],
+                    'operation_id' => $l['operation_id'],
+                    'description'  => $l['description'],
+                    'quantity'     => (string) (float) $l['quantity'],
+                    'unit'         => $l['unit'],
+                    'rate'         => (string) (float) $l['rate'],
+                ])->values()->all(),
+            ] : $defaults,
+        ];
     }
 
     public function pdf(Request $request, RfqItem $rfqItem)
