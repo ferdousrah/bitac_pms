@@ -250,7 +250,37 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
     function removeItem(index: number) {
         if (data.items.length === 1) return;
         setData('items', data.items.filter((_: any, i: number) => i !== index));
+        // Indices after the removed card shift down by one — keep their
+        // collapsed state attached to the same card.
+        setCollapsed(prev => new Set(
+            [...prev].filter(i => i !== index).map(i => (i > index ? i - 1 : i))
+        ));
     }
+
+    // ── Collapse / expand job cards ──
+    // Long RFQs are easier to work through one card at a time: fold away the
+    // jobs that are done and keep the one being edited open.
+    const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+    const toggleItem = (index: number) => setCollapsed(prev => {
+        const next = new Set(prev);
+        next.has(index) ? next.delete(index) : next.add(index);
+        return next;
+    });
+    const collapseAll = () => setCollapsed(new Set(data.items.map((_: any, i: number) => i)));
+    const expandAll   = () => setCollapsed(new Set());
+
+    // A validation error inside a folded card would be invisible, so any card
+    // with an error is opened again.
+    const itemsWithErrors = (idx: number) =>
+        Object.keys(errors as any).some(k => k.startsWith(`items.${idx}.`));
+    useEffect(() => {
+        const bad = Object.keys(errors as any)
+            .map(k => /^items\.(\d+)\./.exec(k)?.[1])
+            .filter((v): v is string => v !== undefined)
+            .map(Number);
+        if (bad.length === 0) return;
+        setCollapsed(prev => new Set([...prev].filter(i => !bad.includes(i))));
+    }, [errors]);
 
     // Parts within an item. Part numbers are positional, so there is nothing
     // to renumber here — the UI derives them from the array index.
@@ -562,9 +592,22 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                     <p className="text-xs text-surface-400">Each item can have its own reference drawing or sample</p>
                                 </div>
                             </div>
-                            <button type="button" onClick={addItem} className="btn-outline btn-sm">
-                                <i className="fi fi-rr-plus text-xs leading-none" /> Add Item
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                                {data.items.length > 1 && (
+                                    collapsed.size === data.items.length ? (
+                                        <button type="button" onClick={expandAll} className="btn-ghost btn-sm">
+                                            <i className="fi fi-rr-expand text-xs leading-none" /> Expand all
+                                        </button>
+                                    ) : (
+                                        <button type="button" onClick={collapseAll} className="btn-ghost btn-sm">
+                                            <i className="fi fi-rr-compress text-xs leading-none" /> Collapse all
+                                        </button>
+                                    )
+                                )}
+                                <button type="button" onClick={addItem} className="btn-outline btn-sm">
+                                    <i className="fi fi-rr-plus text-xs leading-none" /> Add Item
+                                </button>
+                            </div>
                         </div>
                         <div className="card-body space-y-5">
                             {data.items.map((item: any, index: number) => {
@@ -572,15 +615,42 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                 const hasSample  = item.reference_type === 'physical_sample' || item.reference_type === 'both';
                                 return (
                                     <div key={index} className="rounded-xl border border-surface-200 p-4 space-y-4 relative bg-surface-50/50">
-                                        <div className="flex items-center justify-between">
-                                            <span className="badge badge-slate">Item {index + 1}</span>
-                                            {data.items.length > 1 && (
-                                                <button type="button" onClick={() => removeItem(index)}
-                                                    className="btn-ghost btn-xs text-red-500 hover:text-red-700 hover:bg-red-50">
-                                                    <i className="fi fi-rr-trash text-xs leading-none" /> Remove
+                                        <div className="flex items-center justify-between gap-3">
+                                            {/* Clicking the header folds/unfolds the card */}
+                                            <button type="button" onClick={() => toggleItem(index)}
+                                                className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                                                <span className="badge badge-slate shrink-0">Item {index + 1}</span>
+                                                {collapsed.has(index) && (
+                                                    <>
+                                                        <span className="text-sm font-semibold text-surface-800 truncate">
+                                                            {item.job_description?.split('\n')[0] || <span className="italic text-surface-400 font-normal">No description yet</span>}
+                                                        </span>
+                                                        <span className="text-xs text-surface-400 shrink-0">
+                                                            {item.quantity} {item.unit}
+                                                            {item.parts.length > 0 && ` · ${item.parts.length} part${item.parts.length === 1 ? '' : 's'}`}
+                                                        </span>
+                                                    </>
+                                                )}
+                                                {itemsWithErrors(index) && (
+                                                    <span className="badge badge-red shrink-0">needs attention</span>
+                                                )}
+                                            </button>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {data.items.length > 1 && (
+                                                    <button type="button" onClick={() => removeItem(index)}
+                                                        className="btn-ghost btn-xs text-red-500 hover:text-red-700 hover:bg-red-50">
+                                                        <i className="fi fi-rr-trash text-xs leading-none" /> Remove
+                                                    </button>
+                                                )}
+                                                <button type="button" onClick={() => toggleItem(index)}
+                                                    title={collapsed.has(index) ? 'Expand' : 'Collapse'}
+                                                    className="btn-ghost btn-icon btn-xs text-surface-500 hover:text-surface-800">
+                                                    <i className={`fi ${collapsed.has(index) ? 'fi-rr-angle-small-down' : 'fi-rr-angle-small-up'} text-base leading-none`} />
                                                 </button>
-                                            )}
+                                            </div>
                                         </div>
+
+                                        {!collapsed.has(index) && (<>
 
                                         <div className="form-group">
                                             <label className="form-label text-xs">Job Description *</label>
@@ -894,6 +964,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                                 </div>
                                             )}
                                         </div>
+                                        </>)}
                                     </div>
                                 );
                             })}
