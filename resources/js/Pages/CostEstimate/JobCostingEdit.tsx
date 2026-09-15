@@ -1,7 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-import EstimateEditor from '@/Components/CostEstimate/EstimateEditor';
+import EstimateEditor, { newLine } from '@/Components/CostEstimate/EstimateEditor';
 
 const fmt = (n: number) =>
     `৳${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -43,17 +43,30 @@ interface Entry {
  * which sends only the parts that actually changed (plus any newly started)
  * — so an untouched part, and its approval, are never disturbed.
  */
-export default function JobCostingEdit({ job, entries, materials, operations, customers }: any) {
-    const [parts, setParts] = useState<Entry[]>(entries);
+/** Blank rows so a freshly started part looks like the normal New Estimate form. */
+const withStarterRows = (e: Entry): Entry => (e.estimate_id || (e.data.lines ?? []).length > 0)
+    ? e
+    : { ...e, data: { ...e.data, lines: (['material', 'machining', 'surface', 'other'] as const).map(newLine) } };
+
+export default function JobCostingEdit({ job, entries, materials, operations, customers, startAll = false }: any) {
+    const [parts, setParts] = useState<Entry[]>(() => entries.map(withStarterRows));
     // Snapshot of what was loaded — "changed" means differs from this.
     const [baseline] = useState<string[]>(() => entries.map((e: Entry) => JSON.stringify(e.data)));
-    const [started, setStarted] = useState<Set<number>>(new Set());
-    const [open, setOpen] = useState<Set<number>>(() => new Set(entries.length === 1 ? [0] : []));
+    const uncostedIdx: number[] = entries.map((e: Entry, i: number) => (e.estimate_id ? -1 : i)).filter((i: number) => i >= 0);
+    const [started, setStarted] = useState<Set<number>>(() => new Set(startAll ? uncostedIdx : []));
+    // Open the first part to work on; a single-part job just opens.
+    const [open, setOpen] = useState<Set<number>>(() =>
+        new Set(startAll && uncostedIdx.length ? [uncostedIdx[0]] : entries.length === 1 ? [0] : []));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
 
     const isDirty = (i: number) => JSON.stringify(parts[i].data) !== baseline[i];
-    const isIncluded = (i: number) => parts[i].estimate_id ? isDirty(i) : started.has(i);
+    // A new part is only worth saving once it has at least one cost line —
+    // otherwise starting all parts would create ৳0 estimates for the ones
+    // left untouched, and they'd stop showing as "not costed".
+    const hasContent = (i: number) => (parts[i].data.lines ?? [])
+        .some((l: any) => (l.description ?? '').trim() !== '' || l.material_id || l.operation_id);
+    const isIncluded = (i: number) => parts[i].estimate_id ? isDirty(i) : started.has(i) && hasContent(i);
     const includedIdx = parts.map((_, i) => i).filter(isIncluded);
     const hasChanges = includedIdx.length > 0;
 
@@ -93,7 +106,7 @@ export default function JobCostingEdit({ job, entries, materials, operations, cu
         p.estimate_id || started.has(i) ? grandOf(p.data) : 0
     ), [parts, started]);
     const jobTotal = liveTotals.reduce((s, v) => s + v, 0);
-    const uncosted = parts.filter((p, i) => !p.estimate_id && !started.has(i)).length;
+    const uncosted = parts.filter((p, i) => !p.estimate_id && !(started.has(i) && hasContent(i))).length;
 
     // Errors come back as estimates.N.field where N indexes the SENT array.
     const errorsForPart = (i: number): Record<string, string> => {
@@ -187,7 +200,8 @@ export default function JobCostingEdit({ job, entries, materials, operations, cu
                 {parts.map((p, i) => {
                     const exists = !!p.estimate_id;
                     const active = exists || started.has(i);
-                    const dirty = active && (exists ? isDirty(i) : true);
+                    const dirty = active && (exists ? isDirty(i) : hasContent(i));
+                    const emptyNew = !exists && started.has(i) && !hasContent(i);
                     const decided = ['approved', 'pending_approval'].includes(p.approval_status ?? '');
                     const ap = APPROVAL[p.approval_status ?? ''] ?? null;
                     const partErrors = errorsForPart(i);
@@ -206,6 +220,12 @@ export default function JobCostingEdit({ job, entries, materials, operations, cu
                                 {p.estimate_no && <span className="font-mono text-[10px] font-bold text-brand-600">{p.estimate_no}</span>}
                                 {ap && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${ap.cls}`}>{ap.label}</span>}
                                 {dirty && <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-200 font-semibold">{exists ? 'Changed' : 'New'}</span>}
+                                {emptyNew && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-100 text-surface-500 border border-surface-200 font-semibold"
+                                        title="Add at least one cost line — an empty part is not saved">
+                                        empty — not saved yet
+                                    </span>
+                                )}
                                 {dirty && decided && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
                                         approval will reset

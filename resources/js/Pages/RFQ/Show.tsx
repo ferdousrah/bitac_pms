@@ -92,6 +92,23 @@ function ItemEstimateCell({ item }: { item: any }) {
     };
 
     if (estimates.length === 0) {
+        // A job broken into parts is costed part by part — open the job editor
+        // with every part started, rather than a single whole-job estimate.
+        const partCount = item.parts?.length ?? 0;
+        if (partCount > 0) {
+            return (
+                <Link
+                    href={`/cost-estimates/job/${item.id}/edit?start=all`}
+                    title={`Estimate all ${partCount} parts on one page`}
+                    className="inline-flex flex-col items-start gap-0.5 px-2.5 py-1 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors"
+                >
+                    <span className="inline-flex items-center gap-1">
+                        <i className="fi fi-rr-plus text-[10px] leading-none" /> Create Estimate
+                    </span>
+                    <span className="text-[10px] font-normal text-white/80">all {partCount} parts together</span>
+                </Link>
+            );
+        }
         return (
             <Link
                 href={`/cost-estimates/create?rfq_item_id=${item.id}`}

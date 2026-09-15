@@ -44,7 +44,7 @@ class JobCostingController extends Controller
      * with no estimate yet come with sensible defaults and can be started
      * from here. A job costed as a whole edits its single item-level estimate.
      */
-    public function edit(RfqItem $rfqItem)
+    public function edit(Request $request, RfqItem $rfqItem)
     {
         $rfqItem->load(['rfq.customer', 'product', 'parts.costEstimates.lines']);
         $customer = $rfqItem->rfq?->customer;
@@ -106,6 +106,9 @@ class JobCostingController extends Controller
                 'job_unit'        => $rfqItem->unit ?? 'pcs',
             ],
             'entries'    => $entries,
+            // Arriving from "Create Estimate" on the RFQ: every part without an
+            // estimate is started straight away, so the whole job is costed in one go.
+            'startAll'   => $request->query('start') === 'all',
             'materials'  => Material::active()->orderBy('name')->get(['id', 'name', 'category', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3']),
             'operations' => MachiningOperation::active()->orderBy('category')->orderBy('name')
                 ->get(['id', 'name', 'category', 'default_unit', 'rate_group_a', 'rate_group_b', 'rate_group_c', 'rate_group_student', 'rate_group_public']),
