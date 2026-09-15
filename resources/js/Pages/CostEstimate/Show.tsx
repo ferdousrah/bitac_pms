@@ -28,7 +28,7 @@ const APPROVAL_STATUS: Record<string, { dot: string; text: string; label: string
 const fmt = (v: any) => Number(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (v: any) => Number(v ?? 0).toLocaleString('en-IN');
 
-export default function CostEstimateShow({ estimate, revisions = [], rfqAttachments = [], rfqLetter = null, comments = [], canSubmit, canApprove, canReject, jobSubmission = null, batchSize = 1 }: any) {
+export default function CostEstimateShow({ estimate, revisions = [], rfqAttachments = [], rfqLetter = null, comments = [], canSubmit, canApprove, canReject, jobSubmission = null, batchSize = 1, canDelete = false }: any) {
     const currentVersion = revisions[0]?.revision_no ?? null;
     const sectionLines = (section: string) => estimate.lines.filter((l: any) => l.section === section);
 
@@ -154,6 +154,16 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                 <Link href={`/cost-estimates/${estimate.id}/edit`} className="btn-outline btn-sm">
                                     <i className="fi fi-rr-pencil text-xs leading-none" /> Edit
                                 </Link>
+                                {canDelete && (
+                                    <button type="button"
+                                        onClick={() => {
+                                            if (!confirm('Delete this draft cost estimate? Its cost lines are removed too. This cannot be undone.')) return;
+                                            router.delete(`/cost-estimates/${estimate.id}`);
+                                        }}
+                                        className="btn-ghost btn-sm text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <i className="fi fi-rr-trash text-xs leading-none" /> Delete
+                                    </button>
+                                )}
                                 <Link href="/cost-estimates" className="btn-ghost btn-sm">
                                     <i className="fi fi-rr-arrow-left text-xs leading-none" /> Back
                                 </Link>

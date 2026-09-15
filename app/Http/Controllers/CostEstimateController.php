@@ -66,6 +66,7 @@ class CostEstimateController extends Controller
                 'pricing_group' => $e->pricing_group,
                 'grand_total'   => $e->grand_total,
                 'status'        => $e->status,
+                'can_delete'    => self::deleteBlocker($e) === null,
                 'created_by'    => $e->createdBy?->name ?? '—',
                 'created_at'    => $e->created_at->format('d M Y'),
                 'rfq_id'         => $e->rfq_id,
@@ -306,6 +307,7 @@ class CostEstimateController extends Controller
             'batchSize'       => $costEstimate->approval_batch
                 ? CostEstimate::where('approval_batch', $costEstimate->approval_batch)->count()
                 : 1,
+            'canDelete'       => self::deleteBlocker($costEstimate) === null,
             'canSubmit'       => $costEstimate->approval_status === 'not_submitted'
                                 && $costEstimate->status === 'draft'
                                 && ($isCreator || $isSuperAdmin),
@@ -697,10 +699,50 @@ class CostEstimateController extends Controller
         return redirect()->route('cost-estimates.show', $costEstimate)->with('success', $message);
     }
 
+    /**
+     * Delete a DRAFT cost estimate.
+     *
+     * This used to delete any estimate unconditionally. It is now limited to
+     * estimates that are still a work in progress: a draft that is not in
+     * (or through) approval and has not been used for a quotation. An
+     * approved or pending estimate is edited instead — which resets its
+     * approval — so the record of what was approved is never silently lost.
+     * Refusals are a redirect + flash.
+     */
     public function destroy(CostEstimate $costEstimate)
     {
+        if ($reason = self::deleteBlocker($costEstimate)) {
+            return back()->with('error', "{$costEstimate->estimate_no} can't be deleted — {$reason}.");
+        }
+
+        $user = auth()->user();
+        $isCreator = (int) $costEstimate->created_by === (int) $user->id;
+        $isAdmin   = method_exists($user, 'hasRole') && $user->hasRole('super_admin');
+        if (! $isCreator && ! $isAdmin && ! $user->can('edit cost-estimates')) {
+            return back()->with('error', 'You can only delete draft estimates you prepared.');
+        }
+
+        $no = $costEstimate->estimate_no;
+        // Lines and approval rows cascade; a copy made from this estimate just
+        // loses its source link.
         $costEstimate->delete();
-        return redirect()->route('cost-estimates.index')->with('success', 'Cost estimate deleted.');
+
+        return redirect()->route('cost-estimates.index')->with('success', "Draft estimate {$no} deleted.");
+    }
+
+    /** Why this estimate can't be deleted, or null when it can. */
+    public static function deleteBlocker(CostEstimate $e): ?string
+    {
+        if ($e->status !== 'draft') {
+            return "it is {$e->status}, not a draft";
+        }
+        if (in_array($e->approval_status, ['pending_approval', 'approved'], true)) {
+            return $e->approval_status === 'approved' ? 'it has been approved' : 'it is waiting for approval';
+        }
+        if ($e->quotation_id) {
+            return 'it has been used for a quotation';
+        }
+        return null;
     }
 
     /**

@@ -292,6 +292,12 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Approval rule (both pages):** a pending or approved estimate CAN be edited, but if the edit actually changes it, its approval rows are deleted and it drops to `not_submitted` / `draft` (approval_batch cleared) — an approval only vouches for the figures it saw. `update()` compares a **normalised fingerprint** of fields + lines first and returns `false` without writing when nothing changed, so an unchanged save never resets an approval. The job page only sends parts whose data differs from what was loaded (plus newly started ones) and confirms before saving over an approval.
 - `update` is all-or-nothing in one transaction; it rejects any estimate whose `rfq_item_id` isn't this job, and never moves an estimate's part link. Validation errors come back as `estimates.N.field` (N = position in the SENT array) and the page maps them to the right part and opens it.
 
+### Deleting a draft cost estimate (`CostEstimateController@destroy`)
+- `destroy()` used to delete ANY estimate unconditionally. It now refuses (redirect + flash) unless `deleteBlocker()` returns null: `status` must be `draft`, `approval_status` must not be `pending_approval`/`approved` (a draft that was rejected is deletable), and it must not be linked to a quotation (`quotation_id`). Allowed for the creator, a super admin, or anyone with `edit cost-estimates`.
+- Lines and approval rows cascade; an estimate copied from it keeps existing with `source_estimate_id` set NULL.
+- UI: trash icon on deletable rows in the Cost Estimates list (`can_delete` per row) and a **Delete** button on the estimate Show page (`canDelete`), both behind `confirm()`. Deleting a part estimate simply leaves that part uncosted in the job roll-up.
+- Note: `generateEstimateNo()` takes the max existing number, so deleting the newest estimate lets its number be issued again.
+
 ### Copying a costing (don't re-key the same job type)
 - **"Copy from Existing"** button on the estimate form opens a searchable picker of past estimates (`GET api/cost-estimates/copy-search?q=`, matches estimate_no / job_name / company_name / part_no / customer, and only returns estimates that HAVE lines). Selecting one calls `GET api/cost-estimates/{costEstimate}/copy-source` and pulls in the cost structure + all lines.
 - **What is copied:** `overhead_pct`, `vat_pct`, `tax_pct`, `times_multiplier`, `extra_cost`, all cost lines, and the sizes *only if this estimate has none yet*.

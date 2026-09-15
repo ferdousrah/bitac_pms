@@ -204,6 +204,17 @@ export default function CostEstimateIndex({ estimates, filters }: any) {
                                                         >
                                                             <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
                                                         </button>
+                                                        {e.can_delete && (
+                                                            <button type="button"
+                                                                onClick={() => {
+                                                                    if (!confirm('Delete this draft cost estimate? Its cost lines are removed too. This cannot be undone.')) return;
+                                                                    router.delete(`/cost-estimates/${e.id}`, { preserveScroll: true });
+                                                                }}
+                                                                title="Delete this draft"
+                                                                className="inline-flex items-center justify-center p-1.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                                <i className="fi fi-rr-trash text-sm leading-none" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
