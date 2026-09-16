@@ -37,17 +37,11 @@ class BitacLetterhead
         $language = in_array($language, ['bn', 'en'], true) ? $language : 'bn';
         $mpdf     = $this->buildMpdf($documentTitle);
 
-        // Faded BITAC logo watermark — makes the rendered page look like a
-        // preprinted letterhead pad. Use the BITAC gear logo (right-side logo
-        // in the header). Falls back to the left logo if the right one is
-        // missing, then skips silently if neither exists.
-        $watermark = $center?->logoRightAbsolutePath() ?: $center?->logoLeftAbsolutePath();
-        if ($watermark && is_file($watermark)) {
-            // Args: (file, alpha 0..1, size — [w, h] in mm for big visible mark,
-            // position — 'P' = centered on page)
-            $mpdf->SetWatermarkImage($watermark, 0.04, [160, 160], 'P');
-            $mpdf->showWatermarkImage = true;
-        }
+        // No watermark. A faded BITAC gear used to sit behind the page to
+        // suggest a preprinted pad; even at 4% opacity it read as a smudge
+        // under the text, which is not what the real stationery looks like.
+        // If it is ever wanted back it is one call — SetWatermarkImage() with
+        // $center->logoRightAbsolutePath() — plus showWatermarkImage = true.
 
         $mpdf->SetHTMLHeader($this->headerHtml($center, $language));
         $mpdf->SetHTMLFooter($this->footerHtml($center, $language));
