@@ -1923,18 +1923,16 @@ class QuotationController extends Controller
             . '</table>';
 
         // ─────────────────────────────────────────────────────────────────────
-        // Title — a bordered box holding the Bangla word over its English
-        // equivalent in brackets, exactly as the printed BITAC quotation has it.
-        // Revisions read পুনঃদরপত্র / (RE-QUOTATION); the revision number is
-        // carried at the end of the Ref No., not in the title.
+        // Title — the Bangla word centred over its English equivalent in
+        // brackets, no rule or box around it. Revisions read পুনঃদরপত্র /
+        // (RE-QUOTATION); the revision number is carried at the end of the
+        // Ref No., not in the title.
         $isRevision = $quotation->version > 1;
         $titleBn    = $isRevision ? 'পুনঃদরপত্র' : 'দরপত্র';
         $titleEn    = $isRevision ? 'RE-QUOTATION' : 'QUOTATION';
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div style="display: inline-block; border: 0.75pt solid #000; padding: 4pt 16pt; text-align: center;">'
-            .   '<div class="bn" style="font-family: nikosh; font-size: 13pt; font-weight: bold; color: #000; line-height: 1.35;">' . $titleBn . '</div>'
-            .   '<div style="font-size: 12pt; font-weight: bold; color: #000; line-height: 1.35;">(' . $titleEn . ')</div>'
-            . '</div>'
+            . '<div class="bn" style="font-family: nikosh; font-size: 13pt; font-weight: bold; color: #000; line-height: 1.35;">' . $titleBn . '</div>'
+            . '<div style="font-size: 12pt; font-weight: bold; color: #000; line-height: 1.35;">(' . $titleEn . ')</div>'
             . '</div>';
 
         // ─────────────────────────────────────────────────────────────────────
