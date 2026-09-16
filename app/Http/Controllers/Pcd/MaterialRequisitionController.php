@@ -357,14 +357,14 @@ class MaterialRequisitionController extends Controller
         // Memo block — pass no on top-left, date on top-right
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $esc($mr->mrn_number) . '</td>'
-            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($reqDate) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: nikosh;">নং -</span> ' . $esc($mr->mrn_number) . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($reqDate) . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
 
         // Centered title — Material Requisition Note
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">মালামাল চাহিদাপত্র</div>'
+            . '<div class="bn" style="font-family: nikosh; font-size: 13pt; color: #000;">মালামাল চাহিদাপত্র</div>'
             . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(MATERIAL REQUISITION NOTE)</div>'
             . '</div>';
 
@@ -394,7 +394,7 @@ class MaterialRequisitionController extends Controller
             . '<col style="width: 10%;" />'
             . '</colgroup>';
         $itemsHtml .= '<tr>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: nikosh;">ক্র.নং</span><br>(Sl. No)</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Material</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Description<br><span style="font-size: 8pt; color: #4b5563;">(size / spec)</span></th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">Unit</th>';
@@ -447,8 +447,8 @@ class MaterialRequisitionController extends Controller
             .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
             .     ($preparerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>' : '')
             .     ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
-            .     ($preparerPhone !== ''  ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
-            .     ($preparerEmail !== ''  ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>' : '')
+            .     ($preparerPhone !== ''  ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: nikosh;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
+            .     ($preparerEmail !== ''  ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: nikosh;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>' : '')
             .   '</td>'
             .   '<td width="10%"></td>'
             .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'

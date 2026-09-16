@@ -127,25 +127,25 @@ export default function CenterEdit({ center }: { center: Center }) {
                             <input className="form-input" value={data.caption_en} onChange={e => setData('caption_en', e.target.value)} placeholder="BITAC – A Center of Excellence" />
                         </Field>
                         <Field label="Center name in Bangla *" error={errors.name_bn} hint="The big bold line in the header.">
-                            <input className="form-input" style={{ fontFamily: 'SiyamRupali, sans-serif', fontSize: '15px' }} value={data.name_bn} onChange={e => setData('name_bn', e.target.value)} placeholder="বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র (বিটাক)" />
+                            <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif', fontSize: '15px' }} value={data.name_bn} onChange={e => setData('name_bn', e.target.value)} placeholder="বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র (বিটাক)" />
                         </Field>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Field label="Ministry (Bangla)" error={errors.ministry_bn}>
-                                <input className="form-input" style={{ fontFamily: 'SiyamRupali, sans-serif' }} value={data.ministry_bn} onChange={e => setData('ministry_bn', e.target.value)} placeholder="শিল্প মন্ত্রণালয়" />
+                                <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif' }} value={data.ministry_bn} onChange={e => setData('ministry_bn', e.target.value)} placeholder="শিল্প মন্ত্রণালয়" />
                             </Field>
                             <Field label="Government tag (Bangla)" error={errors.government_bn}>
-                                <input className="form-input" style={{ fontFamily: 'SiyamRupali, sans-serif' }} value={data.government_bn} onChange={e => setData('government_bn', e.target.value)} placeholder="গণপ্রজাতন্ত্রী বাংলাদেশ সরকার" />
+                                <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif' }} value={data.government_bn} onChange={e => setData('government_bn', e.target.value)} placeholder="গণপ্রজাতন্ত্রী বাংলাদেশ সরকার" />
                             </Field>
                         </div>
                         <Field label="Footer address (Bangla)" error={errors.address_bn}>
-                            <input className="form-input" style={{ fontFamily: 'SiyamRupali, sans-serif' }} value={data.address_bn} onChange={e => setData('address_bn', e.target.value)} placeholder="বিটাক, ১১৬ (খ), তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৪।" />
+                            <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif' }} value={data.address_bn} onChange={e => setData('address_bn', e.target.value)} placeholder="বিটাক, ১১৬ (খ), তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৪।" />
                         </Field>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <Field label="Phone (Bangla numerals)" error={errors.phone_bn}>
-                                <input className="form-input" style={{ fontFamily: 'SiyamRupali, sans-serif' }} value={data.phone_bn} onChange={e => setData('phone_bn', e.target.value)} placeholder="৮৮৭০২৬৬, ৮৮৭০৬৮০" />
+                                <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif' }} value={data.phone_bn} onChange={e => setData('phone_bn', e.target.value)} placeholder="৮৮৭০২৬৬, ৮৮৭০৬৮০" />
                             </Field>
                             <Field label="Fax (Bangla numerals)" error={errors.fax_bn}>
-                                <input className="form-input" style={{ fontFamily: 'SiyamRupali, sans-serif' }} value={data.fax_bn} onChange={e => setData('fax_bn', e.target.value)} placeholder="০২-৮৮৭০৭২৮" />
+                                <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif' }} value={data.fax_bn} onChange={e => setData('fax_bn', e.target.value)} placeholder="০২-৮৮৭০৭২৮" />
                             </Field>
                             <Field label="Website" error={errors.website}>
                                 <input className="form-input font-mono" value={data.website} onChange={e => setData('website', e.target.value)} placeholder="www.bitac.gov.bd" />

@@ -681,14 +681,14 @@ class RfqController extends Controller
         // ─── Memo block — top-left RFQ no, top-right date (BITAC letter convention) ───
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> RFQ-' . str_pad((string) $rfq->id, 5, '0', STR_PAD_LEFT) . '</td>'
-            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($createdAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: nikosh;">নং -</span> RFQ-' . str_pad((string) $rfq->id, 5, '0', STR_PAD_LEFT) . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($createdAt) . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
 
         // ─── Centered title ─────────────────────────────────────────────
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">দরপত্রের অনুরোধপত্র</div>'
+            . '<div class="bn" style="font-family: nikosh; font-size: 13pt; color: #000;">দরপত্রের অনুরোধপত্র</div>'
             . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(REQUEST FOR QUOTATION)</div>'
             . '</div>';
 
@@ -720,14 +720,14 @@ class RfqController extends Controller
             . '</colgroup>';
         $itemsHtml .= '<tr>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">'
-            . '<span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
+            . '<span class="bn" style="font-family: nikosh;">ক্র.নং</span><br>(Sl. No)</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">'
-            . '<span class="bn" style="font-family: siyamrupali;">কাজের বিবরণ</span><br>(Description)</th>';
+            . '<span class="bn" style="font-family: nikosh;">কাজের বিবরণ</span><br>(Description)</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Product</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">'
-            . '<span class="bn" style="font-family: siyamrupali;">পরিমান</span><br>(Qty)</th>';
+            . '<span class="bn" style="font-family: nikosh;">পরিমান</span><br>(Qty)</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;">'
-            . '<span class="bn" style="font-family: siyamrupali;">একক</span><br>(Unit)</th>';
+            . '<span class="bn" style="font-family: nikosh;">একক</span><br>(Unit)</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Reference</th>';
         $itemsHtml .= '</tr>';
 

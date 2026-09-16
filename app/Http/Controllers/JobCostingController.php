@@ -287,7 +287,7 @@ class JobCostingController extends Controller
             : '';
 
         $body = '<div style="text-align:center; font-size:13pt; font-weight:bold; margin-bottom:2pt;">JOB COSTING SUMMARY</div>'
-            . '<div style="text-align:center; font-family: siyamrupali; font-size:10pt; margin-bottom:8pt;">জব কস্টিং সারসংক্ষেপ</div>'
+            . '<div style="text-align:center; font-family: nikosh; font-size:10pt; margin-bottom:8pt;">জব কস্টিং সারসংক্ষেপ</div>'
             . '<table width="100%" style="font-size:9.5pt; margin-bottom:8pt;">'
             . '<tr><td width="55%"><b>Job:</b> ' . $esc($job['job_description']) . '</td>'
             . '<td align="right"><b>RFQ:</b> #' . $esc($job['rfq_id']) . ' &nbsp; <b>Date:</b> ' . now()->format('d/m/Y') . '</td></tr>'

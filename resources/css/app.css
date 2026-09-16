@@ -26,6 +26,15 @@
     font-style: normal;
     font-display: swap;
 }
+/* Nikosh — the face every BITAC PDF sets Bangla in. Used on screen wherever
+   we preview letterhead text so the admin sees what will print. */
+@font-face {
+    font-family: 'Nikosh';
+    src: url('/fonts/Nikosh.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
 @font-face {
     font-family: 'SiyamRupali';
     src: url('/fonts/SiyamRupali.woff2') format('woff2'),

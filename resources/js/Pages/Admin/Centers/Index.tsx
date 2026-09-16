@@ -52,7 +52,7 @@ export default function CentersIndex({ centers }: { centers: Center[] }) {
                                         <td>
                                             <div className="font-semibold text-surface-900">{c.name}</div>
                                             {c.name_bn && (
-                                                <div className="text-xs text-surface-500 mt-0.5" style={{ fontFamily: 'SiyamRupali, sans-serif' }}>
+                                                <div className="text-xs text-surface-500 mt-0.5" style={{ fontFamily: 'Nikosh, sans-serif' }}>
                                                     {c.name_bn}
                                                 </div>
                                             )}

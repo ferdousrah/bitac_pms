@@ -350,7 +350,7 @@ class WorkOrderSectionController extends Controller
             $itemsHtml .= '<tr>'
                 . '<td style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: top;"><b><span class="bn">' . $esc($department) . '</span></b></td>'
                 . '<td style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: top;"><b><span class="bn">' . $customer . '</span></b>'
-                .   ($customerPo !== '' ? '<div style="font-size: 8.5pt; color: #555; font-family: dejavusansmono; margin-top: 2pt;">PO: ' . $customerPo . '</div>' : '')
+                .   ($customerPo !== '' ? '<div style="font-size: 8.5pt; color: #555; font-family: tinos; margin-top: 2pt;">PO: ' . $customerPo . '</div>' : '')
                 . '</td>'
                 . '<td colspan="4" style="border: 0.75pt solid #000; padding: 10pt; font-size: 9pt; color: #666; text-align: center; font-style: italic;">No items.</td>'
                 . '</tr>';
@@ -366,13 +366,13 @@ class WorkOrderSectionController extends Controller
                 if ($idx === 0) {
                     $itemsHtml .= '<td rowspan="' . $itemCount . '" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: middle; text-align: center;"><b><span class="bn">' . $esc($department) . '</span></b></td>';
                     $itemsHtml .= '<td rowspan="' . $itemCount . '" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; vertical-align: middle;"><b><span class="bn">' . $customer . '</span></b>'
-                        . ($customerPo !== '' ? '<div style="font-size: 8.5pt; color: #555; font-family: dejavusansmono; margin-top: 2pt;">PO: ' . $customerPo . '</div>' : '')
+                        . ($customerPo !== '' ? '<div style="font-size: 8.5pt; color: #555; font-family: tinos; margin-top: 2pt;">PO: ' . $customerPo . '</div>' : '')
                         . '</td>';
                 }
                 $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt; vertical-align: top;">'
                     . '<b>' . ($idx + 1) . '. </b><span class="bn">' . nl2br($esc($desc)) . '</span>'
                     . '</td>';
-                $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center; vertical-align: middle; font-family: dejavusansmono;">' . $partNo . '</td>';
+                $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center; vertical-align: middle; font-family: tinos;">' . $partNo . '</td>';
                 $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $fmt($qty) . ' ' . $esc($unit) . '</td>';
                 $itemsHtml .= '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9pt; vertical-align: top; color: #333;"><span class="bn">' . nl2br($esc($pcdNote)) . '</span></td>';
                 $itemsHtml .= '</tr>';

@@ -17,7 +17,7 @@ use Mpdf\HTMLParserMode;
  *   DomPDF lacks Indic complex-script shaping, so Bangla যুক্তাক্ষর + matra
  *   placement renders incorrectly. mPDF has native Indic support.
  *
- * Bangla font (Siyam Rupali) is loaded from public/fonts/SiyamRupali.ttf.
+ * Bangla font (Siyam Rupali) is loaded from public/fonts/Nikosh.ttf.
  */
 class BitacLetterhead
 {
@@ -73,7 +73,7 @@ class BitacLetterhead
     }
 
     /**
-     * Configure mPDF with our font dir + register SiyamRupali for Bangla shaping.
+     * Configure mPDF with our font dir + register Nikosh for Bangla shaping.
      */
     private function buildMpdf(string $title): Mpdf
     {
@@ -97,13 +97,13 @@ class BitacLetterhead
             'margin_right'     => 18,
             // The top margin is MEASURED, not guessed: 'stretch' makes mPDF grow
             // it to margin_header + the rendered header's own height +
-            // autoMarginPadding. So the body always starts a fixed 5mm under the
+            // autoMarginPadding. So the body always starts a fixed 3mm under the
             // letterhead rule, whatever the centre's address/contact lines do —
-            // no hand-tuned slack sitting between the rule and "Memo No.".
+            // no hand-tuned slack sitting between the rule and "Ref No.".
             // margin_top is only the floor if a header somehow doesn't render.
             'margin_top'         => 28,
             'setAutoTopMargin'   => 'stretch',
-            'autoMarginPadding'  => 5,    // mm of air under the letterhead rule
+            'autoMarginPadding'  => 3,    // mm of air under the letterhead rule
             'margin_bottom'      => 14,   // footer is only the page number now
             'margin_header'      => 6,
             'margin_footer'      => 8,
@@ -111,13 +111,48 @@ class BitacLetterhead
                 public_path('fonts'),
             ]),
             'fontdata'         => $fontData + [
+                // The two document faces. Every PDF in the system uses these:
+                // Tinos for English, Nikosh for Bangla.
+                //
+                // Tinos IS Times New Roman metrically — Monotype's own libre
+                // clone, identical advance widths — so it sets exactly like the
+                // stationery BITAC types on, and unlike the real times.ttf it is
+                // Apache-2.0 and may ship in the repo and embed in the PDF.
+                'tinos' => [
+                    'R'  => 'Tinos-Regular.ttf',
+                    'B'  => 'Tinos-Bold.ttf',
+                    'I'  => 'Tinos-Italic.ttf',
+                    'BI' => 'Tinos-BoldItalic.ttf',
+                ],
+                // Nikosh — the Bangladesh government's standard Bangla face.
+                // useOTL is what actually shapes Bangla: without it mPDF lays the
+                // codepoints out in order and যুক্তাক্ষর / matra placement come out
+                // wrong. 0xFF = apply every OpenType feature.
+                'nikosh' => [
+                    'R'      => 'Nikosh.ttf',
+                    'useOTL' => 0xFF,
+                ],
+                // Alias: stored HTML (rich-text terms, letter bodies) written
+                // before the switch may still name siyamrupali — point it at
+                // Nikosh so those documents reprint in the current face too.
                 'siyamrupali' => [
-                    'R' => 'SiyamRupali.ttf',
+                    'R'      => 'Nikosh.ttf',
+                    'useOTL' => 0xFF,
                 ],
             ],
-            'default_font'        => 'dejavusans',
+            'default_font'        => 'tinos',
+            // Bangla that arrives without an explicit font-family (e.g. a customer
+            // name typed in Bangla inside an English table) falls back to Nikosh
+            // rather than mPDF's generic serif.
+            'backupSubsFont'      => ['nikosh', 'dejavusanscondensed'],
             'autoScriptToLang'    => true,
-            'autoLangToFont'      => true,
+            // ⚠️ autoLangToFont must stay OFF. mPDF's language table maps Bangla
+            // to *freeserif*, and it did so over the font-family we asked for —
+            // which is why PDFs used to carry a third face and Bangla set
+            // inconsistently. Off, our font-family wins and anything Bangla with
+            // no font-family falls through useSubstitutions to backupSubsFont
+            // (nikosh, which carries its own useOTL, so it still shapes).
+            'autoLangToFont'      => false,
             'useSubstitutions'    => true,
         ]);
 
@@ -194,18 +229,18 @@ HTML;
         $contactBn    = $this->contactLine($center, 'bn');
 
         $addressRow = $addressBn
-            ? '<div style="font-family: siyamrupali; font-size: 9.5pt; color: ' . $ink . '; margin-top: 2pt;">' . $addressBn . '</div>' : '';
+            ? '<div style="font-family: nikosh; font-size: 9.5pt; color: ' . $ink . '; margin-top: 2pt;">' . $addressBn . '</div>' : '';
         $contactRow = $contactBn
-            ? '<div style="font-family: siyamrupali; font-size: 8.5pt; color: ' . $ink . '; margin-top: 1pt;">' . $contactBn . '</div>' : '';
+            ? '<div style="font-family: nikosh; font-size: 8.5pt; color: ' . $ink . '; margin-top: 1pt;">' . $contactBn . '</div>' : '';
 
         return <<<HTML
 <table width="100%" cellspacing="0" cellpadding="0" style="border-bottom: 1pt solid {$rule}; padding-bottom: 3pt;">
     <tr>
         <td width="70" align="center" style="vertical-align: middle;">{$leftLogo}</td>
         <td align="center" style="vertical-align: middle; padding: 0 6pt;">
-            <div style="font-family: siyamrupali; font-size: 19pt; color: {$title};">{$nameBn}</div>
-            <div style="font-family: siyamrupali; font-size: 11pt; color: {$red}; margin-top: 1pt;">{$ministryBn}</div>
-            <div style="font-family: siyamrupali; font-size: 10pt; color: {$ink}; margin-top: 1pt;">{$governmentBn}</div>
+            <div style="font-family: nikosh; font-size: 19pt; color: {$title};">{$nameBn}</div>
+            <div style="font-family: nikosh; font-size: 11pt; color: {$red}; margin-top: 1pt;">{$ministryBn}</div>
+            <div style="font-family: nikosh; font-size: 10pt; color: {$ink}; margin-top: 1pt;">{$governmentBn}</div>
             {$addressRow}
             {$contactRow}
         </td>
@@ -240,7 +275,7 @@ HTML;
         if ($phoneBn) $parts[] = "ফোন: {$phoneBn}";
         if ($faxBn)   $parts[] = "ফ্যাক্স: {$faxBn}";
         if ($website) {
-            $parts[] = 'ওয়েবসাইট : <span style="font-family: dejavusans;">' . $website . '</span>';
+            $parts[] = 'ওয়েবসাইট : <span style="font-family: tinos;">' . $website . '</span>';
         }
 
         return implode(', ', $parts);
@@ -281,8 +316,8 @@ HTML;
     private function stylesheetCss(): string
     {
         return <<<CSS
-body { font-family: dejavusans; font-size: 10pt; color: #1f2937; }
-.bn { font-family: siyamrupali; }
+body { font-family: tinos; font-size: 10pt; color: #1f2937; }
+.bn { font-family: nikosh; }
 h1, h2, h3 { color: #1e40af; }
 table { border-collapse: collapse; }
 CSS;

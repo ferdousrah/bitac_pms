@@ -271,7 +271,7 @@ export default function QuotationCreate({
                                 <div className="form-group">
                                     <label className="form-label">
                                         <i className="fi fi-rr-document text-xs leading-none mr-1.5" />
-                                        নং (Memo No)
+                                        নং (Ref No)
                                     </label>
                                     <input
                                         type="text"

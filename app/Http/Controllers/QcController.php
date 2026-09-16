@@ -671,7 +671,7 @@ class QcController extends Controller
                 . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9.5pt; text-align: center;">' . $esc($itemLabel) . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9.5pt;">' . $esc($item?->description ?? '—') . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9.5pt; text-align: center;">' . $esc($itemQty) . '</td>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9pt; text-align: center; font-family: dejavusansmono;">IC-' . str_pad((string) $ins->id, 5, '0', STR_PAD_LEFT) . '</td>'
+                . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9pt; text-align: center; font-family: tinos;">IC-' . str_pad((string) $ins->id, 5, '0', STR_PAD_LEFT) . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 9pt; text-align: center;">' . $esc($ins->inspected_at?->format('d/m/Y') ?? '—') . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 5pt; font-size: 10pt; text-align: center; font-weight: bold; color: ' . $resultColor . ';">' . $esc($resultLabel) . '</td>'
                 . '</tr>';

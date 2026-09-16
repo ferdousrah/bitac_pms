@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# mPDF regenerates this font cache on first render (entrypoint.sh creates the dir)
+/storage/framework/mpdf

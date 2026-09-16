@@ -33,11 +33,11 @@ class CompletionCertificatePdfService
         }
 
         $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-            body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 11pt; line-height: 1.55; padding: 30pt 36pt; }
+            body { font-family: tinos, serif; color: #1f2937; font-size: 11pt; line-height: 1.55; padding: 30pt 36pt; }
             h1 { font-size: 22pt; text-align: center; color: #0f172a; letter-spacing: 4pt; margin: 0 0 4pt; }
             .subtitle { text-align: center; color: #64748b; font-size: 10pt; letter-spacing: 2pt; text-transform: uppercase; margin-bottom: 24pt; }
             .border-box { border: 1.5pt solid #0f172a; padding: 20pt 24pt; margin-top: 10pt; }
-            .ref { text-align: right; font-family: monospace; font-size: 9pt; color: #64748b; margin-bottom: 18pt; }
+            .ref { text-align: right; font-family: tinos; font-size: 9pt; color: #64748b; margin-bottom: 18pt; }
             .body p { margin: 0 0 10pt; }
             .body strong { color: #0f172a; }
             .footer-row { margin-top: 36pt; display: table; width: 100%; }

@@ -84,8 +84,8 @@ class InvoiceService
         // ── Memo strip ─────────────────────────────────────────────
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $invNo . '</td>'
-            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issued) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: nikosh;">নং -</span> ' . $invNo . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($issued) . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
 
@@ -140,8 +140,8 @@ class InvoiceService
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt; vertical-align: top;">' . str_pad($idx, 2, '0', STR_PAD_LEFT) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 9pt; vertical-align: top;">' . nl2br($desc, false) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt; vertical-align: top;">' . $fmt($qty) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: monospace; vertical-align: top;">' . $fmt($unitNet) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: monospace; vertical-align: top;">' . $fmt($line) . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: tinos; vertical-align: top;">' . $fmt($unitNet) . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: tinos; vertical-align: top;">' . $fmt($line) . '</td>'
                     . '</tr>';
             }
         } else {
@@ -153,8 +153,8 @@ class InvoiceService
                 . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">01</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 9pt;">' . $desc . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">' . $fmt($qty) . '</td>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: monospace;">' . $fmt($unit) . '</td>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: monospace;">' . $fmt($invoice->subtotal) . '</td>'
+                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: tinos;">' . $fmt($unit) . '</td>'
+                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: right; font-size: 9pt; font-family: tinos;">' . $fmt($invoice->subtotal) . '</td>'
                 . '</tr>';
         }
 
@@ -181,15 +181,15 @@ class InvoiceService
             .   '</td>'
             .   '<td width="45%" style="border: 0.75pt solid #000; padding: 0; vertical-align: top;">'
             .     '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">'
-            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt;">Subtotal</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt;">৳ ' . $fmt($invoice->subtotal) . '</td></tr>'
+            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt;">Subtotal</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt;">৳ ' . $fmt($invoice->subtotal) . '</td></tr>'
             .       ($discount > 0
-                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; color: #dc2626;">Discount</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt; color: #dc2626;">- ৳ ' . $fmt($discount) . '</td></tr>'
+                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; color: #dc2626;">Discount</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; color: #dc2626;">- ৳ ' . $fmt($discount) . '</td></tr>'
                        : '')
-            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">VAT (' . $fmt($vatRate) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->vat_amount) . '</td></tr>'
+            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">VAT (' . $fmt($vatRate) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->vat_amount) . '</td></tr>'
             .       (((float) ($invoice->tax_amount ?? 0)) > 0
-                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">Tax (' . $fmt($invoice->tax_rate ?? 0) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: monospace; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->tax_amount) . '</td></tr>'
+                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">Tax (' . $fmt($invoice->tax_rate ?? 0) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->tax_amount) . '</td></tr>'
                        : '')
-            .       '<tr style="background: #f3f4f6;"><td style="padding: 6pt 8pt; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">TOTAL DUE</td><td style="padding: 6pt 8pt; text-align: right; font-family: monospace; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">৳ ' . $fmt($invoice->total_amount) . '</td></tr>'
+            .       '<tr style="background: #f3f4f6;"><td style="padding: 6pt 8pt; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">TOTAL DUE</td><td style="padding: 6pt 8pt; text-align: right; font-family: tinos; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">৳ ' . $fmt($invoice->total_amount) . '</td></tr>'
             .     '</table>'
             .   '</td>'
             . '</tr>'

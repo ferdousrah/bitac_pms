@@ -84,7 +84,7 @@ export default function RfqLetterCreate({
                                 {errors.rfq_id && <p className="form-error">{errors.rfq_id as any}</p>}
                             </div>
                             <div className="form-group !mb-0">
-                                <label className="form-label">Memo No. (নং)</label>
+                                <label className="form-label">Ref No. (নং)</label>
                                 <input type="text" value={data.letter_no} onChange={e => setData('letter_no', e.target.value)}
                                     className="form-input font-mono text-xs" placeholder="36.06.2692.028.51." />
                                 {errors.letter_no && <p className="form-error">{errors.letter_no as any}</p>}

@@ -985,7 +985,7 @@ class CostEstimateController extends Controller
 
         $date = now()->format('d M Y, H:i');
         $fullHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-            . "body{font-family:'DejaVu Sans',sans-serif;font-size:11px;color:#334155;margin:30px;}"
+            . "body{font-family:tinos,serif;font-size:11px;color:#334155;margin:30px;}"
             . "h1{font-size:20px;color:#1e40af;margin-bottom:4px;}"
             . ".meta{font-size:9px;color:#94a3b8;margin-bottom:14px;}"
             . ".footer{margin-top:20px;text-align:center;font-size:8px;color:#94a3b8;}"

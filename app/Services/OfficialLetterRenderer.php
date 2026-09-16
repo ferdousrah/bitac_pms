@@ -7,7 +7,7 @@ namespace App\Services;
  * letterhead) in Bangla or English. Shared by the quotation forwarding letter
  * and the standalone RFQ letters so the format stays identical everywhere.
  *
- * Layout:  Memo No. (top-left) / Date (top-right) → Subject → customer Ref →
+ * Layout:  Ref No. (top-left) / Date (top-right) → Subject → customer Ref →
  *          body → recipient (bottom-left) + signatory (bottom-right) with the
  *          "For / Director (Centre Head)" sign-off line.
  */
@@ -37,12 +37,12 @@ class OfficialLetterRenderer
             'yours' => 'আপনার বিশ্বস্ত', 'email' => 'ই-মেইলঃ', 'phone' => 'ফোনঃ',
             'for' => 'পক্ষে', 'director' => 'পরিচালক (কেন্দ্র প্রধান)',
         ] : [
-            'memo' => 'Memo No.-', 'date' => 'Date-', 'subject' => 'Subject:-',
+            'memo' => 'Ref No.-', 'date' => 'Date-', 'subject' => 'Subject:-',
             'ref' => 'Ref:', 'refDate' => ', dated ',
             'yours' => 'Yours faithfully,', 'email' => 'Email:', 'phone' => 'Phone:',
             'for' => 'For', 'director' => 'Director (Centre Head),',
         ];
-        $lf  = $isBn ? 'font-family: siyamrupali;' : '';
+        $lf  = $isBn ? 'font-family: nikosh;' : '';
         $dot = $isBn ? '।' : '.';
 
         $memoOut   = $num($esc($d['memoNo'] ?? ''));

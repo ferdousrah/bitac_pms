@@ -30,13 +30,13 @@ class DeliveryChallanService
 
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $chal . '</td>'
-            .   '<td style="font-size: 11pt; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($date) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt;"><span class="bn" style="font-family: nikosh;">নং -</span> ' . $chal . '</td>'
+            .   '<td style="font-size: 11pt; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($date) . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
 
         $title = '<div style="text-align: center; margin-bottom: 12pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt;">ডেলিভারি চালান</div>'
+            . '<div class="bn" style="font-family: nikosh; font-size: 13pt;">ডেলিভারি চালান</div>'
             . '<div style="font-size: 11pt; margin-top: 1pt; font-weight: bold;">(DELIVERY CHALLAN)</div>'
             . '</div>';
 

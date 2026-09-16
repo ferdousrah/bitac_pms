@@ -101,7 +101,7 @@ class OperationSheetService
             .   '<b>Item Name:</b> <span class="bn">' . $jobTitle . '</span>'
             . '</td>'
             . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 10pt;">'
-            .   '<b>Job No:</b> <b style="font-family: dejavusansmono;">' . $jobNo . '</b>'
+            .   '<b>Job No:</b> <b style="font-family: tinos;">' . $jobNo . '</b>'
             . '</td>'
             . '</tr>';
         // Row 2: Job Description | Customer
@@ -122,7 +122,7 @@ class OperationSheetService
             .   '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">'
             .     '<tr>'
             .       '<td style="padding: 5pt 8pt; border-right: 0.75pt solid #000; font-size: 10pt;">'
-            .         '<b>Part No:</b> <span style="font-family: dejavusansmono;">' . $partNo . '</span>'
+            .         '<b>Part No:</b> <span style="font-family: tinos;">' . $partNo . '</span>'
             .       '</td>'
             .       '<td style="padding: 5pt 8pt; font-size: 10pt;">'
             .         '<b>Quantity:</b> ' . $qty
@@ -181,7 +181,7 @@ class OperationSheetService
                 $secName = $s->section?->name ?? '—';
                 $remarks = $s->tooling_notes ?? '';
                 $routingHtml .= '<tr>'
-                    . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; text-align: center; font-family: dejavusansmono;">' . str_pad((string) $rowCount, 2, '0', STR_PAD_LEFT) . '</td>'
+                    . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; text-align: center; font-family: tinos;">' . str_pad((string) $rowCount, 2, '0', STR_PAD_LEFT) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt;">' . $esc($opName) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt;">' . $esc($secName) . '</td>'
                     . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 9.5pt;">' . nl2br($esc($remarks)) . '</td>'
@@ -205,7 +205,7 @@ class OperationSheetService
             // non-production stops — nothing for PCD to plan there.
             $secName = $esc($stop->section?->name ?? '—');
             $routingHtml .= '<tr>'
-                . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; text-align: center; font-family: dejavusansmono;">' . str_pad((string) $rowCount, 2, '0', STR_PAD_LEFT) . '</td>'
+                . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt; text-align: center; font-family: tinos;">' . str_pad((string) $rowCount, 2, '0', STR_PAD_LEFT) . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt;">' . $secName . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt; font-size: 10pt;">' . $secName . '</td>'
                 . '<td style="border: 0.75pt solid #000; padding: 4pt 6pt;">&nbsp;</td>'

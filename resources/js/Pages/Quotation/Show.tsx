@@ -944,7 +944,7 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                 {/* Memo No. */}
                                 {quotation.memo_no && (
                                     <div>
-                                        <dt className="text-xs text-surface-400 font-medium">Memo No.</dt>
+                                        <dt className="text-xs text-surface-400 font-medium">Ref No.</dt>
                                         <dd className="text-sm font-mono font-semibold text-surface-800 mt-0.5 break-all">{memoNoDisplay}</dd>
                                     </div>
                                 )}

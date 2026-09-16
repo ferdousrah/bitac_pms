@@ -528,14 +528,14 @@ class OperationSheetController extends Controller
         // Memo block — sheet no left, date right
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">জব নম্বরঃ</span> ' . $jobNumber . '</td>'
-            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($issuedAt) . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: nikosh;">জব নম্বরঃ</span> ' . $jobNumber . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($issuedAt) . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
 
         // Centered title — কাজের তালিকা / (OPERATION SHEET)
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">কাজের তালিকা</div>'
+            . '<div class="bn" style="font-family: nikosh; font-size: 13pt; color: #000;">কাজের তালিকা</div>'
             . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(OPERATION SHEET)</div>'
             . '</div>';
 
@@ -619,8 +619,8 @@ class OperationSheetController extends Controller
             .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
             .     ($preparerTitle  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>'  : '')
             .     ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
-            .     ($preparerPhone  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: siyamrupali;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
-            .     ($preparerEmail  !== '' ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: siyamrupali;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>'  : '')
+            .     ($preparerPhone  !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: nikosh;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
+            .     ($preparerEmail  !== '' ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: nikosh;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>'  : '')
             .   '</td>'
             .   '<td width="55%"></td>'
             . '</tr>'

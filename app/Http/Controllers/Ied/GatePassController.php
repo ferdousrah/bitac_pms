@@ -490,14 +490,14 @@ class GatePassController extends Controller
         // Memo block — top-left pass no, top-right date
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
-            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: siyamrupali;">নং -</span> ' . $esc($gatePass->pass_no) . '</td>'
-            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: siyamrupali;">তারিখঃ</span> ' . $esc($gatePass->pass_date?->format('d/m/Y') ?? '') . ' <span class="bn" style="font-family: siyamrupali;">খ্রিঃ</span></td>'
+            .   '<td style="font-size: 11pt; color: #000;"><span class="bn" style="font-family: nikosh;">নং -</span> ' . $esc($gatePass->pass_no) . '</td>'
+            .   '<td style="font-size: 11pt; color: #000; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($gatePass->pass_date?->format('d/m/Y') ?? '') . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
             . '</tr>'
             . '</table>';
 
         // Centered title
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div class="bn" style="font-family: siyamrupali; font-size: 13pt; color: #000;">' . $directionBn . '</div>'
+            . '<div class="bn" style="font-family: nikosh; font-size: 13pt; color: #000;">' . $directionBn . '</div>'
             . '<div style="font-size: 11pt; color: #000; margin-top: 1pt;">(' . $directionLabel . ')</div>'
             . '</div>';
 
@@ -522,10 +522,10 @@ class GatePassController extends Controller
         $itemsHtml  = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 0.75pt solid #000; margin-top: 4pt; table-layout: fixed;">';
         $itemsHtml .= '<colgroup><col style="width: 6%;" /><col style="width: 52%;" /><col style="width: 10%;" /><col style="width: 8%;" /><col style="width: 24%;" /></colgroup>';
         $itemsHtml .= '<tr>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: siyamrupali;">ক্র.নং</span><br>(Sl. No)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: siyamrupali;">দ্রব্যাদির বিবরণ</span><br>(Description)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: siyamrupali;">পরিমান</span><br>(Qty)</th>';
-        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: siyamrupali;">একক</span><br>(Unit)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: nikosh;">ক্র.নং</span><br>(Sl. No)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: nikosh;">দ্রব্যাদির বিবরণ</span><br>(Description)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: nikosh;">পরিমান</span><br>(Qty)</th>';
+        $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt 2pt; font-size: 9pt; font-weight: normal; text-align: center;"><span class="bn" style="font-family: nikosh;">একক</span><br>(Unit)</th>';
         $itemsHtml .=   '<th style="border: 0.75pt solid #000; padding: 4pt; font-size: 9pt; font-weight: normal; text-align: center;">Condition / মন্তব্য</th>';
         $itemsHtml .= '</tr>';
 

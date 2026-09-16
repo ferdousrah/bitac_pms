@@ -1908,12 +1908,12 @@ class QuotationController extends Controller
         $issuedDate = ($quotation->memo_date ?? $quotation->created_at)->format('d/m/Y');
 
         // ─────────────────────────────────────────────────────────────────────
-        // Memo block — English labels only ("Memo No.", "Date").
+        // Ref block — English labels only ("Ref No.", "Date").
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
             . '<tr>'
             .   '<td style="font-size: 11pt; color: #000;">'
-            .     '<b>Memo No.</b> - '
-            .     '<span style="font-family: dejavusansmono;">' . $esc($memoNo) . '</span>'
+            .     '<b>Ref No.</b> - '
+            .     '<span style="font-family: tinos;">' . $esc($memoNo) . '</span>'
             .   '</td>'
             .   '<td style="font-size: 11pt; color: #000; text-align: right;">'
             .     '<b>Date:</b> ' . $esc($issuedDate)
@@ -2122,13 +2122,13 @@ class QuotationController extends Controller
         if (is_array($termsList) && count($termsList) > 0) {
             $termsHtml  = '<div style="margin-top: 18pt;">';
             $termsHtml .=   '<div style="text-align: center; margin-bottom: 6pt;">';
-            $termsHtml .=     '<span class="bn" style="display: inline-block; padding: 2pt 14pt; border: 0.75pt solid #000; font-family: siyamrupali; font-size: 11pt; color: #000;">দরপত্রের শর্ত সমূহ</span>';
+            $termsHtml .=     '<span class="bn" style="display: inline-block; padding: 2pt 14pt; border: 0.75pt solid #000; font-family: nikosh; font-size: 11pt; color: #000;">দরপত্রের শর্ত সমূহ</span>';
             $termsHtml .=   '</div>';
             $termsHtml .=   '<table cellspacing="0" cellpadding="0" style="width: 100%; margin-top: 4pt;">';
             foreach ($termsList as $idx => $term) {
                 $termsHtml .= '<tr>';
                 $termsHtml .=   '<td width="24pt" style="padding: 2pt 4pt; vertical-align: top; font-size: 10pt; color: #000;">' . ($idx + 1) . '.</td>';
-                $termsHtml .=   '<td class="bn" style="padding: 2pt 4pt; vertical-align: top; font-family: siyamrupali; font-size: 10.5pt; color: #000; line-height: 1.5;">' . $esc($term) . '</td>';
+                $termsHtml .=   '<td class="bn" style="padding: 2pt 4pt; vertical-align: top; font-family: nikosh; font-size: 10.5pt; color: #000; line-height: 1.5;">' . $esc($term) . '</td>';
                 $termsHtml .= '</tr>';
             }
             $termsHtml .= '</table>';
@@ -2516,7 +2516,7 @@ HTML;
             $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;font-weight:bold;'>{$q->id}</td>";
             $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;'>" . ($q->customer?->name ?? '—') . "</td>";
             $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;'>{$product}</td>";
-            $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;font-weight:bold;'>" . number_format((float) $q->total_amount, 2) . "</td>";
+            $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:tinos;font-weight:bold;'>" . number_format((float) $q->total_amount, 2) . "</td>";
             $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;'>v{$q->version}</td>";
             $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;'>" . ucfirst(str_replace('_', ' ', $q->status)) . "</td>";
             $tableHtml .= "<td style='padding:5px 8px;border-bottom:1px solid #e2e8f0;'>" . $q->created_at->format('d M Y') . "</td>";
@@ -2530,7 +2530,7 @@ HTML;
             . "<strong>Total Quotations:</strong> {$quotations->count()} | <strong>Total Value:</strong> ৳{$totalAmt}</div>";
 
         $html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
-            . "body{font-family:'DejaVu Sans',sans-serif;font-size:11px;color:#334155;margin:30px;}"
+            . "body{font-family:tinos,serif;font-size:11px;color:#334155;margin:30px;}"
             . "h1{font-size:20px;color:#1e40af;margin-bottom:4px;}"
             . ".meta{font-size:9px;color:#94a3b8;margin-bottom:14px;}"
             . ".footer{margin-top:20px;text-align:center;font-size:8px;color:#94a3b8;}"
