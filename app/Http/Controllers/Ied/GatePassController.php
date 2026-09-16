@@ -559,7 +559,7 @@ class GatePassController extends Controller
         $approvedByCol = $gatePass->approvedBy
             ? '<td width="30%" style="vertical-align: bottom; text-align: center;">'
                 . '<div style="margin-bottom: 4pt;">'
-                . SignatureBlock::html($hasApproverImg ? $approverSigPath : null, [], imageHeightPt: 40, imageMaxWidthPt: 150)
+                . SignatureBlock::html($hasApproverImg ? $approverSigPath : null, [], blankHeightPt: 40, imageMaxWidthPt: 150)
                 . '</div>'
                 . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 130pt;">Approved By</div>'
                 . (!$hasApproverImg ? '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $approverName . '</div>' : '')
@@ -570,7 +570,7 @@ class GatePassController extends Controller
             . '<tr>'
             .   '<td width="35%" style="vertical-align: bottom; text-align: left;">'
             .     '<div style="margin-bottom: 4pt;">'
-            .     SignatureBlock::html($hasIssuerImg ? $sigPath : null, [], imageHeightPt: 40, imageMaxWidthPt: 160, align: 'left')
+            .     SignatureBlock::html($hasIssuerImg ? $sigPath : null, [], blankHeightPt: 40, imageMaxWidthPt: 160, align: 'left')
             .     '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 130pt;">Issued By</div>'
             .     (!$hasIssuerImg

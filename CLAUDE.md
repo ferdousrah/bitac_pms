@@ -323,6 +323,7 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 > A signature image is the WHOLE block. Read this before touching any signature.
 
 - **What is uploaded is a scan of the entire block** — the pen stroke *with* the name (Bangla), designation, centre, email and phone printed under it. So **documents print the image and nothing else**. Typing those lines under it as well printed everything twice.
+- ⚠️ **The image is sized by WIDTH only, never height.** It is a whole block — pen stroke plus four or five lines of name/designation/contacts — so pinning a height squashed all of that into ~17mm and the writing came out unreadable (and only ~23mm wide). `imageMaxWidthPt` is the width it prints at; the height follows the scan's own proportions. ~180pt / 63mm on a quotation, which matches the printed original. `blankHeightPt` only sizes the empty space when there is NO image.
 - **`App\Support\SignatureBlock::html()` is the one renderer.** Image present → image alone. **No image → the typed lines**, so an unsigned document still names who it is for. **Role labels** (`Prepared By` / `Checked By` / `Approved By` / `Issued By` / `Inspector`) are the office speaking, not signatory details, and always print. Don't hand-roll a signature block again.
 - ⚠️ **A drawn signature is only a squiggle** — the pad at approval/issue time captures no name or designation, so a document signed that way names nobody. The picker says so. If that becomes a problem, the fix is a per-signature "details are in the image" flag, not un-picking image-only.
 

@@ -30,26 +30,34 @@ class SignatureBlock
      * @param  array<int,string>  $lines  Typed fallback lines, already escaped,
      *                                    in print order. Ignored when an image
      *                                    is present.
-     * @param  float  $imageHeightPt  Height of the image, and of the blank
-     *                                spacer that stands in for it.
+     * @param  float  $blankHeightPt   Height of the blank space that stands in
+     *                                 for the signature when there is no image.
+     * @param  float  $imageMaxWidthPt Width the image is scaled to fit.
      */
     public static function html(
         ?string $imagePath,
         array $lines = [],
-        float $imageHeightPt = 46,
+        float $blankHeightPt = 46,
         float $imageMaxWidthPt = 170,
         string $align = 'center',
         string $ink = self::INK,
     ): string {
         if ($imagePath && is_file($imagePath)) {
+            // ⚠️ Constrain the WIDTH only, never the height.
+            //
+            // The image is a whole signature block — a pen stroke plus four or
+            // five lines of name/designation/contacts. Pinning it to a fixed
+            // height squeezed all of that into ~17mm and the writing came out
+            // too small to read. Width-only lets it keep its own proportions
+            // and fill the column the way the printed original does.
             return '<div style="text-align: ' . $align . ';">'
-                . '<img src="' . $imagePath . '" style="height: ' . $imageHeightPt . 'pt; max-width: ' . $imageMaxWidthPt . 'pt;" />'
+                . '<img src="' . $imagePath . '" style="width: ' . $imageMaxWidthPt . 'pt;" />'
                 . '</div>';
         }
 
         // No image — keep the space the signature would have taken so the
         // layout doesn't jump, then name the signatory in text.
-        $html = '<div style="height: ' . $imageHeightPt . 'pt;"></div>';
+        $html = '<div style="height: ' . $blankHeightPt . 'pt;"></div>';
 
         foreach (array_values(array_filter($lines, fn ($l) => trim((string) $l) !== '')) as $i => $line) {
             $html .= '<div style="text-align: ' . $align . '; font-size: ' . ($i === 0 ? '10pt' : '9pt')

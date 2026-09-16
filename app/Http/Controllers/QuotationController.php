@@ -2106,7 +2106,7 @@ class QuotationController extends Controller
                       $esc($signerCenter),
                       $signerEmail ? '<b>Email:</b> <u>' . $esc($signerEmail) . '</u>' : '',
                       $signerPhone ? '<b>Phone:</b> ' . $esc($signerPhone) : '',
-                  ], imageHeightPt: 50, imageMaxWidthPt: 180, align: 'right')
+                  ], blankHeightPt: 50, imageMaxWidthPt: 180, align: 'right')
             .   '</td>'
             . '</tr>'
             . '</table>';

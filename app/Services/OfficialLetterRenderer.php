@@ -82,7 +82,7 @@ class OfficialLetterRenderer
         // against the right margin, not floating in the middle of its column.
         $signerCol = '<div style="' . $lf . ' font-size: 11pt; color: #000; text-align: right;">'
             . '<div style="margin-bottom: 30pt;">' . $L['yours'] . '</div>'
-            . SignatureBlock::html($signaturePath, $typedLines, imageHeightPt: 46, imageMaxWidthPt: 190, align: 'right')
+            . SignatureBlock::html($signaturePath, $typedLines, blankHeightPt: 46, imageMaxWidthPt: 190, align: 'right')
             // The "পক্ষে / For — Director (Centre Head)" sign-off is the office
             // acting, not the signatory's own details, so it always prints.
             . '<div style="margin-top: 6pt; color: #a349a4;">' . $L['for'] . '</div>'

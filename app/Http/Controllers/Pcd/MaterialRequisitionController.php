@@ -440,7 +440,7 @@ class MaterialRequisitionController extends Controller
         // designation and contacts), so a signed sheet prints the image and its
         // role label only. Unsigned keeps the typed lines.
         $hasSig = $preparerSig && is_file($preparerSig);
-        $sigImg = SignatureBlock::html($hasSig ? $preparerSig : null, [], imageHeightPt: 40, imageMaxWidthPt: 160, align: 'left');
+        $sigImg = SignatureBlock::html($hasSig ? $preparerSig : null, [], blankHeightPt: 40, imageMaxWidthPt: 160, align: 'left');
 
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'

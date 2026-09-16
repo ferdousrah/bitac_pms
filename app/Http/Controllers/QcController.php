@@ -488,7 +488,7 @@ class QcController extends Controller
         // to the typed lines.
         $sigPath = $inspector?->signatureAbsolutePath();
         $hasSig  = $sigPath && is_file($sigPath);
-        $sigImg  = SignatureBlock::html($hasSig ? $sigPath : null, [], imageHeightPt: 40, imageMaxWidthPt: 150, align: 'left');
+        $sigImg  = SignatureBlock::html($hasSig ? $sigPath : null, [], blankHeightPt: 40, imageMaxWidthPt: 150, align: 'left');
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 22pt;">'
             . '<tr>'
             .   '<td width="50%" style="font-size: 10pt; color: #000; vertical-align: bottom;">'
@@ -697,7 +697,7 @@ class QcController extends Controller
         // now lives in user_signatures and signature_path may be stale.
         $certSigPath = $latestInspector?->signatureAbsolutePath();
         $certHasSig  = $certSigPath && is_file($certSigPath);
-        $sigImg = SignatureBlock::html($certHasSig ? $certSigPath : null, [], imageHeightPt: 36, imageMaxWidthPt: 150);
+        $sigImg = SignatureBlock::html($certHasSig ? $certSigPath : null, [], blankHeightPt: 36, imageMaxWidthPt: 150);
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24pt;">'
             . '<tr>'
             .   '<td width="50%" style="vertical-align: bottom; padding-right: 12pt; text-align: center;">'

@@ -1164,7 +1164,7 @@ class CostEstimateController extends Controller
             $hasImage = $signed && $sigAbs && is_file($sigAbs);
 
             $imgHtml = $hasImage
-                ? SignatureBlock::html($sigAbs, [], imageHeightPt: 38, imageMaxWidthPt: 150, align: $align)
+                ? SignatureBlock::html($sigAbs, [], blankHeightPt: 38, imageMaxWidthPt: 150, align: $align)
                 : ($pendingNote && !$signed
                     ? '<div style="height: 38pt; text-align: center;"><span style="font-size: 8pt; font-style: italic; color: #94a3b8;">(Pending)</span></div>'
                     : '<div style="height: 38pt;"></div>');
