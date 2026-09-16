@@ -182,7 +182,8 @@ class GatePassController extends Controller
             'items.*.quantity'         => 'required|numeric|min:0.01',
             'items.*.unit'             => 'nullable|string|max:20',
             'items.*.condition_note'   => 'nullable|string|max:500',
-            'signature'                => 'nullable|string', // base64 data URL
+            'signature'                => 'nullable|string', // base64 data URL when drawn
+            'user_signature_id'        => 'nullable|integer|exists:user_signatures,id',
         ]);
 
         // PCD passes need approval first; IED passes issue directly.
@@ -217,9 +218,9 @@ class GatePassController extends Controller
                 ]);
             }
 
-            // Capture the inline-drawn issuer signature, if any. Falls back to
-            // user.signature_path at PDF-render time.
-            $sigPath = $this->persistSignature($pass, $validated['signature'] ?? null);
+            // Whichever signature the issuer signed with. Falls back to their
+            // default signature at PDF-render time if they picked neither.
+            $sigPath = $this->persistSignature($request);
             if ($sigPath) $pass->update(['issuer_signature_path' => $sigPath]);
 
             return $pass;
@@ -426,8 +427,8 @@ class GatePassController extends Controller
         abort_unless(\App\Models\GatePassApprover::isApprover(auth()->id()), 403, 'You are not a gate pass approver.');
         abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be approved.');
 
-        $validated = $request->validate(['signature' => 'nullable|string']);
-        $sig = $this->persistSignature($gatePass, $validated['signature'] ?? null);
+        $request->validate(\App\Support\SignatureResolver::rules());
+        $sig = $this->persistSignature($request);
 
         $gatePass->update([
             'status'                  => 'issued',
@@ -612,16 +613,14 @@ HTML;
      * Decode an inline signature data URL and persist it to
      * signatures/gate-passes/{id}-{ts}.png. Returns the stored path or null.
      */
-    private function persistSignature($pass, ?string $dataUrl): ?string
+    private function persistSignature(Request $request): ?string
     {
-        if (!$dataUrl || !str_starts_with($dataUrl, 'data:image/')) return null;
-        $parts = explode(',', $dataUrl, 2);
-        if (count($parts) !== 2) return null;
-        $binary = base64_decode($parts[1], true);
-        if ($binary === false) return null;
-
-        $filename = 'signatures/gate-passes/' . $pass->id . '-' . time() . '.png';
-        Storage::disk('public')->put($filename, $binary);
-        return $filename;
+        // The signer either picked one of their saved blocks or drew one.
+        // Neither → null, and the PDF falls back to their default at render.
+        return \App\Support\SignatureResolver::resolve(
+            $request->integer('user_signature_id') ?: null,
+            $request->input('signature'),
+            'signatures/gate-passes',
+        );
     }
 }

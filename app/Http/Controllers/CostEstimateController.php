@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SignatureResolver;
 use App\Models\CostEstimate;
 use App\Models\EntityRevision;
 use App\Models\Customer;
@@ -19,17 +20,13 @@ class CostEstimateController extends Controller
      * persist it to signatures/estimate-approvals/{id}-{ts}.png. Returns the
      * stored path or null on no/invalid input. Mirrors QuotationController.
      */
-    private function persistApprovalSignature($approval, ?string $dataUrl): ?string
+    private function persistApprovalSignature(Request $request): ?string
     {
-        if (!$dataUrl || !str_starts_with($dataUrl, 'data:image/')) return null;
-        $parts = explode(',', $dataUrl, 2);
-        if (count($parts) !== 2) return null;
-        $binary = base64_decode($parts[1], true);
-        if ($binary === false) return null;
-
-        $filename = 'signatures/estimate-approvals/' . $approval->id . '-' . time() . '.png';
-        \Storage::disk('public')->put($filename, $binary);
-        return $filename;
+        return SignatureResolver::resolve(
+            $request->integer('user_signature_id') ?: null,
+            $request->input('signature'),
+            'signatures/estimate-approvals',
+        );
     }
 
     public function index(Request $request)
@@ -473,6 +470,10 @@ class CostEstimateController extends Controller
         $targets = $costEstimate->approvalBatchMembers();
         $remark  = $request->input('remarks');
         $done    = 0;
+        // One decision, one signature image — resolved before the loop so a
+        // drawn signature is stored once and stamped on every part estimate,
+        // instead of writing an identical file per sibling.
+        $sigPath = $this->persistApprovalSignature($request);
 
         foreach ($targets as $target) {
             $approval = $target->approvals()
@@ -490,9 +491,8 @@ class CostEstimateController extends Controller
                 'acted_at'=> now(),
             ]);
 
-            // Capture the inline-drawn signature if one was provided. Falls back
-            // to user.signature_path at PDF-render time.
-            $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+            // Falls back to the approver's default signature at render time
+            // when they neither picked nor drew one.
             if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
             // Check if all levels approved
@@ -546,6 +546,8 @@ class CostEstimateController extends Controller
         $targets = $costEstimate->approvalBatchMembers();
         $remark  = $request->input('remarks');
         $done    = 0;
+        // One decision, one signature image — see approveEstimate().
+        $sigPath = $this->persistApprovalSignature($request);
 
         foreach ($targets as $target) {
             $approval = $target->approvals()
@@ -560,7 +562,6 @@ class CostEstimateController extends Controller
                 'remarks' => $remark,
                 'acted_at'=> now(),
             ]);
-            $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
             if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
             $target->update(['approval_status' => 'rejected']);
@@ -608,6 +609,8 @@ class CostEstimateController extends Controller
         // costing one part differently usually changes the job's total.
         $targets = $costEstimate->approvalBatchMembers();
         $done    = 0;
+        // One decision, one signature image — see approveEstimate().
+        $sigPath = $this->persistApprovalSignature($request);
 
         foreach ($targets as $target) {
             $approval = $target->approvals()
@@ -623,7 +626,6 @@ class CostEstimateController extends Controller
                 'remarks' => '[Changes Requested] ' . $request->input('remarks'),
                 'acted_at'=> now(),
             ]);
-            $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
             if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
             // Send back to draft so preparer can edit and resubmit. The batch

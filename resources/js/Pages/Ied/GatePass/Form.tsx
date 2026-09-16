@@ -1,7 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { FormEvent, useRef } from 'react';
-import SignaturePad, { SignaturePadHandle } from '@/Components/SignaturePad';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 import SearchableSelect from '@/Components/SearchableSelect';
 
 interface PrefilledItem {
@@ -35,7 +35,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
         sublabel: c.contact_person ?? undefined,
     }));
 
-    const { data, setData, post, processing, errors } = useForm<any>({
+    const { data, setData, post, transform, processing, errors } = useForm<any>({
         rfq_id:                 rfq?.id ?? '',
         direction,
         // Auto-generated, but the issuer can type their own number.
@@ -49,6 +49,7 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
         vehicle_no:             '',
         notes:                  '',
         signature:              null as string | null,
+        user_signature_id:      null as number | null,
         items: prefilled_items.length > 0
             ? prefilled_items.map((i: any) => ({
                 rfq_item_id:    i.rfq_item_id,
@@ -60,7 +61,8 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
             : [{ rfq_item_id: null, description: '', quantity: '1', unit: 'pcs', condition_note: '' }],
     });
 
-    const padRef = useRef<SignaturePadHandle | null>(null);
+    const pickerRef = useRef<SignaturePickerHandle | null>(null);
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
 
     const updateItem = (idx: number, patch: Partial<Item>) => {
         const next = [...(data.items as Item[])];
@@ -77,11 +79,16 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
-        const sig = padRef.current?.toDataURL() ?? null;
-        setData('signature', sig);
-        // setData is async — defer the post by a frame so the form payload
-        // actually includes the just-captured signature data URL.
-        requestAnimationFrame(() => post(basePath));
+        // Whichever signature the issuer picked: a saved block travels as its
+        // id, a drawn one as a data URL. transform() beats setData here —
+        // setData is async, and the payload has to carry the choice now.
+        const choice = pickerRef.current?.value();
+        transform(d => ({
+            ...d,
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }));
+        post(basePath);
     };
 
     return (
@@ -328,20 +335,10 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                         <div className="card">
                             <div className="card-header">
                                 <h3 className="text-sm font-bold text-surface-900">Issuer Signature</h3>
-                                <p className="text-xs text-surface-400 mt-0.5">Sign as the IED officer issuing this pass. Embedded on the printed copy.</p>
+                                <p className="text-xs text-surface-400 mt-0.5">Sign as the officer issuing this pass. Embedded on the printed copy.</p>
                             </div>
                             <div className="card-body">
-                                <div className="relative">
-                                    <SignaturePad ref={padRef} height={120} />
-                                    <button
-                                        type="button"
-                                        onClick={() => padRef.current?.clear()}
-                                        className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white/90 backdrop-blur text-[10px] font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 shadow-sm border border-surface-200"
-                                        title="Clear signature"
-                                    >
-                                        <i className="fi fi-rr-eraser text-[10px] leading-none" /> Clear
-                                    </button>
-                                </div>
+                                <SignaturePicker ref={pickerRef} signatures={mySignatures} padHeight={120} />
                             </div>
                         </div>
                     </div>

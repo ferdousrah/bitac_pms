@@ -69,7 +69,10 @@ class RfqLetterController extends Controller
         $data = $this->validateLetter($request);
         $issue = $request->boolean('issue');
 
-        $rfq = $data['rfq_id'] ? Rfq::find($data['rfq_id']) : null;
+        // ⚠️ validate() only returns keys that were SENT, and an RFQ is optional
+        // on a letter — reading $data['rfq_id'] directly threw a 500 on every
+        // letter issued without one. Always read optional keys with ?? null.
+        $rfq = ($data['rfq_id'] ?? null) ? Rfq::find($data['rfq_id']) : null;
 
         $letter = RfqLetter::create([
             'rfq_id'            => $data['rfq_id'] ?? null,
@@ -82,6 +85,10 @@ class RfqLetterController extends Controller
             'customer_ref_no'   => $data['customer_ref_no'] ?? null,
             'customer_ref_date' => $data['customer_ref_date'] ?? null,
             'signatory_user_id' => $data['signatory_user_id'] ?? null,
+            // Which of the signatory's blocks this letter goes out with. Stored
+            // as a path so a later rename or delete can't change an issued
+            // letter. Null = use their default at render time.
+            'signature_path'    => $this->resolveLetterSignature($data),
             'status'            => $issue ? 'issued' : 'draft',
             'issued_at'         => $issue ? now() : null,
             'created_by'        => auth()->id(),
@@ -112,6 +119,7 @@ class RfqLetterController extends Controller
             'customer_ref_no'   => $data['customer_ref_no'] ?? null,
             'customer_ref_date' => $data['customer_ref_date'] ?? null,
             'signatory_user_id' => $data['signatory_user_id'] ?? null,
+            'signature_path'    => $this->resolveLetterSignature($data) ?? $rfqLetter->signature_path,
             'status'            => $issue ? 'issued' : $rfqLetter->status,
             'issued_at'         => $issue && !$rfqLetter->issued_at ? now() : $rfqLetter->issued_at,
         ]);
@@ -222,12 +230,33 @@ class RfqLetterController extends Controller
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
+    /**
+     * Which of the SIGNATORY's blocks this letter goes out with.
+     *
+     * Note the owner is the chosen signatory, not whoever is filling the form —
+     * a letter is routinely prepared by one person and signed by another. The
+     * resolver refuses an id that doesn't belong to them, so the picker can't
+     * be used to stamp a third person's signature.
+     */
+    private function resolveLetterSignature(array $data): ?string
+    {
+        return \App\Support\SignatureResolver::resolve(
+            $data['user_signature_id'] ?? null,
+            null,                                   // letters are never hand-drawn
+            'signatures/letters',
+            $data['signatory_user_id'] ?? null,
+        );
+    }
+
     private function renderPdf(RfqLetter $letter, string $lang): string
     {
         $letter->loadMissing('signatory.center');
         $signer = $letter->signatory;
 
-        $sigPath = $signer?->signatureAbsolutePath();
+        // The image the letter was issued with, else the signatory's default.
+        $sigPath = $letter->signature_path
+            ? \Storage::disk('public')->path($letter->signature_path)
+            : $signer?->signatureAbsolutePath();
         $signatureImgHtml = ($sigPath && is_file($sigPath))
             ? '<img src="' . $sigPath . '" style="height: 36pt; max-width: 160pt;" alt="signature" />'
             : '<div style="height: 36pt;"></div>';
@@ -283,6 +312,7 @@ class RfqLetterController extends Controller
             'customer_ref_no'   => 'nullable|string|max:150',
             'customer_ref_date' => 'nullable|date',
             'signatory_user_id' => 'nullable|exists:users,id',
+            'user_signature_id' => 'nullable|integer|exists:user_signatures,id',
         ]);
     }
 
@@ -297,11 +327,17 @@ class RfqLetterController extends Controller
             ]));
         }
 
-        $signatories = User::orderBy('name')->get(['id', 'name', 'designation'])
+        // Each signatory's own signature blocks travel with them — the letter
+        // may be signed by someone other than whoever is issuing it, so the
+        // picker cannot read the logged-in user's shared list.
+        $signatories = User::with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
             ->map(fn ($u) => [
                 'id'          => $u->id,
                 'name'        => $u->name,
                 'designation' => $u->designation,
+                'signatures'  => $u->signatures->map(fn ($sig) => [
+                    'id' => $sig->id, 'label' => $sig->label, 'url' => $sig->url, 'is_default' => $sig->is_default,
+                ])->values(),
             ]);
 
         // RFQ picker — selecting one auto-fills the customer ref + recipient.

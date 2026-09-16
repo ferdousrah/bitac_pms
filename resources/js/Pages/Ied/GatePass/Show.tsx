@@ -1,8 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useState, useRef } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
-import SignaturePad, { SignaturePadHandle } from '@/Components/SignaturePad';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 
 interface Item {
     id: number;
@@ -52,7 +52,8 @@ const STATUS_CLS: Record<string, string> = {
     pending_approval: 'badge-amber', rejected: 'badge-red', draft: 'badge-slate',
 };
 
-export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canApprove = false, mySignatureUrl = null }: any) {
+export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canApprove = false }: any) {
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
     const [pdfOpen, setPdfOpen] = useState(false);
     const isIn = pass.direction === 'in';
     const isActive = pass.status === 'issued';
@@ -83,12 +84,16 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
             onSuccess: () => { setReturnOpen(false); setReturnQty({}); setReturnNote(''); },
         });
     };
-    const sigRef = useRef<SignaturePadHandle>(null);
+    const sigRef = useRef<SignaturePickerHandle>(null);
     const canAct = canApprove && pass.status === 'pending_approval';
 
     const doApprove = () => {
         setBusy(true);
-        router.post(`${basePath}/${pass.id}/approve`, { signature: sigRef.current?.toDataURL() ?? null }, {
+        const choice = sigRef.current?.value();
+        router.post(`${basePath}/${pass.id}/approve`, {
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }, {
             preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setShowApprove(false),
         });
     };
@@ -459,13 +464,7 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                         </div>
                         <div className="p-5 space-y-3">
                             <p className="text-sm text-surface-600">Approve &amp; issue this gate pass.</p>
-                            {mySignatureUrl && (
-                                <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-2">
-                                    <div className="text-[11px] font-semibold text-emerald-700 mb-1">Your saved signature (used by default)</div>
-                                    <img src={mySignatureUrl} alt="saved signature" className="h-12 object-contain" />
-                                </div>
-                            )}
-                            <div><label className="form-label">{mySignatureUrl ? 'Draw to override (optional)' : 'Signature'}</label><SignaturePad ref={sigRef} /></div>
+                            <SignaturePicker ref={sigRef} signatures={mySignatures} padHeight={110} />
                         </div>
                         <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
                             <button type="button" onClick={() => setShowApprove(false)} disabled={busy} className="btn-outline">Cancel</button>

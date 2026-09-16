@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePage } from '@inertiajs/react';
 import ApprovalNoteAI from './ApprovalNoteAI';
-import SignaturePad, { SignaturePadHandle } from './SignaturePad';
+import SignaturePicker, { SignaturePickerHandle } from './SignaturePicker';
+import { UserSignatureItem } from './SignatureManager';
 import { useAiEnabled } from '@/lib/useAiEnabled';
 
 export type ApprovalAction = 'approve' | 'request_changes' | 'reject';
@@ -16,9 +17,14 @@ interface Props {
     entityLabel: string;          // e.g. "EST-2026-0041" or "Quotation #12 v2"
     entityTitle?: string;         // e.g. "Custom Flange - ACI Motors"
     entityAmount?: number | string;
-    // Quotations carry a signature on the approval row; estimates don't (yet).
-    // Pass `(remarks, signatureDataUrl)` to onConfirm so caller decides what to do.
-    onConfirm: (remarks: string, signature?: string | null) => Promise<void> | void;
+    // Both quotations and estimates carry a signature on the approval row.
+    // The signer either picks one of their saved blocks (userSignatureId) or
+    // draws one on the pad (signature data URL) — never both.
+    onConfirm: (
+        remarks: string,
+        signature?: string | null,
+        userSignatureId?: number | null,
+    ) => Promise<void> | void;
     onClose: () => void;
 }
 
@@ -83,7 +89,7 @@ export default function ApprovalActionModal({
 }: Props) {
     const aiEnabled = useAiEnabled();
     const { props: pageProps } = usePage<any>();
-    const savedSignatureUrl: string | null = pageProps?.auth?.user?.signature_url ?? null;
+    const mySignatures: UserSignatureItem[] = pageProps?.auth?.user?.signatures ?? [];
     // Signature capture applies to both quotations and cost estimates —
     // both have a per-approval signature_path column for audit.
     const signatureEnabled = entityType === 'quotation' || entityType === 'cost_estimate';
@@ -91,10 +97,7 @@ export default function ApprovalActionModal({
     const [note, setNote] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // 'saved' = use the user's stored signature, 'draw' = capture a fresh one inline.
-    // Defaults to saved if available, otherwise draw.
-    const [sigMode, setSigMode] = useState<'saved' | 'draw'>(savedSignatureUrl ? 'saved' : 'draw');
-    const padRef = useRef<SignaturePadHandle | null>(null);
+    const pickerRef = useRef<SignaturePickerHandle | null>(null);
 
     // Reset when modal opens
     useEffect(() => {
@@ -102,10 +105,8 @@ export default function ApprovalActionModal({
             setNote('');
             setError(null);
             setSubmitting(false);
-            setSigMode(savedSignatureUrl ? 'saved' : 'draw');
-            padRef.current?.clear();
         }
-    }, [open, action, savedSignatureUrl]);
+    }, [open, action]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -126,17 +127,13 @@ export default function ApprovalActionModal({
             setError(`Please provide a ${action === 'reject' ? 'reason' : 'description of changes needed'}.`);
             return;
         }
-        // Capture the signature based on the chosen mode.
-        //   'draw'  → data URL from the canvas (null if user didn't draw anything)
-        //   'saved' → null (backend will reuse the user's stored signature_path)
-        let signature: string | null = null;
-        if (signatureEnabled && sigMode === 'draw') {
-            signature = padRef.current?.toDataURL() ?? null;
-        }
+        // Whatever the signer picked. A saved block travels as its id; a drawn
+        // one as a data URL. Both null = sign with the default at the backend.
+        const choice = signatureEnabled ? pickerRef.current?.value() : null;
         setSubmitting(true);
         setError(null);
         try {
-            await onConfirm(note.trim(), signature);
+            await onConfirm(note.trim(), choice?.drawn ?? null, choice?.userSignatureId ?? null);
         } catch (err: any) {
             setError(err?.message || 'Something went wrong.');
             setSubmitting(false);
@@ -254,63 +251,14 @@ export default function ApprovalActionModal({
                             </div>
                         )}
 
-                        {/* Signature — quotations only. Mirrors the BITAC paper-letter signature line. */}
+                        {/* Signature — which block goes on the document. */}
                         {signatureEnabled && (
                             <div className="p-3 rounded-xl border border-surface-200 bg-surface-50/50">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="text-xs font-bold text-surface-700 uppercase tracking-wider flex items-center gap-1.5">
-                                        <i className="fi fi-rr-signature text-sm leading-none" />
-                                        Signature
-                                    </div>
-                                    {savedSignatureUrl && (
-                                        <div className="inline-flex rounded-lg bg-white border border-surface-200 p-0.5 text-[11px]">
-                                            <button
-                                                type="button"
-                                                onClick={() => setSigMode('saved')}
-                                                className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
-                                                    sigMode === 'saved' ? 'bg-brand-500 text-white' : 'text-surface-500 hover:bg-surface-50'
-                                                }`}
-                                            >
-                                                Use saved
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setSigMode('draw')}
-                                                className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
-                                                    sigMode === 'draw' ? 'bg-brand-500 text-white' : 'text-surface-500 hover:bg-surface-50'
-                                                }`}
-                                            >
-                                                Sign now
-                                            </button>
-                                        </div>
-                                    )}
+                                <div className="text-xs font-bold text-surface-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                    <i className="fi fi-rr-signature text-sm leading-none" />
+                                    Signature
                                 </div>
-
-                                {sigMode === 'saved' && savedSignatureUrl ? (
-                                    <div className="flex items-center gap-3 p-2 bg-white rounded-lg border border-surface-100">
-                                        <img
-                                            src={savedSignatureUrl}
-                                            alt="Saved signature"
-                                            className="h-16 w-auto max-w-[240px] object-contain"
-                                        />
-                                        <p className="text-[11px] text-surface-500">Your saved signature will be embedded above your name on the PDF.</p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <SignaturePad ref={padRef} width={520} height={120} className="w-full" />
-                                        <div className="flex items-center justify-between mt-1.5">
-                                            <p className="text-[10px] text-surface-400">Draw your signature with mouse or touch. It will be saved to this approval record only.</p>
-                                            <button
-                                                type="button"
-                                                onClick={() => padRef.current?.clear()}
-                                                className="text-[11px] text-red-600 hover:text-red-700 font-semibold flex items-center gap-1"
-                                            >
-                                                <i className="fi fi-rr-eraser text-[10px] leading-none" />
-                                                Clear
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
+                                <SignaturePicker ref={pickerRef} signatures={mySignatures} />
                             </div>
                         )}
 

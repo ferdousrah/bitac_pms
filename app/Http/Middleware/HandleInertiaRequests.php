@@ -64,9 +64,16 @@ class HandleInertiaRequests extends Middleware
                     'center_id'      => $user->center_id,
                     'permissions'    => $permissions,
                     'is_super_admin' => $isSuperAdmin,
-                    // Approver's saved signature — shown as the default option in
-                    // the approval modal's "Use my saved signature" toggle.
+                    // Approver's default signature — the preview in the picker.
                     'signature_url'  => method_exists($user, 'getSignatureUrlAttribute') ? $user->signature_url : null,
+                    // Every block they may sign with, default first. Whatever
+                    // asks for a signature (approval modal, gate pass, letter)
+                    // reads this, so no page needs to ship its own copy.
+                    'signatures'     => method_exists($user, 'signatures')
+                        ? $user->signatures()->get(['id', 'label', 'path', 'is_default'])
+                            ->map(fn ($s) => ['id' => $s->id, 'label' => $s->label, 'url' => $s->url, 'is_default' => $s->is_default])
+                            ->values()
+                        : [],
                     // Profile photo — used in sidebar / topbar avatar widgets.
                     'avatar_url'     => method_exists($user, 'getAvatarUrlAttribute') ? $user->avatar_url : null,
                 ] : null,

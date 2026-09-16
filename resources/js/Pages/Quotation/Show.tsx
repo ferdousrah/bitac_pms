@@ -326,7 +326,7 @@ export default function QuotationShow({
         router.delete(`/quotation-files/${id}`, { preserveScroll: true });
     };
 
-    const handleQuotationApproval = (remarks: string, signature?: string | null) => {
+    const handleQuotationApproval = (remarks: string, signature?: string | null, userSignatureId?: number | null) => {
         if (!approvalAction) return;
         const url = approvalAction === 'approve'
             ? `/quotations/${quotation.id}/approve`
@@ -336,7 +336,10 @@ export default function QuotationShow({
         return new Promise<void>((resolve) => {
             router.post(url, {
                 remarks: remarks || null,
-                signature: signature || null, // base64 data URL when approver drew a fresh signature
+                // A drawn signature travels as a data URL; a saved block as its
+                // id. Both null = the approver's default is used.
+                signature: signature || null,
+                user_signature_id: userSignatureId ?? null,
             }, {
                 onFinish: () => {
                     setApprovalAction(null);

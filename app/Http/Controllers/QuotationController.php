@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\BanglaDigits;
+use App\Support\SignatureResolver;
 use App\Models\CostEstimate;
 use App\Models\Customer;
 use App\Models\Quotation;
@@ -1295,7 +1296,7 @@ class QuotationController extends Controller
         // signature_path null and let the PDF generator fall back to the user's
         // saved signature_path. The approval row's id is the key, so update is
         // needed AFTER the first update() (so $approval->id is available).
-        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        $sigPath = $this->persistApprovalSignature($request);
         if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
         $allApproved = $this->quotationService->checkApprovalChain($quotation);
@@ -1368,9 +1369,9 @@ class QuotationController extends Controller
 
         $remark = $request->input('remarks');
 
-        $signatureDataUrl = $request->input('signature');
+        $signaturePath = $this->persistApprovalSignature($request);
 
-        $newQuotation = \DB::transaction(function () use ($quotation, $approval, $remark, $signatureDataUrl) {
+        $newQuotation = \DB::transaction(function () use ($quotation, $approval, $remark, $signaturePath) {
             // 1. Stamp the approver's decision on the current (old) approval row.
             $approval->update([
                 'status'      => 'rejected', // DB-level status; UI re-labels via tag prefix
@@ -1378,9 +1379,8 @@ class QuotationController extends Controller
                 'approved_at' => now(),
             ]);
 
-            // Capture the inline-drawn signature on this approval row (if any).
-            $sigPath = $this->persistApprovalSignature($approval, $signatureDataUrl);
-            if ($sigPath) $approval->update(['signature_path' => $sigPath]);
+            // Stamp whichever signature the approver signed with (if any).
+            if ($signaturePath) $approval->update(['signature_path' => $signaturePath]);
 
             // 2. Wipe remaining pending levels on the OLD version — they no longer apply.
             $quotation->approvals()->where('status', 'pending')->delete();
@@ -1478,7 +1478,7 @@ class QuotationController extends Controller
         ]);
 
         // Capture an inline-drawn signature on the reject decision, if any.
-        $sigPath = $this->persistApprovalSignature($approval, $request->input('signature'));
+        $sigPath = $this->persistApprovalSignature($request);
         if ($sigPath) $approval->update(['signature_path' => $sigPath]);
 
         $quotation->update(['status' => 'rejected']);
@@ -1791,19 +1791,15 @@ class QuotationController extends Controller
      * persist it to the public disk at signatures/approvals/{approval_id}-{ts}.png.
      * Returns the stored path (relative to the disk) or null on no/invalid input.
      */
-    private function persistApprovalSignature($approval, ?string $dataUrl): ?string
+    private function persistApprovalSignature(Request $request): ?string
     {
-        if (!$dataUrl || !str_starts_with($dataUrl, 'data:image/')) return null;
-
-        // Strip "data:image/png;base64," header
-        $parts = explode(',', $dataUrl, 2);
-        if (count($parts) !== 2) return null;
-        $binary = base64_decode($parts[1], true);
-        if ($binary === false) return null;
-
-        $filename = 'signatures/approvals/' . $approval->id . '-' . time() . '.png';
-        \Storage::disk('public')->put($filename, $binary);
-        return $filename;
+        // The approver either picked one of their saved blocks or drew one.
+        // Neither → null, and the PDF falls back to their default at render.
+        return SignatureResolver::resolve(
+            $request->integer('user_signature_id') ?: null,
+            $request->input('signature'),
+            'signatures/approvals',
+        );
     }
 
     /**

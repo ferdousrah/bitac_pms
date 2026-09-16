@@ -59,7 +59,7 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
         );
     };
 
-    const handleApprovalConfirm = (remarks: string, signature?: string | null) => {
+    const handleApprovalConfirm = (remarks: string, signature?: string | null, userSignatureId?: number | null) => {
         if (!approvalAction) return;
         const url = approvalAction === 'approve'
             ? `/cost-estimates/${estimate.id}/approve`
@@ -69,7 +69,10 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
         return new Promise<void>((resolve) => {
             router.post(url, {
                 remarks: remarks || null,
-                signature: signature || null, // base64 data URL when approver drew a fresh signature
+                // A drawn signature travels as a data URL; a saved block as its
+                // id. Both null = the approver's default is used.
+                signature: signature || null,
+                user_signature_id: userSignatureId ?? null,
             }, {
                 onFinish: () => {
                     setApprovalAction(null);

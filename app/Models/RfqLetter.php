@@ -13,7 +13,8 @@ class RfqLetter extends Model
         'center_id', 'rfq_id', 'customer_id',
         'letter_no', 'letter_date', 'subject', 'body', 'recipient_block',
         'customer_ref_no', 'customer_ref_date',
-        'signatory_user_id', 'status', 'issued_at', 'emailed_at', 'created_by',
+        'signatory_user_id', 'signature_path',
+        'status', 'issued_at', 'emailed_at', 'created_by',
     ];
 
     protected function casts(): array

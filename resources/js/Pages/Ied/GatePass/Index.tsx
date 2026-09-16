@@ -1,7 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useState, useRef, FormEvent } from 'react';
-import SignaturePad, { SignaturePadHandle } from '@/Components/SignaturePad';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 
 interface Pass {
     id: number;
@@ -43,7 +43,8 @@ const STATUS_LABEL: Record<string, string> = {
     partially_returned: 'Partially Returned',
 };
 
-export default function GatePassIndex({ passes, filters, customers = [], basePath = '/ied/gate-passes', lockedDirection, canApprove = false, mySignatureUrl = null }: any) {
+export default function GatePassIndex({ passes, filters, customers = [], basePath = '/ied/gate-passes', lockedDirection, canApprove = false }: any) {
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
     const [search, setSearch]     = useState(filters.search || '');
     const [direction, setDir]     = useState(filters.direction || '');
     const [status, setStatus]     = useState(filters.status || '');
@@ -57,12 +58,16 @@ export default function GatePassIndex({ passes, filters, customers = [], basePat
     const [rejectId, setRejectId]   = useState<number | null>(null);
     const [reason, setReason]       = useState('');
     const [busy, setBusy]           = useState(false);
-    const sigRef = useRef<SignaturePadHandle>(null);
+    const sigRef = useRef<SignaturePickerHandle>(null);
 
     const doApprove = () => {
         if (approveId == null) return;
         setBusy(true);
-        router.post(`${basePath}/${approveId}/approve`, { signature: sigRef.current?.toDataURL() ?? null }, {
+        const choice = sigRef.current?.value();
+        router.post(`${basePath}/${approveId}/approve`, {
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }, {
             preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setApproveId(null),
         });
     };
@@ -262,16 +267,7 @@ export default function GatePassIndex({ passes, filters, customers = [], basePat
                         </div>
                         <div className="p-5 space-y-3">
                             <p className="text-sm text-surface-600">Any one approver finalises the pass (→ issued).</p>
-                            {mySignatureUrl && (
-                                <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-2">
-                                    <div className="text-[11px] font-semibold text-emerald-700 mb-1">Your saved signature (used by default)</div>
-                                    <img src={mySignatureUrl} alt="saved signature" className="h-12 object-contain" />
-                                </div>
-                            )}
-                            <div>
-                                <label className="form-label">{mySignatureUrl ? 'Draw to override (optional)' : 'Signature'}</label>
-                                <SignaturePad ref={sigRef} />
-                            </div>
+                            <SignaturePicker ref={sigRef} signatures={mySignatures} padHeight={110} />
                         </div>
                         <div className="p-4 bg-surface-50 border-t border-surface-100 flex justify-end gap-2 rounded-b-2xl">
                             <button type="button" onClick={() => setApproveId(null)} disabled={busy} className="btn-outline">Cancel</button>

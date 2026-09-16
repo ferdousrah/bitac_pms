@@ -1,5 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
+import { useRef } from 'react';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 import { FormEvent } from 'react';
 import RichTextEditor from '@/Components/RichTextEditor';
 
@@ -28,6 +30,12 @@ export default function RfqLetterCreate({
         issue:             false,
     });
 
+    const pickerRef = useRef<SignaturePickerHandle | null>(null);
+    // The chosen signatory — the picker shows THEIR blocks, not the current
+    // user's, because letters are often prepared by one person and signed by
+    // another.
+    const signatory = signatories.find((u: any) => String(u.id) === String(data.signatory_user_id)) ?? null;
+
     const onSelectRfq = (id: string) => {
         setData('rfq_id', id);
         const picked = rfqs.find((r: any) => String(r.id) === String(id));
@@ -42,7 +50,8 @@ export default function RfqLetterCreate({
 
     const submit = (e: FormEvent, issue: boolean) => {
         e.preventDefault();
-        transform((d: any) => ({ ...d, issue }));
+        const picked = pickerRef.current?.value().userSignatureId ?? null;
+        transform((d: any) => ({ ...d, issue, user_signature_id: picked }));
         if (isEdit) put(`/rfq-letters/${existing.id}`);
         else post('/rfq-letters');
     };
@@ -157,8 +166,22 @@ export default function RfqLetterCreate({
                                     ))}
                                 </select>
                                 {errors.signatory_user_id && <p className="form-error">{errors.signatory_user_id as any}</p>}
-                                <p className="form-hint">The signatory's name, designation, centre, email & phone and saved signature appear in the bottom-right block, above the “For / Director (Centre Head)” line.</p>
+                                <p className="form-hint">Their signature block prints in the bottom-right, above the “For / Director (Centre Head)” line.</p>
                             </div>
+
+                            {/* Which of THEIR blocks — the signatory is often not
+                                the person filling this form in. */}
+                            {signatory && (
+                                <div className="mt-4 pt-4 border-t border-surface-100">
+                                    <SignaturePicker
+                                        key={signatory.id}
+                                        ref={pickerRef}
+                                        signatures={signatory.signatures ?? []}
+                                        ownerName={signatory.name}
+                                        allowDraw={false}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 
