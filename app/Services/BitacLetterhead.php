@@ -95,10 +95,18 @@ class BitacLetterhead
             'tempDir'          => $tempDir,
             'margin_left'      => 18,
             'margin_right'     => 18,
-            'margin_top'       => 44,    // clears the five-line letterhead + logos
-            'margin_bottom'    => 14,    // footer is only the page number now
-            'margin_header'    => 6,
-            'margin_footer'    => 8,
+            // The top margin is MEASURED, not guessed: 'stretch' makes mPDF grow
+            // it to margin_header + the rendered header's own height +
+            // autoMarginPadding. So the body always starts a fixed 5mm under the
+            // letterhead rule, whatever the centre's address/contact lines do —
+            // no hand-tuned slack sitting between the rule and "Memo No.".
+            // margin_top is only the floor if a header somehow doesn't render.
+            'margin_top'         => 28,
+            'setAutoTopMargin'   => 'stretch',
+            'autoMarginPadding'  => 5,    // mm of air under the letterhead rule
+            'margin_bottom'      => 14,   // footer is only the page number now
+            'margin_header'      => 6,
+            'margin_footer'      => 8,
             'fontDir'          => array_merge($fontDirs, [
                 public_path('fonts'),
             ]),
