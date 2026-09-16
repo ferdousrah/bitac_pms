@@ -318,6 +318,29 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - UI: the estimate Show page offers **Submit** and (for a part estimate whose job has >1 submittable estimate) **Submit Whole Job (N)**, warning in the confirm if some parts are uncosted. When `batchSize > 1` an indigo note tells the approver their decision covers all N.
 - ⚠️ **`approval_status` was missing from `CostEstimate::$fillable`** — every `update(['approval_status' => …])` was silently dropped by mass-assignment protection, so estimates never left `not_submitted` (Submit stayed clickable and could stack duplicate chains). Fixed; keep it in `$fillable`.
 
+## ✍️ Signatures — multiple per user, picked when signing (2026-09)
+
+> A signature image is the WHOLE block. Read this before touching any signature.
+
+- **What is uploaded is a scan of the entire block** — the pen stroke *with* the name (Bangla), designation, centre, email and phone printed under it. So **documents print the image and nothing else**. Typing those lines under it as well printed everything twice.
+- **`App\Support\SignatureBlock::html()` is the one renderer.** Image present → image alone. **No image → the typed lines**, so an unsigned document still names who it is for. **Role labels** (`Prepared By` / `Checked By` / `Approved By` / `Issued By` / `Inspector`) are the office speaking, not signatory details, and always print. Don't hand-roll a signature block again.
+- ⚠️ **A drawn signature is only a squiggle** — the pad at approval/issue time captures no name or designation, so a document signed that way names nobody. The picker says so. If that becomes a problem, the fix is a per-signature "details are in the image" flag, not un-picking image-only.
+
+### Where they live
+- **`user_signatures`** (`user_id`, `label`, `path`, `is_default`) replaces the single `users.signature_path`. The migration copies every existing signature across as that user's default. The old column is **read-only fallback** — nothing writes it.
+- **`User::signatureAbsolutePath()` kept its name and meaning** and resolves the **default** signature, so all eight PDF sites that already called it work unchanged. `User::signatures()` / `defaultSignature()` / `signature_url` all go through the new table.
+- **`UserSignatureController`** is behind both the profile routes (`profile.signatures.*`, your own) and the admin ones (`admin.users.signatures.*`, anyone, needs `manage users`). Invariants live there: exactly one default per user, the **first upload becomes the default**, deleting the default **promotes a survivor**, max 6.
+- ⚠️ **Deleting a signature does NOT delete its file while a document points at it.** `UserSignature::deleteWithFile()` checks `quotation_approvals` / `cost_estimate_approvals` / `gate_passes` (both columns) / `rfq_letters` / `users` first — a blind unlink would blank a document that was already signed.
+- UI is `Components/SignatureManager.tsx` on **Profile → Signatures** and **Admin → Users → edit**. The admin *create* form keeps one optional upload (the manager needs a user id). `ProfileController@updateSignature` + `POST /profile/signature` were **removed** — they were the single-signature path.
+
+### Picking one when you sign
+- `Components/SignaturePicker.tsx` shows the signer's blocks (default preselected) plus "draw one now". Used in **four** places: **quotation approve**, **cost estimate approve**, **gate pass issue + approve**, **RFQ letter issue**.
+- The request carries **`user_signature_id`** (a saved block) or **`signature`** (a drawn data URL) — never both. **`App\Support\SignatureResolver::resolve()`** turns either into a path.
+- ⚠️ **Documents store the PATH, not the id**, so renaming or deleting a signature later can never change a document that already went out.
+- **It refuses an id that isn't the signer's**, so nobody can stamp another officer's signature by guessing a number. On an **RFQ letter the owner is the chosen signatory, not the person filling the form** — letters are routinely prepared by one person and signed by another, so `formProps` ships each signatory's own blocks with them rather than reading `auth.user.signatures`. ⚠️ The check **casts before comparing**: a signatory id from a form arrives as a string and a strict `===` silently refused every legitimate signature.
+- `auth.user.signatures` is shared globally in `HandleInertiaRequests`, so no page ships its own copy (the letter form is the one exception, above).
+- A **batch cost-estimate decision resolves its signature once**, before the loop — one decision, one image, not N identical copies.
+
 ## 📝 Official Letters, Quotation Pricing & Email (2026-06)
 
 > Conventions hammered out over many iterations — read before touching these areas.
@@ -464,7 +487,7 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **PCD passes need approval; IED passes issue directly.** PCD `store` → status **`pending_approval`**; **any ONE** configured approver **approves** (→ `issued`, captures approver signature via `SignaturePad`) or **rejects** (reason). Routes `pcd.gate-passes.approve`/`.reject`. Status enum grew: `pending_approval`, `rejected` (+ existing draft/issued/completed/cancelled). New `gate_passes` cols: `approved_by/approved_at/approver_signature_path`, `rejected_by/rejected_at/rejection_reason`.
 - **Approver pool** = `gate_pass_approvers` table (any-one-approves model, no levels). Managed under **Users & Access → Gate Pass Approvers** (`Admin\GatePassApproverController`, `Admin/GatePassApprovers/Index.tsx`). `GatePassApprover::isApprover($userId)` gates the Approve/Reject buttons (controller passes `canApprove` to Index + Show).
 - Gate Pass Index/Show show status label/badges + Approve/Reject (signature modal / reason modal) for approvers on pending passes. Customer "gate pass issued" notification now fires on **approve** (not create) for PCD. `gate_pass_approvers` is **config → NOT in the SystemReset wipe list**.
-- **Signature defaults to the user's profile signature** (`User::signature_url`/`signatureAbsolutePath()`): both issuer AND approver — if they don't draw one, the saved profile signature is used (PDF falls back at render, same pattern for both). The approve modal previews the saved signature ("used by default; draw to override"). The gate-pass PDF now has an **Approved By** signature column (middle) alongside Issued By + Customer Representative.
+- **Signature defaults to the user's default block** (`User::signatureAbsolutePath()`): both issuer AND approver — if they pick nothing, the default is used at render. Both the issue form and the approve modals now show the **SignaturePicker** (their saved blocks, default preselected, or draw one) — see the Signatures section above. The gate-pass PDF now has an **Approved By** signature column (middle) alongside Issued By + Customer Representative.
 
 ## 🚀 Quick Commands
 
