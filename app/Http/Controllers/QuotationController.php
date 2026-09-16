@@ -2099,14 +2099,14 @@ class QuotationController extends Controller
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24pt;">'
             . '<tr>'
             .   '<td width="55%"></td>'
-            .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5;">'
+            .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5; text-align: right;">'
             .     SignatureBlock::html($sigPath, [
                       '(' . $esc($signerName) . ')',
                       $esc($signerDesignation),
                       $esc($signerCenter),
                       $signerEmail ? '<b>Email:</b> <u>' . $esc($signerEmail) . '</u>' : '',
                       $signerPhone ? '<b>Phone:</b> ' . $esc($signerPhone) : '',
-                  ], imageHeightPt: 50, imageMaxWidthPt: 180, align: 'left')
+                  ], imageHeightPt: 50, imageMaxWidthPt: 180, align: 'right')
             .   '</td>'
             . '</tr>'
             . '</table>';

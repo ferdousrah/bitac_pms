@@ -78,9 +78,11 @@ class OfficialLetterRenderer
             $signerPhone !== '' ? $L['phone'] . ' ' . $num($signerPhone) : '',
         ];
 
-        $signerCol = '<div style="' . $lf . ' font-size: 11pt; color: #000; text-align: center;">'
+        // Right-aligned: on the printed BITAC letter the signature block sits
+        // against the right margin, not floating in the middle of its column.
+        $signerCol = '<div style="' . $lf . ' font-size: 11pt; color: #000; text-align: right;">'
             . '<div style="margin-bottom: 30pt;">' . $L['yours'] . '</div>'
-            . SignatureBlock::html($signaturePath, $typedLines, imageHeightPt: 46, imageMaxWidthPt: 190)
+            . SignatureBlock::html($signaturePath, $typedLines, imageHeightPt: 46, imageMaxWidthPt: 190, align: 'right')
             // The "পক্ষে / For — Director (Centre Head)" sign-off is the office
             // acting, not the signatory's own details, so it always prints.
             . '<div style="margin-top: 6pt; color: #a349a4;">' . $L['for'] . '</div>'
@@ -104,7 +106,7 @@ class OfficialLetterRenderer
 <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 40pt;">
     <tr>
         <td width="48%" style="vertical-align: bottom;">{$recipientCol}</td>
-        <td width="52%" style="vertical-align: top;">{$signerCol}</td>
+        <td width="52%" align="right" style="vertical-align: top; text-align: right;">{$signerCol}</td>
     </tr>
 </table>
 HTML;
