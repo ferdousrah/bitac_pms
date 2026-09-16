@@ -75,22 +75,28 @@ class UserController extends Controller
             'signature'   => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
         ]);
 
-        $signaturePath = null;
-        if ($request->hasFile('signature')) {
-            $signaturePath = $request->file('signature')->store('signatures', 'public');
-        }
-
         $user = User::create([
             'name'           => $validated['name'],
             'email'          => $validated['email'],
             'phone'          => $validated['phone'] ?? null,
             'designation'    => $validated['designation'] ?? null,
-            'signature_path' => $signaturePath,
             'password'       => $validated['password'], // cast 'hashed' auto-hashes
             'is_active'      => $validated['is_active'] ?? true,
             'section_id'     => $validated['section_id'] ?? null,
         ]);
         $user->assignRole($validated['role']);
+
+        // A signature given on the create form becomes their first — and so
+        // their default. More are added afterwards from the edit page, which
+        // is where the full signature manager lives (it needs a user id).
+        if ($request->hasFile('signature')) {
+            \App\Models\UserSignature::create([
+                'user_id'    => $user->id,
+                'label'      => 'Signature',
+                'path'       => $request->file('signature')->store('signatures', 'public'),
+                'is_default' => true,
+            ]);
+        }
 
         return redirect()->route('admin.users.index')->with('success', 'User created.');
     }
@@ -106,6 +112,11 @@ class UserController extends Controller
                 'phone'     => $user->phone,
                 'designation' => $user->designation,
                 'signature_url' => $user->signature_url,
+                // The user's signature blocks, default first — managed by
+                // their own routes on the edit page, not by this form's submit.
+                'signatures' => $user->signatures()->get(['id', 'label', 'path', 'is_default'])
+                    ->map(fn ($s) => ['id' => $s->id, 'label' => $s->label, 'url' => $s->url, 'is_default' => $s->is_default])
+                    ->values(),
                 'is_active' => (bool) $user->is_active,
                 'deactivation_reason' => $user->deactivation_reason,
                 'roles'     => $user->roles->pluck('name'),
@@ -128,8 +139,6 @@ class UserController extends Controller
             'is_active'           => 'nullable|boolean',
             'password'            => 'nullable|string|min:8',
             'deactivation_reason' => 'nullable|string|max:500',
-            'signature'           => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
-            'remove_signature'    => 'nullable|boolean',
         ]);
 
         $data = [
@@ -140,16 +149,9 @@ class UserController extends Controller
             'section_id'  => $validated['section_id'] ?? null,
         ];
 
-        // Replace or remove signature image
-        if ($request->hasFile('signature')) {
-            if ($user->signature_path) {
-                \Storage::disk('public')->delete($user->signature_path);
-            }
-            $data['signature_path'] = $request->file('signature')->store('signatures', 'public');
-        } elseif ($request->boolean('remove_signature') && $user->signature_path) {
-            \Storage::disk('public')->delete($user->signature_path);
-            $data['signature_path'] = null;
-        }
+        // Signatures are NOT part of this form any more — a user may hold
+        // several, so they are added, re-defaulted and removed one at a time
+        // through UserSignatureController from the card on this page.
 
         // Password update (optional)
         if (!empty($validated['password'])) {

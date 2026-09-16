@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
+import SignatureManager from '@/Components/SignatureManager';
 
 export default function UserCreateEdit({ user, roles, sections = [] }: any) {
     const { data, setData, post, transform, errors, processing } = useForm<any>({
@@ -15,7 +16,6 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
         is_active: user?.is_active ?? true,
         deactivation_reason: user?.deactivation_reason ?? '',
         signature: null as File | null,
-        remove_signature: false,
     });
 
     // Local preview state so the user sees the chosen image before submit.
@@ -23,7 +23,6 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
 
     const onSignaturePicked = (file: File | null) => {
         setData('signature', file);
-        setData('remove_signature', false);
         if (file) {
             const reader = new FileReader();
             reader.onload = () => setSigPreview(reader.result as string);
@@ -35,7 +34,6 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
 
     const clearSignature = () => {
         setData('signature', null);
-        setData('remove_signature', true);
         setSigPreview(null);
     };
 
@@ -128,9 +126,32 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
                                 {errors.designation && <p className="form-error">{errors.designation}</p>}
                             </div>
 
+                            {/* Signatures.
+                                Editing: the full manager — a user may hold several blocks
+                                (Bangla, English, one per post) and mark one default. Those
+                                have their own endpoints, so they save on their own and are
+                                not part of this form's submit.
+                                Creating: one optional upload, which becomes their default;
+                                the manager needs a user id to post against. */}
+                            {user ? (
+                                <div className="form-group">
+                                    <label className="form-label">Signatures</label>
+                                    <p className="form-hint">
+                                        Upload the whole scanned block — signature with the name, designation and
+                                        contacts under it. Documents print the image on its own, nothing typed beneath.
+                                    </p>
+                                    <SignatureManager
+                                        signatures={user.signatures ?? []}
+                                        ownerLabel={user.name}
+                                        storeUrl={`/admin/users/${user.id}/signatures`}
+                                        defaultUrl={(id) => `/admin/users/signatures/${id}/default`}
+                                        destroyUrl={(id) => `/admin/users/signatures/${id}`}
+                                    />
+                                </div>
+                            ) : (
                             <div className="form-group">
                                 <label className="form-label">Signature</label>
-                                <p className="form-hint">PNG with transparent background works best. Max 2 MB. Embedded above the name on quotation PDFs the user approves.</p>
+                                <p className="form-hint">The scanned signature block. It becomes this user’s default; more can be added after the user is created. Max 2 MB.</p>
 
                                 {sigPreview ? (
                                     <div className="flex items-start gap-4 p-3 rounded-xl border border-surface-200 bg-surface-50/60">
@@ -174,6 +195,7 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
                                 )}
                                 {errors.signature && <p className="form-error">{errors.signature as any}</p>}
                             </div>
+                            )}
 
                             <div className="form-group">
                                 <label className="form-label">

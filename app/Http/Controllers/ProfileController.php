@@ -24,6 +24,10 @@ class ProfileController extends Controller
             'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status'          => session('status'),
             'signatureUrl'    => $user?->signature_url,
+            // Every signature block this user holds, default first.
+            'signatures'      => $user?->signatures()->get(['id', 'label', 'path', 'is_default'])
+                ->map(fn ($s) => ['id' => $s->id, 'label' => $s->label, 'url' => $s->url, 'is_default' => $s->is_default])
+                ->values() ?? [],
             'avatarUrl'       => $user?->avatar_url,
         ]);
     }
@@ -75,67 +79,6 @@ class ProfileController extends Controller
         $request->user()->save();
 
         return Redirect::route('profile.edit');
-    }
-
-    /**
-     * Update the user's saved signature. Accepts either:
-     *   - signature_image : a real uploaded PNG/JPG file, OR
-     *   - signature_data  : a base64 data URL from the in-browser canvas pad
-     *
-     * Posting `remove=1` (with no other field) clears the existing signature.
-     */
-    public function updateSignature(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'signature_image' => 'nullable|file|mimes:png,jpg,jpeg,webp|max:2048',
-            'signature_data'  => 'nullable|string|max:500000', // base64 PNG data-URL
-            'remove'          => 'nullable|boolean',
-        ]);
-
-        $user = $request->user();
-
-        // Remove existing signature
-        if (! empty($validated['remove'])) {
-            if ($user->signature_path) {
-                Storage::disk('public')->delete($user->signature_path);
-            }
-            $user->forceFill(['signature_path' => null])->save();
-            return back()->with('status', 'Signature removed.');
-        }
-
-        // From inline canvas (data URL)
-        if (! empty($validated['signature_data'])) {
-            $dataUrl = $validated['signature_data'];
-            if (! preg_match('/^data:image\/(png|jpeg|webp);base64,(.+)$/', $dataUrl, $m)) {
-                return back()->withErrors(['signature_data' => 'Invalid signature data.']);
-            }
-            $ext  = $m[1] === 'jpeg' ? 'jpg' : $m[1];
-            $bin  = base64_decode($m[2], true);
-            if ($bin === false) {
-                return back()->withErrors(['signature_data' => 'Could not decode signature.']);
-            }
-            $path = 'signatures/' . $user->id . '_' . time() . '.' . $ext;
-            Storage::disk('public')->put($path, $bin);
-
-            // Clean up previous file
-            if ($user->signature_path && $user->signature_path !== $path) {
-                Storage::disk('public')->delete($user->signature_path);
-            }
-            $user->forceFill(['signature_path' => $path])->save();
-            return back()->with('status', 'Signature saved.');
-        }
-
-        // From uploaded file
-        if ($request->hasFile('signature_image')) {
-            $stored = $request->file('signature_image')->store('signatures', 'public');
-            if ($user->signature_path && $user->signature_path !== $stored) {
-                Storage::disk('public')->delete($user->signature_path);
-            }
-            $user->forceFill(['signature_path' => $stored])->save();
-            return back()->with('status', 'Signature uploaded.');
-        }
-
-        return back()->withErrors(['signature_data' => 'No signature provided.']);
     }
 
     /**

@@ -4,15 +4,15 @@ import { Head, usePage } from '@inertiajs/react';
 import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
-import UpdateSignatureForm from './Partials/UpdateSignatureForm';
+import SignatureManager, { UserSignatureItem } from '@/Components/SignatureManager';
 import UpdateAvatarForm from './Partials/UpdateAvatarForm';
 
 export default function Edit({
     mustVerifyEmail,
     status,
-    signatureUrl,
+    signatures = [],
     avatarUrl,
-}: PageProps<{ mustVerifyEmail: boolean; status?: string; signatureUrl?: string | null; avatarUrl?: string | null }>) {
+}: PageProps<{ mustVerifyEmail: boolean; status?: string; signatures?: UserSignatureItem[]; avatarUrl?: string | null }>) {
     const { auth } = usePage().props as any;
     return (
         <AppLayout header="Profile Settings">
@@ -89,13 +89,18 @@ export default function Edit({
                                 <i className="fi fi-rr-signature text-emerald-500 text-sm leading-none" />
                             </div>
                             <div>
-                                <h3 className="text-sm font-bold text-surface-900">Signature</h3>
-                                <p className="text-xs text-surface-400">Draw or upload your signature — used on Gate Passes, Quotations, Approvals &amp; Inspection Certificates</p>
+                                <h3 className="text-sm font-bold text-surface-900">Signatures</h3>
+                                <p className="text-xs text-surface-400">Keep as many as you need and mark one as your default — used on Gate Passes, Quotations, Approvals &amp; Inspection Certificates</p>
                             </div>
                         </div>
                     </div>
                     <div className="card-body">
-                        <UpdateSignatureForm signatureUrl={signatureUrl} status={status} />
+                        <SignatureManager
+                            signatures={signatures}
+                            storeUrl="/profile/signatures"
+                            defaultUrl={(id) => `/profile/signatures/${id}/default`}
+                            destroyUrl={(id) => `/profile/signatures/${id}`}
+                        />
                     </div>
                 </div>
 
