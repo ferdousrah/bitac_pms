@@ -36,6 +36,7 @@ use App\Http\Controllers\NcrController;
 use App\Http\Controllers\OperationSheetController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UserSignatureController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\ReportController;
@@ -142,6 +143,10 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/signature', [ProfileController::class, 'updateSignature'])->name('profile.signature.update');
     Route::post('/profile/avatar',    [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
+    // A user may keep several signature blocks and mark one as their default.
+    Route::post('/profile/signatures', [UserSignatureController::class, 'store'])->name('profile.signatures.store');
+    Route::patch('/profile/signatures/{signature}/default', [UserSignatureController::class, 'setDefault'])->name('profile.signatures.default');
+    Route::delete('/profile/signatures/{signature}', [UserSignatureController::class, 'destroy'])->name('profile.signatures.destroy');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Dashboard
@@ -696,6 +701,14 @@ Route::middleware(['auth'])->group(function () {
         Route::post('users/{user}/activate', [UserController::class, 'activate'])
             ->middleware('permission:manage users')
             ->name('admin.users.activate');
+
+        // Managing another user's signature blocks (same controller as the
+        // profile routes; it decides whose signatures you may touch).
+        Route::middleware('permission:manage users')->group(function () {
+            Route::post('users/{user}/signatures', [UserSignatureController::class, 'store'])->name('admin.users.signatures.store');
+            Route::patch('users/signatures/{signature}/default', [UserSignatureController::class, 'setDefault'])->name('admin.users.signatures.default');
+            Route::delete('users/signatures/{signature}', [UserSignatureController::class, 'destroy'])->name('admin.users.signatures.destroy');
+        });
 
         // PCD gate-pass approver pool (any one approves a pass).
         Route::middleware('permission:manage users')->group(function () {

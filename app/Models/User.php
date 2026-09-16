@@ -53,11 +53,37 @@ class User extends Authenticatable
     }
 
     /**
-     * Public URL of the user's scanned signature, or null if not uploaded.
+     * Every signature this user holds, their default first.
+     *
+     * A user may keep several — a Bangla block, an English one, one per post.
+     * Each image already carries the name/designation/contacts under the pen
+     * stroke, so documents print the image and nothing else.
+     */
+    public function signatures()
+    {
+        return $this->hasMany(UserSignature::class)->orderByDesc('is_default')->orderBy('id');
+    }
+
+    /** The one documents reach for unless the signer picks another. */
+    public function defaultSignature(): ?UserSignature
+    {
+        return $this->relationLoaded('signatures')
+            ? ($this->signatures->firstWhere('is_default', true) ?? $this->signatures->first())
+            : $this->signatures()->first();
+    }
+
+    /**
+     * Public URL of the user's default signature, or null if they have none.
      * Used in the Inertia payload for previews.
      */
     public function getSignatureUrlAttribute(): ?string
     {
+        if ($sig = $this->defaultSignature()) {
+            return $sig->url;
+        }
+
+        // Pre-`user_signatures` fallback. The migration copies every existing
+        // signature across, so this only fires if that backfill was skipped.
         return $this->signature_path
             ? \Storage::disk('public')->url($this->signature_path)
             : null;
@@ -74,11 +100,19 @@ class User extends Authenticatable
     }
 
     /**
-     * Absolute filesystem path of the signature image — used by mPDF when
-     * embedding the image into a generated PDF (mPDF needs a local path).
+     * Absolute filesystem path of the user's DEFAULT signature — used by mPDF
+     * when embedding the image into a generated PDF (mPDF needs a local path).
+     *
+     * Every document that doesn't let the signer choose (operation sheets, work
+     * orders, material requisitions, QC reports) resolves through here, so
+     * changing your default changes what they print from then on.
      */
     public function signatureAbsolutePath(): ?string
     {
+        if ($abs = $this->defaultSignature()?->absolutePath()) {
+            return $abs;
+        }
+
         if (!$this->signature_path) return null;
         $path = \Storage::disk('public')->path($this->signature_path);
         return is_file($path) ? $path : null;
