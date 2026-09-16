@@ -317,7 +317,15 @@ HTML;
     {
         return <<<CSS
 body { font-family: tinos; font-size: 10pt; color: #1f2937; }
-.bn { font-family: nikosh; }
+
+/* Bangla goes in Nikosh wherever it appears.
+   `.bn` is ours, on markup we know is Bangla. `.lang_bn` is mPDF's: with
+   autoScriptToLang on it wraps every run of Bengali script it finds in
+   <span lang="bn" class="lang_bn">, so Bangla typed into an otherwise English
+   field — a job description, a customer name — lands in Nikosh too, and is
+   therefore shaped (Nikosh carries useOTL; the backupSubsFont path does NOT
+   apply OpenType, so relying on substitution alone printed যুক্তাক্ষর broken). */
+.bn, .lang_bn { font-family: nikosh; }
 h1, h2, h3 { color: #1e40af; }
 table { border-collapse: collapse; }
 CSS;

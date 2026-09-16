@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\BanglaDigits;
+
 /**
  * Renders the BITAC official letter body (the part that sits inside the
  * letterhead) in Bangla or English. Shared by the quotation forwarding letter
@@ -25,11 +27,7 @@ class OfficialLetterRenderer
         $esc  = fn ($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $isBn = ($lang !== 'en');
 
-        $bnDigits = fn ($s) => strtr((string) $s, [
-            '0' => '০', '1' => '১', '2' => '২', '3' => '৩', '4' => '৪',
-            '5' => '৫', '6' => '৬', '7' => '৭', '8' => '৮', '9' => '৯',
-        ]);
-        $num = fn ($s) => $isBn ? $bnDigits($s) : (string) $s;
+        $num = fn ($s) => $isBn ? BanglaDigits::from($s) : (string) $s;
 
         $L = $isBn ? [
             'memo' => 'নং-', 'date' => 'তাং-', 'subject' => 'বিষয়ঃ-',

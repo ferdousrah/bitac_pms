@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\BanglaDigits;
 use App\Models\CostEstimate;
 use App\Models\Customer;
 use App\Models\Quotation;
@@ -1922,12 +1923,18 @@ class QuotationController extends Controller
             . '</table>';
 
         // ─────────────────────────────────────────────────────────────────────
-        // Title — English-only. Revisions read "RE-QUOTATION" (the revision
-        // number is carried at the end of the Memo No., not in the title).
+        // Title — a bordered box holding the Bangla word over its English
+        // equivalent in brackets, exactly as the printed BITAC quotation has it.
+        // Revisions read পুনঃদরপত্র / (RE-QUOTATION); the revision number is
+        // carried at the end of the Ref No., not in the title.
         $isRevision = $quotation->version > 1;
+        $titleBn    = $isRevision ? 'পুনঃদরপত্র' : 'দরপত্র';
         $titleEn    = $isRevision ? 'RE-QUOTATION' : 'QUOTATION';
         $titleBlock = '<div style="text-align: center; margin-bottom: 14pt;">'
-            . '<div style="font-size: 14pt; font-weight: bold; color: #000; letter-spacing: 0.3pt;">' . $titleEn . '</div>'
+            . '<div style="display: inline-block; border: 0.75pt solid #000; padding: 4pt 16pt; text-align: center;">'
+            .   '<div class="bn" style="font-family: nikosh; font-size: 13pt; font-weight: bold; color: #000; line-height: 1.35;">' . $titleBn . '</div>'
+            .   '<div style="font-size: 12pt; font-weight: bold; color: #000; line-height: 1.35;">(' . $titleEn . ')</div>'
+            . '</div>'
             . '</div>';
 
         // ─────────────────────────────────────────────────────────────────────
@@ -2127,7 +2134,7 @@ class QuotationController extends Controller
             $termsHtml .=   '<table cellspacing="0" cellpadding="0" style="width: 100%; margin-top: 4pt;">';
             foreach ($termsList as $idx => $term) {
                 $termsHtml .= '<tr>';
-                $termsHtml .=   '<td width="24pt" style="padding: 2pt 4pt; vertical-align: top; font-size: 10pt; color: #000;">' . ($idx + 1) . '.</td>';
+                $termsHtml .=   '<td width="24pt" class="bn" style="padding: 2pt 4pt; vertical-align: top; font-family: nikosh; font-size: 10.5pt; color: #000;">' . BanglaDigits::from($idx + 1) . '.</td>';
                 $termsHtml .=   '<td class="bn" style="padding: 2pt 4pt; vertical-align: top; font-family: nikosh; font-size: 10.5pt; color: #000; line-height: 1.5;">' . $esc($term) . '</td>';
                 $termsHtml .= '</tr>';
             }
