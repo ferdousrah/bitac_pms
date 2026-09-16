@@ -136,10 +136,6 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
                             {user ? (
                                 <div className="form-group">
                                     <label className="form-label">Signatures</label>
-                                    <p className="form-hint">
-                                        Upload the whole scanned block — signature with the name, designation and
-                                        contacts under it. Documents print the image on its own, nothing typed beneath.
-                                    </p>
                                     <SignatureManager
                                         signatures={user.signatures ?? []}
                                         ownerLabel={user.name}

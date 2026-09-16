@@ -1,5 +1,5 @@
 import { router, useForm } from '@inertiajs/react';
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
 
 export interface UserSignatureItem {
     id: number;
@@ -41,8 +41,7 @@ export default function SignatureManager({
 
     const form = useForm<{ label: string; image: File | null }>({ label: '', image: null });
 
-    const add = (e: FormEvent) => {
-        e.preventDefault();
+    const add = () => {
         if (!form.data.image) {
             alert('Choose a signature image first.');
             return;
@@ -152,7 +151,11 @@ export default function SignatureManager({
             )}
 
             {/* Add another */}
-            <form onSubmit={add} className="rounded-xl border border-surface-200 p-4 space-y-3">
+            {/* ⚠️ A <div>, not a <form>. This card renders inside the Admin →
+                Users edit form, and a nested form is invalid HTML — the submit
+                event bubbles to the outer one, which saved the user and
+                navigated away before the upload could fire. */}
+            <div className="rounded-xl border border-surface-200 p-4 space-y-3">
                 <div className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">
                     Add a signature
                 </div>
@@ -169,6 +172,9 @@ export default function SignatureManager({
                                 className="form-input"
                                 value={form.data.label}
                                 onChange={(e) => form.setData('label', e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') { e.preventDefault(); add(); }
+                                }}
                                 placeholder="e.g. Bangla block, English block, Executive Engineer"
                                 maxLength={80}
                             />
@@ -195,7 +201,7 @@ export default function SignatureManager({
                             </div>
                         )}
 
-                        <button type="submit" disabled={form.processing} className="btn-primary">
+                        <button type="button" onClick={add} disabled={form.processing} className="btn-primary">
                             {form.processing ? (
                                 <>
                                     <i className="fi fi-rr-spinner animate-spin text-sm" /> Uploading…
@@ -208,7 +214,7 @@ export default function SignatureManager({
                         </button>
                     </>
                 )}
-            </form>
+            </div>
         </div>
     );
 }
