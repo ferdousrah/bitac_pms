@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SignatureBlock;
 use App\Support\SignatureResolver;
 use App\Models\CostEstimate;
 use App\Models\EntityRevision;
@@ -1152,24 +1153,30 @@ class CostEstimateController extends Controller
         // Prepared By = creator (saved signature). Checked By = first approver,
         // Approved By = final approver — each shows the assigned person's name
         // always, and their signature only once that step is approved.
-        $sigImg = fn($absPath) => $absPath
-            ? '<img src="' . $absPath . '" style="height: 38pt; max-width: 140pt;" alt="signature" />'
-            : '<div style="height: 38pt;"></div>';
-
         // Render one signatory cell.
-        $sigCell = function (string $role, ?string $sigAbs, bool $signed, ?object $person, ?string $date, string $align, bool $pendingNote) use ($sigImg, $esc) {
-            $name   = $esc($person?->name ?? '');
-            $title  = $esc($person?->designation ?? '');
-            $center = $esc($person?->center?->name ?? '');
-            $imgHtml = $signed
-                ? $sigImg($sigAbs)
-                : ($pendingNote
+        //
+        // A signed cell shows the signature image ALONE — the scan carries the
+        // name, designation, centre and date under the pen stroke already. The
+        // ROLE label (Prepared By / Checked By / Approved By) is not a
+        // signatory detail and always prints. An unsigned cell keeps the typed
+        // lines so the grid still says who each step is waiting on.
+        $sigCell = function (string $role, ?string $sigAbs, bool $signed, ?object $person, ?string $date, string $align, bool $pendingNote) use ($esc) {
+            $hasImage = $signed && $sigAbs && is_file($sigAbs);
+
+            $imgHtml = $hasImage
+                ? SignatureBlock::html($sigAbs, [], imageHeightPt: 38, imageMaxWidthPt: 150, align: $align)
+                : ($pendingNote && !$signed
                     ? '<div style="height: 38pt; text-align: center;"><span style="font-size: 8pt; font-style: italic; color: #94a3b8;">(Pending)</span></div>'
                     : '<div style="height: 38pt;"></div>');
+
             $html = '<td style="vertical-align: bottom; text-align: ' . $align . '; padding: 0 6pt;">'
                 . '<div style="margin-bottom: 4pt;">' . $imgHtml . '</div>'
                 . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 110pt;">' . $role . '</div>';
-            if ($name !== '') {
+
+            $name = $esc($person?->name ?? '');
+            if (!$hasImage && $name !== '') {
+                $title  = $esc($person?->designation ?? '');
+                $center = $esc($person?->center?->name ?? '');
                 $html .= '<div style="font-size: 10pt; color: #a349a4; margin-top: 2pt;">' . $name . '</div>';
                 if ($title !== '')  $html .= '<div style="font-size: 9pt; color: #a349a4; margin-top: 1pt;">' . $title . '</div>';
                 if ($center !== '') $html .= '<div style="font-size: 9pt; color: #a349a4;">' . $center . '</div>';

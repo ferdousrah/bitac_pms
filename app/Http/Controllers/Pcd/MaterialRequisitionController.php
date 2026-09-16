@@ -7,6 +7,7 @@ use App\Models\Material;
 use App\Models\MaterialRequisition;
 use App\Models\WorkOrder;
 use App\Services\PcdReleaseService;
+use App\Support\SignatureBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -435,20 +436,23 @@ class MaterialRequisitionController extends Controller
         $preparerPhone  = $esc($preparer?->phone ?? '');
         $preparerEmail  = $esc($preparer?->email ?? '');
 
-        $sigImg = $preparerSig
-            ? '<img src="' . $preparerSig . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
-            : '<div style="height: 40pt;"></div>';
+        // The signature image is the whole block (the scan carries the name,
+        // designation and contacts), so a signed sheet prints the image and its
+        // role label only. Unsigned keeps the typed lines.
+        $hasSig = $preparerSig && is_file($preparerSig);
+        $sigImg = SignatureBlock::html($hasSig ? $preparerSig : null, [], imageHeightPt: 40, imageMaxWidthPt: 160, align: 'left');
 
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
             .   '<td width="55%" style="vertical-align: bottom; text-align: left;">'
             .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Prepared By</div>'
-            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
-            .     ($preparerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>' : '')
-            .     ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
-            .     ($preparerPhone !== ''  ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: nikosh;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
-            .     ($preparerEmail !== ''  ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: nikosh;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>' : '')
+            .     ($hasSig ? '' :
+                      '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
+                      . ($preparerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>' : '')
+                      . ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
+                      . ($preparerPhone !== ''  ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: nikosh;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
+                      . ($preparerEmail !== ''  ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: nikosh;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>' : ''))
             .   '</td>'
             .   '<td width="10%"></td>'
             .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'

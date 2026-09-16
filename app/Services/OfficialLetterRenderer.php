@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\BanglaDigits;
+use App\Support\SignatureBlock;
 
 /**
  * Renders the BITAC official letter body (the part that sits inside the
@@ -20,7 +21,7 @@ class OfficialLetterRenderer
      *   memoNo, issued (d/m/Y), subject, custRefNo, custRefDate (d/m/Y),
      *   recipientBlock (plain text), bodyHtml (already-safe HTML),
      *   signerName, signerDesignation, signerCenter, signerEmail, signerPhone,
-     *   signatureImgHtml (already-safe HTML)
+     *   signaturePath (absolute local path of the signature image, or null)
      */
     public function buildHtml(array $d, string $lang = 'bn'): string
     {
@@ -62,25 +63,27 @@ class OfficialLetterRenderer
         $signerCenter      = $esc($d['signerCenter'] ?? '');
         $signerEmail       = $esc($d['signerEmail'] ?? '');
         $signerPhone       = $esc($d['signerPhone'] ?? '');
-        $signatureImgHtml  = $d['signatureImgHtml'] ?? '<div style="height: 36pt;"></div>';
+        // `signaturePath` is the image the letter is signed with (an absolute
+        // local path, or null when nobody has signed yet).
+        $signaturePath = $d['signaturePath'] ?? null;
+
+        // The scan already carries the name, designation, centre and contacts
+        // under the pen stroke, so a signed letter prints the image alone. An
+        // UNSIGNED one keeps the typed lines, or it would name nobody.
+        $typedLines = [
+            '(' . $signerName . ')',
+            $signerDesignation,
+            $signerCenter !== '' ? $signerCenter . $dot : '',
+            $signerEmail !== '' ? $L['email'] . ' <u>' . $signerEmail . '</u>' : '',
+            $signerPhone !== '' ? $L['phone'] . ' ' . $num($signerPhone) : '',
+        ];
 
         $signerCol = '<div style="' . $lf . ' font-size: 11pt; color: #000; text-align: center;">'
             . '<div style="margin-bottom: 30pt;">' . $L['yours'] . '</div>'
-            . '<div>' . $signatureImgHtml . '</div>'
-            . '<div style="color: #a349a4;">(' . $signerName . ')</div>';
-        if ($signerDesignation !== '') {
-            $signerCol .= '<div style="color: #a349a4;">' . $signerDesignation . '</div>';
-        }
-        if ($signerCenter !== '') {
-            $signerCol .= '<div style="color: #a349a4;">' . $signerCenter . $dot . '</div>';
-        }
-        if ($signerEmail !== '') {
-            $signerCol .= '<div style="color: #a349a4;">' . $L['email'] . ' <u>' . $signerEmail . '</u></div>';
-        }
-        if ($signerPhone !== '') {
-            $signerCol .= '<div style="color: #a349a4;">' . $L['phone'] . ' ' . $num($signerPhone) . '</div>';
-        }
-        $signerCol .= '<div style="margin-top: 6pt; color: #a349a4;">' . $L['for'] . '</div>'
+            . SignatureBlock::html($signaturePath, $typedLines, imageHeightPt: 46, imageMaxWidthPt: 190)
+            // The "পক্ষে / For — Director (Centre Head)" sign-off is the office
+            // acting, not the signatory's own details, so it always prints.
+            . '<div style="margin-top: 6pt; color: #a349a4;">' . $L['for'] . '</div>'
             . '<div style="color: #a349a4;">' . $L['director'] . ' ' . $signerCenter . $dot . '</div>'
             . '</div>';
 

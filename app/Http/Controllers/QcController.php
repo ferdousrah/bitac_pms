@@ -6,6 +6,7 @@ use App\Models\QcInspection;
 use App\Models\WorkOrder;
 use App\Services\AuditService;
 use App\Services\BitacLetterhead;
+use App\Support\SignatureBlock;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -482,23 +483,23 @@ class QcController extends Controller
 
         // ── Inspector signature block ─────────────────────────────
         $inspector = $inspection->inspector;
-        $sigImg = '';
-        if ($inspector && method_exists($inspector, 'signatureAbsolutePath')) {
-            $sigPath = $inspector->signatureAbsolutePath();
-            if ($sigPath) {
-                $sigImg = '<img src="file://' . str_replace('\\', '/', $sigPath) . '" style="max-height: 40pt; max-width: 140pt;" alt="signature" />';
-            }
-        }
+        // The scan carries the inspector's name, designation and contacts, so a
+        // signed report prints the image and the rule only; unsigned falls back
+        // to the typed lines.
+        $sigPath = $inspector?->signatureAbsolutePath();
+        $hasSig  = $sigPath && is_file($sigPath);
+        $sigImg  = SignatureBlock::html($hasSig ? $sigPath : null, [], imageHeightPt: 40, imageMaxWidthPt: 150, align: 'left');
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 22pt;">'
             . '<tr>'
             .   '<td width="50%" style="font-size: 10pt; color: #000; vertical-align: bottom;">'
             .     '<div style="min-height: 50pt;">' . $sigImg . '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; margin-top: 2pt;">'
-            .       '<div style="font-weight: bold;">' . $esc($inspector?->name ?? '—') . '</div>'
-            .       '<div style="color: #444;">' . $esc($inspector?->designation ?? 'Quality Inspector') . '</div>'
-            .       '<div style="color: #555; font-size: 9pt;">BITAC ' . $esc($inspector?->center?->name ?? '') . '</div>'
-            .       ($inspector?->phone ? '<div style="color: #555; font-size: 9pt;">Phone: ' . $esc($inspector->phone) . '</div>' : '')
-            .       ($inspector?->email ? '<div style="color: #555; font-size: 9pt;">Email: ' . $esc($inspector->email) . '</div>' : '')
+            .       ($hasSig ? '<div style="font-weight: bold;">Inspector</div>' :
+                        '<div style="font-weight: bold;">' . $esc($inspector?->name ?? '—') . '</div>'
+                        . '<div style="color: #444;">' . $esc($inspector?->designation ?? 'Quality Inspector') . '</div>'
+                        . '<div style="color: #555; font-size: 9pt;">BITAC ' . $esc($inspector?->center?->name ?? '') . '</div>'
+                        . ($inspector?->phone ? '<div style="color: #555; font-size: 9pt;">Phone: ' . $esc($inspector->phone) . '</div>' : '')
+                        . ($inspector?->email ? '<div style="color: #555; font-size: 9pt;">Email: ' . $esc($inspector->email) . '</div>' : ''))
             .     '</div>'
             .   '</td>'
             .   '<td width="50%" style="font-size: 10pt; color: #000; vertical-align: bottom; text-align: center;">'
@@ -692,20 +693,19 @@ class QcController extends Controller
         $latestInspector = collect($perItem)
             ->sortByDesc(fn ($r) => $r['inspection']->inspected_at)
             ->first()['inspection']->inspector ?? null;
-        $sigImg = '';
-        if ($latestInspector && $latestInspector->signature_path) {
-            $sigPath = storage_path('app/public/' . ltrim($latestInspector->signature_path, '/'));
-            if (is_file($sigPath)) {
-                $sigImg = '<img src="file://' . str_replace('\\', '/', $sigPath) . '" style="max-height: 36pt; max-width: 80%;" />';
-            }
-        }
+        // Resolve through the model, not the legacy column — a user's signature
+        // now lives in user_signatures and signature_path may be stale.
+        $certSigPath = $latestInspector?->signatureAbsolutePath();
+        $certHasSig  = $certSigPath && is_file($certSigPath);
+        $sigImg = SignatureBlock::html($certHasSig ? $certSigPath : null, [], imageHeightPt: 36, imageMaxWidthPt: 150);
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24pt;">'
             . '<tr>'
             .   '<td width="50%" style="vertical-align: bottom; padding-right: 12pt; text-align: center;">'
             .     '<div style="min-height: 40pt;">' . $sigImg . '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold;">Inspector</div>'
-            .     ($latestInspector ? '<div style="font-size: 9.5pt; margin-top: 1pt;">' . $esc($latestInspector->name) . '</div>' : '')
-            .     ($latestInspector?->designation ? '<div style="font-size: 8.5pt; color: #555;">' . $esc($latestInspector->designation) . '</div>' : '')
+            .     ($certHasSig ? '' :
+                      ($latestInspector ? '<div style="font-size: 9.5pt; margin-top: 1pt;">' . $esc($latestInspector->name) . '</div>' : '')
+                      . ($latestInspector?->designation ? '<div style="font-size: 8.5pt; color: #555;">' . $esc($latestInspector->designation) . '</div>' : ''))
             .   '</td>'
             .   '<td width="50%" style="vertical-align: bottom; padding-left: 12pt; text-align: center;">'
             .     '<div style="min-height: 40pt;">&nbsp;</div>'

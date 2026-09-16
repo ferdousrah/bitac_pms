@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Ied;
 use App\Http\Controllers\Controller;
 use App\Models\GatePass;
 use App\Models\Rfq;
+use App\Support\SignatureBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -546,31 +547,37 @@ class GatePassController extends Controller
             ? '<div style="margin-top: 10pt; font-size: 10pt; color: #000;"><b>Notes:</b> ' . nl2br($esc($gatePass->notes), false) . '</div>'
             : '';
 
-        // Signature blocks — issuer left, customer rep right
-        $sigImg = $sigPath
-            ? '<img src="' . $sigPath . '" style="height: 40pt; max-width: 150pt;" alt="signature" />'
-            : '<div style="height: 40pt;"></div>';
+        // Signature blocks — issuer left, approver middle, customer rep right.
+        //
+        // A signature image is the whole block (name and designation are inside
+        // the scan), so a signed column prints the image and its ROLE label
+        // only. Unsigned falls back to the typed name so the column still says
+        // who owes a signature.
+        $hasIssuerImg   = $sigPath && is_file($sigPath);
+        $hasApproverImg = $approverSigPath && is_file($approverSigPath);
 
-        // Approved-By block (only when the pass has been approved).
-        $approverSigImg = $approverSigPath
-            ? '<img src="' . $approverSigPath . '" style="height: 40pt; max-width: 140pt;" alt="approver signature" />'
-            : '<div style="height: 40pt;"></div>';
         $approvedByCol = $gatePass->approvedBy
             ? '<td width="30%" style="vertical-align: bottom; text-align: center;">'
-                . '<div style="margin-bottom: 4pt;">' . $approverSigImg . '</div>'
+                . '<div style="margin-bottom: 4pt;">'
+                . SignatureBlock::html($hasApproverImg ? $approverSigPath : null, [], imageHeightPt: 40, imageMaxWidthPt: 150)
+                . '</div>'
                 . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 130pt;">Approved By</div>'
-                . '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $approverName . '</div>'
+                . (!$hasApproverImg ? '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $approverName . '</div>' : '')
               . '</td>'
             : '<td width="20%"></td>';
 
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
             .   '<td width="35%" style="vertical-align: bottom; text-align: left;">'
-            .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
+            .     '<div style="margin-bottom: 4pt;">'
+            .     SignatureBlock::html($hasIssuerImg ? $sigPath : null, [], imageHeightPt: 40, imageMaxWidthPt: 160, align: 'left')
+            .     '</div>'
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 130pt;">Issued By</div>'
-            .     '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $issuerName . '</div>'
-            .     ($issuerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $issuerTitle . '</div>' : '')
-            .     ($issuerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $issuerCenter . '</div>' : '')
+            .     (!$hasIssuerImg
+                      ? '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $issuerName . '</div>'
+                        . ($issuerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $issuerTitle . '</div>' : '')
+                        . ($issuerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $issuerCenter . '</div>' : '')
+                      : '')
             .   '</td>'
             .   $approvedByCol
             .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'

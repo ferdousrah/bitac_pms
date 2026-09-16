@@ -257,9 +257,7 @@ class RfqLetterController extends Controller
         $sigPath = $letter->signature_path
             ? \Storage::disk('public')->path($letter->signature_path)
             : $signer?->signatureAbsolutePath();
-        $signatureImgHtml = ($sigPath && is_file($sigPath))
-            ? '<img src="' . $sigPath . '" style="height: 36pt; max-width: 160pt;" alt="signature" />'
-            : '<div style="height: 36pt;"></div>';
+        $sigPath = ($sigPath && is_file($sigPath)) ? $sigPath : null;
 
         $signerCenter = $signer?->center?->name
             ?? \App\Models\Center::find($letter->center_id ?? auth()->user()?->center_id ?? 1)?->name
@@ -278,7 +276,7 @@ class RfqLetterController extends Controller
             'signerCenter'      => $signerCenter,
             'signerEmail'       => $signer?->email,
             'signerPhone'       => $signer?->phone,
-            'signatureImgHtml'  => $signatureImgHtml,
+            'signaturePath'     => $sigPath,
         ], $lang);
 
         return app(\App\Services\BitacLetterhead::class)

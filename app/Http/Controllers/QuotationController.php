@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\BanglaDigits;
+use App\Support\SignatureBlock;
 use App\Support\SignatureResolver;
 use App\Models\CostEstimate;
 use App\Models\Customer;
@@ -1629,11 +1630,11 @@ class QuotationController extends Controller
         $signerEmail       = $esc($signer?->email ?? '');
         $signerPhone       = $esc($signer?->phone ?? '');
 
-        // Only embed the signature image after final approval — otherwise
-        // leave the slot blank for a handwritten signature.
-        $signatureImgHtml = ($isFinalApproved && $signerSigPath && is_file($signerSigPath))
-            ? '<img src="' . $signerSigPath . '" style="height: 36pt; max-width: 160pt;" alt="signature" />'
-            : '<div style="height: 36pt;"></div>';
+        // Only embed the signature image after final approval — an unapproved
+        // letter must not look signed, so the slot stays blank until then.
+        $letterSignaturePath = ($isFinalApproved && $signerSigPath && is_file($signerSigPath))
+            ? $signerSigPath
+            : null;
 
         // Contact line — only emit non-empty parts so we don't get stray bullets.
         $contactParts = [];
@@ -1663,7 +1664,7 @@ class QuotationController extends Controller
             'signerCenter'      => $signerCenterRaw,
             'signerEmail'       => $signer?->email,
             'signerPhone'       => $signer?->phone,
-            'signatureImgHtml'  => $signatureImgHtml,
+            'signaturePath'     => $letterSignaturePath,
         ], $lang);
 
         $bytes = app(\App\Services\BitacLetterhead::class)->render($html, "Forwarding Letter {$quotationLabel}", null, $lang);
@@ -2091,27 +2092,22 @@ class QuotationController extends Controller
             ? ($finalApproval->signatureAbsolutePath() ?? $finalApproval->approver?->signatureAbsolutePath())
             : null;
 
-        // Signature image — only render if approval exists; otherwise leave blank space.
-        $signatureImg = $sigPath
-            ? '<img src="' . $sigPath . '" style="height: 50pt; max-width: 160pt;" alt="signature" />'
-            : '<div style="height: 36pt;"></div>';
-
+        // The signature image IS the block — a scan carrying the name,
+        // designation and contacts under the pen stroke — so nothing is typed
+        // beneath it. Only an unsigned quotation (no image) falls back to the
+        // typed lines, so it still says who it is for.
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24pt;">'
             . '<tr>'
             .   '<td width="55%"></td>'
             .   '<td width="45%" style="font-size: 11pt; color: #000; line-height: 1.5;">'
-            .     '<div>' . $signatureImg . '</div>'
-            .     '<div style="color: #a349a4;">(' . $esc($signerName) . ')</div>'
-            .     '<div style="color: #a349a4;">' . $esc($signerDesignation) . '</div>'
-            .     '<div style="color: #a349a4;">' . $esc($signerCenter) . '</div>';
-        if ($signerEmail) {
-            $signatureBlock .= '<div style="margin-top: 2pt; color: #a349a4;"><b>Email:</b> '
-                . '<u>' . $esc($signerEmail) . '</u></div>';
-        }
-        if ($signerPhone) {
-            $signatureBlock .= '<div style="color: #a349a4;"><b>Phone:</b> ' . $esc($signerPhone) . '</div>';
-        }
-        $signatureBlock .= '</td>'
+            .     SignatureBlock::html($sigPath, [
+                      '(' . $esc($signerName) . ')',
+                      $esc($signerDesignation),
+                      $esc($signerCenter),
+                      $signerEmail ? '<b>Email:</b> <u>' . $esc($signerEmail) . '</u>' : '',
+                      $signerPhone ? '<b>Phone:</b> ' . $esc($signerPhone) : '',
+                  ], imageHeightPt: 50, imageMaxWidthPt: 180, align: 'left')
+            .   '</td>'
             . '</tr>'
             . '</table>';
 
