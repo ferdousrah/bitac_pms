@@ -149,7 +149,15 @@ export default function CostEstimateShow({ estimate, revisions = [], rfqAttachme
                                         subtitle: `${estimate.job_name} · ${estimate.customer?.name ?? estimate.company_name ?? ''}`,
                                     })}
                                 />
-                                {estimate.status !== 'used' && (
+                                {/* Gated on a quotation actually existing, not on the
+                                    status string. Gating on status !== 'used' meant that
+                                    opening the quotation form and abandoning it hid this
+                                    button permanently, with no quotation to show for it. */}
+                                {estimate.quotation_id ? (
+                                    <Link href={`/quotations/${estimate.quotation_id}`} className="btn-outline btn-sm">
+                                        <i className="fi fi-rr-document text-xs leading-none" /> View Quotation
+                                    </Link>
+                                ) : (
                                     <button onClick={() => { setUseQuotationNote(''); setUseQuotationOpen(true); }} className="btn-success btn-sm">
                                         <i className="fi fi-rr-paper-plane text-xs leading-none" /> Use as Quotation
                                     </button>

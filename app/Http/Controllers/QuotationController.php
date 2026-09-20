@@ -442,6 +442,9 @@ class QuotationController extends Controller
             // backing RFQ is created for it and customer_id says who for.
             'rfq_id'                  => 'nullable|exists:rfqs,id',
             'customer_id'             => 'required_without:rfq_id|nullable|exists:customers,id',
+            // Which estimate the preparer opened this form from, so the
+            // quotation can be linked back to it once it exists.
+            'source_estimate_id'      => 'nullable|exists:cost_estimates,id',
             'vat_rate'                => 'required|numeric|min:0|max:100',
             'tax_rate'                => 'nullable|numeric|min:0|max:100',
             'show_tax_breakdown'      => 'boolean',
@@ -595,8 +598,40 @@ class QuotationController extends Controller
             $saveAsDraft ? 'created' : 'submitted_for_approval'
         );
 
+        // NOW the estimate has actually been used — mark it and record which
+        // quotation came out of it. Doing this here rather than when the form
+        // opened is what stops an abandoned form stranding the estimate.
+        $this->linkSourceEstimate($request->input('source_estimate_id'), $quotation);
+
         return redirect()->route('quotations.show', $quotation)
             ->with('success', $saveAsDraft ? 'Quotation saved as draft.' : 'Quotation created and sent for approval.');
+    }
+
+    /**
+     * Mark the estimate a quotation was built from as used, and link the two.
+     *
+     * `cost_estimates.quotation_id` already existed and is read by
+     * CostEstimateController::deleteBlocker() and the material-requisition
+     * lookup, but nothing ever wrote it — so those checks never fired and
+     * nothing could tell "a quotation was made from this" apart from "someone
+     * clicked the button once".
+     */
+    private function linkSourceEstimate($estimateId, Quotation $quotation): void
+    {
+        if (!$estimateId) return;
+
+        $estimate = CostEstimate::find($estimateId);
+        // Only link an estimate that belongs to this quotation's RFQ, and never
+        // steal one that is already tied to another quotation.
+        if (!$estimate || $estimate->quotation_id || $estimate->rfq_id !== $quotation->rfq_id) return;
+
+        $estimate->update(['status' => 'used', 'quotation_id' => $quotation->id]);
+
+        app(\App\Services\RevisionTracker::class)->trackEstimate(
+            $estimate->fresh(),
+            'used_as_quotation',
+            'Quotation #' . $quotation->id . ' created from this estimate.'
+        );
     }
 
     /**

@@ -750,18 +750,18 @@ class CostEstimateController extends Controller
 
     /**
      * Use this estimate to populate a quotation.
+     *
+     * ⚠️ This only OPENS the quotation form — it does not mark the estimate
+     * used. It used to set `status = 'used'` right here, before any quotation
+     * existed, so anyone who opened the form and then closed the tab left the
+     * estimate stuck: "Used as Quotation" in its history, no quotation to show
+     * for it, and the button gone for good because the page hides it on that
+     * status. The estimate is marked used (and linked) by
+     * QuotationController@store, once a quotation actually exists.
      */
     public function useAsQuotation(Request $request, CostEstimate $costEstimate)
     {
         $note = $request->input('note');
-
-        $costEstimate->update(['status' => 'used']);
-
-        app(\App\Services\RevisionTracker::class)->trackEstimate(
-            $costEstimate->fresh(),
-            'used_as_quotation',
-            $note
-        );
 
         return redirect()->route('quotations.create', [
             'rfq_id'         => $costEstimate->rfq_id,

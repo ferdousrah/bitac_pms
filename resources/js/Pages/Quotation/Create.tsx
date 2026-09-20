@@ -29,6 +29,7 @@ export default function QuotationCreate({
     defaultCustomerRefNo = '',
     defaultCustomerRefDate = '',
     uncostedJobs = [],
+    sourceEstimateId = null,
     existing = null,
 }: any) {
     // Edit mode flips the form to PUT-to-update instead of POST-to-create.
@@ -46,6 +47,10 @@ export default function QuotationCreate({
 
     const { data, setData, post, transform, errors, processing } = useForm<any>({
         rfq_id:            rfq?.id ?? '',
+        // Which estimate this form was opened from. The estimate is only
+        // marked "used" once this quotation is actually saved — the controller
+        // links the two on store.
+        source_estimate_id: sourceEstimateId ?? '',
         vat_rate:          String(existing?.vat_rate ?? defaultVatRate),
         tax_rate:          String(existing?.tax_rate ?? defaultTaxRate),
         show_tax_breakdown: existing?.show_tax_breakdown ?? false,
