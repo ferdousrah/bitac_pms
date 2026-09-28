@@ -58,6 +58,13 @@ export default function RfqLetterIndex({ letters, filters = {} }: any) {
             });
     };
 
+    // Copies the body and recipient into a new draft and opens it. The number,
+    // date and signature are deliberately left for the new letter.
+    const duplicate = (l: any) => {
+        if (!confirm(`Duplicate “${l.subject}” into a new draft letter?`)) return;
+        router.post(`/rfq-letters/${l.id}/duplicate`);
+    };
+
     const del = (id: number) => {
         if (!confirm('Delete this letter? This cannot be undone.')) return;
         router.delete(`/rfq-letters/${id}`, { preserveScroll: true });
@@ -141,6 +148,8 @@ export default function RfqLetterIndex({ letters, filters = {} }: any) {
                                                         className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">EN</button>
                                                     <button onClick={() => openMail(l)} title="Email to customer"
                                                         className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-sky-600 hover:bg-sky-50 border border-transparent hover:border-sky-200"><i className="fi fi-rr-envelope text-xs leading-none" /></button>
+                                                    <button onClick={() => duplicate(l)} title="Duplicate into a new draft"
+                                                        className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-surface-500 hover:bg-surface-100"><i className="fi fi-rr-copy text-xs leading-none" /></button>
                                                     <Link href={`/rfq-letters/${l.id}/edit`} title="Edit"
                                                         className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-surface-500 hover:bg-surface-100"><i className="fi fi-rr-pencil text-xs leading-none" /></Link>
                                                     <button onClick={() => del(l.id)} title="Delete"

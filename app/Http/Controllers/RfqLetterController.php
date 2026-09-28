@@ -134,6 +134,44 @@ class RfqLetterController extends Controller
         return back()->with('success', 'Letter deleted.');
     }
 
+    /**
+     * Copy a letter into a fresh draft and open it for editing.
+     *
+     * The same letter goes out again and again with a different recipient or a
+     * line changed — this saves retyping the body.
+     *
+     * ⚠️ What is deliberately NOT copied is the letter's identity:
+     *   letter_no      every letter carries its own number from the register;
+     *                  reusing one would put two letters on the same reference
+     *   letter_date    today, not the original's date
+     *   status         always a draft, whatever the source was
+     *   issued_at      it has not been issued
+     *   emailed_at     it has not been sent
+     *   signature_path the copy is signed when IT is issued, not before —
+     *                  carrying the snapshot across would put the signatory's
+     *                  signature on a letter they have not seen
+     */
+    public function duplicate(RfqLetter $rfqLetter)
+    {
+        $copy = RfqLetter::create([
+            'rfq_id'            => $rfqLetter->rfq_id,
+            'customer_id'       => $rfqLetter->customer_id,
+            'letter_no'         => null,
+            'letter_date'       => now()->toDateString(),
+            'subject'           => $rfqLetter->subject,
+            'body'              => $rfqLetter->body,
+            'recipient_block'   => $rfqLetter->recipient_block,
+            'customer_ref_no'   => $rfqLetter->customer_ref_no,
+            'customer_ref_date' => $rfqLetter->customer_ref_date,
+            'signatory_user_id' => $rfqLetter->signatory_user_id,
+            'status'            => 'draft',
+            'created_by'        => auth()->id(),
+        ]);
+
+        return redirect()->route('rfq-letters.edit', $copy)
+            ->with('success', "Copied from letter {$rfqLetter->letter_no}. Give it a number and check the recipient before issuing.");
+    }
+
     /** Render the letter PDF (Bangla default, ?lang=en for English). */
     public function pdf(Request $request, RfqLetter $rfqLetter)
     {

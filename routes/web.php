@@ -558,6 +558,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('rfq-letters.pdf');
     Route::post('rfq-letters/{rfqLetter}/email', [RfqLetterController::class, 'email'])
         ->name('rfq-letters.email');
+    // Copy a letter into a fresh draft — same body, its own number.
+    Route::post('rfq-letters/{rfqLetter}/duplicate', [RfqLetterController::class, 'duplicate'])
+        ->name('rfq-letters.duplicate');
 
     // Work Orders
     Route::resource('work-orders', WorkOrderController::class)

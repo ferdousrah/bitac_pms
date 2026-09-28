@@ -383,6 +383,7 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 
 ### RFQ Letters module (IED → "Letters")
 - Table `rfq_letters`, `RfqLetterController`, `Pages/RfqLetter/{Index,Create}.tsx`. Issue an official letter against an RFQ (RFQ optional — selecting it auto-fills customer ref + recipient). **Direct issue, no approval. Signatory is selectable.** PDF in BN & EN. Entry: "Issue Letter" button on RFQ show + Letters index.
+- **Duplicate** (`POST rfq-letters/{rfqLetter}/duplicate`, copy icon on the Letters list) copies a letter into a fresh draft and opens it — the same letter goes out repeatedly with a different recipient or a line changed. It carries the subject, body, recipient block, customer ref, signatory and customer. ⚠️ It deliberately does **not** carry the letter's identity: `letter_no` is left blank (every letter takes its own number from the register — reusing one would put two letters on the same reference), the date is today, status is `draft`, `issued_at`/`emailed_at` are null, and **`signature_path` is null** — carrying the snapshot across would put the signatory's signature on a letter they have not seen. The source is never touched.
 
 ### Email system (PDF attachments)
 - Both RFQ letters and quotations email via a compose modal: **From** (defaults to logged-in user; sets From+Reply-To), **To**, **CC** (comma-sep), **Subject**, **Message** (RichTextEditor → sanitised HTML), attachment language toggle, animated sending overlay.
