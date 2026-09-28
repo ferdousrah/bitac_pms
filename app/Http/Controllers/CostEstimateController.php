@@ -326,12 +326,16 @@ class CostEstimateController extends Controller
      */
     private function buildApprovalChain(CostEstimate $costEstimate): void
     {
-        $settings = \App\Models\QuotationApprovalSetting::orderBy('level')->get();
+        // ⚠️ Follows the ESTIMATE's centre, not the session's. Cost estimates
+        // deliberately share the quotation chain — same approvers, same steps.
+        $settings = \App\Models\QuotationApprovalSetting::forCenter($costEstimate->center_id)->get();
         $chainLabels = fn (int $total): array => \App\Support\ApprovalChainLabels::forCount($total);
 
         if ($settings->isEmpty()) {
             // Fallback: use management users
-            $managers = \App\Models\User::role('management')->take(2)->get();
+            $managers = \App\Models\User::role('management')
+                ->where('center_id', $costEstimate->center_id)
+                ->take(2)->get();
             $labels = $chainLabels($managers->count());
             $level = 1;
             foreach ($managers as $manager) {

@@ -41,11 +41,16 @@ class QuotationService
 
     public function createApprovalChain(Quotation $quotation): void
     {
-        $settings = QuotationApprovalSetting::orderBy('level')->get();
+        // ⚠️ The chain follows the QUOTATION's centre, not the session's — a
+        // super admin looking at another centre must still build the right one.
+        $settings = QuotationApprovalSetting::forCenter($quotation->center_id)->get();
 
-        // Fallback: if no settings configured, use users with management role (up to 2)
+        // Fallback: no chain configured for this centre — use its management
+        // users (up to 2). Scoped to the same centre for the same reason.
         if ($settings->isEmpty()) {
-            $managers = User::role('management')->take(2)->get();
+            $managers = User::role('management')
+                ->where('center_id', $quotation->center_id)
+                ->take(2)->get();
             $level = 1;
             foreach ($managers as $manager) {
                 QuotationApproval::create([

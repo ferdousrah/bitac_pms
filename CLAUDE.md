@@ -474,6 +474,16 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 🏢 Approval chains are PER CENTRE (2026-09)
+
+- **`quotation_approval_settings` drives BOTH quotations and cost estimates** — `QuotationService::createApprovalChain()` and `CostEstimateController::buildApprovalChain()` read the same rows. The table name is historical; don't assume it is quotation-only.
+- It and `gate_pass_approvers` now carry **`center_id`**, and both models use `HasCenter`. Chains are **separate per centre** — no shared head-office steps (BITAC's decision).
+- ⚠️ **Building a chain follows the DOCUMENT's centre, never the session's.** Use **`QuotationApprovalSetting::forCenter($doc->center_id)`**, which deliberately bypasses the global scope — a super admin with another centre selected (or none) must still get the chain the document belongs to. `HasCenter`'s scope is for the *admin screen*, where the active centre is the right answer.
+- The empty-chain fallback (`User::role('management')->take(2)`) is centre-filtered too, or a centre with no chain would pull another centre's managers.
+- **`GatePassApprover::isApprover($userId, $centerId)`** takes the **pass's** centre. Passing null asks "an approver anywhere", which is only right for deciding whether a *list* shows an action column before any pass is in hand; `approve()`/`reject()` always pass the real centre.
+- ⚠️ **The old UNIQUE indexes were global and had to go composite**: `UNIQUE(level)` meant Dhaka's level 1 blocked Chittagong's, and `UNIQUE(user_id)` meant one officer couldn't approve at two centres. Now `UNIQUE(center_id, level)` and `UNIQUE(user_id, center_id)` — **`user_id` stays leftmost** on the latter so it still backs `gate_pass_approvers_user_id_foreign` (MySQL refuses to drop the last index a foreign key sits on; the first attempt at that migration died exactly there).
+- Verified with a second centre: each centre's quotation and cost estimate build only their own approvers, both centres can hold the same level, a Dhaka approver is refused on a Chittagong pass, and one person can now be an approver at both.
+
 ## ✅ Approval Cycle Labels — Cost Estimate & Quotation (2026-07)
 
 - **Work cycle:** the doc is **Prepared By** its creator (NOT an approver), then the chain runs — **first approver = "Checked By"**, **last approver = "Approved By"**, any in-between = "Reviewer N". Single approver = just "Approved By".

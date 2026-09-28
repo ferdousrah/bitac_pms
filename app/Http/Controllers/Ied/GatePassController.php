@@ -104,6 +104,9 @@ class GatePassController extends Controller
             'lockedDirection' => $lockedDirection,
             // PCD gate passes need approval; only pool members see Approve/Reject.
             'requiresApproval'=> $this->isPcdContext(),
+            // No single pass in hand here, so this only decides whether the
+            // list shows the action column at all; approve()/reject() do the
+            // real per-centre check.
             'canApprove'      => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
             'mySignatureUrl'  => auth()->user()->signature_url,
         ]);
@@ -297,7 +300,7 @@ class GatePassController extends Controller
                 'pdf_url'                => "{$this->basePath()}/{$gatePass->id}/pdf?preview=base64",
             ],
             'basePath'   => $this->basePath(),
-            'canApprove' => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
+            'canApprove' => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id(), $gatePass->center_id),
             'mySignatureUrl' => auth()->user()->signature_url,
         ]);
     }
@@ -425,7 +428,12 @@ class GatePassController extends Controller
     public function approve(Request $request, GatePass $gatePass)
     {
         abort_unless($this->isPcdContext(), 403);
-        abort_unless(\App\Models\GatePassApprover::isApprover(auth()->id()), 403, 'You are not a gate pass approver.');
+        // Against THIS pass's centre — an approver at one centre must not be
+        // able to approve another centre's pass by switching centres in the UI.
+        abort_unless(
+            \App\Models\GatePassApprover::isApprover(auth()->id(), $gatePass->center_id),
+            403, 'You are not a gate pass approver for this centre.'
+        );
         abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be approved.');
 
         $request->validate(\App\Support\SignatureResolver::rules());
@@ -447,7 +455,10 @@ class GatePassController extends Controller
     public function reject(Request $request, GatePass $gatePass)
     {
         abort_unless($this->isPcdContext(), 403);
-        abort_unless(\App\Models\GatePassApprover::isApprover(auth()->id()), 403, 'You are not a gate pass approver.');
+        abort_unless(
+            \App\Models\GatePassApprover::isApprover(auth()->id(), $gatePass->center_id),
+            403, 'You are not a gate pass approver for this centre.'
+        );
         abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be rejected.');
 
         $validated = $request->validate(['rejection_reason' => 'required|string|max:1000']);

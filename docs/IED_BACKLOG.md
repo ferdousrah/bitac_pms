@@ -93,7 +93,7 @@ approved quotation can immediately accept it themselves.
 - Full approval → the work order moves to PCD (what Accept does now). A rejection at any level
   sends it back with a reason.
 
-## 7. Approval chains are not centre-aware — `SPEC'D`
+## 7. Approval chains are not centre-aware — `DONE`
 
 Found while specifying item 6.
 
@@ -116,6 +116,12 @@ Chittagong's quotations, and one centre's admin editing the chain would change i
 - **Decision: chains are separate per centre.** No shared head-office steps.
 - Add `center_id` to the approver config tables and filter by centre when building a chain.
 - Cheap to migrate now (one row, one centre); expensive once six centres hold data.
+
+**Built.** `center_id` on both tables, `HasCenter` on both models, and chain building now
+follows the *document's* centre via `QuotationApprovalSetting::forCenter()` rather than the
+session's. `GatePassApprover::isApprover()` takes the pass's centre. The global `UNIQUE(level)`
+and `UNIQUE(user_id)` became composite — they would have stopped two centres sharing a level or
+one officer approving at two centres. Verified against a second test centre.
 
 ## 8. PCD → Notes (no pad, legal) + Envelope printing — `SPEC'D`
 
