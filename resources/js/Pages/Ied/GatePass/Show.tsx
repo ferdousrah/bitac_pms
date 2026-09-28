@@ -66,7 +66,10 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
     // ── Recording goods going back ──
     // Whatever came in on a pass eventually leaves again (and the reverse),
     // usually a few pieces at a time, so returns are per item and partial.
-    const canReturn = ['issued', 'partially_returned'].includes(pass.status);
+    // ⚠️ Comes from the server (GatePass::canAcceptReturns) — do not rebuild it
+    // from the status here. A COMPLETED Gate Pass In still takes returns:
+    // "Completed" means the goods arrived, not that the pass is finished.
+    const canReturn = !!pass.can_return;
     const [returnOpen, setReturnOpen] = useState(false);
     const [returnOn, setReturnOn] = useState(new Date().toISOString().slice(0, 10));
     const [returnNote, setReturnNote] = useState('');

@@ -258,6 +258,10 @@ class GatePassController extends Controller
                 'direction'              => $gatePass->direction,
                 // Can this In pass still send something back out?
                 'can_raise_out'          => $this->outBlocker($gatePass) === null,
+                // The one rule for "goods can still be booked back" — the page
+                // must not re-derive it from the status string.
+                'can_return'             => $gatePass->canAcceptReturns(),
+                'outstanding_qty'        => $gatePass->outstandingQty(),
                 // The Out passes raised against it, and (on an Out) the In it answers.
                 'out_passes'             => $gatePass->outPasses->map(fn ($o) => [
                     'id'      => $o->id,
@@ -374,9 +378,14 @@ class GatePassController extends Controller
      */
     public function recordReturn(Request $request, GatePass $gatePass)
     {
-        if (! in_array($gatePass->status, ['issued', 'partially_returned'], true)) {
+        $gatePass->loadMissing('items');
+
+        if (! in_array($gatePass->status, GatePass::RETURNABLE_STATUSES, true)) {
             return back()->with('error',
-                "Only an issued pass can take returns — this one is \"{$gatePass->status}\".");
+                "Returns can't be recorded against a \"{$gatePass->status}\" pass.");
+        }
+        if ($gatePass->outstandingQty() <= 0) {
+            return back()->with('error', 'Everything on this pass has already been returned.');
         }
 
         $validated = $request->validate([
@@ -448,11 +457,15 @@ class GatePassController extends Controller
         if ($gatePass->direction !== 'in') {
             return 'Only a Gate Pass In can send items back out.';
         }
-        if (! in_array($gatePass->status, ['issued', 'partially_returned'], true)) {
-            return "Only an issued pass can send items back — this one is \"{$gatePass->status}\".";
-        }
         $gatePass->loadMissing('items');
-        if ($gatePass->items->sum(fn ($i) => $i->outstandingQty()) <= 0) {
+
+        // ⚠️ `completed` counts as live here. On an In pass that means the
+        // goods ARRIVED, not that the pass is finished — what came in still
+        // has to go back out.
+        if (! in_array($gatePass->status, GatePass::RETURNABLE_STATUSES, true)) {
+            return "A \"{$gatePass->status}\" pass can't send items back out.";
+        }
+        if ($gatePass->outstandingQty() <= 0) {
             return 'Everything on this pass has already gone back out.';
         }
         return null;

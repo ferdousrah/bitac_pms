@@ -59,6 +59,36 @@ class GatePass extends Model
      * Where this pass stands on returns: 'none', 'partial' or 'full'.
      * Goods that went out on a pass come back (and vice versa), item by item.
      */
+    /**
+     * Statuses in which a pass is live enough to book goods back.
+     *
+     * ⚠️ `completed` IS included. On a Gate Pass In, "Completed" means the
+     * goods ARRIVED — the inward movement finished. Whatever came in still
+     * goes back out later, which is a separate event. Excluding `completed`
+     * left arrived-and-closed passes with no way to record the return at all.
+     * (`recordReturn` also lands a pass on `completed` once everything is back;
+     * that case is harmless because nothing is outstanding by then.)
+     */
+    public const RETURNABLE_STATUSES = ['issued', 'partially_returned', 'completed'];
+
+    /** How much of this pass has still not gone back. */
+    public function outstandingQty(): float
+    {
+        $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+
+        return round($items->sum(fn ($i) => $i->outstandingQty()), 2);
+    }
+
+    /**
+     * Can goods still be booked back against this pass? The one rule the
+     * return form, the Gate Pass Out and the UI all read, so they cannot drift.
+     */
+    public function canAcceptReturns(): bool
+    {
+        return in_array($this->status, self::RETURNABLE_STATUSES, true)
+            && $this->outstandingQty() > 0;
+    }
+
     public function returnState(): string
     {
         $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
