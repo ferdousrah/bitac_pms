@@ -621,11 +621,21 @@ class QuotationController extends Controller
         if (!$estimateId) return;
 
         $estimate = CostEstimate::find($estimateId);
-        // Only link an estimate that belongs to this quotation's RFQ, and never
-        // steal one that is already tied to another quotation.
-        if (!$estimate || $estimate->quotation_id || $estimate->rfq_id !== $quotation->rfq_id) return;
+        if (!$estimate || $estimate->quotation_id) return;   // never steal a linked one
 
-        $estimate->update(['status' => 'used', 'quotation_id' => $quotation->id]);
+        // A STANDALONE estimate (costed with no RFQ — "New Estimate" on the
+        // list) adopts whichever RFQ the quotation ended up on, including the
+        // backing RFQ a direct quotation creates for itself. Without this the
+        // NULL rfq_id never matched and the estimate was left unlinked, still
+        // offering "Use as Quotation" after a quotation had been made from it.
+        $adoptRfq = $estimate->rfq_id === null;
+        if (!$adoptRfq && $estimate->rfq_id !== $quotation->rfq_id) return;
+
+        $estimate->update(array_filter([
+            'status'       => 'used',
+            'quotation_id' => $quotation->id,
+            'rfq_id'       => $adoptRfq ? $quotation->rfq_id : null,
+        ], fn ($v) => $v !== null));
 
         app(\App\Services\RevisionTracker::class)->trackEstimate(
             $estimate->fresh(),
