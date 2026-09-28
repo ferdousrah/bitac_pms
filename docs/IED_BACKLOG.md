@@ -43,21 +43,18 @@ A bug found while confirming this **has been fixed** (commit `cd5b193`): a stand
 could never be linked to the quotation made from it, so it kept offering "Use as Quotation"
 forever. It now adopts the quotation's backing RFQ.
 
-## 4. Customer Type + Sector — `OPEN`
+## 4. Customer Type + Sector — `SPEC'D`
 
 Reports must be groupable by customer type **and** by sector.
 
 - **Customer Type**: Government Entity · Private Organizations.
 - **Sector applies to both types** (not government-only).
-- Sectors become **master data** (Admin → Master Data), following the `job_categories` shape
-  (name, code, display_order, is_active) so BITAC can maintain the list themselves.
-- Proposed: **one Sectors list**, each sector tagged government / private / both, so choosing
-  the type filters the sector dropdown.
-
-❓ **Blocked on:**
-- One shared sector list with a type tag, or two separate lists?
-- The actual sector names. Government so far: Power, BCIC, BSFIC, Defense — the full list was
-  in a photo that never arrived. Private list also needed.
+- Sectors are **master data the admin creates — nothing hardcoded**. Follows the
+  `job_categories` shape (name, code, display_order, is_active) under Admin → Master Data.
+- **One Sectors list**, each sector tagged government / private / both, so picking the customer
+  type filters the sector dropdown.
+- No seed list needed: BITAC enters their own. (Government examples from the meeting: Power,
+  BCIC, BSFIC, Defense.)
 - The 15 existing customers will be blank and fall under "Unspecified" until filled in.
 
 ## 5. Target vs Achievement — `SPEC'D`
@@ -137,8 +134,9 @@ A second letter-like module, for **internal** notes.
 ### Envelope
 Print the envelope with **To** and **From**.
 
-- **Several sizes to choose from** (needs the real list — standard candidates: 9″×4″,
-  10″×4.5″ for letters; 10″×12″, 12″×16″ for documents).
+- **Several sizes to choose from.** BITAC will confirm the real ones later; build with these
+  provisional entries and make them easy to correct: 9″×4″ and 10″×4.5″ (letters),
+  10″×12″ and 12″×16″ (documents).
 - **Both entry points are wanted:**
   - from inside a letter/note — a "Print Envelope" button, To filled from the recipient block,
     From from the centre's address;
@@ -159,6 +157,68 @@ From the same meeting notes, not yet worked through:
 - **Word-like drafting in IED.**
 - **PCD → Outsourcing** — work given to a third party: who, what, note.
 - **Delivery Orders reaching PCD** with the challan.
-- **Billing & Accounts** (rename of Delivery & Billing) — bill/invoice · **মূসক ৬.৩** ·
+- **Billing & Accounts** (rename of Delivery & Billing) — bill/invoice · **মূসক ৬.৩ (spec'd
+  below)** ·
   VAT & tax calculator · delivery challan generated from PCD · bill forwarding letter.
   The three that travel together: forwarding letter + bill + musak challan.
+
+---
+
+## 9. মূসক ৬.৩ — কর চালানপত্র — `SPEC'D`
+
+The NBR VAT challan. Transcribed from an original BITAC issued (Kushiara Power Company Ltd,
+challan no. 45), so the layout is known and nothing needs guessing.
+
+**Masthead**
+- গণপ্রজাতন্ত্রী বাংলাদেশ সরকার, জাতীয় রাজস্ব বোর্ড
+- **কর চালানপত্র** · [বিধি ৪০ এর উপ-বিধি (১) এর দফা (গ) ও (চ) দ্রষ্টব্য]
+- Top right, boxed: **প্রথম কপি** over **মূসক-৬.৩** (so the copy label is a variable —
+  প্রথম / দ্বিতীয় / তৃতীয় কপি).
+
+**Header fields** — left column is the supplier (BITAC) and the buyer; right column the
+challan's own identity.
+
+| Field | Source |
+|---|---|
+| নিবন্ধিত ব্যক্তির নাম | the centre (BITAC) |
+| নিবন্ধিত ব্যক্তির বিআইএন | **new** — BITAC's BIN, per centre |
+| চালানপত্র ইস্যুর ঠিকানা | the centre's address |
+| ক্রেতার নাম | customer |
+| ক্রেতার বিআইএন (প্রযোজ্য ক্ষেত্রে) | **new** — customers have no BIN field |
+| ক্রেতার ঠিকানা | customer address |
+| সরবরাহের গন্তব্যস্থল | **new** — delivery destination, typed |
+| যানবাহনের প্রকৃতি ও নম্বর | **new** — vehicle type & number, typed |
+| চালানপত্র নম্বর | own running number (the sample is `45`) |
+| ইস্যুর তারিখ / ইস্যুর সময় | issue date **and time** |
+
+**The 11 columns**
+
+| # | Column |
+|---|---|
+| ১ | ক্রমিক নং |
+| ২ | পণ্য বা সেবার বর্ণনা (প্রযোজ্য ক্ষেত্রে ব্র্যান্ড নাম সহ) |
+| ৩ | সরবরাহের একক |
+| ৪ | পরিমাণ |
+| ৫ | একক মূল্য (টাকায়) |
+| ৬ | মোট মূল্য (টাকায়) |
+| ৭ | সম্পূরক শুল্কের হার |
+| ৮ | সম্পূরক শুল্কের পরিমাণ (টাকায়) |
+| ৯ | মূল্য সংযোজন করহার / সুনির্দিষ্ট কর |
+| ১০ | মূল্য সংযোজন কর / সুনির্দিষ্ট কর এর পরিমাণ (টাকায়) |
+| ১১ | সকল প্রকার শুল্ক ও করসহ মূল্য |
+
+Footer: **সর্বমোট** row totalling columns ৬, ১০ and ১১ · প্রতিষ্ঠান কর্তৃপক্ষের দায়িত্বপ্রাপ্ত
+ব্যক্তির নাম / পদবি / স্বাক্ষর · seal. Bottom-left note: **"সকল প্রকার কর ব্যতীত মূল্য"**.
+
+**The sample's arithmetic** — 290,909 + 10% (29,091) = 320,000. So the round figure is the
+**tax-inclusive** one and the base is extracted from it. That matches how quotations already
+work here (VAT embedded in the price, extracted for display), so the two reconcile.
+
+⚠️ **Open — where does income tax go?** মূসক ৬.৩ has columns for সম্পূরক শুল্ক and মূসক only;
+there is no place for AIT. Our quotations and invoices embed **VAT *and* Tax**
+(`base = gross/(1+(vat%+tax%)/100)`). The sample challan shows VAT alone. The normal practice is
+that the buyer deducts AIT at source, so it never appears on the challan — **needs confirming**,
+because if AIT were included the challan total would not match the invoice.
+
+⚠️ Also note the VAT rate here is **10%**, not the 15% the quotation form defaults to — the rate
+must come from the document, not a constant.
