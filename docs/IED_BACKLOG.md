@@ -222,12 +222,17 @@ From the same meeting notes, not yet worked through:
   its own page (item 5). All share the financial-year filter; work-order money and dates use the
   same expressions as `TargetAchievementService` so the reports cannot disagree.
 - **Word-like drafting in IED.**
-- **PCD → Outsourcing** — work given to a third party: who, what, note.
-- **Delivery Orders reaching PCD** with the challan.
+- ~~**Delivery Orders reaching PCD**~~ — **`DONE`**. The menu moved: **Delivery & Billing** is
+  now **Billing & Accounts** (bills/invoices + মূসক ৬.৩) and **Delivery Orders sits under PCD**.
+  `pcd-officer` was granted the delivery permissions in the seeder and by migration, or the menu
+  would have appeared for nobody on the live database. PCD Job Detail also carries the challans
+  raised against that job, behind a `view pcd-inbox` door onto the same PDF.
 - **Billing & Accounts** (rename of Delivery & Billing) — bill/invoice · **মূসক ৬.৩ (spec'd
   below)** ·
   VAT & tax calculator · delivery challan generated from PCD · bill forwarding letter.
   The three that travel together: forwarding letter + bill + musak challan.
+- **PCD → Outsourcing** — work given to a third party: who, what, note.
+  **Last**, by BITAC's instruction (2026-09-28) — everything else goes first.
 
 ---
 

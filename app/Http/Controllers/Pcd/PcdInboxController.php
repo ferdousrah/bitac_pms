@@ -75,6 +75,7 @@ class PcdInboxController extends Controller
             'files.uploadedBy',
             'items',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
+            'deliveryOrders',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
             'operationSheets.workOrderItem',
             'cancelledBy',
@@ -215,6 +216,16 @@ class PcdInboxController extends Controller
                 // can review every document the job inherited without bouncing
                 // between RFQ / Quotation / WO pages.
                 'all_attachments' => $allAttachments->values(),
+                // What has actually left the gate against this job. PCD planned
+                // it and routed it, so PCD sees the challans too — read-only,
+                // and the Delivery module stays the place that raises them.
+                // Every row is a delivery of THIS job, so hand it the work order
+                // it already has rather than letting pack() fetch it back again.
+                'deliveries' => $workOrder->deliveryOrders->sortByDesc('id')->values()
+                    ->map(fn ($d) => \App\Http\Controllers\Pcd\PcdDeliveryController::pack(
+                        $d->setRelation('workOrder', $workOrder)
+                    )),
+                'delivered_qty' => (float) $workOrder->deliveredQty(),
                 'material_requisitions' => $workOrder->materialRequisitions->map(fn($mr) => [
                     'id'          => $mr->id,
                     'mrn_number'  => $mr->mrn_number,

@@ -500,6 +500,13 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 🚚 Delivery Orders belong to PCD (2026-09)
+
+- The menu **Delivery & Billing** is now **Billing & Accounts** and holds the money only — **Bills / Invoices** and **মূসক ৬.৩**. **Delivery Orders moved into the PCD group** (BITAC's instruction): the department that planned and routed the job also ships it. The module itself is unchanged and still lives at `/delivery`.
+- `pcd-officer` gained **`view delivery` / `create delivery` / `complete delivery`**, in the seeder *and* in migration `..._000047_give_pcd_the_delivery_orders` — a seeder edit alone only helps a fresh install, so on a live database the menu would have appeared for nobody.
+- **PCD Job Detail carries the deliveries** raised against that job — a sky-dot **Deliveries** card listing each challan with its quantity, date, vehicle, status and a **challan PDF** button, plus "N of M delivered" in the header. Props come from `PcdInboxController@show` (`deliveries`, `delivered_qty`); each row is packed by `Pcd\PcdDeliveryController::pack()` and is handed the work order it already has, rather than refetching it per row.
+- ⚠️ **`pcd.deliveries.challan` is a deliberate second door onto the same PDF.** `delivery.pdf` is gated by `view delivery`; the PCD job detail is open to anyone with `view pcd-inbox`, who need not hold it. Same service (`DeliveryChallanService`), same bytes — verified byte-length identical through both routes. The production op-sheet PDF has exactly this shape; don't "tidy" it by pointing the card at `delivery.pdf`.
+
 ## 📊 IED commercial reports (2026-09)
 
 > `IED → Reports`. The four existing reports (Production, OEE, Rejection, Lead Time) look at

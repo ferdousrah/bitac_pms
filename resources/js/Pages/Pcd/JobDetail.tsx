@@ -48,6 +48,16 @@ interface OperationSheet {
     step_count: number;
 }
 
+interface DeliveryRow {
+    id: number;
+    challan_number: string;
+    quantity: number;
+    status: string;
+    scheduled_date: string | null;
+    delivered_at: string | null;
+    vehicle_number: string | null;
+}
+
 interface Job {
     id: number;
     job_number: string | number | null;
@@ -64,6 +74,8 @@ interface Job {
     released_at: string | null;
     rfq_items: RfqItem[];
     material_requisitions: MaterialRequisition[];
+    deliveries: DeliveryRow[];
+    delivered_qty: number;
     sections: SectionEntry[];
     operation_sheet: OperationSheet | null;
     item_operation_sheets: Array<{
@@ -1144,6 +1156,47 @@ export default function JobDetail({ job, checklist }: Props) {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Deliveries — what has actually left the gate, with its challan.
+                            PCD planned and routed this job, so PCD sees the challans;
+                            raising a delivery is still Delivery & Billing's job. */}
+                        {job.deliveries?.length > 0 && (
+                            <div className="card">
+                                <div className="card-header">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" />
+                                            <h3 className="text-base font-semibold text-surface-900">Deliveries</h3>
+                                        </div>
+                                        <span className="badge badge-slate">
+                                            {job.delivered_qty} of {job.quantity} delivered
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="card-body space-y-2">
+                                    {job.deliveries.map((d) => (
+                                        <div key={d.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-surface-200 hover:border-sky-300 hover:bg-sky-50/30 transition-all">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-surface-900 text-sm truncate">{d.challan_number}</div>
+                                                <div className="text-[11px] text-surface-500">
+                                                    {d.quantity} pc{d.quantity !== 1 ? 's' : ''}
+                                                    {d.delivered_at ? ` · delivered ${d.delivered_at}` : d.scheduled_date ? ` · due ${d.scheduled_date}` : ''}
+                                                    {d.vehicle_number ? ` · ${d.vehicle_number}` : ''}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className={statusBadgeClass(d.status)}>{d.status}</span>
+                                                <button
+                                                    onClick={() => openPdf(`/pcd/deliveries/${d.id}/challan`, 'Delivery Challan', d.challan_number)}
+                                                    className="btn-ghost btn-xs" title="Delivery challan">
+                                                    <i className="fi fi-rr-file-pdf" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Material Requisitions — optional gate */}
                         <div className="card">

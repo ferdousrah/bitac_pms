@@ -79,6 +79,9 @@ class BitacDepartmentRolesSeeder extends Seeder
             'view operation-sheets', 'create operation-sheets',
             'release-job-to-shops',
             'view schedule', 'manage schedule',
+            // Delivery Orders moved from Delivery & Billing to PCD — the
+            // department that ran the job also ships it.
+            'view delivery', 'create delivery', 'complete delivery',
         ]);
 
         // Shop In-Charge — sees only their shop's jobs

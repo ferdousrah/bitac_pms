@@ -65,6 +65,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
             { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
+            { label: 'Delivery Orders',      href: '/delivery',                  icon: 'fi-rr-truck-side',      permission: 'view delivery' },
         ],
     },
     {
@@ -84,11 +85,10 @@ export const mainGroups: NavGroup[] = [
         ],
     },
     {
-        label: 'Delivery & Billing',
-        icon: 'fi-rr-truck-side',
+        label: 'Billing & Accounts',
+        icon: 'fi-rr-receipt',
         items: [
-            { label: 'Delivery Orders', href: '/delivery', icon: 'fi-rr-truck-side', permission: 'view delivery' },
-            { label: 'Invoices',        href: '/invoices', icon: 'fi-rr-receipt',    permission: 'view invoices' },
+            { label: 'Bills / Invoices', href: '/invoices', icon: 'fi-rr-receipt', permission: 'view invoices' },
         ],
     },
     {

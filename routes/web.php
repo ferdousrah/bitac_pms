@@ -496,6 +496,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('material-requisitions/{materialRequisition}/pdf', [PcdMaterialRequisitionController::class, 'pdf'])
             ->name('material-requisitions.pdf');
 
+        // The delivery challan for a job, for anyone who can see the PCD job
+        // detail — `delivery.pdf` is gated by `view delivery`, which a viewer
+        // of the job page may not hold.
+        Route::get('deliveries/{delivery}/challan', [\App\Http\Controllers\Pcd\PcdDeliveryController::class, 'challan'])
+            ->name('deliveries.challan');
+
         // Section assignment
         Route::get('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'edit'])->name('sections.edit');
         Route::put('work-orders/{workOrder}/sections',  [WorkOrderSectionController::class, 'update'])->name('sections.update');
