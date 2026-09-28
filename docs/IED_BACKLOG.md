@@ -120,6 +120,31 @@ Chittagong's quotations, and one centre's admin editing the chain would change i
 - Add `center_id` to the approver config tables and filter by centre when building a chain.
 - Cheap to migrate now (one row, one centre); expensive once six centres hold data.
 
+## 8. PCD → Notes (no pad, legal) + Envelope printing — `SPEC'D`
+
+### Notes
+A second letter-like module, for **internal** notes.
+
+- New menu **PCD → Notes**, built like RFQ Letters (direct issue, no approval, selectable
+  signatory — assumed from "letter er motoi", not explicitly confirmed).
+- **No pad at all** — plain paper, no letterhead, no logos, no footer rule.
+- **Legal, 8.5″ × 14″.**
+
+> ⚠️ Every PDF today goes through `BitacLetterhead`, which always sets a header/footer and is
+> fixed to A4. Notes need a **separate render path**: same fonts and body conventions, no
+> letterhead, legal page size.
+
+### Envelope
+Print the envelope with **To** and **From**.
+
+- **Several sizes to choose from** (needs the real list — standard candidates: 9″×4″,
+  10″×4.5″ for letters; 10″×12″, 12″×16″ for documents).
+- **Both entry points are wanted:**
+  - from inside a letter/note — a "Print Envelope" button, To filled from the recipient block,
+    From from the centre's address;
+  - a standalone page — type any address and print an envelope on its own.
+- Applies to IED letters as well as PCD notes.
+
 ---
 
 ## Still to be discussed
@@ -132,9 +157,6 @@ From the same meeting notes, not yet worked through:
   · total quotation value this financial year · jobs in pipeline. All new; the four existing
   reports (Production, OEE, Rejection, Lead Time) are production-side only.
 - **Word-like drafting in IED.**
-- **Envelope printing** (From / To) alongside letters.
-- **PCD → Notes** — internal note on letterhead, **legal 8.5″ × 14″, without the pad**. Every
-  PDF today is A4 with the letterhead.
 - **PCD → Outsourcing** — work given to a third party: who, what, note.
 - **Delivery Orders reaching PCD** with the challan.
 - **Billing & Accounts** (rename of Delivery & Billing) — bill/invoice · **মূসক ৬.৩** ·
