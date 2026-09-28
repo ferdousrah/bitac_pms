@@ -104,7 +104,6 @@ class SystemResetController extends Controller
         'stakeholder_form_answers',
         'stakeholder_form_responses',
         'stakeholder_form_invitations',
-        'stakeholders',
     ];
 
     /**

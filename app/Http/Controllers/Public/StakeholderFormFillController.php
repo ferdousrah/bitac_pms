@@ -95,7 +95,7 @@ class StakeholderFormFillController extends Controller
             $resp = StakeholderFormResponse::create([
                 'form_id'              => $form->id,
                 'invitation_id'        => $invitation?->id,
-                'stakeholder_id'       => $invitation?->stakeholder_id,
+                'customer_id'          => $invitation?->customer_id,
                 'anonymous_name'       => $invitation ? null : ($validated['anonymous_name'] ?? null),
                 'anonymous_organization' => $invitation ? null : ($validated['anonymous_organization'] ?? null),
                 'ip_address'           => $request->ip(),

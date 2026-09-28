@@ -184,7 +184,7 @@ Print the envelope with **To** and **From**.
 From the same meeting notes, not yet worked through:
 
 - ~~**Letter duplicate**~~ — **`DONE`**. Copy icon on the Letters list copies the subject, body, recipient, customer ref and signatory into a fresh draft and opens it. The number, date, status, issue/email stamps and signature are deliberately left for the new letter.
-- **Stakeholder ↔ Customer link** — `stakeholders` has free-text `organization`, no customer FK.
+- ~~**Stakeholder ↔ Customer link**~~ — **`DONE`**. BITAC's decision: there is no separate stakeholder module at all — a stakeholder IS a client. The `stakeholders` table and its screens are gone; stakeholder forms are distributed to customers. Past answers keep their author (matched by email, or preserved inline where no customer matched).
 - ~~**IED Reports**~~ — **`DONE`**. `IED → Reports`: Client List, By Type & Sector, Quotation
   Value (with conversion and a monthly breakdown), Jobs in Pipeline. Target vs Achievement is
   its own page (item 5). All share the financial-year filter; work-order money and dates use the

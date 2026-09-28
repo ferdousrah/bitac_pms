@@ -2,7 +2,7 @@
 
 namespace App\Mail;
 
-use App\Models\Stakeholder;
+use App\Models\Customer;
 use App\Models\StakeholderForm;
 use App\Models\StakeholderFormInvitation;
 use Illuminate\Bus\Queueable;
@@ -18,7 +18,8 @@ class StakeholderFormInvite extends Mailable
     public function __construct(
         public StakeholderForm $form,
         public StakeholderFormInvitation $invitation,
-        public Stakeholder $stakeholder,
+        // Stakeholder forms go to CLIENTS — the separate directory is gone.
+        public Customer $stakeholder,
         public bool $isReminder = false,
     ) {}
 

@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 class StakeholderFormInvitation extends Model
 {
     protected $fillable = [
-        'form_id', 'stakeholder_id', 'token',
+        'form_id', 'customer_id', 'token',
         'sent_at', 'opened_at', 'completed_at',
         'reminder_count', 'last_reminder_at',
     ];
@@ -33,6 +33,7 @@ class StakeholderFormInvitation extends Model
     }
 
     public function form(): BelongsTo        { return $this->belongsTo(StakeholderForm::class, 'form_id'); }
-    public function stakeholder(): BelongsTo { return $this->belongsTo(Stakeholder::class); }
+    /** Stakeholder forms go to CLIENTS — there is no separate directory. */
+    public function customer(): BelongsTo    { return $this->belongsTo(Customer::class); }
     public function responses(): HasMany     { return $this->hasMany(StakeholderFormResponse::class, 'invitation_id'); }
 }

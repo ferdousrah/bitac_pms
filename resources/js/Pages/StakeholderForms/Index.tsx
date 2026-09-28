@@ -45,9 +45,6 @@ export default function StakeholderFormsIndex({ forms }: any) {
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Link href="/ied/stakeholders" className="btn-outline btn-sm">
-                                <i className="fi fi-rr-users text-xs leading-none" /> Stakeholders
-                            </Link>
                             <button onClick={() => setShowCreate(true)} className="btn-primary btn-sm">
                                 <i className="fi fi-rr-plus text-xs leading-none" /> New Form
                             </button>

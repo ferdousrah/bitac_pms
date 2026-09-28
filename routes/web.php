@@ -334,16 +334,6 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ─── IED Stakeholder Directory ──────────────────────────
-    Route::prefix('ied/stakeholders')->middleware('permission:view stakeholder-forms')->name('ied.stakeholders.')->group(function () {
-        Route::get('/',                              [\App\Http\Controllers\StakeholderController::class, 'index'])->name('index');
-        Route::get('/create',                        [\App\Http\Controllers\StakeholderController::class, 'create'])->name('create');
-        Route::post('/',                             [\App\Http\Controllers\StakeholderController::class, 'store'])->name('store');
-        Route::get('/{stakeholder}/edit',            [\App\Http\Controllers\StakeholderController::class, 'edit'])->name('edit');
-        Route::put('/{stakeholder}',                 [\App\Http\Controllers\StakeholderController::class, 'update'])->name('update');
-        Route::delete('/{stakeholder}',              [\App\Http\Controllers\StakeholderController::class, 'destroy'])->name('destroy');
-        Route::post('/import',                       [\App\Http\Controllers\StakeholderController::class, 'bulkImport'])->name('import');
-    });
-
     // ─── IED Service Demand Log + Report ───
     Route::prefix('ied/service-demand')->middleware('permission:view service-demand')->name('ied.service-demand.')->group(function () {
         Route::get('/',                          [\App\Http\Controllers\ServiceDemandController::class, 'index'])->name('index');

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\StakeholderFormInvite;
-use App\Models\Stakeholder;
+use App\Models\Customer;
 use App\Models\StakeholderForm;
 use App\Models\StakeholderFormInvitation;
 use App\Models\StakeholderFormQuestion;
@@ -187,14 +187,26 @@ class StakeholderFormController extends Controller
     {
         abort_if($stakeholderForm->status !== 'published', 422, 'Form must be published before distributing.');
 
-        $stakeholders = Stakeholder::active()->orderBy('category')->orderBy('name')->get();
+        // The client list IS the stakeholder list. Only those with an email can
+        // be invited — there is nowhere to send the link otherwise.
+        $stakeholders = Customer::where('is_active', true)
+            ->whereNotNull('email')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'contact_person', 'customer_type'])
+            ->map(fn ($c) => [
+                'id'           => $c->id,
+                'name'         => $c->contact_person ?: $c->name,
+                'organization' => $c->name,
+                'email'        => $c->email,
+                'category'     => $c->customer_type ?: 'unspecified',
+            ]);
 
-        $invited = $stakeholderForm->invitations()->with('stakeholder')->get()->map(fn ($inv) => [
+        $invited = $stakeholderForm->invitations()->with('customer')->get()->map(fn ($inv) => [
             'id'             => $inv->id,
-            'stakeholder_id' => $inv->stakeholder_id,
-            'name'           => $inv->stakeholder?->name,
-            'organization'   => $inv->stakeholder?->organization,
-            'email'          => $inv->stakeholder?->email,
+            'stakeholder_id' => $inv->customer_id,
+            'name'           => $inv->customer?->contact_person ?: $inv->customer?->name,
+            'organization'   => $inv->customer?->name,
+            'email'          => $inv->customer?->email,
             'sent_at'        => $inv->sent_at?->format('d M Y'),
             'opened_at'      => $inv->opened_at?->format('d M Y'),
             'completed_at'   => $inv->completed_at?->format('d M Y'),
@@ -214,17 +226,17 @@ class StakeholderFormController extends Controller
     {
         $validated = $request->validate([
             'stakeholder_ids'   => 'required|array|min:1',
-            'stakeholder_ids.*' => 'integer|exists:stakeholders,id',
+            'stakeholder_ids.*' => 'integer|exists:customers,id',
         ]);
 
         $sent = 0;
         foreach ($validated['stakeholder_ids'] as $sid) {
             // Idempotent — reuse existing invitation if one exists for this form/stakeholder
             $inv = StakeholderFormInvitation::firstOrCreate(
-                ['form_id' => $stakeholderForm->id, 'stakeholder_id' => $sid],
+                ['form_id' => $stakeholderForm->id, 'customer_id' => $sid],
             );
 
-            $stakeholder = $inv->stakeholder;
+            $stakeholder = $inv->customer;
             if (!$stakeholder) continue;
 
             try {
@@ -244,12 +256,12 @@ class StakeholderFormController extends Controller
         $pending = $stakeholderForm->invitations()
             ->whereNull('completed_at')
             ->whereNotNull('sent_at')
-            ->with('stakeholder')
+            ->with('customer')
             ->get();
 
         $sent = 0;
         foreach ($pending as $inv) {
-            $stakeholder = $inv->stakeholder;
+            $stakeholder = $inv->customer;
             if (!$stakeholder) continue;
             try {
                 Mail::to($stakeholder->email)->send(new StakeholderFormInvite($stakeholderForm, $inv, $stakeholder, true));
@@ -269,7 +281,7 @@ class StakeholderFormController extends Controller
         $stakeholderForm->load(['questions.section', 'sections']);
 
         $responses = $stakeholderForm->responses()
-            ->with(['answers', 'stakeholder', 'invitation.stakeholder'])
+            ->with(['answers', 'customer', 'invitation.customer'])
             ->where('is_complete', true)
             ->latest('submitted_at')
             ->get();
@@ -289,8 +301,11 @@ class StakeholderFormController extends Controller
             'responses' => $responses->map(fn ($r) => [
                 'id'            => $r->id,
                 'display_name'  => $r->display_name,
-                'organization'  => $r->stakeholder?->organization ?? $r->invitation?->stakeholder?->organization ?? $r->anonymous_organization,
-                'category'      => $r->stakeholder?->category ?? $r->invitation?->stakeholder?->category,
+                // The client's own name is the organisation. `anonymous_*` covers
+                // both public submissions and answers migrated from the old
+                // directory, whose author was preserved there.
+                'organization'  => $r->customer?->name ?? $r->invitation?->customer?->name ?? $r->anonymous_organization,
+                'category'      => $r->customer?->customer_type ?? $r->invitation?->customer?->customer_type,
                 'submitted_at'  => $r->submitted_at?->format('d M Y, h:i A'),
                 'answers'       => $r->answers->map(fn ($a) => [
                     'question_id'    => $a->question_id,

@@ -2,13 +2,11 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
+// Stakeholders ARE the clients now, so the grouping is the customer type.
 const CATEGORY_LABEL: Record<string, string> = {
-    govt_ministry:     'Government / Ministry',
-    industry_customer: 'Industry Customer',
-    academic:          'Academic Partner',
-    industry_body:     'Industry Body',
-    internal:          'Internal',
-    other:             'Other',
+    government:  'Government Entity',
+    private:     'Private Organization',
+    unspecified: 'Unspecified',
 };
 
 export default function Distribute({ form, stakeholders, invited, publicUrl }: any) {
@@ -106,21 +104,21 @@ export default function Distribute({ form, stakeholders, invited, publicUrl }: a
                         <div className="card-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                                 <h3 className="text-sm font-bold text-surface-900">Send Invitations</h3>
-                                <p className="text-[11px] text-surface-400 mt-0.5">Pick stakeholders to send a personalised invite email.</p>
+                                <p className="text-[11px] text-surface-400 mt-0.5">Pick clients to send a personalised invite email. Only clients with an email address are listed.</p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <Link href="/ied/stakeholders" className="text-[11px] font-semibold text-brand-600 hover:underline inline-flex items-center gap-1">
-                                    Manage directory <i className="fi fi-rr-arrow-right text-[10px] leading-none" />
+                                <Link href="/admin/customers" className="text-[11px] font-semibold text-brand-600 hover:underline inline-flex items-center gap-1">
+                                    Manage clients <i className="fi fi-rr-arrow-right text-[10px] leading-none" />
                                 </Link>
                             </div>
                         </div>
 
                         <div className="card-body border-b border-surface-100 flex flex-wrap items-center gap-2">
                             <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                                placeholder="Filter by name / email / org…"
+                                placeholder="Filter by client / contact / email…"
                                 className="form-input text-xs flex-1 min-w-[180px]" />
                             <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="form-select text-xs w-auto">
-                                <option value="">All categories</option>
+                                <option value="">All types</option>
                                 {Object.entries(CATEGORY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                             </select>
                             <span className="text-[11px] text-surface-500 ml-auto">
