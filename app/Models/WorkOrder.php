@@ -15,12 +15,16 @@ class WorkOrder extends Model
         'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'department', 'customer_po_no', 'created_by', 'prepared_by',
         'pcd_handoff_at', 'pcd_handoff_by', 'released_to_shops_at', 'released_by',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
+        // The date on the CUSTOMER's own work order — what decides which
+        // financial year this counts towards, not when it was keyed in.
+        'customer_wo_date',
     ];
 
     protected function casts(): array
     {
         return [
             'due_date'             => 'date',
+            'customer_wo_date'     => 'date',
             'pcd_handoff_at'       => 'datetime',
             'released_to_shops_at' => 'datetime',
             'cancelled_at'         => 'datetime',

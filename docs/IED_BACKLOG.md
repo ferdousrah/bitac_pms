@@ -70,7 +70,7 @@ national rather than per centre — otherwise each centre's "Power" would be a d
 cross-centre sector reports could only group by name. A sector in use deactivates instead of
 deleting. This unblocks the reports in items 5 and the IED reports list below.
 
-## 5. Target vs Achievement — `SPEC'D`
+## 5. Target vs Achievement — `DONE`
 
 - **In taka, per centre, per financial year.**
 - **Target**: the centre admin sets their own centre's figure. One figure per year.
@@ -91,6 +91,14 @@ deleting. This unblocks the reports in items 5 and the IED reports list below.
 
 Build a `FinancialYear` helper that knows these three rules. Do **not** hardcode a July–June
 pair anywhere. The 2028 change is a cabinet decision, not yet law, so it must stay easy to amend.
+
+**Built.** `App\Support\FinancialYear` holds the three rules; every day across five years was
+checked to land in exactly one year, with no gap or overlap. `work_orders.customer_wo_date` was
+added and sits on the Issue Work Order form. `center_targets` holds one figure per centre per
+year. `Reports → Target vs Achievement` shows target, achieved, progress and gap per centre,
+and clicking a centre lists the work orders behind the figure with their quotation and version.
+Cancelled work orders are excluded; rows with no customer date fall back to the entry date and
+are badged as such.
 
 ## 6. Work order accept — approval chain — `DONE`
 

@@ -2402,6 +2402,10 @@ HTML;
 
         $request->validate([
             'customer_po_no'    => 'nullable|string|max:100',
+            // The date on the CUSTOMER's work order. This decides which
+            // financial year it counts towards in Target vs Achievement — a
+            // January work order keyed in July belongs to January.
+            'customer_wo_date'  => 'nullable|date',
             'priority'          => 'nullable|in:normal,high,urgent',
             'due_date'          => 'nullable|date',
             'notes'             => 'nullable|string|max:1000',
@@ -2446,6 +2450,7 @@ HTML;
             'due_date'        => $request->input('due_date'),
             'notes'           => $request->input('notes'),
             'customer_po_no'  => $request->input('customer_po_no') ?? $quotation->customer_po_no,
+            'customer_wo_date'=> $request->input('customer_wo_date'),
             'created_by'      => auth()->id(),
             'pcd_handoff_at'  => null,
             'pcd_handoff_by'  => null,

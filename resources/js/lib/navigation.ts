@@ -92,6 +92,7 @@ export const mainGroups: NavGroup[] = [
         label: 'Reports',
         icon: 'fi-rr-stats',
         items: [
+            { label: 'Target vs Achievement', href: '/reports/target-achievement', icon: 'fi-rr-bullseye-arrow', permission: 'view reports' },
             { label: 'Production',     href: '/reports/production',     icon: 'fi-rr-chart-histogram', permission: 'view reports' },
             { label: 'OEE',            href: '/reports/oee',            icon: 'fi-rr-gauge',           permission: 'view reports' },
             { label: 'Lead Time',      href: '/reports/lead-time',      icon: 'fi-rr-clock-three',     permission: 'view reports' },

@@ -474,6 +474,30 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 🎯 Target vs Achievement (2026-09)
+
+> Taka, per centre, per financial year. `Reports → Target vs Achievement`.
+
+- **Target**: `center_targets` (center_id, financial_year, target_amount, note, set_by), **one figure per centre per year** (unique). A centre admin sets their own; a super admin sets any and sees every centre side by side.
+- **Achievement**: the value of work orders received. A work order carries **no money of its own**, so the figure comes from the quotation it was issued against (`work_orders.quotation_id` → `quotations.total_amount`). A revised quotation is fine — the WO points at the version actually accepted, so that is what counts.
+- ⚠️ **Which year a work order falls in is `work_orders.customer_wo_date`** — the date on the CUSTOMER's own work order, entered on the Issue Work Order form — **not** when it was keyed in. A January work order entered in July belongs to January. Rows from before the column existed fall back to `created_at`, and the breakdown badges those rows "entered" so the figure stays honest.
+- **Cancelled work orders are excluded** — IED rejecting one at the inbox sets exactly that status.
+- Every figure is traceable: clicking a centre lists the work orders behind it with their quotation and version. A total nobody can trace is a total nobody trusts.
+
+### ⚠️ The financial year is not fixed — `App\Support\FinancialYear`
+
+| Financial year | Period |
+|---|---|
+| up to 2026–27 | 1 July – 30 June |
+| **2027–28** | **nine months** — 1 July 2027 – 31 March 2028 |
+| 2028–29 onward | 1 April – 31 March |
+
+Bangladesh is moving the cycle to April–March from FY 2028–29, which makes 2027–28 a
+nine-month transitional year. **Never hardcode a July–June pair — ask `FinancialYear`.** The
+three windows meet exactly, with no gap or overlap (verified day by day across five years). The
+2028 change is a cabinet decision, not law yet, so `LAST_JULY_START_YEAR` and
+`FIRST_APRIL_START_YEAR` are the only two things to move if it shifts again.
+
 ## 📝 Work order acceptance goes through an approval chain (2026-09)
 
 - A work order issued from an approved quotation lands `ied_pending` in the IED inbox. Accepting it was guarded by **`permission:view rfqs` alone**, with no check on who created it — so whoever issued the WO could immediately wave it through to PCD.

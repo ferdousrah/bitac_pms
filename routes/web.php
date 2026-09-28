@@ -693,6 +693,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/rejection-rate', [ReportController::class, 'rejectionRate'])->name('reports.rejection-rate');
         Route::get('/lead-time', [ReportController::class, 'leadTime'])->name('reports.lead-time');
         Route::get('/oee', [ReportController::class, 'oee'])->name('reports.oee');
+        // Target vs Achievement — taka, per centre, per financial year.
+        // Declared BEFORE the {type} export catch-all so it isn't shadowed.
+        Route::get('/target-achievement', [\App\Http\Controllers\TargetController::class, 'index'])
+            ->name('reports.target-achievement');
+        Route::get('/target-achievement/{center}/breakdown', [\App\Http\Controllers\TargetController::class, 'breakdown'])
+            ->name('reports.target-achievement.breakdown');
+        Route::post('/target-achievement', [\App\Http\Controllers\TargetController::class, 'store'])
+            ->name('reports.target-achievement.store');
         Route::get('/{type}/export', [ReportController::class, 'export'])->name('reports.export');
     });
 

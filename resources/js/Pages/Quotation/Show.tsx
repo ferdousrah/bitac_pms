@@ -237,6 +237,9 @@ export default function QuotationShow({
     const sendForm    = useForm({});
     const convertForm = useForm<any>({
         customer_po_no:   quotation.customer_po_no ?? '',
+        // The date printed on the customer's own work order — decides the
+        // financial year it counts towards.
+        customer_wo_date: '',
         priority:         'normal',
         due_date:         '',
         notes:            '',
@@ -837,6 +840,20 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                                     placeholder="e.g. PO-2024-456"
                                                     className="form-input"
                                                 />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label">Customer WO Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={convertForm.data.customer_wo_date}
+                                                    onChange={e => convertForm.setData('customer_wo_date', e.target.value)}
+                                                    className="form-input"
+                                                />
+                                                <p className="form-hint">
+                                                    The date on the customer's own work order. Decides which financial
+                                                    year it counts towards in Target vs Achievement — leave blank and
+                                                    today's entry date is used.
+                                                </p>
                                             </div>
                                             <div className="form-group">
                                                 <label className="form-label">Priority</label>
