@@ -125,8 +125,8 @@ Chittagong's quotations, and one centre's admin editing the chain would change i
 ### Notes
 A second letter-like module, for **internal** notes.
 
-- New menu **PCD → Notes**, built like RFQ Letters (direct issue, no approval, selectable
-  signatory — assumed from "letter er motoi", not explicitly confirmed).
+- New menu **PCD → Notes**, built like RFQ Letters: **direct issue, no approval**, selectable
+  signatory. (Confirmed.)
 - **No pad at all** — plain paper, no letterhead, no logos, no footer rule.
 - **Legal, 8.5″ × 14″.**
 
