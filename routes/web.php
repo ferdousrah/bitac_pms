@@ -316,6 +316,12 @@ Route::middleware(['auth'])->group(function () {
             ->name('office-notes.pdf');
         Route::post('office-notes/{officeNote}/duplicate', [\App\Http\Controllers\OfficeNoteController::class, 'duplicate'])
             ->name('office-notes.duplicate');
+
+        // Envelope printing — nothing is stored, it just asks for the PDF.
+        Route::get('envelopes', [\App\Http\Controllers\EnvelopeController::class, 'index'])
+            ->name('envelopes.index');
+        Route::get('envelopes/pdf', [\App\Http\Controllers\EnvelopeController::class, 'pdf'])
+            ->name('envelopes.pdf');
     });
 
     // ─── IED commercial reports (clients, sectors, quotation value, pipeline) ──

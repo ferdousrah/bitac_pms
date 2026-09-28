@@ -151,7 +151,7 @@ session's. `GatePassApprover::isApprover()` takes the pass's centre. The global 
 and `UNIQUE(user_id)` became composite — they would have stopped two centres sharing a level or
 one officer approving at two centres. Verified against a second test centre.
 
-## 8. IED → Notes (no pad, legal) + Envelope printing — Notes `DONE`, Envelope `SPEC'D`
+## 8. IED → Notes (no pad, legal) + Envelope printing — `DONE`
 
 ### Notes
 A second letter-like module, for **internal** notes.
@@ -191,6 +191,23 @@ Print the envelope with **To** and **From**.
     From from the centre's address;
   - a standalone page — type any address and print an envelope on its own.
 - Applies to IED letters as well as PCD notes.
+
+**`DONE`.** `IED → Envelope`, `EnvelopeController`, `Pages/Envelope/Create.tsx`, sizes in
+`config/envelopes.php`. **Nothing is stored** — an envelope is not a document, it is the same two
+addresses on another piece of paper, and the letter it goes with is already on record. The screen
+posts nothing; it just asks for the PDF.
+
+Both entry points are live: the standalone page, and an envelope icon on every row of **Letters**
+and **Notes**, which carries the recipient and the Ref No. across. A letter with an empty
+recipient block falls back to the customer's name and address, which is what the letter itself
+prints.
+
+From sits top-left (small, with the centre's emblem if wanted), To in the lower-right half
+(large, bold), an optional reference line beneath. BN + EN.
+
+⚠️ **The four sizes are provisional** and sit alone in `config/envelopes.php` — correcting that
+file is the entire change once BITAC says what they buy. Verified: each one renders at its real
+millimetre size, both addresses and both labels print, and Bangla shapes.
 
 ---
 
