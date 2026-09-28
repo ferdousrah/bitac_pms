@@ -49,7 +49,7 @@ A bug found while confirming this **has been fixed** (commit `cd5b193`): a stand
 could never be linked to the quotation made from it, so it kept offering "Use as Quotation"
 forever. It now adopts the quotation's backing RFQ.
 
-## 4. Customer Type + Sector — `SPEC'D`
+## 4. Customer Type + Sector — `DONE`
 
 Reports must be groupable by customer type **and** by sector.
 
@@ -62,6 +62,13 @@ Reports must be groupable by customer type **and** by sector.
 - No seed list needed: BITAC enters their own. (Government examples from the meeting: Power,
   BCIC, BSFIC, Defense.)
 - The 15 existing customers will be blank and fall under "Unspecified" until filled in.
+
+**Built.** `customers.customer_type` + `customers.sector_id`, a `sectors` master table with an
+`applies_to` tag, and Admin → Master Data → **Client Sectors** to maintain it. The customer form
+narrows the sector list to the chosen type and clears one that no longer fits. Sectors are
+national rather than per centre — otherwise each centre's "Power" would be a different id and
+cross-centre sector reports could only group by name. A sector in use deactivates instead of
+deleting. This unblocks the reports in items 5 and the IED reports list below.
 
 ## 5. Target vs Achievement — `SPEC'D`
 

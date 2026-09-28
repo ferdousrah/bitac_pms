@@ -484,6 +484,17 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - ⚠️ **The old UNIQUE indexes were global and had to go composite**: `UNIQUE(level)` meant Dhaka's level 1 blocked Chittagong's, and `UNIQUE(user_id)` meant one officer couldn't approve at two centres. Now `UNIQUE(center_id, level)` and `UNIQUE(user_id, center_id)` — **`user_id` stays leftmost** on the latter so it still backs `gate_pass_approvers_user_id_foreign` (MySQL refuses to drop the last index a foreign key sits on; the first attempt at that migration died exactly there).
 - Verified with a second centre: each centre's quotation and cost estimate build only their own approvers, both centres can hold the same level, a Dhaka approver is refused on a Chittagong pass, and one person can now be an approver at both.
 
+## 🏭 Customer Type + Sector (2026-09)
+
+> The basis of IED's sector-wise reporting.
+
+- Every client is a **Government Entity** or a **Private Organization** (`customers.customer_type`, `Customer::TYPES`) and sits in a **sector** (`customers.sector_id`). Both are **nullable** — the 15 pre-existing customers read as **"Unspecified"** (`customer_type_label`) until someone classifies them.
+- **Sectors are master data the admin creates — nothing hardcoded.** Admin → Master Data → **Client Sectors** (`Admin\SectorController`, `Admin/Sectors/Index.tsx`, inline add/edit).
+- `sectors.applies_to` is `government` / `private` / **`both`** — one list, each row tagged. The customer form narrows the sector dropdown to the chosen type, and **clears a sector that no longer fits** when the type changes.
+- ⚠️ **Sectors are NATIONAL — no `HasCenter`, deliberately unlike `job_categories` and the rest of master data.** Per-centre rows would give Dhaka and Chittagong each their own "Power" with a different id, and "jobs by sector across BITAC" could then only group by name — which breaks the first time someone types it differently. One list keeps the figures comparable. The flip side: editing it changes what every centre sees, so it belongs to a super admin.
+- A sector **already attached to customers is deactivated, not deleted** — deleting would blank their classification and skew past reports. An unused one deletes outright.
+- The reporting shape this exists for: `customers` LEFT JOIN `sectors`, grouped by `COALESCE(customer_type,'unspecified')` and sector name.
+
 ## ✅ Approval Cycle Labels — Cost Estimate & Quotation (2026-07)
 
 - **Work cycle:** the doc is **Prepared By** its creator (NOT an approver), then the chain runs — **first approver = "Checked By"**, **last approver = "Approved By"**, any in-between = "Reviewer N". Single approver = just "Approved By".

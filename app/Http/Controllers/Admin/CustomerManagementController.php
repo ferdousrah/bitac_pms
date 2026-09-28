@@ -28,13 +28,32 @@ class CustomerManagementController extends Controller
 
     public function create()
     {
-        return Inertia::render('Admin/Customers/CreateEdit');
+        return Inertia::render('Admin/Customers/CreateEdit', [
+            'sectors'       => $this->sectorOptions(),
+            'customerTypes' => Customer::TYPES,
+        ]);
+    }
+
+    /**
+     * Every active sector, each carrying which customer types it applies to so
+     * the form can narrow the dropdown once a type is picked.
+     */
+    private function sectorOptions()
+    {
+        return \App\Models\Sector::active()->ordered()
+            ->get(['id', 'name', 'applies_to'])
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'applies_to' => $s->applies_to])
+            ->values();
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name'           => 'required|string|max:255',
+            // How IED reports on this client. Both stay optional — an existing
+            // customer nobody has classified yet reads as "Unspecified".
+            'customer_type'  => 'nullable|in:government,private',
+            'sector_id'      => 'nullable|exists:sectors,id',
             'contact_person' => 'nullable|string|max:255',
             'email'          => 'required|email|unique:customers',
             'phone'          => 'nullable|string|max:20',
@@ -70,12 +89,16 @@ class CustomerManagementController extends Controller
             'customer' => [
                 'id'             => $customer->id,
                 'name'           => $customer->name,
+                'customer_type'  => $customer->customer_type,
+                'sector_id'      => $customer->sector_id,
                 'contact_person' => $customer->contact_person,
                 'email'          => $customer->email,
                 'phone'          => $customer->phone,
                 'address'        => $customer->address,
                 'is_active'      => $customer->is_active,
             ],
+            'sectors'       => $this->sectorOptions(),
+            'customerTypes' => Customer::TYPES,
         ]);
     }
 
@@ -83,6 +106,8 @@ class CustomerManagementController extends Controller
     {
         $validated = $request->validate([
             'name'           => 'required|string|max:255',
+            'customer_type'  => 'nullable|in:government,private',
+            'sector_id'      => 'nullable|exists:sectors,id',
             'contact_person' => 'nullable|string|max:255',
             'email'          => 'required|email|unique:customers,email,' . $customer->id,
             'phone'          => 'nullable|string|max:20',

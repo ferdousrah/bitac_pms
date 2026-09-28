@@ -17,9 +17,27 @@ class Customer extends Authenticatable
     protected $guard = 'customer';
 
     protected $fillable = [
-        'center_id', 'name', 'contact_person', 'email', 'phone', 'address', 'password', 'is_active',
+        'center_id', 'name', 'customer_type', 'sector_id',
+        'contact_person', 'email', 'phone', 'address', 'password', 'is_active',
         'password_change_required',
     ];
+
+    /** Government Entity or Private Organization — drives IED's sector reports. */
+    public const TYPES = [
+        'government' => 'Government Entity',
+        'private'    => 'Private Organization',
+    ];
+
+    public function sector()
+    {
+        return $this->belongsTo(Sector::class);
+    }
+
+    /** Label for the type, or a clear stand-in when nobody has classified them yet. */
+    public function getCustomerTypeLabelAttribute(): string
+    {
+        return self::TYPES[$this->customer_type] ?? 'Unspecified';
+    }
 
     protected $hidden = ['password', 'remember_token'];
 

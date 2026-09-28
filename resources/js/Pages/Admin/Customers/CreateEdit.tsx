@@ -2,9 +2,11 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent } from 'react';
 
-export default function CustomerCreateEdit({ customer }: any) {
+export default function CustomerCreateEdit({ customer, sectors = [], customerTypes = {} }: any) {
     const { data, setData, post, put, errors, processing } = useForm({
         name: customer?.name ?? '',
+        customer_type: customer?.customer_type ?? '',
+        sector_id: customer?.sector_id ?? '',
         contact_person: customer?.contact_person ?? '',
         email: customer?.email ?? '',
         phone: customer?.phone ?? '',
@@ -57,6 +59,63 @@ export default function CustomerCreateEdit({ customer }: any) {
                                     required
                                 />
                                 {errors.name && <p className="form-error">{errors.name}</p>}
+                            </div>
+
+                            {/* How IED reports on this client. A sector is offered only
+                                if it applies to the chosen type, so picking a type first
+                                narrows the list. Both may be left blank — an unclassified
+                                customer simply reads as "Unspecified" in reports. */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        Customer Type <span className="form-label-optional">Optional</span>
+                                    </label>
+                                    <select
+                                        value={data.customer_type}
+                                        onChange={e => {
+                                            const next = e.target.value;
+                                            setData('customer_type', next);
+                                            // Drop a sector that doesn't belong to the new type.
+                                            const keep = sectors.find((x: any) =>
+                                                String(x.id) === String(data.sector_id) &&
+                                                (x.applies_to === 'both' || x.applies_to === next));
+                                            if (!keep) setData('sector_id', '');
+                                        }}
+                                        className="form-input"
+                                    >
+                                        <option value="">— Not specified —</option>
+                                        {Object.entries(customerTypes).map(([v, label]: any) => (
+                                            <option key={v} value={v}>{label}</option>
+                                        ))}
+                                    </select>
+                                    {errors.customer_type && <p className="form-error">{errors.customer_type as any}</p>}
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        Sector <span className="form-label-optional">Optional</span>
+                                    </label>
+                                    <select
+                                        value={data.sector_id}
+                                        onChange={e => setData('sector_id', e.target.value)}
+                                        className="form-input"
+                                    >
+                                        <option value="">— Not specified —</option>
+                                        {sectors
+                                            .filter((x: any) => !data.customer_type
+                                                || x.applies_to === 'both'
+                                                || x.applies_to === data.customer_type)
+                                            .map((x: any) => (
+                                                <option key={x.id} value={x.id}>{x.name}</option>
+                                            ))}
+                                    </select>
+                                    {sectors.length === 0 && (
+                                        <p className="form-hint">
+                                            No sectors yet — add them under Master Data → Client Sectors.
+                                        </p>
+                                    )}
+                                    {errors.sector_id && <p className="form-error">{errors.sector_id as any}</p>}
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -815,6 +815,13 @@ Route::middleware(['auth'])->group(function () {
             ->names('admin.job-categories')
             ->parameters(['job-categories' => 'jobCategory'])
             ->except(['show']);
+        // Client sectors — one NATIONAL list (not per centre), so IED's
+        // sector-wise figures stay comparable across every BITAC centre.
+        Route::resource('sectors', \App\Http\Controllers\Admin\SectorController::class)
+            ->middleware('permission:manage materials-master')
+            ->names('admin.sectors')
+            ->parameters(['sectors' => 'sector'])
+            ->only(['index', 'store', 'update', 'destroy']);
         Route::resource('qc-checkpoints', \App\Http\Controllers\Admin\QcCheckpointController::class)
             ->middleware('permission:manage materials-master')
             ->names('admin.qc-checkpoints')
