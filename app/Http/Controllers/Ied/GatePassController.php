@@ -247,6 +247,8 @@ class GatePassController extends Controller
         $gatePass->load([
             'rfq.customer', 'customer', 'issuedBy.center', 'items.rfqItem',
             'items.returns.recordedBy', 'approvedBy', 'rejectedBy',
+            // Both ends of the In ↔ Out chain.
+            'outPasses', 'sourcePass',
         ]);
 
         return Inertia::render('Ied/GatePass/Show', [
@@ -254,6 +256,19 @@ class GatePassController extends Controller
                 'id'                     => $gatePass->id,
                 'pass_no'                => $gatePass->pass_no,
                 'direction'              => $gatePass->direction,
+                // Can this In pass still send something back out?
+                'can_raise_out'          => $this->outBlocker($gatePass) === null,
+                // The Out passes raised against it, and (on an Out) the In it answers.
+                'out_passes'             => $gatePass->outPasses->map(fn ($o) => [
+                    'id'      => $o->id,
+                    'pass_no' => $o->pass_no,
+                    'status'  => $o->status,
+                    'date'    => $o->pass_date?->format('d M Y'),
+                ])->values(),
+                'source_pass'            => $gatePass->sourcePass ? [
+                    'id'      => $gatePass->sourcePass->id,
+                    'pass_no' => $gatePass->sourcePass->pass_no,
+                ] : null,
                 'rfq_id'                 => $gatePass->rfq_id,
                 'rfq_customer'           => $gatePass->rfq?->customer?->name,
                 'rfq_customer_ref'       => $gatePass->rfq?->customer_ref_no,
@@ -425,6 +440,230 @@ class GatePassController extends Controller
             : "Return recorded against {$recorded} item(s) on Gate Pass {$gatePass->pass_no}.");
     }
 
+    /**
+     * Why this In pass can't send anything back out, or null when it can.
+     */
+    private function outBlocker(GatePass $gatePass): ?string
+    {
+        if ($gatePass->direction !== 'in') {
+            return 'Only a Gate Pass In can send items back out.';
+        }
+        if (! in_array($gatePass->status, ['issued', 'partially_returned'], true)) {
+            return "Only an issued pass can send items back — this one is \"{$gatePass->status}\".";
+        }
+        $gatePass->loadMissing('items');
+        if ($gatePass->items->sum(fn ($i) => $i->outstandingQty()) <= 0) {
+            return 'Everything on this pass has already gone back out.';
+        }
+        return null;
+    }
+
+    /**
+     * Raise a Gate Pass Out against a Gate Pass In.
+     *
+     * What came in to IED usually goes back once the work is done, and that
+     * exit needs its own paper. The form opens pre-filled with whatever is
+     * still outstanding on the In pass; the issuer can send back less, and come
+     * back for the rest later.
+     */
+    public function createOut(GatePass $gatePass)
+    {
+        if ($msg = $this->outBlocker($gatePass)) {
+            return redirect($this->basePath() . '/' . $gatePass->id)->with('error', $msg);
+        }
+
+        $gatePass->load(['items', 'customer', 'rfq']);
+
+        return Inertia::render('Ied/GatePass/Form', [
+            'rfq' => $gatePass->rfq ? [
+                'id'           => $gatePass->rfq->id,
+                'customer'     => $gatePass->rfq->customer?->name,
+                'customer_ref' => $gatePass->rfq->customer_ref_no,
+            ] : null,
+            'direction'       => 'out',
+            // The direction is decided by the pass being answered.
+            'directionLocked' => true,
+            'suggestedPassNo' => GatePass::generatePassNo('out'),
+            // Only what is still outstanding, and each line remembers which In
+            // line it answers so the return lands on the right row.
+            'prefilled_items' => $gatePass->items
+                ->filter(fn ($i) => $i->outstandingQty() > 0)
+                ->map(fn ($i) => [
+                    'rfq_item_id'             => $i->rfq_item_id,
+                    'source_gate_pass_item_id' => $i->id,
+                    'description'             => $i->description,
+                    'quantity'                => $i->outstandingQty(),
+                    'max_quantity'            => $i->outstandingQty(),
+                    'unit'                    => $i->unit ?? 'pcs',
+                    'condition_note'          => '',
+                ])->values(),
+            'sourcePass' => [
+                'id'      => $gatePass->id,
+                'pass_no' => $gatePass->pass_no,
+                'date'    => $gatePass->pass_date?->format('d M Y'),
+                'party'   => $gatePass->customer?->name ?? $gatePass->party_name,
+            ],
+            'prefill' => [
+                'customer_id'            => $gatePass->customer_id,
+                'party_name'             => $gatePass->party_name,
+                'customer_rep_name'      => $gatePass->customer_rep_name,
+                'customer_rep_phone'     => $gatePass->customer_rep_phone,
+                'customer_rep_id_number' => $gatePass->customer_rep_id_number,
+            ],
+            'pass'            => null,
+            'basePath'        => $this->basePath(),
+            'condition_notes' => \App\Models\GatePassConditionNote::active()
+                ->orderBy('display_order')->orderBy('label')->pluck('label')->values(),
+            'customers'       => \App\Models\Customer::where('is_active', true)
+                ->orderBy('name')->get(['id', 'name', 'contact_person']),
+        ]);
+    }
+
+    /**
+     * Create the Out pass and, once it is actually issued, book the return
+     * against the In pass it answers.
+     */
+    public function storeOut(Request $request, GatePass $gatePass)
+    {
+        if ($msg = $this->outBlocker($gatePass)) {
+            return redirect($this->basePath() . '/' . $gatePass->id)->with('error', $msg);
+        }
+
+        $validated = $request->validate([
+            'pass_no'                  => 'nullable|string|max:40|unique:gate_passes,pass_no',
+            'pass_date'                => 'required|date',
+            'customer_rep_name'        => 'nullable|string|max:120',
+            'customer_rep_phone'       => 'nullable|string|max:40',
+            'customer_rep_id_number'   => 'nullable|string|max:60',
+            'vehicle_no'               => 'nullable|string|max:60',
+            'notes'                    => 'nullable|string|max:2000',
+            'items'                    => 'required|array|min:1',
+            'items.*.source_gate_pass_item_id' => 'required|exists:gate_pass_items,id',
+            'items.*.quantity'         => 'required|numeric|min:0',
+            'items.*.condition_note'   => 'nullable|string|max:500',
+            'signature'                => 'nullable|string',
+            'user_signature_id'        => 'nullable|integer|exists:user_signatures,id',
+        ]);
+
+        $gatePass->load('items');
+        // PCD passes wait for an approver; IED issues on the spot.
+        $needsApproval = $this->isPcdContext();
+
+        $out = DB::transaction(function () use ($gatePass, $validated, $request, $needsApproval) {
+            $out = GatePass::create([
+                'rfq_id'                 => $gatePass->rfq_id,
+                'source_gate_pass_id'    => $gatePass->id,
+                'customer_id'            => $gatePass->customer_id,
+                'pass_no'                => trim((string) ($validated['pass_no'] ?? '')) ?: GatePass::generatePassNo('out'),
+                'direction'              => 'out',
+                'pass_date'              => $validated['pass_date'],
+                'party_name'             => $gatePass->party_name,
+                'customer_rep_name'      => $validated['customer_rep_name'] ?? $gatePass->customer_rep_name,
+                'customer_rep_phone'     => $validated['customer_rep_phone'] ?? $gatePass->customer_rep_phone,
+                'customer_rep_id_number' => $validated['customer_rep_id_number'] ?? $gatePass->customer_rep_id_number,
+                'vehicle_no'             => $validated['vehicle_no'] ?? null,
+                'notes'                  => $validated['notes'] ?? null,
+                'issued_by'              => auth()->id(),
+                'issued_at'              => now(),
+                'status'                 => $needsApproval ? 'pending_approval' : 'issued',
+            ]);
+
+            $sort = 0;
+            foreach ($validated['items'] as $row) {
+                $source = $gatePass->items->firstWhere('id', (int) $row['source_gate_pass_item_id']);
+                if (! $source) continue;
+
+                // Never send back more than is still outstanding, whatever was posted.
+                $qty = min((float) $row['quantity'], $source->outstandingQty());
+                if ($qty <= 0) continue;
+
+                $out->items()->create([
+                    'rfq_item_id'              => $source->rfq_item_id,
+                    'source_gate_pass_item_id' => $source->id,
+                    'description'              => $source->description,
+                    'quantity'                 => $qty,
+                    'unit'                     => $source->unit ?? 'pcs',
+                    'condition_note'           => $row['condition_note'] ?? null,
+                    'sort_order'               => $sort++,
+                ]);
+            }
+
+            $sigPath = $this->persistSignature($request);
+            if ($sigPath) $out->update(['issuer_signature_path' => $sigPath]);
+
+            return $out;
+        });
+
+        if ($out->items()->count() === 0) {
+            $out->delete();
+            return back()->with('error', 'Nothing to send back — enter a quantity against at least one item.');
+        }
+
+        // The return only counts once the goods may actually leave. For PCD
+        // that is the approver's decision, so approve() books it instead.
+        if ($out->status === 'issued') {
+            $this->bookReturnsFor($out);
+        }
+
+        return redirect($this->basePath() . '/' . $out->id)->with('success', $needsApproval
+            ? "Gate Pass Out {$out->pass_no} created against {$gatePass->pass_no} — waiting for approval."
+            : "Gate Pass Out {$out->pass_no} issued against {$gatePass->pass_no}.");
+    }
+
+    /**
+     * Book an issued Out pass as a return against the In pass it answers.
+     *
+     * The Out pass IS the return — there is one physical event, so it gets one
+     * record. Writing `gate_pass_returns` rows (rather than touching
+     * `returned_qty` directly) keeps it identical to a hand-recorded return:
+     * the same totals, the same status transitions, the same history.
+     *
+     * Idempotent — a pass already booked is left alone, so calling it twice
+     * (created issued, then approved) cannot double-count.
+     */
+    private function bookReturnsFor(GatePass $out): void
+    {
+        if (! $out->source_gate_pass_id) return;
+        if (\App\Models\GatePassReturn::where('out_gate_pass_id', $out->id)->exists()) return;
+
+        $source = GatePass::withoutGlobalScopes()->with('items')->find($out->source_gate_pass_id);
+        if (! $source) return;
+
+        DB::transaction(function () use ($out, $source) {
+            foreach ($out->items()->get() as $line) {
+                $item = $source->items->firstWhere('id', $line->source_gate_pass_item_id);
+                if (! $item) continue;
+
+                $qty = min((float) $line->quantity, $item->outstandingQty());
+                if ($qty <= 0) continue;
+
+                \App\Models\GatePassReturn::create([
+                    'gate_pass_id'      => $source->id,
+                    'gate_pass_item_id' => $item->id,
+                    'out_gate_pass_id'  => $out->id,
+                    'quantity'          => $qty,
+                    'returned_on'       => $out->pass_date,
+                    'note'              => 'Sent out on Gate Pass ' . $out->pass_no,
+                    'recorded_by'       => auth()->id(),
+                ]);
+
+                $item->syncReturnedQty();
+            }
+
+            $source->load('items');
+            $state = $source->returnState();
+            if ($state === 'full') {
+                $source->update([
+                    'status'       => 'completed',
+                    'completed_at' => now(),
+                    'completed_by' => auth()->id(),
+                ]);
+            } elseif ($state === 'partial') {
+                $source->update(['status' => 'partially_returned']);
+            }
+        });
+    }
+
     public function approve(Request $request, GatePass $gatePass)
     {
         abort_unless($this->isPcdContext(), 403);
@@ -445,6 +684,10 @@ class GatePassController extends Controller
             'approved_at'             => now(),
             'approver_signature_path' => $sig ?: $gatePass->approver_signature_path,
         ]);
+
+        // A PCD Out pass raised against an In pass only books its return now —
+        // until it was approved the goods had not left.
+        $this->bookReturnsFor($gatePass->fresh());
 
         \App\Services\CustomerNotifyService::gatePassIssued($gatePass->fresh(['customer', 'rfq.customer']));
 

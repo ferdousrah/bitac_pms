@@ -491,6 +491,19 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Cost estimate PDF** (`exportSinglePdf`) now renders a **3-column signatory grid — Prepared By · Checked By · Approved By** (`$sigCell` helper): Prepared = creator (saved signature); Checked = the `Checked By` approval row (first approver); Approved = the `Approved By`/final row. Each shows the assigned person always + their signature/date once that step is approved (else "(Pending)"). Single-approver chains drop the Checked column.
 - **Quotation PDF/forwarding letter** still shows the **final approver** as the single signatory (formal customer-facing letter convention) — NOT the 3-grid.
 
+## 🚪 Gate Pass Out raised against a Gate Pass In (2026-09)
+
+> What comes in to IED goes back out, and that exit needs its own paper.
+
+- **`GET/POST {ied|pcd}/gate-passes/{gatePass}/out`** → `createOut` / `storeOut`. The form is the normal Gate Pass form with `directionLocked`, pre-filled from the In pass's **outstanding** lines and posting to its own endpoint.
+- **Partial**: one In can raise several Outs. Each line is capped at `outstandingQty()` **server-side too** — whatever is posted, more can never go back than came in.
+- **Three links** so the chain reads both ways: `gate_passes.source_gate_pass_id`, `gate_pass_items.source_gate_pass_item_id`, `gate_pass_returns.out_gate_pass_id`. All `nullOnDelete` — deleting the In pass must not take an issued, signed Out with it.
+- ⚠️ **The Out pass IS the return.** `bookReturnsFor()` writes ordinary `gate_pass_returns` rows rather than touching `returned_qty` directly, so it is indistinguishable from a hand-recorded return: same totals, same `partially_returned` / `completed` transitions, same history. One physical event, one record — don't add a second path that also moves `returned_qty`.
+- ⚠️ **The return is booked when the Out is ISSUED, not created.** IED issues on the spot; a PCD Out sits at `pending_approval` and `approve()` books it — until then the goods have not left. `bookReturnsFor()` is **idempotent** (it returns early if rows already exist for that Out), so the two call sites cannot double-count.
+- `outBlocker()` is the single guard: direction must be `in`, status `issued`/`partially_returned`, and something must still be outstanding. It refuses with a redirect + flash, never `abort()`.
+- The Show page carries **Gate Pass Out** (primary) next to **Record Return** (now secondary — that path is for noting a return without producing paper), plus a card linking In ↔ Out both ways.
+- **In → Out only.** Raising an In against an Out is not supported — BITAC did not want it yet.
+
 ## 🚪 Gate Pass Returns, Manual Numbers & Filters (2026-08)
 
 - **Returns are itemwise and partial.** Whatever comes in on a pass goes back out again (and the reverse), often a few pieces at a time. New table **`gate_pass_returns`** (`gate_pass_id`, `gate_pass_item_id`, `quantity`, `returned_on`, `note`, `recorded_by`) — an item can have many, each with its own note. `gate_pass_items.returned_qty` is the denormalised running total, kept in step by `GatePassItem::syncReturnedQty()`.

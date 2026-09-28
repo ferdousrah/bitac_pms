@@ -7,12 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 class GatePassItem extends Model
 {
     protected $fillable = [
-        'gate_pass_id', 'rfq_item_id', 'description', 'quantity', 'returned_qty', 'unit',
+        'gate_pass_id', 'rfq_item_id', 'source_gate_pass_item_id', 'description', 'quantity', 'returned_qty', 'unit',
         'condition_note', 'sort_order',
     ];
 
     public function gatePass() { return $this->belongsTo(GatePass::class); }
     public function rfqItem()  { return $this->belongsTo(RfqItem::class, 'rfq_item_id'); }
+
+    /** The Gate Pass In line this Out line is sending back. */
+    public function sourceItem() { return $this->belongsTo(GatePassItem::class, 'source_gate_pass_item_id'); }
     public function returns()  { return $this->hasMany(GatePassReturn::class)->latest('returned_on')->latest('id'); }
 
     /** How much of this item is still out — never negative. */

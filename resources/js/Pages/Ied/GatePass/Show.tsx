@@ -199,6 +199,34 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                     </div>
                 </div>
 
+                {/* The In ↔ Out chain, from whichever end you are standing on. */}
+                {(pass.source_pass || (pass.out_passes ?? []).length > 0) && (
+                    <div className="card">
+                        <div className="card-header">
+                            <h3 className="text-sm font-bold text-surface-900">
+                                {pass.source_pass ? 'Raised against' : 'Sent back out on'}
+                            </h3>
+                        </div>
+                        <div className="card-body flex flex-wrap gap-2">
+                            {pass.source_pass && (
+                                <Link href={`${basePath}/${pass.source_pass.id}`}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors">
+                                    <i className="fi fi-rr-sign-in-alt text-xs leading-none" />
+                                    {pass.source_pass.pass_no}
+                                </Link>
+                            )}
+                            {(pass.out_passes ?? []).map((o: any) => (
+                                <Link key={o.id} href={`${basePath}/${o.id}`}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50/60 text-sm font-semibold text-amber-800 hover:bg-amber-100 transition-colors">
+                                    <i className="fi fi-rr-sign-out-alt text-xs leading-none" />
+                                    {o.pass_no}
+                                    <span className="text-[10px] font-normal text-amber-700/70">{o.date} · {o.status}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Items */}
                 <div className="card">
                     <div className="card-header">
@@ -275,11 +303,21 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                                     itself once everything is back.
                                 </p>
                             </div>
-                            {!returnOpen && (
-                                <button type="button" onClick={() => setReturnOpen(true)} className="btn-primary btn-sm shrink-0">
-                                    <i className="fi fi-rr-undo text-xs leading-none" /> Record Return
-                                </button>
-                            )}
+                            <div className="flex items-center gap-2 shrink-0">
+                                {/* The proper document: a Gate Pass Out the gate keeps and
+                                    the customer's rep signs. Issuing it books the return too,
+                                    so "Record Return" is only for noting it without paper. */}
+                                {pass.can_raise_out && (
+                                    <Link href={`${basePath}/${pass.id}/out`} className="btn-primary btn-sm">
+                                        <i className="fi fi-rr-sign-out-alt text-xs leading-none" /> Gate Pass Out
+                                    </Link>
+                                )}
+                                {!returnOpen && (
+                                    <button type="button" onClick={() => setReturnOpen(true)} className="btn-outline btn-sm">
+                                        <i className="fi fi-rr-undo text-xs leading-none" /> Record Return
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {returnOpen && (

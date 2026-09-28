@@ -11,7 +11,7 @@ class GatePass extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'rfq_id', 'customer_id', 'pass_no', 'direction', 'party_name',
+        'center_id', 'rfq_id', 'source_gate_pass_id', 'customer_id', 'pass_no', 'direction', 'party_name',
         'completed_at', 'completed_by', 'completion_remarks',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
         'customer_rep_name', 'customer_rep_phone', 'customer_rep_id_number', 'vehicle_no',
@@ -44,6 +44,12 @@ class GatePass extends Model
     public function completedBy() { return $this->belongsTo(User::class, 'completed_by'); }
     public function cancelledBy() { return $this->belongsTo(User::class, 'cancelled_by'); }
     public function center()      { return $this->belongsTo(Center::class); }
+
+    /** The Gate Pass In this Out was raised against (null for a pass raised on its own). */
+    public function sourcePass()  { return $this->belongsTo(GatePass::class, 'source_gate_pass_id'); }
+
+    /** The Out passes raised against this In pass — one In can send things back in several trips. */
+    public function outPasses()   { return $this->hasMany(GatePass::class, 'source_gate_pass_id')->orderBy('id'); }
 
     /**
      * Auto-generate next pass number — prefix depends on direction.

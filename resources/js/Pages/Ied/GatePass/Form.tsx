@@ -20,14 +20,21 @@ interface Props {
 
 interface Item {
     rfq_item_id: number | null;
+    /** Set only when this Out line is sending back a Gate Pass In line. */
+    source_gate_pass_item_id?: number | null;
+    /** How much of that In line is still outstanding — the cap for this row. */
+    max_quantity?: number | null;
     description: string;
     quantity: string;
     unit: string;
     condition_note: string;
 }
 
-export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [], customers = [], suggestedPassNo = '' }: any) {
+export default function GatePassForm({ rfq, direction, prefilled_items, basePath = '/ied/gate-passes', directionLocked = false, condition_notes = [], customers = [], suggestedPassNo = '', sourcePass = null, prefill = null }: any) {
     const isIn = direction === 'in';
+    // Raised against a Gate Pass In: the lines are fixed to that pass's items,
+    // capped at what is still outstanding, and it posts to its own endpoint.
+    const againstIn = !!sourcePass;
     const conditionOptions = (condition_notes ?? []).map((l: string) => ({ value: l, label: l }));
     const customerOptions = (customers ?? []).map((c: any) => ({
         value: c.id,
@@ -41,11 +48,11 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
         // Auto-generated, but the issuer can type their own number.
         pass_no:                suggestedPassNo ?? '',
         pass_date:              new Date().toISOString().slice(0, 10),
-        customer_id:            rfq?.customer?.id ?? '',
-        party_name:             rfq?.customer?.name ?? '',
-        customer_rep_name:      '',
-        customer_rep_phone:     '',
-        customer_rep_id_number: '',
+        customer_id:            prefill?.customer_id ?? rfq?.customer?.id ?? '',
+        party_name:             prefill?.party_name ?? rfq?.customer?.name ?? '',
+        customer_rep_name:      prefill?.customer_rep_name ?? '',
+        customer_rep_phone:     prefill?.customer_rep_phone ?? '',
+        customer_rep_id_number: prefill?.customer_rep_id_number ?? '',
         vehicle_no:             '',
         notes:                  '',
         signature:              null as string | null,
@@ -53,6 +60,8 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
         items: prefilled_items.length > 0
             ? prefilled_items.map((i: any) => ({
                 rfq_item_id:    i.rfq_item_id,
+                source_gate_pass_item_id: i.source_gate_pass_item_id ?? null,
+                max_quantity:   i.max_quantity ?? null,
                 description:    i.description,
                 quantity:       String(i.quantity),
                 unit:           i.unit,
@@ -88,11 +97,13 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
             signature: choice?.drawn ?? null,
             user_signature_id: choice?.userSignatureId ?? null,
         }));
-        post(basePath);
+        // Against an In pass this is its own endpoint, which books the return
+        // on the In pass as soon as the Out is issued.
+        post(againstIn ? `${basePath}/${sourcePass.id}/out` : basePath);
     };
 
     return (
-        <AppLayout header={`New ${isIn ? 'Gate Pass In' : 'Gate Pass Out'}`}>
+        <AppLayout header={againstIn ? `Gate Pass Out against ${sourcePass.pass_no}` : `New ${isIn ? 'Gate Pass In' : 'Gate Pass Out'}`}>
             <div className="max-w-5xl space-y-6 animate-fade-in">
                 {/* Header banner */}
                 <div className={`rounded-2xl border p-5 ${isIn ? 'bg-emerald-50/60 border-emerald-200' : 'bg-amber-50/60 border-amber-200'}`}>
@@ -236,12 +247,21 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                     <div className="card">
                         <div className="card-header flex items-center justify-between">
                             <div>
-                                <h3 className="text-sm font-bold text-surface-900">Items {isIn ? 'Entering BITAC' : 'Leaving BITAC'}</h3>
-                                <p className="text-xs text-surface-400 mt-0.5">List every physical item — description, qty, condition note.</p>
+                                <h3 className="text-sm font-bold text-surface-900">
+                                    {againstIn ? 'Items Going Back Out' : `Items ${isIn ? 'Entering BITAC' : 'Leaving BITAC'}`}
+                                </h3>
+                                <p className="text-xs text-surface-400 mt-0.5">
+                                    {againstIn
+                                        ? `Send back all or part of what is still outstanding on ${sourcePass.pass_no}. Come back for the rest later.`
+                                        : 'List every physical item — description, qty, condition note.'}
+                                </p>
                             </div>
-                            <button type="button" onClick={addItem} className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1">
-                                <i className="fi fi-rr-plus text-[10px] leading-none" /> Add row
-                            </button>
+                            {/* Answering an In pass, the lines ARE that pass's items — nothing to add. */}
+                            {!againstIn && (
+                                <button type="button" onClick={addItem} className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1">
+                                    <i className="fi fi-rr-plus text-[10px] leading-none" /> Add row
+                                </button>
+                            )}
                         </div>
                         <div className="card-body p-0 overflow-x-auto">
                             <table className="w-full text-sm">
@@ -274,11 +294,17 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                                     type="number"
                                                     min="0"
                                                     step="0.01"
+                                                    max={item.max_quantity ?? undefined}
                                                     value={item.quantity}
                                                     onChange={e => updateItem(idx, { quantity: e.target.value })}
                                                     className="form-input text-sm text-right font-mono"
                                                     required
                                                 />
+                                                {item.max_quantity != null && (
+                                                    <p className="text-[10px] text-surface-400 mt-1 text-right">
+                                                        {item.max_quantity} outstanding
+                                                    </p>
+                                                )}
                                             </td>
                                             <td className="px-3 py-3 align-middle">
                                                 <input
@@ -300,13 +326,15 @@ export default function GatePassForm({ rfq, direction, prefilled_items, basePath
                                                 />
                                             </td>
                                             <td className="px-2 py-3 align-middle">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeItem(idx)}
-                                                    className="w-7 h-7 rounded-lg flex items-center justify-center text-surface-400 hover:bg-red-50 hover:text-red-600"
-                                                >
-                                                    <i className="fi fi-rr-trash text-xs leading-none" />
-                                                </button>
+                                                {!againstIn && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeItem(idx)}
+                                                        className="w-7 h-7 rounded-lg flex items-center justify-center text-surface-400 hover:bg-red-50 hover:text-red-600"
+                                                    >
+                                                        <i className="fi fi-rr-trash text-xs leading-none" />
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

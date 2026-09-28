@@ -302,6 +302,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
         // Goods going back out again, item by item.
         Route::post('/{gatePass}/return',   [GatePassController::class, 'recordReturn'])->name('return');
+        // …or as a proper Gate Pass Out raised against this In pass.
+        Route::get('/{gatePass}/out',       [GatePassController::class, 'createOut'])->name('out.create');
+        Route::post('/{gatePass}/out',      [GatePassController::class, 'storeOut'])->name('out.store');
     });
 
     // ─── IED Stakeholder Forms ──────────────────────────────
@@ -377,6 +380,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/cancel',   [GatePassController::class, 'cancel'])->name('cancel');
         Route::post('/{gatePass}/complete', [GatePassController::class, 'complete'])->name('complete');
         Route::post('/{gatePass}/return',   [GatePassController::class, 'recordReturn'])->name('return');
+        // A Gate Pass Out raised against an In pass. In PCD it needs approval
+        // first, so the return is only booked once the approver issues it.
+        Route::get('/{gatePass}/out',       [GatePassController::class, 'createOut'])->name('out.create');
+        Route::post('/{gatePass}/out',      [GatePassController::class, 'storeOut'])->name('out.store');
         // Approval — any one configured approver finalises (→ issued) or rejects.
         Route::post('/{gatePass}/approve',  [GatePassController::class, 'approve'])->name('approve');
         Route::post('/{gatePass}/reject',   [GatePassController::class, 'reject'])->name('reject');

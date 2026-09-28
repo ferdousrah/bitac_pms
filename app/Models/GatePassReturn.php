@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 class GatePassReturn extends Model
 {
     protected $fillable = [
-        'gate_pass_id', 'gate_pass_item_id', 'quantity', 'returned_on', 'note', 'recorded_by',
+        'gate_pass_id', 'gate_pass_item_id', 'out_gate_pass_id', 'quantity', 'returned_on', 'note', 'recorded_by',
     ];
 
     protected function casts(): array
@@ -24,5 +24,8 @@ class GatePassReturn extends Model
 
     public function gatePass()     { return $this->belongsTo(GatePass::class); }
     public function gatePassItem() { return $this->belongsTo(GatePassItem::class); }
+
+    /** The Gate Pass Out that carried this return, if it came from one rather than by hand. */
+    public function outGatePass()  { return $this->belongsTo(GatePass::class, 'out_gate_pass_id'); }
     public function recordedBy()   { return $this->belongsTo(User::class, 'recorded_by'); }
 }
