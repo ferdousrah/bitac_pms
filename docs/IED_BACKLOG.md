@@ -185,9 +185,10 @@ From the same meeting notes, not yet worked through:
 
 - **Letter duplicate** — duplicate an existing letter.
 - **Stakeholder ↔ Customer link** — `stakeholders` has free-text `organization`, no customer FK.
-- **IED Reports** — client list · jobs by type/sector (item 4) · target vs achievement (item 5)
-  · total quotation value this financial year · jobs in pipeline. All new; the four existing
-  reports (Production, OEE, Rejection, Lead Time) are production-side only.
+- ~~**IED Reports**~~ — **`DONE`**. `IED → Reports`: Client List, By Type & Sector, Quotation
+  Value (with conversion and a monthly breakdown), Jobs in Pipeline. Target vs Achievement is
+  its own page (item 5). All share the financial-year filter; work-order money and dates use the
+  same expressions as `TargetAchievementService` so the reports cannot disagree.
 - **Word-like drafting in IED.**
 - **PCD → Outsourcing** — work given to a third party: who, what, note.
 - **Delivery Orders reaching PCD** with the challan.

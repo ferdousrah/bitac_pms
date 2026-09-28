@@ -474,6 +474,23 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 📊 IED commercial reports (2026-09)
+
+> `IED → Reports`. The four existing reports (Production, OEE, Rejection, Lead Time) look at
+> the shop floor; these look at **who the work is for and what it is worth**.
+
+One page, four views, sharing a financial-year and centre filter — `Ied\IedReportController`
++ `App\Services\IedReportService`. Only the view being looked at is queried.
+
+- **Client List** — every client with their type, sector, job count and value for the year, biggest first.
+- **By Type & Sector** — jobs folded into Government / Private, then sector. **Unclassified customers are shown, not hidden**, so a gap in the data is never mistaken for a gap in the work.
+- **Quotation Value** — what was quoted in the year, how much turned into work, and a month-by-month bar. ⚠️ Counts quotations that actually **reached the customer** (drafts and `pending_approval` excluded — a draft was not "given"), dated by `sent_to_customer_at` → `memo_date` → `created_at`. **`superseded` is excluded**, or a revised quotation would be counted twice for the same job.
+- **Jobs in Pipeline** — everything neither delivered nor cancelled, by stage in workflow order, plus the job list with overdue flagged. Deliberately **not** year-scoped: what is open is open, whenever it started.
+- Work-order money comes from the linked quotation and work-order dates use
+  `COALESCE(customer_wo_date, DATE(created_at))` — the same expressions as
+  `TargetAchievementService`, so the two reports can never disagree. Cancelled work orders are
+  excluded everywhere.
+
 ## 🎯 Target vs Achievement (2026-09)
 
 > Taka, per centre, per financial year. `Reports → Target vs Achievement`.

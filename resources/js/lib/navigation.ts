@@ -43,6 +43,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
             { label: 'Work Order Inbox', href: '/ied/work-orders', icon: 'fi-rr-paper-plane',  permission: 'view rfqs', badgeKey: 'pending_ied_work_orders' },
             { label: 'Jobs',             href: '/ied/jobs',         icon: 'fi-rr-briefcase',    permission: 'view rfqs' },
+            { label: 'Reports',        href: '/ied/reports',      icon: 'fi-rr-stats',  permission: 'view rfqs' },
             { label: 'Feedback', href: '/ied/complaints', icon: 'fi-rr-comment-alt', permission: 'manage complaints', badgeKey: 'open_complaints' },
             { label: 'Completion Certificates', href: '/ied/completion-certificates', icon: 'fi-rr-diploma', permission: 'view completion-certificates' },
             { label: 'Consultancy Requests',    href: '/ied/consultancy-requests',    icon: 'fi-rr-graduation-cap', permission: 'view consultancy-requests' },

@@ -307,6 +307,11 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/out',      [GatePassController::class, 'storeOut'])->name('out.store');
     });
 
+    // ─── IED commercial reports (clients, sectors, quotation value, pipeline) ──
+    Route::get('ied/reports', [\App\Http\Controllers\Ied\IedReportController::class, 'index'])
+        ->middleware('permission:view rfqs')
+        ->name('ied.reports');
+
     // ─── IED Stakeholder Forms ──────────────────────────────
     Route::prefix('ied/stakeholder-forms')->middleware('permission:view stakeholder-forms')->name('ied.stakeholder-forms.')->group(function () {
         Route::get('/',                              [\App\Http\Controllers\StakeholderFormController::class, 'index'])->name('index');
