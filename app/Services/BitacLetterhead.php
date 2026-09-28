@@ -52,6 +52,45 @@ class BitacLetterhead
         return $mpdf->Output('', \Mpdf\Output\Destination::STRING_RETURN);
     }
 
+    /** Legal paper, 8.5″ × 14″, in millimetres — what internal notes print on. */
+    public const LEGAL_MM = [215.9, 355.6];
+
+    /**
+     * Render with **no letterhead at all** — plain paper, no header, no footer.
+     *
+     * Internal notes are typed on blank legal sheets, not on the printed pad,
+     * so they must not carry the emblem, the centre block or the rule. This
+     * keeps everything else `render()` gives: the Tinos/Nikosh font setup, the
+     * Bangla shaping rules and the shared body stylesheet — those are what make
+     * যুক্তাক্ষর come out right, and are nothing to do with the letterhead.
+     *
+     * @param  array{0: float, 1: float}  $format  Page size in mm.
+     */
+    public function renderPlain(
+        string $bodyHtml,
+        string $documentTitle = 'BITAC PMS Document',
+        array $format = self::LEGAL_MM,
+        float $marginMm = 20,
+    ): string {
+        $mpdf = $this->buildMpdf($documentTitle, [
+            'format'            => $format,
+            'margin_left'       => $marginMm,
+            'margin_right'      => $marginMm,
+            'margin_top'        => $marginMm,
+            'margin_bottom'     => $marginMm,
+            'margin_header'     => 0,
+            'margin_footer'     => 0,
+            // render() lets mPDF stretch the top margin to clear the letterhead.
+            // There is no letterhead here, so the margin above is the whole story.
+            'setAutoTopMargin'  => false,
+        ]);
+
+        $mpdf->WriteHTML($this->stylesheetCss(), HTMLParserMode::HEADER_CSS);
+        $mpdf->WriteHTML($bodyHtml, HTMLParserMode::HTML_BODY);
+
+        return $mpdf->Output('', \Mpdf\Output\Destination::STRING_RETURN);
+    }
+
     /**
      * Find which center's letterhead to use:
      *   1. Explicit $center argument wins.
@@ -69,7 +108,7 @@ class BitacLetterhead
     /**
      * Configure mPDF with our font dir + register Nikosh for Bangla shaping.
      */
-    private function buildMpdf(string $title): Mpdf
+    private function buildMpdf(string $title, array $overrides = []): Mpdf
     {
         $defaultConfig     = (new \Mpdf\Config\ConfigVariables())->getDefaults();
         $fontDirs          = $defaultConfig['fontDir'];
@@ -83,7 +122,7 @@ class BitacLetterhead
             @mkdir($tempDir, 0775, true);
         }
 
-        $mpdf = new Mpdf([
+        $mpdf = new Mpdf($overrides + [
             'mode'             => 'utf-8',
             'format'           => 'A4',
             'tempDir'          => $tempDir,

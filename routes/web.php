@@ -307,6 +307,17 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/out',      [GatePassController::class, 'storeOut'])->name('out.store');
     });
 
+    // ─── IED Notes — internal notes, plain legal paper, no letterhead ────
+    Route::middleware('permission:view rfqs')->group(function () {
+        Route::resource('office-notes', \App\Http\Controllers\OfficeNoteController::class)
+            ->parameters(['office-notes' => 'officeNote'])
+            ->except(['show']);
+        Route::get('office-notes/{officeNote}/pdf', [\App\Http\Controllers\OfficeNoteController::class, 'pdf'])
+            ->name('office-notes.pdf');
+        Route::post('office-notes/{officeNote}/duplicate', [\App\Http\Controllers\OfficeNoteController::class, 'duplicate'])
+            ->name('office-notes.duplicate');
+    });
+
     // ─── IED commercial reports (clients, sectors, quotation value, pipeline) ──
     Route::get('ied/reports', [\App\Http\Controllers\Ied\IedReportController::class, 'index'])
         ->middleware('permission:view rfqs')

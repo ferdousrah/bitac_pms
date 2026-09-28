@@ -151,12 +151,12 @@ session's. `GatePassApprover::isApprover()` takes the pass's centre. The global 
 and `UNIQUE(user_id)` became composite — they would have stopped two centres sharing a level or
 one officer approving at two centres. Verified against a second test centre.
 
-## 8. PCD → Notes (no pad, legal) + Envelope printing — `SPEC'D`
+## 8. IED → Notes (no pad, legal) + Envelope printing — Notes `DONE`, Envelope `SPEC'D`
 
 ### Notes
 A second letter-like module, for **internal** notes.
 
-- New menu **PCD → Notes**, built like RFQ Letters: **direct issue, no approval**, selectable
+- New menu **IED → Notes** (corrected — first recorded under PCD), built like RFQ Letters: **direct issue, no approval**, selectable
   signatory. (Confirmed.)
 - **No pad at all** — plain paper, no letterhead, no logos, no footer rule.
 - **Legal, 8.5″ × 14″.**
@@ -164,6 +164,21 @@ A second letter-like module, for **internal** notes.
 > ⚠️ Every PDF today goes through `BitacLetterhead`, which always sets a header/footer and is
 > fixed to A4. Notes need a **separate render path**: same fonts and body conventions, no
 > letterhead, legal page size.
+
+**`DONE`.** `BitacLetterhead::renderPlain()` is that path — same mPDF instance, same Tinos +
+Nikosh registration and stylesheet, but no header/footer callback and a caller-supplied page
+size, so Bangla shaping and the digit rules come along unchanged. `buildMpdf()` now takes an
+`$overrides` array rather than hard-coding A4 and the stretched top margin.
+
+Table `office_notes`, `OfficeNote`, `OfficeNoteController`, `Pages/OfficeNote/{Index,Create}.tsx`,
+menu **IED → Notes**. Draft → issue in one form (Save as draft / Issue note), duplicate into a
+fresh draft, BN + EN PDF, edit, delete. The signatory is selectable and the `SignaturePicker`
+shows **that signatory's** blocks, not the drafter's. Since there is no pad, the sheet names the
+office itself: centre name, then **অফিস নোট**, then নং / তারিখ, প্রতি, বিষয় and the body.
+
+Verified by decoding the rendered PDF: **612 × 1008 pt = 8.5″ × 14″**, exactly one picture (the
+signature — an alpha PNG's `/SMask` counts as a second image object, so count only images nothing
+points at as a mask), Bangla shaped through Nikosh, Bangla digits in the date.
 
 ### Envelope
 Print the envelope with **To** and **From**.
