@@ -7,7 +7,7 @@ Status: `DONE` already works · `SPEC'D` decided, not built · `OPEN` needs an a
 
 ---
 
-## 1. Gate Pass Out against a Gate Pass In — `SPEC'D`
+## 1. Gate Pass Out against a Gate Pass In — `DONE`
 
 Something gated **in** to IED usually goes back out. Today there is no way to raise the
 Out pass for the items that came in.
@@ -21,6 +21,12 @@ Out pass for the items that came in.
 > Why it isn't just the existing Return feature: `gate_pass_returns` records *how much went
 > back* with a note, but produces no document — no GOUT number, nothing to print, nothing for
 > the customer's representative to sign. IED needs the paper.
+
+**Built.** `{ied|pcd}/gate-passes/{pass}/out` opens the normal form, locked to `out` and
+pre-filled with what is outstanding. Quantities are capped server-side as well as in the form.
+The Out pass books the return itself — as ordinary `gate_pass_returns` rows, so it behaves
+exactly like a hand-recorded one — and only once it is **issued**, which for a PCD pass means
+at approval. The booking is idempotent. Show pages link In ↔ Out both ways.
 
 ## 2. Gate In reaching PCD — mostly `DONE`
 
