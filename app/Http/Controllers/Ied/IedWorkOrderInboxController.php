@@ -96,6 +96,21 @@ class IedWorkOrderInboxController extends Controller
                 'rfq_id'         => $workOrder->rfq_id,
                 'quotation_id'   => $workOrder->quotation_id,
                 'created_by'     => $workOrder->createdBy?->name,
+                // The acceptance chain, and whether it is this viewer's turn.
+                'approvals'      => $workOrder->approvals()->with('approver:id,name')->get()
+                    ->map(fn ($a) => [
+                        'level'    => $a->level,
+                        'label'    => $a->label,
+                        'approver' => $a->approver?->name,
+                        'status'   => $a->status,
+                        'remarks'  => $a->remarks,
+                        'acted_at' => $a->acted_at?->format('d M Y, H:i'),
+                        'is_you'   => (int) $a->approver_id === (int) auth()->id(),
+                    ])->values(),
+                'my_turn'        => app(\App\Services\WorkOrderApprovalService::class)
+                    ->blockerFor($workOrder, (int) auth()->id()) === null,
+                'chain_blocker'  => app(\App\Services\WorkOrderApprovalService::class)
+                    ->blockerFor($workOrder, (int) auth()->id()),
                 'items'          => $workOrder->items->map(fn ($i) => [
                     'id'          => $i->id,
                     'job_number'  => $i->job_number,
@@ -140,9 +155,44 @@ class IedWorkOrderInboxController extends Controller
             'note'             => 'nullable|string|max:1000',
             'item_notes'       => 'nullable|array',
             'item_notes.*'     => 'nullable|string|max:1000',
+            // The approver signs their step, same as a quotation approval.
+            'signature'         => 'nullable|string',
+            'user_signature_id' => 'nullable|integer|exists:user_signatures,id',
         ]);
 
         $note = trim((string) ($validated['note'] ?? ''));
+
+        // ── Approval chain ────────────────────────────────────────────────
+        // Accepting used to be guarded by `permission:view rfqs` alone, with no
+        // check on who issued the WO. With a chain configured, this is one
+        // approver's step; the handoff to PCD only runs once every level has
+        // signed. With no chain, the old behaviour stands.
+        $chain = app(\App\Services\WorkOrderApprovalService::class);
+        if ($msg = $chain->blockerFor($workOrder, (int) auth()->id())) {
+            return redirect()->route('ied.work-orders.index')->with('error', $msg);
+        }
+
+        if ($step = $workOrder->pendingApproval()) {
+            $step->update([
+                'status'         => 'approved',
+                'remarks'        => $note !== '' ? $note : null,
+                'signature_path' => \App\Support\SignatureResolver::resolve(
+                    $request->integer('user_signature_id') ?: null,
+                    $request->input('signature'),
+                    'signatures/work-orders',
+                ),
+                'acted_at'       => now(),
+            ]);
+
+            // Not the last word — hold the WO in the inbox for the next level.
+            if (! $workOrder->fresh()->isFullyApproved()) {
+                $next = $workOrder->fresh()->pendingApproval();
+
+                return redirect()->route('ied.work-orders.index')->with('success',
+                    "WO {$workOrder->wo_number} approved at your level. Now waiting on "
+                    . ($next?->approver?->name ?? 'the next approver') . '.');
+            }
+        }
 
         // Append the overall handoff note to the WO's notes (tagged so PCD can
         // spot it at a glance) — preserves any customer-supplied notes already
@@ -278,6 +328,23 @@ class IedWorkOrderInboxController extends Controller
         $validated = $request->validate([
             'reason' => 'required|string|max:1000',
         ]);
+
+        // Only the approver whose turn it is may reject, when a chain exists.
+        $chain = app(\App\Services\WorkOrderApprovalService::class);
+        if ($msg = $chain->blockerFor($workOrder, (int) auth()->id())) {
+            return redirect()->route('ied.work-orders.index')->with('error', $msg);
+        }
+
+        // Stamp the rejection on their step and drop the levels below it —
+        // they no longer apply. Resubmitting is a fresh decision.
+        if ($step = $workOrder->pendingApproval()) {
+            $step->update([
+                'status'   => 'rejected',
+                'remarks'  => $validated['reason'],
+                'acted_at' => now(),
+            ]);
+            $workOrder->approvals()->where('status', 'pending')->delete();
+        }
 
         $workOrder->update([
             'status' => 'cancelled',

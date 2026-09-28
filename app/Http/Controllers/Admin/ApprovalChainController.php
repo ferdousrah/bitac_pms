@@ -10,9 +10,25 @@ use Inertia\Inertia;
 
 class ApprovalChainController extends Controller
 {
-    public function index()
+    /**
+     * Which chain is being edited. The same table drives quotations + cost
+     * estimates (`quotation`) and work-order acceptance (`work_order`).
+     */
+    private function docType(Request $request): string
     {
+        $type = $request->input('document_type', QuotationApprovalSetting::DOC_QUOTATION);
+
+        return array_key_exists($type, QuotationApprovalSetting::DOC_TYPES)
+            ? $type
+            : QuotationApprovalSetting::DOC_QUOTATION;
+    }
+
+    public function index(Request $request)
+    {
+        $docType = $this->docType($request);
+
         $chain = QuotationApprovalSetting::with('approver')
+            ->where('document_type', $docType)
             ->orderBy('level')
             ->get()
             ->map(fn($s) => [
@@ -26,24 +42,31 @@ class ApprovalChainController extends Controller
         $users = User::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Admin/ApprovalChain/Index', [
-            'chain' => $chain,
-            'users' => $users,
+            'chain'        => $chain,
+            'users'        => $users,
+            'documentType' => $docType,
+            'documentTypes'=> QuotationApprovalSetting::DOC_TYPES,
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'approver_id' => 'required|exists:users,id',
-            'label'       => 'nullable|string|max:100',
+            'approver_id'   => 'required|exists:users,id',
+            'label'         => 'nullable|string|max:100',
+            'document_type' => 'nullable|string',
         ]);
+        $docType = $this->docType($request);
 
-        $nextLevel = (QuotationApprovalSetting::max('level') ?? 0) + 1;
+        // Levels run 1..N within a centre AND a document type — the unique is
+        // (center_id, document_type, level).
+        $nextLevel = (QuotationApprovalSetting::where('document_type', $docType)->max('level') ?? 0) + 1;
 
         QuotationApprovalSetting::create([
-            'level'       => $nextLevel,
-            'approver_id' => $validated['approver_id'],
-            'label'       => $validated['label'] ?? "Level {$nextLevel} Approval",
+            'document_type' => $docType,
+            'level'         => $nextLevel,
+            'approver_id'   => $validated['approver_id'],
+            'label'         => $validated['label'] ?? "Level {$nextLevel} Approval",
         ]);
 
         return back()->with('success', 'Approver added to chain.');
@@ -63,11 +86,14 @@ class ApprovalChainController extends Controller
 
     public function destroy(QuotationApprovalSetting $approvalChain)
     {
-        $level = $approvalChain->level;
+        $level   = $approvalChain->level;
+        $docType = $approvalChain->document_type;
         $approvalChain->delete();
 
-        // Re-sequence levels after deletion
-        QuotationApprovalSetting::where('level', '>', $level)
+        // Re-sequence levels after deletion — within THIS document type only,
+        // or removing a quotation step would renumber the work-order chain.
+        QuotationApprovalSetting::where('document_type', $docType)
+            ->where('level', '>', $level)
             ->orderBy('level')
             ->each(function ($setting) use (&$level) {
                 $setting->update(['level' => $level++]);

@@ -92,7 +92,7 @@ deleting. This unblocks the reports in items 5 and the IED reports list below.
 Build a `FinancialYear` helper that knows these three rules. Do **not** hardcode a July–June
 pair anywhere. The 2028 change is a cabinet decision, not yet law, so it must stay easy to amend.
 
-## 6. Work order accept — approval chain — `SPEC'D`
+## 6. Work order accept — approval chain — `DONE`
 
 Today the accept step is barely guarded: the route carries only `permission:view rfqs`, and
 nothing stops the creator accepting their own. So whoever issues the work order from the
@@ -105,6 +105,13 @@ approved quotation can immediately accept it themselves.
   the work-order chain is a single level: Anis.
 - Full approval → the work order moves to PCD (what Accept does now). A rejection at any level
   sends it back with a reason.
+
+**Built.** `work_order_approvals` mirrors `quotation_approvals`;
+`quotation_approval_settings.document_type` separates the work-order chain from the quotation
+one, with a switcher on Admin → Approval Chain. Only the pending approver may accept or reject,
+the handoff to PCD runs only after the last level, and each step is signed. **An empty chain
+leaves acceptance exactly as it was** — so deploying this does not freeze the inbox; BITAC turns
+the gate on by adding Anis as level 1.
 
 ## 7. Approval chains are not centre-aware — `DONE`
 

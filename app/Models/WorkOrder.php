@@ -118,6 +118,25 @@ class WorkOrder extends Model
     public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }
     public function customerPoFile()      { return $this->hasOne(WorkOrderFile::class)->where('kind', 'customer_po')->latest('id'); }
 
+    /** The acceptance chain — levels decided in order. */
+    public function approvals()
+    {
+        return $this->hasMany(WorkOrderApproval::class)->orderBy('level');
+    }
+
+    /** The step waiting on a decision, or null when the chain is done or absent. */
+    public function pendingApproval(): ?WorkOrderApproval
+    {
+        return $this->approvals()->where('status', 'pending')->orderBy('level')->first();
+    }
+
+    /** Has every step signed off? False when there is no chain at all. */
+    public function isFullyApproved(): bool
+    {
+        return $this->approvals()->exists()
+            && ! $this->approvals()->where('status', '!=', 'approved')->exists();
+    }
+
     public function items()               { return $this->hasMany(WorkOrderItem::class)->orderBy('display_order')->orderBy('id'); }
     public function operationSheets()     { return $this->hasMany(OperationSheet::class); }
     public function jobExecutions()       { return $this->hasMany(JobExecution::class); }

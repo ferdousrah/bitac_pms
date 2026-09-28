@@ -21,7 +21,16 @@ class QuotationApprovalSetting extends Model
 {
     use HasCenter;
 
-    protected $fillable = ['center_id', 'level', 'approver_id', 'label'];
+    /** Quotations and cost estimates share `quotation`; work orders have their own. */
+    public const DOC_QUOTATION  = 'quotation';
+    public const DOC_WORK_ORDER = 'work_order';
+
+    public const DOC_TYPES = [
+        self::DOC_QUOTATION  => 'Quotations & Cost Estimates',
+        self::DOC_WORK_ORDER => 'Work Order Acceptance',
+    ];
+
+    protected $fillable = ['center_id', 'document_type', 'level', 'approver_id', 'label'];
 
     public function approver()
     {
@@ -35,10 +44,11 @@ class QuotationApprovalSetting extends Model
      * centre selected (or no centre at all) must still build the chain that
      * belongs to the document, not the one they happen to be looking at.
      */
-    public static function forCenter(?int $centerId)
+    public static function forCenter(?int $centerId, string $documentType = self::DOC_QUOTATION)
     {
         return static::withoutGlobalScopes()
             ->where('center_id', $centerId)
+            ->where('document_type', $documentType)
             ->orderBy('level');
     }
 }

@@ -474,6 +474,16 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 📝 Work order acceptance goes through an approval chain (2026-09)
+
+- A work order issued from an approved quotation lands `ied_pending` in the IED inbox. Accepting it was guarded by **`permission:view rfqs` alone**, with no check on who created it — so whoever issued the WO could immediately wave it through to PCD.
+- Acceptance is now a **chain, the same shape as quotations**: levels decided in order, each with remarks and a signature. `work_order_approvals` mirrors `quotation_approvals`; `App\Services\WorkOrderApprovalService` builds it (from `QuotationController` when the WO is issued) and answers `blockerFor($wo, $userId)`.
+- **It is a SEPARATE chain from quotations.** `quotation_approval_settings.document_type` is `quotation` (quotations + cost estimates, as before) or **`work_order`**. Admin → Approval Chain has a switcher. The quotation already passed its approvers; putting the same people on the work order is the same signature twice.
+- ⚠️ **No chain configured → no approval rows, and acceptance behaves exactly as it always did.** Deliberate: shipping this with an empty chain must not freeze every work order in the inbox. BITAC turns the gate on by adding approvers.
+- Only the approver whose level is pending may accept **or reject**. The handoff to PCD (notes, `pcd_pending`, the PCD + customer notifications) runs **only when the last level approves**. A rejection stamps that step, deletes the pending levels below it, cancels the WO and reopens the quotation — as before.
+- ⚠️ The unique on the settings table is now **`(center_id, document_type, level)`** (`qas_center_doc_level_unique`) — without the type, a work-order level 1 would collide with a quotation level 1 at the same centre. `center_id` stays leftmost so it still backs the centre foreign key. `ApprovalChainController::destroy` re-sequences **within one document type**, or deleting a quotation step would renumber the work-order chain.
+- The inbox Show page renders the chain with each step's state, badges the viewer's own row, and disables Accept/Reject with the reason when it is not their turn.
+
 ## 🏢 Approval chains are PER CENTRE (2026-09)
 
 - **`quotation_approval_settings` drives BOTH quotations and cost estimates** — `QuotationService::createApprovalChain()` and `CostEstimateController::buildApprovalChain()` read the same rows. The table name is historical; don't assume it is quotation-only.

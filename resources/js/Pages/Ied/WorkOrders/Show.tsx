@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { Link, useForm, usePage } from '@inertiajs/react';
+import { useState, useRef } from 'react';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 
 export default function IedWorkOrderShow({ workOrder }: any) {
@@ -11,7 +12,13 @@ export default function IedWorkOrderShow({ workOrder }: any) {
         note: '',
         // Map of work_order_item id → per-item note. Empty values are dropped server-side.
         item_notes: {} as Record<number, string>,
+        signature: null as string | null,
+        user_signature_id: null as number | null,
     });
+    // An approver signs their step, the same as a quotation approval.
+    const pickerRef = useRef<SignaturePickerHandle | null>(null);
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
+    const hasChain = (workOrder.approvals ?? []).length > 0;
     const rejectForm = useForm({ reason: '' });
     const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string }>({
         open: false, url: null, title: '',
@@ -19,6 +26,12 @@ export default function IedWorkOrderShow({ workOrder }: any) {
 
     const submitAccept = (e: React.FormEvent) => {
         e.preventDefault();
+        const choice = pickerRef.current?.value();
+        acceptForm.transform((d: any) => ({
+            ...d,
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }));
         acceptForm.post(`/ied/work-orders/${wo.id}/accept`, {
             preserveScroll: true,
             onSuccess: () => setAcceptOpen(false),
@@ -189,21 +202,72 @@ export default function IedWorkOrderShow({ workOrder }: any) {
                             </div>
                         </div>
 
+                        {/* The acceptance chain, when one is configured. */}
+                        {(wo.approvals ?? []).length > 0 && (
+                            <div className="card">
+                                <div className="card-header">
+                                    <h3 className="text-sm font-bold text-surface-900">Acceptance Chain</h3>
+                                    <p className="text-xs text-surface-400 mt-0.5">
+                                        Each level decides in order; PCD gets it after the last one.
+                                    </p>
+                                </div>
+                                <div className="card-body space-y-2">
+                                    {wo.approvals.map((a: any) => (
+                                        <div key={a.level}
+                                            className={`flex items-start gap-2.5 p-2 rounded-lg border ${
+                                                a.status === 'approved' ? 'border-emerald-200 bg-emerald-50/50'
+                                                : a.status === 'rejected' ? 'border-rose-200 bg-rose-50/50'
+                                                : 'border-surface-200'
+                                            }`}>
+                                            <span className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center text-[10px] font-bold ${
+                                                a.status === 'approved' ? 'bg-emerald-500 text-white'
+                                                : a.status === 'rejected' ? 'bg-rose-500 text-white'
+                                                : 'bg-surface-200 text-surface-600'
+                                            }`}>
+                                                {a.status === 'approved' ? '✓' : a.status === 'rejected' ? '✕' : a.level}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-sm font-semibold text-surface-800">{a.approver ?? '—'}</span>
+                                                    {a.is_you && (
+                                                        <span className="text-[9px] px-1 py-0.5 rounded bg-brand-500 text-white font-bold uppercase">You</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] text-surface-400">
+                                                    {a.label}{a.acted_at ? ` · ${a.acted_at}` : ''}
+                                                </p>
+                                                {a.remarks && <p className="text-xs text-surface-600 mt-1">{a.remarks}</p>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Actions */}
                         <div className="card border-2 border-amber-200 bg-amber-50/30">
                             <div className="card-body space-y-2.5">
+                                {/* Not this viewer's turn — say whose it is rather than
+                                    offering buttons the server will refuse. */}
+                                {wo.chain_blocker && (
+                                    <p className="text-xs text-amber-800 bg-amber-100/70 border border-amber-200 rounded-lg px-3 py-2">
+                                        {wo.chain_blocker}
+                                    </p>
+                                )}
                                 <button
                                     type="button"
+                                    disabled={!!wo.chain_blocker}
                                     onClick={() => setAcceptOpen(true)}
-                                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-sm"
+                                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold shadow-sm"
                                 >
                                     <i className="fi fi-rr-paper-plane text-xs leading-none" />
                                     Accept &amp; Forward to PCD
                                 </button>
                                 <button
                                     type="button"
+                                    disabled={!!wo.chain_blocker}
                                     onClick={() => setRejectOpen(true)}
-                                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-sm font-bold"
+                                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed text-rose-700 border border-rose-200 text-sm font-bold"
                                 >
                                     <i className="fi fi-rr-cross text-xs leading-none" />
                                     Reject Work Order
@@ -238,12 +302,25 @@ export default function IedWorkOrderShow({ workOrder }: any) {
                                 <div className="p-5 space-y-4 overflow-y-auto flex-1">
                                     <div className="rounded-lg bg-emerald-50/60 border border-emerald-100 px-3 py-2.5 text-[11px] text-emerald-800 flex items-start gap-2">
                                         <i className="fi fi-rr-info text-emerald-500 mt-0.5 shrink-0" />
-                                        <span>Add an overall note and/or item-wise notes for the PCD team. The customer will be notified that production planning has begun.</span>
+                                        <span>
+                                            {hasChain
+                                                ? 'This records your approval. The work order reaches PCD once every level has approved — your note travels with it.'
+                                                : 'Add an overall note and/or item-wise notes for the PCD team. The customer will be notified that production planning has begun.'}
+                                        </span>
                                     </div>
+
+                                    {/* Sign the step, same as a quotation approval. */}
+                                    {hasChain && (
+                                        <div className="rounded-xl border border-surface-200 p-3">
+                                            <SignaturePicker ref={pickerRef} signatures={mySignatures} padHeight={110} />
+                                        </div>
+                                    )}
 
                                     {/* Overall note */}
                                     <div className="form-group !mb-0">
-                                        <label className="form-label">Overall Note for PCD <span className="form-label-optional">(optional)</span></label>
+                                        <label className="form-label">
+                                            {hasChain ? 'Remarks' : 'Overall Note for PCD'} <span className="form-label-optional">(optional)</span>
+                                        </label>
                                         <textarea
                                             value={acceptForm.data.note}
                                             onChange={e => acceptForm.setData('note', e.target.value)}

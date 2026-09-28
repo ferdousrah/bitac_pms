@@ -2,10 +2,16 @@ import AppLayout from '@/Layouts/AppLayout';
 import { router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function ApprovalChainIndex({ chain, users }: any) {
+export default function ApprovalChainIndex({ chain, users, documentType = 'quotation', documentTypes = {} }: any) {
     const [editingId, setEditingId] = useState<number | null>(null);
 
-    const addForm = useForm({ approver_id: '', label: '' });
+    // The same table drives two chains. Work orders are deliberately separate:
+    // the quotation already passed its approvers, so repeating them on the work
+    // order would be the same signature twice.
+    const switchType = (t: string) =>
+        router.get('/admin/approval-chain', { document_type: t }, { preserveState: false });
+
+    const addForm = useForm({ approver_id: '', label: '', document_type: documentType });
     const editForm = useForm({ approver_id: '', label: '' });
 
     function startEdit(entry: any) {
@@ -47,8 +53,26 @@ export default function ApprovalChainIndex({ chain, users }: any) {
     }
 
     return (
-        <AppLayout header="Quotation Approval Chain">
+        <AppLayout header="Approval Chains">
             <div className="max-w-3xl space-y-6 animate-fade-in">
+
+                {/* Which chain. Two documents, two independent lists. */}
+                <div className="inline-flex rounded-xl bg-surface-100 p-1">
+                    {Object.entries(documentTypes).map(([value, label]: any) => (
+                        <button
+                            key={value}
+                            type="button"
+                            onClick={() => switchType(value)}
+                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                documentType === value
+                                    ? 'bg-white text-surface-900 shadow-sm'
+                                    : 'text-surface-500 hover:text-surface-700'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
 
                 {/* Explanation Alert */}
                 <div className="alert alert-warning">
@@ -57,9 +81,12 @@ export default function ApprovalChainIndex({ chain, users }: any) {
                         <div>
                             <p className="font-semibold text-amber-900 mb-1">How it works</p>
                             <p className="text-sm text-amber-800">
-                                When a quotation is submitted, approval requests are sent to each
-                                approver in order (Level 1 first). All levels must approve before the quotation is marked as
-                                approved. If any level rejects, the quotation is rejected.
+                                {documentType === 'work_order'
+                                    ? 'A work order issued from an approved quotation waits here before it reaches PCD. Each approver decides in order (Level 1 first); only when the last one approves does the work order move on. Any rejection cancels it and reopens the quotation. Leave this list empty and acceptance stays open to anyone who can reach the IED inbox — including whoever issued it.'
+                                    : 'When a quotation or cost estimate is submitted, approval requests are sent to each approver in order (Level 1 first). All levels must approve before it is marked as approved. If any level rejects, it is rejected.'}
+                            </p>
+                            <p className="text-xs text-amber-700 mt-2">
+                                This chain belongs to the centre you are working in — each BITAC centre keeps its own.
                             </p>
                         </div>
                     </div>

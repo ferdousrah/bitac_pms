@@ -2488,6 +2488,11 @@ HTML;
 
         $quotation->update(['status' => 'converted']);
 
+        // Build the acceptance chain, so the person who issued this cannot
+        // also wave it through to PCD. No chain configured for the centre =
+        // no rows, and acceptance behaves as it always did.
+        app(\App\Services\WorkOrderApprovalService::class)->createApprovalChain($workOrder);
+
         // Notify IED officers — they're the gate before PCD now.
         NotifyService::toPermission(
             'view rfqs',
