@@ -30,4 +30,5 @@ class Invoice extends Model
     public function customer()      { return $this->belongsTo(Customer::class); }
     public function deliveryOrder() { return $this->belongsTo(DeliveryOrder::class); }
     public function markedPaidBy()  { return $this->belongsTo(User::class, 'marked_paid_by'); }
+    public function musakChallans() { return $this->hasMany(MusakChallan::class); }
 }

@@ -19,6 +19,10 @@ const GROUPS: { label: string; tables: string[] }[] = [
         tables: ['cost_estimates', 'cost_estimate_lines', 'cost_estimate_approvals'],
     },
     {
+        label: 'মূসক ৬.৩ Challans',
+        tables: ['musak_challans', 'musak_challan_items'],
+    },
+    {
         label: 'Quotations',
         tables: ['quotations', 'quotation_items', 'quotation_files', 'quotation_approvals', 'customer_responses'],
     },

@@ -39,6 +39,7 @@ class CenterController extends Controller
         $validated = $request->validate([
             'name'              => 'required|string|max:255',
             'code'              => 'required|string|max:20',
+            'bin_number'        => 'nullable|string|max:40',
             'address'           => 'nullable|string|max:255',
             'phone'             => 'nullable|string|max:255',
             'email'             => 'nullable|email|max:255',

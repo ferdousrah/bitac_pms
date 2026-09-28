@@ -81,6 +81,9 @@ class SystemResetController extends Controller
         'cost_estimate_lines',
         'cost_estimates',
 
+        'musak_challan_items',
+        'musak_challans',
+
         // RFQ chain
         'office_notes',
         'rfq_letters',

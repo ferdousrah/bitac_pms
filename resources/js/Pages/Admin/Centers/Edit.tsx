@@ -6,6 +6,7 @@ interface Center {
     id: number;
     name: string;
     code: string;
+    bin_number: string | null;
     address?: string | null;
     phone?: string | null;
     email?: string | null;
@@ -30,6 +31,7 @@ export default function CenterEdit({ center }: { center: Center }) {
     const { data, setData, post, processing, errors, transform } = useForm<any>({
         name:              center.name             ?? '',
         code:              center.code             ?? '',
+        bin_number:        center.bin_number       ?? '',
         address:           center.address          ?? '',
         phone:             center.phone            ?? '',
         email:             center.email            ?? '',
@@ -95,6 +97,12 @@ export default function CenterEdit({ center }: { center: Center }) {
                         </Field>
                         <Field label="Short code *" error={errors.code}>
                             <input className="form-input font-mono uppercase" value={data.code} onChange={e => setData('code', e.target.value.toUpperCase())} />
+                        </Field>
+                        <Field label="BIN (VAT registration)" error={errors.bin_number}>
+                            <input className="form-input font-mono" value={data.bin_number}
+                                onChange={e => setData('bin_number', e.target.value)}
+                                placeholder="0000000000000" />
+                            <p className="form-hint">Prints as নিবন্ধিত ব্যক্তির বিআইএন on মূসক ৬.৩.</p>
                         </Field>
                         <Field label="Address (English)" error={errors.address}>
                             <input className="form-input" value={data.address} onChange={e => setData('address', e.target.value)} />

@@ -89,6 +89,7 @@ export const mainGroups: NavGroup[] = [
         icon: 'fi-rr-receipt',
         items: [
             { label: 'Bills / Invoices', href: '/invoices', icon: 'fi-rr-receipt', permission: 'view invoices' },
+            { label: 'মূসক ৬.৩',          href: '/musak-challans', icon: 'fi-rr-file-invoice', permission: 'view invoices' },
         ],
     },
     {

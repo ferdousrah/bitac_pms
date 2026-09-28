@@ -500,6 +500,20 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - `Admin/SectionController` shows sections as a one-level tree (parent then its sub-sections), validates parent must be a top-level production shop, blocks deleting a parent that has sub-sections. Create/Edit form has a "Parent Section" select (locks type to production_shop; disabled if the section already has children).
 - Machines attach to the **leaf** (sub-section if the shop has them): `MachineController::sectionOptions()` returns shops + sub-sections ordered hierarchically; the machine form's Section dropdown indents sub-sections ("↳ … under <parent>").
 
+## 🧾 মূসক ৬.৩ — কর চালানপত্র (2026-09)
+
+> **Billing & Accounts → মূসক ৬.৩.** The NBR VAT challan, transcribed from an original BITAC issued (challan no. 45), so nothing about the layout is guessed.
+
+- `musak_challans` + `musak_challan_items`, `MusakChallan(Item)`, `MusakChallanController`, `App\Services\MusakChallanRenderer`, `Pages/MusakChallan/{Index,Create}.tsx`. Draft → issue in one form, edit, delete (draft only), and the PDF in **প্রথম / দ্বিতীয় / তৃতীয় কপি** (`?copy=1|2|3`).
+- ⚠️ **It is an NBR form, not BITAC stationery** — its own masthead (গণপ্রজাতন্ত্রী বাংলাদেশ সরকার / জাতীয় রাজস্ব বোর্ড) and the boxed মূসক-৬.৩ label top-right. It goes through **`BitacLetterhead::renderPlain()`**, which brings the Tinos/Nikosh setup and Bangla shaping without the pad. Never render it with `render()`.
+- ⚠️ **Every figure is STORED, never derived at print time.** A tax challan is a legal document: what it printed must not change because the customer's address, the centre's BIN or a quotation rate was edited afterwards. All header fields are typed (prefilled), and buyer/supplier name, BIN and address are snapshots on the row — verified by renaming the customer after issue and reprinting.
+- **The arithmetic lives on the server** (`syncItems`), and the form computes the same thing only so the preparer can see it. Per line: `value = qty × unit_price` (col ৬, **ex all tax**), `sd = value × sd_rate%` (col ৮), **`vat = (value + sd) × vat_rate%`** (col ১০ — সম্পূরক শুল্ক is part of the taxable base, not a parallel charge), `col ১১ = ৬ + ৮ + ১০`. সর্বমোট totals ৬, ৮, ১০ and ১১ only, as on the form.
+- ⚠️ **The challan carries VAT only, and the AIT is named rather than dropped.** মূসক ৬.৩ has no column for income tax, while our invoices embed VAT *and* Tax. Prefilling from an invoice extracts `unit_price = gross / (1 + (vat+tax)/100)` — the same extraction the quotation uses — which leaves the AIT out, and the form shows an amber banner naming the exact amount and rate excluded. **Still unconfirmed with BITAC** (the usual practice is that the buyer deducts AIT at source); the figure is surfaced precisely so nobody has to take our word for it.
+- ⚠️ **The VAT rate comes from the document, never a constant** — the sample challan is at **10%**, not the 15% the quotation form defaults to.
+- New columns: **`centers.bin_number`** (নিবন্ধিত ব্যক্তির বিআইএন, on Admin → Centers) and **`customers.bin_number`** (ক্রেতার বিআইএন, on the customer form). `InvoiceService` had been reading `customers.bin_number` all along — **the column simply never existed**, so the tax invoice has always printed a blank there. It works now.
+- An **issued** challan cannot be deleted (redirect + flash) — it records something that left the premises. Only a draft goes.
+- ⚠️ **Asserting on decoded PDF text: never match a Bangla fragment containing a conjunct.** Shaping turns যুক্তাক্ষর into private-use ligatures, so `মূসক-৬.৩` can never appear in the decoded stream — it comes out as `{lig}সক-৬.৩`. Match on conjunct-free fragments. (Related: mPDF writes letter-spaced runs as `TJ`, not `Tj`.)
+
 ## 🚚 Delivery Orders belong to PCD (2026-09)
 
 - The menu **Delivery & Billing** is now **Billing & Accounts** and holds the money only — **Bills / Invoices** and **মূসক ৬.৩**. **Delivery Orders moved into the PCD group** (BITAC's instruction): the department that planned and routed the job also ships it. The module itself is unchanged and still lives at `/delivery`.

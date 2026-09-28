@@ -11,6 +11,7 @@ export default function CustomerCreateEdit({ customer, sectors = [], customerTyp
         email: customer?.email ?? '',
         phone: customer?.phone ?? '',
         address: customer?.address ?? '',
+        bin_number: customer?.bin_number ?? '',
         is_active: customer?.is_active ?? true,
         reset_password: false as boolean,
     });
@@ -194,6 +195,21 @@ export default function CustomerCreateEdit({ customer, sectors = [], customerTyp
                                     className="form-textarea"
                                     placeholder="Organisation address"
                                 />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">
+                                    BIN <span className="form-label-optional">Optional</span>
+                                </label>
+                                <input
+                                    value={data.bin_number}
+                                    onChange={e => setData('bin_number', e.target.value)}
+                                    className="form-input font-mono"
+                                    placeholder="0000000000000"
+                                />
+                                <p className="form-hint">
+                                    The client's VAT registration — prints as ক্রেতার বিআইএন on মূসক ৬.৩ and on the tax invoice.
+                                </p>
                             </div>
 
                             <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-50 border border-surface-200">

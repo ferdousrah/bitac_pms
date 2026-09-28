@@ -324,6 +324,15 @@ Route::middleware(['auth'])->group(function () {
             ->name('envelopes.pdf');
     });
 
+    // ─── Billing & Accounts → মূসক ৬.৩ (কর চালানপত্র) ──────────────────────
+    Route::middleware('permission:view invoices')->group(function () {
+        Route::resource('musak-challans', \App\Http\Controllers\MusakChallanController::class)
+            ->parameters(['musak-challans' => 'musakChallan'])
+            ->except(['show']);
+        Route::get('musak-challans/{musakChallan}/pdf', [\App\Http\Controllers\MusakChallanController::class, 'pdf'])
+            ->name('musak-challans.pdf');
+    });
+
     // ─── IED commercial reports (clients, sectors, quotation value, pipeline) ──
     Route::get('ied/reports', [\App\Http\Controllers\Ied\IedReportController::class, 'index'])
         ->middleware('permission:view rfqs')

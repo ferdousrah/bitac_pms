@@ -236,7 +236,7 @@ From the same meeting notes, not yet worked through:
 
 ---
 
-## 9. মূসক ৬.৩ — কর চালানপত্র — `SPEC'D`
+## 9. মূসক ৬.৩ — কর চালানপত্র — `DONE`
 
 The NBR VAT challan. Transcribed from an original BITAC issued (Kushiara Power Company Ltd,
 challan no. 45), so the layout is known and nothing needs guessing.
@@ -294,3 +294,19 @@ because if AIT were included the challan total would not match the invoice.
 
 ⚠️ Also note the VAT rate here is **10%**, not the 15% the quotation form defaults to — the rate
 must come from the document, not a constant.
+
+**`DONE`.** `Billing & Accounts → মূসক ৬.৩`. Every field on the form is typed and stored, so an
+issued challan prints what it was issued with however the customer or the centre is edited later.
+Rendered through `renderPlain()` with the board's own masthead — it is an NBR form, not BITAC
+stationery. প্রথম / দ্বিতীয় / তৃতীয় কপি all print. `centers.bin_number` and
+`customers.bin_number` were added; the tax invoice had been reading the customer one for a long
+time against a column that did not exist.
+
+The AIT question is **still open** and the build does not pretend otherwise: prefilling from an
+invoice leaves the income tax out (there is no column for it) and the form says so in an amber
+banner naming the exact amount and rate. Confirm with BITAC's accounts and the banner can go.
+
+One small thing to confirm with them: the original challan shows VAT as a whole taka
+(29,091 → a round 320,000). We keep two decimals like every other figure in the system, so the
+same line computes 29,090.90 → 319,999.90. If NBR expects whole taka, say so and it is one
+rounding rule.

@@ -58,6 +58,8 @@ class CustomerManagementController extends Controller
             'email'          => 'required|email|unique:customers',
             'phone'          => 'nullable|string|max:20',
             'address'        => 'nullable|string',
+            // ক্রেতার বিআইএন on মূসক ৬.৩, and the tax invoice already printed it.
+            'bin_number'     => 'nullable|string|max:40',
         ]);
 
         // Auto-generate a memorable-but-secure temporary password.
@@ -95,6 +97,7 @@ class CustomerManagementController extends Controller
                 'email'          => $customer->email,
                 'phone'          => $customer->phone,
                 'address'        => $customer->address,
+                'bin_number'     => $customer->bin_number,
                 'is_active'      => $customer->is_active,
             ],
             'sectors'       => $this->sectorOptions(),
@@ -112,6 +115,8 @@ class CustomerManagementController extends Controller
             'email'          => 'required|email|unique:customers,email,' . $customer->id,
             'phone'          => 'nullable|string|max:20',
             'address'        => 'nullable|string',
+            // ক্রেতার বিআইএন on মূসক ৬.৩, and the tax invoice already printed it.
+            'bin_number'     => 'nullable|string|max:40',
             'is_active'      => 'boolean',
             'reset_password' => 'sometimes|boolean',
         ]);

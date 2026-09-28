@@ -9,6 +9,8 @@ class Center extends Model
 {
     protected $fillable = [
         'name', 'code', 'address', 'phone', 'email', 'is_active',
+        // BITAC's VAT registration — নিবন্ধিত ব্যক্তির বিআইএন on মূসক ৬.৩.
+        'bin_number',
         // Letterhead fields (per-center PDF header/footer config)
         'name_bn', 'caption_en', 'ministry_bn', 'government_bn',
         'address_bn', 'phone_bn', 'fax_bn', 'website',
