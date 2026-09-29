@@ -23,6 +23,20 @@ class Center extends Model
 
     protected $appends = ['logo_left_url', 'logo_right_url'];
 
+    /**
+     * The centre a row belongs to when nothing else says.
+     *
+     * ⚠️ Dhaka (the lowest id) is BITAC's head office and the only live
+     * centre. A row with **no** centre is worse than a row in the wrong one:
+     * it is invisible to every centre-scoped query and matches no per-centre
+     * configuration, which is how an approval chain can exist on screen and
+     * still not apply to anything.
+     */
+    public static function defaultId(): ?int
+    {
+        return static::query()->orderBy('id')->value('id');
+    }
+
     public function users()
     {
         return $this->hasMany(User::class);

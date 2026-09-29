@@ -51,4 +51,31 @@ class QuotationApprovalSetting extends Model
             ->where('document_type', $documentType)
             ->orderBy('level');
     }
+
+    /**
+     * The chain to build for a document — what every chain builder should call.
+     *
+     * ⚠️ A document with **no centre at all** is a data defect, not a second
+     * centre: it can only have been written before `HasCenter` stopped
+     * allowing NULL. It falls back to the default centre's chain, because the
+     * alternative — no chain — sends the document to the management-role
+     * fallback and quietly ignores the approvers BITAC configured.
+     *
+     * A **real** centre with no chain of its own does NOT borrow another's.
+     * Chains are separate per centre (BITAC's decision); that case keeps the
+     * caller's own fallback.
+     */
+    public static function resolveFor(?int $centerId, string $documentType = self::DOC_QUOTATION)
+    {
+        $rows = static::forCenter($centerId, $documentType)->get();
+
+        if ($rows->isEmpty() && $centerId === null) {
+            $default = \App\Models\Center::defaultId();
+            if ($default !== null) {
+                return static::forCenter($default, $documentType)->get();
+            }
+        }
+
+        return $rows;
+    }
 }

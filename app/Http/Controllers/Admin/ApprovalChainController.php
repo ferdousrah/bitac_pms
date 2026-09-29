@@ -23,11 +23,30 @@ class ApprovalChainController extends Controller
             : QuotationApprovalSetting::DOC_QUOTATION;
     }
 
+    /**
+     * The centre this screen is configuring.
+     *
+     * Never null: a chain row with no centre belongs to nothing and silently
+     * fails to apply — see `HasCenter`.
+     */
+    private function centerId(): ?int
+    {
+        return (app()->bound('current_center_id') ? app('current_center_id') : null)
+            ?: (auth()->user()?->center_id)
+            ?: \App\Models\Center::defaultId();
+    }
+
     public function index(Request $request)
     {
         $docType = $this->docType($request);
 
+        // ⚠️ Explicitly this centre's rows. The global scope does not filter
+        // for a super admin with no centre selected, so the page used to list
+        // every centre's chain at once — which read as "the chain is set up"
+        // while documents at a given centre found nothing.
         $chain = QuotationApprovalSetting::with('approver')
+            ->withoutGlobalScopes()
+            ->where('center_id', $this->centerId())
             ->where('document_type', $docType)
             ->orderBy('level')
             ->get()
@@ -60,9 +79,13 @@ class ApprovalChainController extends Controller
 
         // Levels run 1..N within a centre AND a document type — the unique is
         // (center_id, document_type, level).
-        $nextLevel = (QuotationApprovalSetting::where('document_type', $docType)->max('level') ?? 0) + 1;
+        $nextLevel = (QuotationApprovalSetting::withoutGlobalScopes()
+            ->where('center_id', $this->centerId())
+            ->where('document_type', $docType)
+            ->max('level') ?? 0) + 1;
 
         QuotationApprovalSetting::create([
+            'center_id'     => $this->centerId(),
             'document_type' => $docType,
             'level'         => $nextLevel,
             'approver_id'   => $validated['approver_id'],

@@ -35,10 +35,10 @@ class WorkOrderApprovalService
 
         // Follows the WORK ORDER's centre, not the session's — see
         // QuotationApprovalSetting::forCenter().
-        $settings = QuotationApprovalSetting::forCenter(
+        $settings = QuotationApprovalSetting::resolveFor(
             $workOrder->center_id,
             QuotationApprovalSetting::DOC_WORK_ORDER
-        )->get();
+        );
 
         if ($settings->isEmpty()) return;
 

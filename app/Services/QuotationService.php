@@ -43,7 +43,7 @@ class QuotationService
     {
         // ⚠️ The chain follows the QUOTATION's centre, not the session's — a
         // super admin looking at another centre must still build the right one.
-        $settings = QuotationApprovalSetting::forCenter($quotation->center_id)->get();
+        $settings = QuotationApprovalSetting::resolveFor($quotation->center_id);
 
         // Fallback: no chain configured for this centre — use its management
         // users (up to 2). Scoped to the same centre for the same reason.

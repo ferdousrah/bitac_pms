@@ -328,7 +328,7 @@ class CostEstimateController extends Controller
     {
         // ⚠️ Follows the ESTIMATE's centre, not the session's. Cost estimates
         // deliberately share the quotation chain — same approvers, same steps.
-        $settings = \App\Models\QuotationApprovalSetting::forCenter($costEstimate->center_id)->get();
+        $settings = \App\Models\QuotationApprovalSetting::resolveFor($costEstimate->center_id);
         $chainLabels = fn (int $total): array => \App\Support\ApprovalChainLabels::forCount($total);
 
         if ($settings->isEmpty()) {

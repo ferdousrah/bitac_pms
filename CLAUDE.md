@@ -601,6 +601,17 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ The unique on the settings table is now **`(center_id, document_type, level)`** (`qas_center_doc_level_unique`) — without the type, a work-order level 1 would collide with a quotation level 1 at the same centre. `center_id` stays leftmost so it still backs the centre foreign key. `ApprovalChainController::destroy` re-sequences **within one document type**, or deleting a quotation step would renumber the work-order chain.
 - The inbox Show page renders the chain with each step's state, badges the viewer's own row, and disables Accept/Reject with the reason when it is not their turn.
 
+## ⚠️ A row must never be written with NO centre (2026-09-29)
+
+> Reported from the live system: the approval chain screen listed **Md Rakib Hassan → Mir Md. Anisuzzaman**, yet Quotation #18 sat pending with the **Director General**, who is not in the chain at all.
+
+- **The cause was `HasCenter`.** It only filled `center_id` when a centre was active, and `current_center_id` is deliberately **null for a super admin who has not picked a centre** (that is what makes `CenterScope` show them everything). A row written in that state belonged to **no centre**.
+- That is quietly fatal for per-centre configuration: the admin screen's query does not filter when no centre is active, so the chain **looked** correctly set up, while `forCenter($doc->center_id)` matched none of it — and every quotation and cost estimate fell through to the **management-role fallback**, i.e. the Director General. **Seeing all centres and writing into none are two different things.**
+- **`HasCenter` now never writes NULL**: active centre → the signed-in user's own → **`Center::defaultId()`** (the lowest id, Dhaka — the same fallback the centre migration used). Reading is unchanged, so a super admin still sees every centre.
+- **`QuotationApprovalSetting::resolveFor($centerId, $docType)` is what every chain builder calls now** (quotation, cost estimate, work order). A document with **no centre at all** — only possible for rows written before this fix — falls back to the default centre's chain. ⚠️ A **real** centre with no chain of its own does **not** borrow another's: chains are separate per centre (BITAC's decision), so that case keeps the management fallback. Verified both ways.
+- **Admin → Approval Chain now reads and writes one centre explicitly** (`withoutGlobalScopes()->where('center_id', …)`), instead of relying on the scope. It also sets `center_id` on create rather than leaving it to the trait, and computes the next level within that centre.
+- Migration `..._000050_repair_centreless_approval_chains` gives the orphaned configuration the default centre and **rebuilds the chain of quotations still awaiting their first decision**. ⚠️ It only touches a quotation when **every** approval row is still `pending` — rebuilding a chain someone has already signed would erase a decision that was really made.
+
 ## 🏢 Approval chains are PER CENTRE (2026-09)
 
 - **`quotation_approval_settings` drives BOTH quotations and cost estimates** — `QuotationService::createApprovalChain()` and `CostEstimateController::buildApprovalChain()` read the same rows. The table name is historical; don't assume it is quotation-only.
