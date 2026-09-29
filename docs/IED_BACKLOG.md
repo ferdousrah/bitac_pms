@@ -227,10 +227,17 @@ From the same meeting notes, not yet worked through:
   `pcd-officer` was granted the delivery permissions in the seeder and by migration, or the menu
   would have appeared for nobody on the live database. PCD Job Detail also carries the challans
   raised against that job, behind a `view pcd-inbox` door onto the same PDF.
-- **Billing & Accounts** (rename of Delivery & Billing) — bill/invoice · **মূসক ৬.৩ (spec'd
-  below)** ·
-  VAT & tax calculator · delivery challan generated from PCD · bill forwarding letter.
-  The three that travel together: forwarding letter + bill + musak challan.
+- **Billing & Accounts** (rename of Delivery & Billing) — bill/invoice ✅ · **মূসক ৬.৩** ✅ ·
+  delivery challan from PCD ✅ · **bill forwarding letter** ✅.
+  The three that travel together — forwarding letter + bill + musak challan — are on the bill
+  page as one card, and **Send to customer** emails all three. The letter uses the same renderer
+  and the same columns as a quotation's, so nothing about the official format was re-invented.
+- **VAT & tax calculator.** **Second to last**, by BITAC's instruction (2026-09-29).
+- **Word-like letter editing** — **`DONE`** (2026-09-29). The rich-text editor now has tables,
+  headings, text size and colour, indent, links, rules and undo/redo. ⚠️ The server's allow-list
+  had to grow with it, and consolidating the three copies of it turned up two real defects: RFQ
+  letters silently stripped tables that quotations kept, and office notes were not sanitised at
+  all despite a comment saying they were.
 - **PCD → Outsourcing** — work given to a third party: who, what, note.
   **Last**, by BITAC's instruction (2026-09-28) — everything else goes first.
 

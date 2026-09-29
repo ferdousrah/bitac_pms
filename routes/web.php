@@ -720,6 +720,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::post('{invoice}/acknowledge', [InvoiceController::class, 'acknowledge'])->name('invoices.acknowledge');
         Route::post('{invoice}/mark-paid', [InvoiceController::class, 'markPaid'])->name('invoices.mark-paid');
+
+        // The forwarding letter that travels with the bill, and sending the
+        // three together (letter + bill + মূসক ৬.৩).
+        Route::get('{invoice}/letter', [InvoiceController::class, 'editLetter'])->name('invoices.letter.edit');
+        Route::put('{invoice}/letter', [InvoiceController::class, 'updateLetter'])->name('invoices.letter.update');
+        Route::get('{invoice}/letter/pdf', [InvoiceController::class, 'letterPdf'])->name('invoices.letter.pdf');
+        Route::post('{invoice}/email', [InvoiceController::class, 'email'])->name('invoices.email');
     });
 
     // Reports

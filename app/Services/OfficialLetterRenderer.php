@@ -100,7 +100,7 @@ class OfficialLetterRenderer
 </table>
 <div style="{$lf} margin-bottom: 8pt; font-size: 11pt; color: #000;"><b>{$L['subject']}</b> {$subject}</div>
 {$refSourceHtml}
-<div style="font-size: 11pt; color: #000; line-height: 1.7; text-align: justify; margin-top: 10pt;">
+<div class="letter-body" style="font-size: 11pt; color: #000; line-height: 1.7; text-align: justify; margin-top: 10pt;">
     {$bodyHtml}
 </div>
 <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 40pt;">

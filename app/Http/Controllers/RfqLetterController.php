@@ -321,18 +321,17 @@ class RfqLetterController extends Controller
             ->render($html, 'Letter ' . str_pad((string) $letter->id, 5, '0', STR_PAD_LEFT), null, $lang);
     }
 
+    /**
+     * \see \App\Support\LetterHtml
+     *
+     * ⚠️ This used to be its own copy of the rules, with a narrower tag list
+     * than the quotation's — so a table typed into an RFQ letter was silently
+     * stripped on the way to the PDF while the same table survived in a
+     * quotation. One implementation now.
+     */
     private function sanitizeBody(string $body): string
     {
-        $body = trim($body);
-        if ($body === '') return '';
-        if (!(str_contains($body, '<') && str_contains($body, '>'))) {
-            return nl2br(htmlspecialchars($body, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        }
-        $body = preg_replace('#<\s*(script|style|iframe|object|embed)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $body);
-        $body = preg_replace('#\son[a-z]+\s*=\s*"[^"]*"#i', '', $body);
-        $body = preg_replace("#\son[a-z]+\s*=\s*'[^']*'#i", '', $body);
-        $body = preg_replace('#javascript\s*:#i', '', $body);
-        return strip_tags($body, '<p><br><b><strong><i><em><u><s><strike><ul><ol><li><div><span>');
+        return trim($body) === '' ? '' : \App\Support\LetterHtml::toPrintable($body);
     }
 
     private function validateLetter(Request $request): array

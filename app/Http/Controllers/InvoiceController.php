@@ -4,7 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
+use App\Models\User;
+use App\Services\BitacLetterhead;
+use App\Http\Controllers\MusakChallanController;
 use App\Services\InvoiceService;
+use App\Services\OfficialLetterRenderer;
+use App\Support\SignatureResolver;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -98,9 +103,230 @@ class InvoiceController extends Controller
             ->with('success', "Bill {$invoice->invoice_number} raised.");
     }
 
+    // ─── The forwarding letter that travels with the bill ────────────────
+    //
+    // Three documents reach the customer together: the **forwarding letter**,
+    // the **bill** and the **মূসক ৬.৩**. The letter is the one that carries the
+    // office's reference, the customer's reference and the signature, so it is
+    // rendered by `OfficialLetterRenderer` exactly like a quotation's.
+
+    public function editLetter(Invoice $invoice)
+    {
+        $invoice->load(['customer', 'workOrder.customer', 'signatory']);
+        $customer = $invoice->customer ?? $invoice->workOrder?->customer;
+
+        return Inertia::render('Invoice/Letter', [
+            'invoice' => [
+                'id'             => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'customer'       => $customer?->name,
+                'total_amount'   => (float) $invoice->total_amount,
+                'issued_date'    => $invoice->issued_at?->format('d M Y'),
+                'memo_no'                   => $invoice->memo_no,
+                'forwarding_letter_subject' => $invoice->forwarding_letter_subject,
+                'forwarding_letter'         => $invoice->forwarding_letter,
+                // A blank recipient falls back to the customer, which is what
+                // the letter would print anyway — better typed in than guessed
+                // silently at render time.
+                'recipient_block'   => $invoice->recipient_block
+                    ?: trim(implode("\n", array_filter([$customer?->name, $customer?->address]))),
+                'customer_ref_no'   => $invoice->customer_ref_no,
+                'customer_ref_date' => $invoice->customer_ref_date?->format('Y-m-d'),
+                'signatory_user_id' => $invoice->signatory_user_id,
+                'letter_issued_at'  => $invoice->letter_issued_at?->format('d M Y, h:i A'),
+            ],
+            // Each signatory carries their own blocks — a letter is routinely
+            // drafted by one person and signed by another.
+            'signatories' => User::with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
+                ->map(fn ($u) => [
+                    'id'          => $u->id,
+                    'name'        => $u->name,
+                    'designation' => $u->designation,
+                    'signatures'  => $u->signatures->map(fn ($sig) => [
+                        'id' => $sig->id, 'label' => $sig->label,
+                        'url' => $sig->url, 'is_default' => $sig->is_default,
+                    ])->values(),
+                ]),
+            'defaultSignatoryId' => auth()->id(),
+        ]);
+    }
+
+    public function updateLetter(Request $request, Invoice $invoice)
+    {
+        $data = $request->validate([
+            'memo_no'                   => 'nullable|string|max:120',
+            'forwarding_letter_subject' => 'nullable|string|max:255',
+            'forwarding_letter'         => 'required|string',
+            'recipient_block'           => 'nullable|string|max:1000',
+            'customer_ref_no'           => 'nullable|string|max:120',
+            'customer_ref_date'         => 'nullable|date',
+            'signatory_user_id'         => 'nullable|exists:users,id',
+            'user_signature_id'         => 'nullable|integer|exists:user_signatures,id',
+        ]);
+
+        $invoice->update([
+            'memo_no'                   => $data['memo_no'] ?? null,
+            'forwarding_letter_subject' => $data['forwarding_letter_subject'] ?? null,
+            'forwarding_letter'         => $data['forwarding_letter'],
+            'recipient_block'           => $data['recipient_block'] ?? null,
+            'customer_ref_no'           => $data['customer_ref_no'] ?? null,
+            'customer_ref_date'         => $data['customer_ref_date'] ?? null,
+            'signatory_user_id'         => $data['signatory_user_id'] ?? null,
+            // The snapshot is only replaced when a block was actually picked —
+            // saving a typo fix must not un-sign a letter that went out.
+            'signature_path'            => SignatureResolver::resolve(
+                $data['user_signature_id'] ?? null,
+                null,
+                'signatures/invoice-letters',
+                $data['signatory_user_id'] ?? null,
+            ) ?? $invoice->signature_path,
+            'letter_issued_at'          => $invoice->letter_issued_at ?? now(),
+        ]);
+
+        return redirect()->route('invoices.show', $invoice)->with('success', 'Forwarding letter saved.');
+    }
+
+    /** The letter, on the BITAC pad, in Bangla or English. */
+    public function letterPdf(Request $request, Invoice $invoice)
+    {
+        $body = trim((string) $invoice->forwarding_letter);
+        if ($body === '') {
+            return redirect()->route('invoices.letter.edit', $invoice)
+                ->with('error', 'This bill has no forwarding letter yet — write one first.');
+        }
+
+        $invoice->load(['customer', 'workOrder.customer', 'signatory.center']);
+        $lang = $request->query('lang') === 'en' ? 'en' : 'bn';
+
+        $signer   = $invoice->signatory;
+        $customer = $invoice->customer ?? $invoice->workOrder?->customer;
+
+        $sigPath = $invoice->signature_path
+            ? \Storage::disk('public')->path($invoice->signature_path)
+            : $signer?->signatureAbsolutePath();
+        $sigPath = ($sigPath && is_file($sigPath)) ? $sigPath : null;
+
+        $html = app(OfficialLetterRenderer::class)->buildHtml([
+            'memoNo'            => $invoice->memo_no,
+            'issued'            => ($invoice->letter_issued_at ?? $invoice->issued_at ?? $invoice->created_at)->format('d/m/Y'),
+            'subject'           => $invoice->forwarding_letter_subject ?: 'Bill — Forwarding Letter',
+            'custRefNo'         => $invoice->customer_ref_no,
+            'custRefDate'       => $invoice->customer_ref_date?->format('d/m/Y'),
+            'recipientBlock'    => $invoice->recipient_block
+                ?: trim(implode("\n", array_filter([$customer?->name, $customer?->address]))),
+            'bodyHtml'          => \App\Support\LetterHtml::toPrintable($body),
+            'signerName'        => $signer?->name,
+            'signerDesignation' => $signer?->designation,
+            'signerCenter'      => $signer?->center?->name
+                ?? \App\Models\Center::find($invoice->center_id ?? 1)?->name,
+            'signerEmail'       => $signer?->email,
+            'signerPhone'       => $signer?->phone,
+            'signaturePath'     => $sigPath,
+        ], $lang);
+
+        $bytes = app(BitacLetterhead::class)->render(
+            $html, "Forwarding Letter {$invoice->invoice_number}", null, $lang,
+        );
+        $filename = "forwarding-letter-{$invoice->invoice_number}" . ($lang === 'en' ? '-EN' : '-BN') . '.pdf';
+
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => ($request->boolean('preview') ? 'inline' : 'attachment')
+                . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
+    }
+
+    /**
+     * Send the three that travel together.
+     *
+     * The bill always goes. The forwarding letter and the মূসক ৬.৩ go when they
+     * exist and the sender asked for them — a bill with no challan raised yet
+     * must still be sendable.
+     */
+    public function email(Request $request, Invoice $invoice)
+    {
+        $data = $request->validate([
+            'to'                => 'required|email',
+            'cc'                => 'nullable|string|max:500',
+            'subject'           => 'required|string|max:255',
+            'message'           => 'nullable|string',
+            'from_email'        => 'nullable|email',
+            'lang'              => 'nullable|in:bn,en',
+            'include_letter'    => 'nullable|boolean',
+            'include_musak'     => 'nullable|boolean',
+        ]);
+
+        if (! config('mail.mailers.' . config('mail.default') . '.host') && config('mail.default') === 'smtp') {
+            return back()->with('error', 'No SMTP server is configured — set the MAIL_* settings first.');
+        }
+
+        $lang  = ($data['lang'] ?? 'bn') === 'en' ? 'en' : 'bn';
+        $grab  = fn ($resp) => base64_decode(json_decode($resp->getContent(), true)['data'] ?? '');
+        $files = [];
+
+        // The letter goes first — it is the covering document.
+        if ($request->boolean('include_letter', true) && trim((string) $invoice->forwarding_letter) !== '') {
+            $letter = $this->letterPdf(new Request(['preview' => 'base64', 'lang' => $lang]), $invoice);
+            if ($letter instanceof \Illuminate\Http\JsonResponse) {
+                $files[] = ['data' => $grab($letter), 'name' => "Forwarding-Letter-{$invoice->invoice_number}.pdf"];
+            }
+        }
+
+        $files[] = [
+            'data' => $grab($this->downloadPdf(new Request(['preview' => 'base64']), $invoice)),
+            'name' => "Bill-{$invoice->invoice_number}.pdf",
+        ];
+
+        if ($request->boolean('include_musak', true) && ($challan = $invoice->musakChallans()->first())) {
+            $files[] = [
+                'data' => $grab(app(MusakChallanController::class)
+                    ->pdf(new Request(['preview' => 'base64', 'copy' => 1]), $challan)),
+                'name' => "Musak-6.3-{$challan->challan_no}.pdf",
+            ];
+        }
+
+        $ccList = collect(preg_split('/[,;]+/', (string) ($data['cc'] ?? '')))
+            ->map(fn ($e) => trim($e))
+            ->filter(fn ($e) => $e !== '' && filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->unique()->values()->all();
+
+        $message = trim((string) ($data['message'] ?? ''));
+        if (trim(strip_tags($message)) === '') {
+            $message = '<p>Dear Sir/Madam,</p><p>Please find attached our bill '
+                . e($invoice->invoice_number) . ' with its supporting documents.</p>';
+        }
+
+        try {
+            \Illuminate\Support\Facades\Mail::send(new \App\Mail\DocumentMail(
+                $data['to'],
+                $data['subject'],
+                \App\Support\LetterHtml::sanitize($message),
+                $files,
+                $ccList,
+                $data['from_email'] ?? auth()->user()?->email,
+                auth()->user()?->name,
+            ));
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not send: ' . $e->getMessage());
+        }
+
+        $invoice->update(['emailed_at' => now()]);
+
+        return back()->with('success', 'Sent ' . count($files) . ' document(s) to ' . $data['to'] . '.');
+    }
+
     public function show(Invoice $invoice)
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy', 'musakChallans', 'customer']);
 
         return Inertia::render('Invoice/Show', [
             'invoice' => [
@@ -128,6 +354,13 @@ class InvoiceController extends Controller
                 'payment_reference' => $invoice->payment_reference,
                 'payment_notes'     => $invoice->payment_notes,
                 'marked_paid_by'    => $invoice->markedPaidBy?->name,
+                // The two that travel with the bill.
+                'has_letter'        => trim((string) $invoice->forwarding_letter) !== '',
+                'letter_subject'    => $invoice->forwarding_letter_subject,
+                'letter_issued_at'  => $invoice->letter_issued_at?->format('d M Y'),
+                'emailed_at'        => $invoice->emailed_at?->format('d M Y, h:i A'),
+                'musak_challan'     => $invoice->musakChallans->first()?->only(['id', 'challan_no']),
+                'customer_email'    => $invoice->customer?->email ?? $invoice->workOrder?->customer?->email,
             ],
         ]);
     }
@@ -139,10 +372,24 @@ class InvoiceController extends Controller
     public function downloadPdf(Request $request, Invoice $invoice)
     {
         $bytes = $this->service->generatePdf($invoice);
-        $disp  = $request->boolean('download') ? 'attachment' : 'inline';
+
+        // `?preview=base64` is how PdfPopupModal fetches a PDF (download
+        // managers hijack an application/pdf response), and how `email()`
+        // reuses this generator instead of a second copy of it.
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $invoice->invoice_number . '.pdf',
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        $disp = $request->boolean('download') ? 'attachment' : 'inline';
+
         return response($bytes, 200, [
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => $disp . '; filename="' . $invoice->invoice_number . '.pdf"',
+            'Content-Length'      => strlen($bytes),
         ]);
     }
 

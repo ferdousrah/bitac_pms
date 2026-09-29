@@ -212,9 +212,12 @@ class OfficeNoteController extends Controller
         $subject = '<div style="' . $lf . ' font-size: 11pt; color: #000; margin-bottom: 12pt;">'
             . '<b>' . $L['subject'] . '</b> ' . $esc($note->subject) . '</div>';
 
-        // The body is rich text from the editor — already sanitised on save.
-        $body = '<div style="' . $lf . ' font-size: 11pt; color: #000; line-height: 1.7; text-align: justify;">'
-            . $note->body . '</div>';
+        // ⚠️ The body is rich text from the editor and was NOT sanitised
+        // anywhere — a comment here claimed it had been on save, which was
+        // never true. It goes through the shared letter rules now, which also
+        // lets a typed table survive into the PDF.
+        $body = '<div class="letter-body" style="' . $lf . ' font-size: 11pt; color: #000; line-height: 1.7; text-align: justify;">'
+            . \App\Support\LetterHtml::toPrintable((string) $note->body) . '</div>';
 
         return $head . $meta . $to . $subject . $body
             . '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 36pt;">'

@@ -1,6 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { FormEvent, useState } from 'react';
+import PdfPopupModal from '@/Components/PdfPopupModal';
+import RichTextEditor from '@/Components/RichTextEditor';
 
 const statusBadge: Record<string, string> = {
     draft: 'badge-slate',
@@ -23,6 +25,22 @@ const formatAmount = (amount: any, fraction = 2) =>
     `৳${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: fraction })}`;
 
 export default function InvoiceShow({ invoice }: any) {
+    const [pdf, setPdf] = useState<string | null>(null);
+    const [showMail, setShowMail] = useState(false);
+    const mail = useForm<any>({
+        to: invoice.customer_email ?? '',
+        cc: '',
+        subject: `Bill ${invoice.invoice_number} — BITAC`,
+        message: '',
+        from_email: '',
+        lang: 'bn',
+        include_letter: true,
+        include_musak: true,
+    });
+    const sendMail = (e: FormEvent) => {
+        e.preventDefault();
+        mail.post(`/invoices/${invoice.id}/email`, { onSuccess: () => setShowMail(false) });
+    };
     const { post, processing } = useForm({});
     const [showPay, setShowPay] = useState(false);
 
@@ -224,10 +242,82 @@ export default function InvoiceShow({ invoice }: any) {
                             Mark Acknowledged
                         </button>
                     )}
+                    <Link href={`/invoices/${invoice.id}/letter`} className="btn-outline btn-sm">
+                        <i className="fi fi-rr-envelope text-xs leading-none" />
+                        {invoice.has_letter ? 'Forwarding Letter' : 'Write Forwarding Letter'}
+                    </Link>
+                    {invoice.musak_challan ? (
+                        <Link href={`/musak-challans/${invoice.musak_challan.id}/edit`} className="btn-outline btn-sm">
+                            <i className="fi fi-rr-file-invoice text-xs leading-none" />
+                            মূসক ৬.৩
+                        </Link>
+                    ) : (
+                        <Link href={`/musak-challans/create?invoice=${invoice.id}`} className="btn-outline btn-sm">
+                            <i className="fi fi-rr-plus text-xs leading-none" />
+                            মূসক ৬.৩
+                        </Link>
+                    )}
+                    <button type="button" onClick={() => setShowMail(true)} className="btn-primary btn-sm">
+                        <i className="fi fi-rr-paper-plane text-xs leading-none" />
+                        Send to customer
+                    </button>
                     <Link href="/invoices" className="btn-outline btn-sm">
                         <i className="fi fi-rr-arrow-left text-xs leading-none" />
                         Back
                     </Link>
+                </div>
+
+                {/* What travels with this bill. */}
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="text-sm font-bold text-surface-900">Documents that travel together</h3>
+                    </div>
+                    <div className="card-body grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                        <div className="p-3 rounded-xl border border-surface-200">
+                            <p className="font-semibold text-surface-900">Forwarding letter</p>
+                            {invoice.has_letter ? (
+                                <>
+                                    <p className="text-xs text-surface-500 mt-0.5">
+                                        {invoice.letter_subject || 'Written'}
+                                        {invoice.letter_issued_at ? ` · ${invoice.letter_issued_at}` : ''}
+                                    </p>
+                                    <div className="flex gap-1.5 mt-2">
+                                        <button type="button"
+                                            onClick={() => setPdf(`/invoices/${invoice.id}/letter/pdf?preview=base64&lang=bn`)}
+                                            className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">বাংলা</button>
+                                        <button type="button"
+                                            onClick={() => setPdf(`/invoices/${invoice.id}/letter/pdf?preview=base64&lang=en`)}
+                                            className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">EN</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <p className="text-xs text-surface-400 mt-0.5">Not written yet.</p>
+                            )}
+                        </div>
+                        <div className="p-3 rounded-xl border border-surface-200">
+                            <p className="font-semibold text-surface-900">Bill</p>
+                            <p className="text-xs text-surface-500 mt-0.5">{invoice.invoice_number}</p>
+                            <button type="button"
+                                onClick={() => setPdf(`/invoices/${invoice.id}/pdf?preview=base64`)}
+                                className="mt-2 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">PDF</button>
+                        </div>
+                        <div className="p-3 rounded-xl border border-surface-200">
+                            <p className="font-semibold text-surface-900">মূসক ৬.৩</p>
+                            {invoice.musak_challan ? (
+                                <>
+                                    <p className="text-xs text-surface-500 mt-0.5">নং {invoice.musak_challan.challan_no}</p>
+                                    <button type="button"
+                                        onClick={() => setPdf(`/musak-challans/${invoice.musak_challan.id}/pdf?preview=base64&copy=1`)}
+                                        className="mt-2 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">প্রথম কপি</button>
+                                </>
+                            ) : (
+                                <p className="text-xs text-surface-400 mt-0.5">Not raised yet.</p>
+                            )}
+                        </div>
+                    </div>
+                    {invoice.emailed_at && (
+                        <div className="px-5 pb-4 text-xs text-surface-400">Last sent {invoice.emailed_at}</div>
+                    )}
                 </div>
             </div>
 
@@ -340,6 +430,98 @@ export default function InvoiceShow({ invoice }: any) {
                     </div>
                 </div>
             )}
+
+            {/* Send the three that travel together. */}
+            {showMail && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMail(false)} />
+                    <form onSubmit={sendMail}
+                        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="px-5 py-3 border-b border-surface-100 flex items-center justify-between">
+                            <h3 className="text-sm font-bold text-surface-900">Send bill {invoice.invoice_number}</h3>
+                            <button type="button" onClick={() => setShowMail(false)}
+                                className="w-8 h-8 rounded-lg hover:bg-surface-100 flex items-center justify-center">
+                                <i className="fi fi-rr-cross text-sm leading-none" />
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">To <span className="text-red-500">*</span></label>
+                                    <input type="email" className="form-input" value={mail.data.to}
+                                        onChange={(e) => mail.setData('to', e.target.value)} />
+                                    {mail.errors.to && <p className="form-error">{mail.errors.to as any}</p>}
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">CC <span className="form-label-optional">Optional</span></label>
+                                    <input className="form-input" value={mail.data.cc}
+                                        onChange={(e) => mail.setData('cc', e.target.value)}
+                                        placeholder="comma separated" />
+                                </div>
+                            </div>
+
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Subject <span className="text-red-500">*</span></label>
+                                <input className="form-input" value={mail.data.subject}
+                                    onChange={(e) => mail.setData('subject', e.target.value)} />
+                                {mail.errors.subject && <p className="form-error">{mail.errors.subject as any}</p>}
+                            </div>
+
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Message</label>
+                                <RichTextEditor value={mail.data.message} minHeight="140px"
+                                    onChange={(v: string) => mail.setData('message', v)} />
+                            </div>
+
+                            <div className="rounded-xl border border-surface-200 p-3 space-y-2">
+                                <p className="text-[11px] uppercase tracking-wider font-bold text-surface-400">Attachments</p>
+                                <label className={`flex items-center gap-2 text-sm ${invoice.has_letter ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
+                                    <input type="checkbox" disabled={!invoice.has_letter}
+                                        checked={invoice.has_letter && mail.data.include_letter}
+                                        onChange={(e) => mail.setData('include_letter', e.target.checked)}
+                                        className="rounded border-surface-300" />
+                                    Forwarding letter {invoice.has_letter ? '' : '— none written yet'}
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-surface-500">
+                                    <input type="checkbox" checked readOnly className="rounded border-surface-300" />
+                                    Bill {invoice.invoice_number} (always sent)
+                                </label>
+                                <label className={`flex items-center gap-2 text-sm ${invoice.musak_challan ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
+                                    <input type="checkbox" disabled={!invoice.musak_challan}
+                                        checked={!!invoice.musak_challan && mail.data.include_musak}
+                                        onChange={(e) => mail.setData('include_musak', e.target.checked)}
+                                        className="rounded border-surface-300" />
+                                    মূসক ৬.৩ {invoice.musak_challan ? `— নং ${invoice.musak_challan.challan_no}` : '— not raised yet'}
+                                </label>
+                                <div className="flex items-center gap-2 pt-1">
+                                    <span className="text-xs text-surface-500">Letter language</span>
+                                    <div className="flex rounded-lg border border-surface-200 overflow-hidden text-xs font-bold">
+                                        {(['bn', 'en'] as const).map((l) => (
+                                            <button key={l} type="button" onClick={() => mail.setData('lang', l)}
+                                                className={`px-2.5 py-1 ${mail.data.lang === l ? 'bg-brand-500 text-white' : 'text-surface-500 hover:bg-surface-50'}`}>
+                                                {l === 'bn' ? 'বাংলা' : 'EN'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-5 py-3 border-t border-surface-100 flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => setShowMail(false)} className="btn-ghost">Cancel</button>
+                            <button type="submit" disabled={mail.processing} className="btn-primary">
+                                {mail.processing
+                                    ? <><i className="fi fi-rr-spinner animate-spin text-xs leading-none" /> Sending…</>
+                                    : <><i className="fi fi-rr-paper-plane text-xs leading-none" /> Send</>}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <PdfPopupModal open={pdf !== null} pdfUrl={pdf} title={invoice.invoice_number}
+                onClose={() => setPdf(null)} />
         </AppLayout>
     );
 }

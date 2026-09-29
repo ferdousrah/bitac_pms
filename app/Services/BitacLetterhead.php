@@ -361,6 +361,16 @@ body { font-family: tinos; font-size: 10pt; color: #1f2937; }
 .bn, .lang_bn { font-family: nikosh; }
 h1, h2, h3 { color: #1e40af; }
 table { border-collapse: collapse; }
+
+/* A table typed into a letter body carries its own inline borders (the editor
+   writes them, because mPDF never sees the editor's stylesheet). These are the
+   fallback for a table pasted in from elsewhere, so it still prints as a table
+   rather than as run-together text. */
+.letter-body table { width: 100%; }
+.letter-body th, .letter-body td { border: 0.5pt solid #000; padding: 3pt 5pt; }
+.letter-body th { background: #f3f4f6; font-weight: bold; }
+.letter-body blockquote { border-left: 2pt solid #d1d5db; padding-left: 8pt; color: #4b5563; }
+.letter-body hr { border: 0; border-top: 0.5pt solid #d1d5db; }
 CSS;
     }
 }

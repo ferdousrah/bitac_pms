@@ -1819,17 +1819,10 @@ class QuotationController extends Controller
      * any `on*=` event handlers and `javascript:` URLs, and removes <script>
      * blocks wholesale so paste-bombs can't smuggle code into the PDF.
      */
+    /** @see \App\Support\LetterHtml — the bill's forwarding letter shares these rules. */
     private function sanitizeLetterHtml(string $html): string
     {
-        // Hard-strip script/style blocks and all event handlers / javascript: URLs.
-        $html = preg_replace('#<\s*(script|style|iframe|object|embed)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $html);
-        $html = preg_replace('#\son[a-z]+\s*=\s*"[^"]*"#i', '', $html);
-        $html = preg_replace("#\son[a-z]+\s*=\s*'[^']*'#i", '', $html);
-        $html = preg_replace('#javascript\s*:#i', '', $html);
-
-        // Allow a small set of formatting tags — anything else is dropped.
-        $allowed = '<p><br><b><strong><i><em><u><s><strike><ul><ol><li><div><span>';
-        return strip_tags($html, $allowed);
+        return \App\Support\LetterHtml::sanitize($html);
     }
 
     /**
