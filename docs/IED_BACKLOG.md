@@ -302,11 +302,15 @@ stationery. প্রথম / দ্বিতীয় / তৃতীয় ক�
 `customers.bin_number` were added; the tax invoice had been reading the customer one for a long
 time against a column that did not exist.
 
-The AIT question is **still open** and the build does not pretend otherwise: prefilling from an
-invoice leaves the income tax out (there is no column for it) and the form says so in an amber
-banner naming the exact amount and rate. Confirm with BITAC's accounts and the banner can go.
+**Both open questions are answered** (BITAC, 2026-09-29):
 
-One small thing to confirm with them: the original challan shows VAT as a whole taka
-(29,091 → a round 320,000). We keep two decimals like every other figure in the system, so the
-same line computes 29,090.90 → 319,999.90. If NBR expects whole taka, say so and it is one
-rounding rule.
+- **AIT** — the buyer deducts income tax at source, so it never appears on the supplier's challan.
+  The challan carries VAT only. The form still states the excluded amount, so the difference
+  between the bill total and the challan total is never a mystery; verified that the gap is
+  exactly the AIT.
+- **Rounding** — follow the sample: money is whole taka. 290,909 + 10% = 29,091 → a round
+  320,000, exactly as the original prints. The unit price keeps its paisa, since rounding a
+  per-piece price is a different thing from rounding a total.
+- **The bill and the challan are raised together.** Confirming a delivery writes the invoice and
+  the মূসক ৬.৩ in one go, issued and signed by the officer who confirmed it, with destination
+  and vehicle from the delivery order. The invoice list links straight to its challan.

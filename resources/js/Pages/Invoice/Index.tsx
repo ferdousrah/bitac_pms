@@ -138,6 +138,13 @@ export default function InvoiceIndex({ invoices, filters }: any) {
                                                 <td className="text-xs text-surface-500">{inv.created_at}</td>
                                                 <td>
                                                     <div className="flex items-center justify-end gap-1.5">
+                                                        {inv.musak_challan && (
+                                                            <Link href={`/musak-challans/${inv.musak_challan.id}/edit`}
+                                                                title={`মূসক ৬.৩ — ${inv.musak_challan.challan_no ?? ''}`}
+                                                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
+                                                                মূসক ৬.৩
+                                                            </Link>
+                                                        )}
                                                         <Link href={`/invoices/${inv.id}`} title="View invoice details"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                             <i className="fi fi-rr-eye text-sm leading-none" /> View

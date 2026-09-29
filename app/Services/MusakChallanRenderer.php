@@ -58,15 +58,21 @@ class MusakChallanRenderer
     {
         $esc = fn ($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $bn  = fn ($v) => BanglaDigits::from((string) $v);
-        // Money is written in Bangla digits like every other figure on the form.
-        $money = fn ($v) => BanglaDigits::from(number_format((float) $v, 2));
+        // ⚠️ The column figures are WHOLE TAKA, as on the printed form — the
+        // original reads 290,909 + 29,091 = 320,000, with no paisa anywhere.
+        $money = fn ($v) => BanglaDigits::from(number_format((float) $v));
+        // The unit price is the exception: it is a per-piece price, not a
+        // total, so it keeps its paisa when it has any.
+        $price = fn ($v) => BanglaDigits::from(
+            fmod((float) $v, 1.0) === 0.0 ? number_format((float) $v) : number_format((float) $v, 2)
+        );
 
         $cell = 'border: 0.75pt solid #000; padding: 3pt 4pt; font-family: nikosh;';
 
         return '<div style="font-family: nikosh; font-size: 9pt; color: #000;">'
             . $this->masthead($challan, $copy, $esc, $bn)
             . $this->header($challan, $esc, $bn)
-            . $this->table($challan, $esc, $bn, $money, $cell)
+            . $this->table($challan, $esc, $bn, $money, $price, $cell)
             . $this->footer($challan, $esc)
             . '</div>';
     }
@@ -130,7 +136,7 @@ class MusakChallanRenderer
             . '</tr></table>';
     }
 
-    private function table(MusakChallan $challan, callable $esc, callable $bn, callable $money, string $cell): string
+    private function table(MusakChallan $challan, callable $esc, callable $bn, callable $money, callable $price, string $cell): string
     {
         $head = '<tr>';
         foreach (self::COLUMNS as $i => $label) {
@@ -150,7 +156,7 @@ class MusakChallanRenderer
                 . '<td style="' . $cell . '">' . nl2br($esc($item->description)) . '</td>'
                 . '<td align="center" style="' . $cell . '">' . $esc($item->unit) . '</td>'
                 . '<td align="center" style="' . $cell . '">' . $bn(rtrim(rtrim(number_format((float) $item->quantity, 3), '0'), '.')) . '</td>'
-                . '<td align="right" style="' . $cell . '">' . $money($item->unit_price) . '</td>'
+                . '<td align="right" style="' . $cell . '">' . $price($item->unit_price) . '</td>'
                 . '<td align="right" style="' . $cell . '">' . $money($item->total_value) . '</td>'
                 . '<td align="center" style="' . $cell . '">' . ((float) $item->sd_rate > 0 ? $bn(rtrim(rtrim(number_format((float) $item->sd_rate, 2), '0'), '.')) . '%' : '-') . '</td>'
                 . '<td align="right" style="' . $cell . '">' . ((float) $item->sd_amount > 0 ? $money($item->sd_amount) : '-') . '</td>'

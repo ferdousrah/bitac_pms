@@ -13,7 +13,7 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
-        $query = Invoice::with(['workOrder.product', 'workOrder.customer']);
+        $query = Invoice::with(['workOrder.product', 'workOrder.customer', 'musakChallans']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -50,6 +50,9 @@ class InvoiceController extends Controller
                 'issued_date'    => $i->issued_date ? \Carbon\Carbon::parse($i->issued_date)->format('d/m/Y') : null,
                 'due_date'       => $i->due_date ? \Carbon\Carbon::parse($i->due_date)->format('d/m/Y') : null,
                 'is_overdue'     => $i->due_date && now()->gt(\Carbon\Carbon::parse($i->due_date)) && $i->status !== 'paid',
+                // The bill and the মূসক ৬.৩ are raised together and travel
+                // together, so the bill links straight to its challan.
+                'musak_challan'  => $i->musakChallans->first()?->only(['id', 'challan_no']),
             ]);
 
         return Inertia::render('Invoice/Index', [

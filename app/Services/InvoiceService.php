@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
+use App\Services\MusakChallanService;
 
 class InvoiceService
 {
@@ -33,7 +34,7 @@ class InvoiceService
         $count = Invoice::whereYear('created_at', $year)->count();
         $invoiceNumber = 'INV-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
 
-        return Invoice::create([
+        $invoice = Invoice::create([
             'invoice_number'    => $invoiceNumber,
             'work_order_id'     => $workOrder->id,
             'delivery_order_id' => $delivery->id,
@@ -48,6 +49,14 @@ class InvoiceService
             'status'            => 'issued',
             'issued_at'         => now(),
         ]);
+
+        // BITAC issues the bill and the মূসক ৬.৩ together, so raising one
+        // raises the other. It returns null when there is nothing to put on the
+        // challan (a bill with no quotation behind it has no lines) — a blank
+        // tax challan would be worse than none.
+        app(MusakChallanService::class)->createFromInvoice($invoice);
+
+        return $invoice;
     }
 
     /**

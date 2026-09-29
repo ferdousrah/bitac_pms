@@ -24,8 +24,8 @@ export default function MusakChallanIndex({ challans, filters = {} }: any) {
         router.delete(`/musak-challans/${c.id}`, { preserveScroll: true });
     };
 
-    const money = (n: number) =>
-        n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Whole taka, as the form prints it.
+    const money = (n: number) => Math.round(n).toLocaleString('en-IN');
 
     return (
         <AppLayout header="মূসক ৬.৩">

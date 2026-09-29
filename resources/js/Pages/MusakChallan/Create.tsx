@@ -19,11 +19,18 @@ const blankLine = (vatRate: number = 15): Line => ({
 const money = (n: number) =>
     n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** The same arithmetic the server writes — shown live so the preparer sees it. */
+/** Column figures are whole taka — print them that way. */
+const taka = (n: number) => Math.round(n).toLocaleString('en-IN');
+
+/**
+ * The same arithmetic the server writes — shown live so the preparer sees it.
+ * Money on মূসক ৬.৩ is WHOLE TAKA, as on the printed form; keep this in step
+ * with `MusakChallanService::computeLine()`.
+ */
 const compute = (l: Line) => {
-    const value = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0);
-    const sd    = value * (Number(l.sd_rate) || 0) / 100;
-    const vat   = (value + sd) * (Number(l.vat_rate) || 0) / 100;
+    const value = Math.round((Number(l.quantity) || 0) * (Number(l.unit_price) || 0));
+    const sd    = Math.round(value * (Number(l.sd_rate) || 0) / 100);
+    const vat   = Math.round((value + sd) * (Number(l.vat_rate) || 0) / 100);
     return { value, sd, vat, incl: value + sd + vat };
 };
 
@@ -115,15 +122,16 @@ export default function MusakChallanCreate({
                         </div>
                     )}
 
-                    {/* The AIT question, named rather than hidden -------------- */}
+    {/* Why the challan total differs from the bill total. Stated, not hidden. */}
                     {prefill?.excluded_tax > 0 && (
-                        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
-                            <p className="font-semibold">মূসক ৬.৩ carries VAT only — ৳ {money(prefill.excluded_tax)} of tax is not on this form.</p>
-                            <p className="mt-1 text-amber-800">
-                                The form has columns for সম্পূরক শুল্ক and মূসক and nothing else, so the
-                                income tax ({prefill.tax_rate}%) embedded in invoice {prefill.invoice_number} has
-                                been left out of the prices below. The usual practice is that the buyer deducts
-                                it at source. <strong>Confirm this with accounts before issuing.</strong>
+                        <div className="rounded-2xl border border-surface-200 bg-surface-50/60 p-4 text-sm text-surface-600">
+                            <p className="font-semibold text-surface-800">
+                                মূসক ৬.৩ carries VAT only — ৳ {money(prefill.excluded_tax)} of income tax is not on this form.
+                            </p>
+                            <p className="mt-1">
+                                The form has columns for সম্পূরক শুল্ক and মূসক and nothing else. The AIT
+                                ({prefill.tax_rate}%) embedded in invoice {prefill.invoice_number} is left out because
+                                the buyer deducts it at source, so it never belongs on our challan.
                             </p>
                         </div>
                     )}
@@ -265,7 +273,7 @@ export default function MusakChallanCreate({
                                                     <input type="number" step="0.01" className="form-input text-sm py-1.5 text-right"
                                                         value={l.unit_price} onChange={(e) => setLine(i, 'unit_price', e.target.value)} />
                                                 </td>
-                                                <td className="px-2 py-2 text-right tabular-nums text-surface-700">{money(c.value)}</td>
+                                                <td className="px-2 py-2 text-right tabular-nums text-surface-700">{taka(c.value)}</td>
                                                 <td className="px-2 py-2">
                                                     <input type="number" step="0.01" className="form-input text-sm py-1.5 text-right"
                                                         value={l.sd_rate} onChange={(e) => setLine(i, 'sd_rate', e.target.value)} />
@@ -274,8 +282,8 @@ export default function MusakChallanCreate({
                                                     <input type="number" step="0.01" className="form-input text-sm py-1.5 text-right"
                                                         value={l.vat_rate} onChange={(e) => setLine(i, 'vat_rate', e.target.value)} />
                                                 </td>
-                                                <td className="px-2 py-2 text-right tabular-nums text-surface-700">{money(c.vat)}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums font-semibold text-surface-900">{money(c.incl)}</td>
+                                                <td className="px-2 py-2 text-right tabular-nums text-surface-700">{taka(c.vat)}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums font-semibold text-surface-900">{taka(c.incl)}</td>
                                                 <td className="px-1 py-2">
                                                     {data.items.length > 1 && (
                                                         <button type="button" onClick={() => removeLine(i)}
@@ -291,11 +299,11 @@ export default function MusakChallanCreate({
                                 <tfoot>
                                     <tr className="bg-surface-50 font-bold text-surface-900">
                                         <td colSpan={4} className="px-3 py-2.5 text-right">সর্বমোট</td>
-                                        <td className="px-2 py-2.5 text-right tabular-nums">{money(totals.value)}</td>
+                                        <td className="px-2 py-2.5 text-right tabular-nums">{taka(totals.value)}</td>
                                         <td />
                                         <td />
-                                        <td className="px-2 py-2.5 text-right tabular-nums">{money(totals.vat)}</td>
-                                        <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.incl)}</td>
+                                        <td className="px-2 py-2.5 text-right tabular-nums">{taka(totals.vat)}</td>
+                                        <td className="px-3 py-2.5 text-right tabular-nums">{taka(totals.incl)}</td>
                                         <td />
                                     </tr>
                                 </tfoot>
@@ -304,6 +312,7 @@ export default function MusakChallanCreate({
                         {typeof errors.items === 'string' && <p className="form-error px-4 pb-3">{errors.items}</p>}
                         <div className="px-4 pb-4 text-[11px] text-surface-400">
                             একক মূল্য is <strong>সকল প্রকার কর ব্যতীত</strong> — the price before any duty or tax.
+                            The columns are rounded to whole taka, as on the printed form.
                         </div>
                     </div>
 

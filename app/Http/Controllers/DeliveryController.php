@@ -214,7 +214,9 @@ class DeliveryController extends Controller
             'received_by'       => $validated['received_by'],
             'received_at'       => $validated['received_at'],
             'signature_path'    => $signaturePath,
-            'notes'             => $validated['notes'],
+            // `notes` is nullable, so it is simply absent when nothing was
+            // typed — reading it straight threw and the whole confirmation 500'd.
+            'notes'             => $validated['notes'] ?? null,
         ]);
 
         $delivery->update(['status' => 'delivered', 'delivered_at' => now()]);

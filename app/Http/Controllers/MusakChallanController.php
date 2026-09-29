@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\MusakChallan;
 use App\Models\User;
 use App\Services\MusakChallanRenderer;
+use App\Services\MusakChallanService;
 use App\Support\SignatureResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,13 +19,15 @@ use Inertia\Inertia;
  * The NBR VAT challan. Every field on the form is typed and stored — see
  * `MusakChallan` for why nothing is derived at print time.
  *
- * ⚠️ **The challan carries VAT only.** মূসক ৬.৩ has columns for সম্পূরক শুল্ক
- * and মূসক and nothing else; there is no column for income tax. Our invoices
- * embed VAT *and* Tax (AIT), so when a challan is prefilled from one the AIT is
- * left out and the form says so plainly, naming the amount. The usual practice
- * is that the buyer deducts AIT at source, so it never appears on the supplier's
- * challan — **BITAC still has to confirm this**, and the figure is shown rather
- * than silently dropped precisely so nobody has to take our word for it.
+ * ⚠️ **The challan carries VAT only, and that is correct.** মূসক ৬.৩ has
+ * columns for সম্পূরক শুল্ক and মূসক and nothing else. Our invoices embed
+ * VAT *and* Tax (AIT), so a challan raised from one leaves the AIT out — **the
+ * buyer deducts income tax at source** (confirmed by BITAC, 2026-09-29), so it
+ * never belongs on the supplier's challan. The form still states the amount
+ * excluded, so the gap between the challan total and the bill total is never a
+ * mystery.
+ *
+ * ⚠️ **Money is whole taka** — see `MusakChallanService::computeLine()`.
  */
 class MusakChallanController extends Controller
 {
@@ -176,9 +179,11 @@ class MusakChallanController extends Controller
     /**
      * Write the lines and the footer totals.
      *
-     * ⚠️ The arithmetic lives HERE, not in the browser: what the challan claims
-     * was charged must come from the server. The form computes the same figures
-     * live so the preparer sees them, but those numbers are never trusted.
+     * ⚠️ The arithmetic lives on the SERVER, not in the browser: what the
+     * challan claims was charged must come from here. The form computes the
+     * same figures live so the preparer sees them, but those are never trusted.
+     * `MusakChallanService::computeLine()` is the one rule — the auto-raised
+     * challan uses it too, so a typed one and a generated one cannot disagree.
      */
     private function syncItems(MusakChallan $challan, array $items): void
     {
@@ -192,38 +197,30 @@ class MusakChallanController extends Controller
             $sdPct = (float) ($row['sd_rate'] ?? 0);
             $vatPct= (float) ($row['vat_rate'] ?? 0);
 
-            $value = round($qty * $price, 2);
-            $sd    = round($value * $sdPct / 100, 2);
-            // VAT sits on the value PLUS the supplementary duty — সম্পূরক শুল্ক
-            // is part of the taxable base, not a parallel charge.
-            $vat   = round(($value + $sd) * $vatPct / 100, 2);
-            $incl  = round($value + $sd + $vat, 2);
+            $figures = MusakChallanService::computeLine($qty, $price, $sdPct, $vatPct);
 
             $challan->items()->create([
-                'sort_order'      => $i,
-                'description'     => $row['description'] ?? null,
-                'unit'            => $row['unit'] ?? null,
-                'quantity'        => $qty,
-                'unit_price'      => $price,
-                'total_value'     => $value,
-                'sd_rate'         => $sdPct,
-                'sd_amount'       => $sd,
-                'vat_rate'        => $vatPct,
-                'vat_amount'      => $vat,
-                'total_inclusive' => $incl,
+                'sort_order'  => $i,
+                'description' => $row['description'] ?? null,
+                'unit'        => $row['unit'] ?? null,
+                'quantity'    => $qty,
+                'unit_price'  => $price,
+                'sd_rate'     => $sdPct,
+                'vat_rate'    => $vatPct,
+                ...$figures,
             ]);
 
-            $totals['value'] += $value;
-            $totals['sd']    += $sd;
-            $totals['vat']   += $vat;
-            $totals['incl']  += $incl;
+            $totals['value'] += $figures['total_value'];
+            $totals['sd']    += $figures['sd_amount'];
+            $totals['vat']   += $figures['vat_amount'];
+            $totals['incl']  += $figures['total_inclusive'];
         }
 
         $challan->update([
-            'total_value'     => round($totals['value'], 2),
-            'total_sd'        => round($totals['sd'], 2),
-            'total_vat'       => round($totals['vat'], 2),
-            'total_inclusive' => round($totals['incl'], 2),
+            'total_value'     => $totals['value'],
+            'total_sd'        => $totals['sd'],
+            'total_vat'       => $totals['vat'],
+            'total_inclusive' => $totals['incl'],
         ]);
     }
 
@@ -292,14 +289,7 @@ class MusakChallanController extends Controller
         ];
     }
 
-    /**
-     * Build the lines from an invoice.
-     *
-     * Quotation unit prices are VAT **and** Tax inclusive (see the quotation
-     * VAT/Tax model), so the ex-tax price is `gross / (1 + (vat+tax)/100)` — the
-     * same extraction the quotation itself uses. What that leaves out is the
-     * AIT, which the form then names.
-     */
+    /** Build the form's starting point from an invoice. */
     private function prefillFromInvoice(Request $request): ?array
     {
         $id = $request->query('invoice');
@@ -313,22 +303,7 @@ class MusakChallanController extends Controller
             return null;
         }
 
-        $vatRate = (float) ($invoice->vat_rate ?? 0);
-        $taxRate = (float) ($invoice->tax_rate ?? 0);
-        $divisor = 1 + ($vatRate + $taxRate) / 100;
-
-        $units = $invoice->workOrder?->items->pluck('unit')->values() ?? collect();
-
-        $items = ($invoice->workOrder?->quotation?->items ?? collect())
-            ->values()
-            ->map(fn ($line, $i) => [
-                'description' => $line->description,
-                'unit'        => $units[$i] ?? null,
-                'quantity'    => (float) $line->quantity,
-                'unit_price'  => round(((float) $line->unit_price) / ($divisor ?: 1), 2),
-                'sd_rate'     => 0,
-                'vat_rate'    => $vatRate,
-            ])->values();
+        $items = app(MusakChallanService::class)->linesFor($invoice);
 
         return [
             'invoice_id'        => $invoice->id,
@@ -342,9 +317,9 @@ class MusakChallanController extends Controller
             'destination'       => $invoice->deliveryOrder?->delivery_address ?: $invoice->customer?->address,
             'vehicle'           => $invoice->deliveryOrder?->vehicle_number,
             'items'             => $items,
-            // Named, never silently dropped — see the class docblock.
+            // Stated, not hidden — see the class docblock.
             'excluded_tax'      => round((float) ($invoice->tax_amount ?? 0), 2),
-            'tax_rate'          => $taxRate,
+            'tax_rate'          => (float) ($invoice->tax_rate ?? 0),
             'invoice_total'     => (float) $invoice->total_amount,
         ];
     }
