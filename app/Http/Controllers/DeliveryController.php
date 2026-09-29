@@ -20,7 +20,7 @@ class DeliveryController extends Controller
 
     public function index(Request $request)
     {
-        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer']);
+        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -57,6 +57,9 @@ class DeliveryController extends Controller
                 'status'              => $d->status,
                 'scheduled_date'      => $d->scheduled_date?->format('d/m/Y'),
                 'delivered_at'        => $d->delivered_at?->format('d/m/Y H:i'),
+                // Billing is a separate act now, so the list has to show which
+                // deliveries are still waiting for one.
+                'invoice'             => $d->invoice?->only(['id', 'invoice_number']),
             ]);
 
         return Inertia::render('Delivery/Index', [
@@ -227,15 +230,14 @@ class DeliveryController extends Controller
         $fully = $workOrder->fresh()->deliveredQty() >= (float) $workOrder->quantity - 0.001;
         $workOrder->update(['status' => $fully ? 'delivered' : 'partially_delivered']);
 
-        $invoice = $this->invoiceService->createFromDelivery($delivery);
-
-        // Customer-portal live notifications
+        // ⚠️ Confirming a delivery does NOT raise the bill (BITAC, 2026-09-29).
+        // The delivery challan belongs to the delivery, but billing is its own
+        // act and happens whenever accounts get to it — see
+        // `InvoiceController@storeFromDelivery`. The মূসক ৬.৩ then comes off
+        // the bill, equally deliberately.
         \App\Services\CustomerNotifyService::workOrderStateChanged($delivery->workOrder->fresh('customer'), $previousWoStatus);
-        if ($invoice) {
-            \App\Services\CustomerNotifyService::invoiceIssued($invoice->fresh('customer', 'workOrder'));
-        }
 
         return redirect()->route('delivery.index')
-            ->with('success', "Delivery confirmed. Invoice {$invoice->invoice_number} created.");
+            ->with('success', 'Delivery confirmed. Raise the bill from this delivery when you are ready.');
     }
 }

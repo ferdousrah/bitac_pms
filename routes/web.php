@@ -706,6 +706,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{delivery}', [DeliveryController::class, 'show'])->name('delivery.show');
         Route::get('{delivery}/pdf', [DeliveryController::class, 'pdf'])->name('delivery.pdf');
         Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->name('delivery.complete');
+        // Billing is its own act, done whenever accounts get to it — it is
+        // deliberately NOT a side effect of confirming the delivery.
+        Route::post('{delivery}/bill', [\App\Http\Controllers\InvoiceController::class, 'storeFromDelivery'])
+            ->middleware('permission:create invoices')
+            ->name('delivery.bill');
     });
 
     // Invoices

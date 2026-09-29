@@ -97,7 +97,7 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                         <SortableHeader label="Scheduled" column="scheduled_date" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/delivery" filters={filters} className="w-28" />
                                         <th>Delivered</th>
                                         <SortableHeader label="Created" column="created_at" currentSort={filters?.sort} currentDir={filters?.dir} baseUrl="/delivery" filters={filters} className="w-28" />
-                                        <th className="w-36 text-right">Actions</th>
+                                        <th className="w-52 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -161,6 +161,25 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                             <i className="fi fi-rr-check text-sm leading-none" /> Complete
                                                         </Link>
                                                     )}
+                                                    {/* Billing is its own act — confirming the delivery
+                                                        deliberately does not raise the bill. */}
+                                                    {d.status === 'delivered' && (d.invoice ? (
+                                                        <Link href={`/invoices/${d.invoice.id}`}
+                                                            title={`Bill ${d.invoice.invoice_number}`}
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 transition-colors">
+                                                            <i className="fi fi-rr-receipt text-sm leading-none" /> Bill
+                                                        </Link>
+                                                    ) : (
+                                                        <button type="button" title="Raise the bill for this delivery"
+                                                            onClick={() => {
+                                                                if (confirm('Raise the bill for this delivery?')) {
+                                                                    router.post(`/delivery/${d.id}/bill`);
+                                                                }
+                                                            }}
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-brand-600 hover:bg-brand-500 transition-colors">
+                                                            <i className="fi fi-rr-receipt text-sm leading-none" /> Raise bill
+                                                        </button>
+                                                    ))}
                                                 </div>
                                             </td>
                                         </tr>

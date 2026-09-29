@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
-use App\Services\MusakChallanService;
 
 class InvoiceService
 {
@@ -50,12 +49,10 @@ class InvoiceService
             'issued_at'         => now(),
         ]);
 
-        // BITAC issues the bill and the মূসক ৬.৩ together, so raising one
-        // raises the other. It returns null when there is nothing to put on the
-        // challan (a bill with no quotation behind it has no lines) — a blank
-        // tax challan would be worse than none.
-        app(MusakChallanService::class)->createFromInvoice($invoice);
-
+        // ⚠️ Confirming a delivery does NOT raise a মূসক ৬.৩ (BITAC,
+        // 2026-09-29). A tax challan is issued deliberately, from the bill, so
+        // that someone has looked at the destination, the vehicle and the
+        // signatory first. The bill links straight to it.
         return $invoice;
     }
 

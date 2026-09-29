@@ -23,4 +23,5 @@ class DeliveryOrder extends Model
     public function workOrder() { return $this->belongsTo(WorkOrder::class); }
     public function customer()  { return $this->belongsTo(Customer::class); }
     public function pod()       { return $this->hasOne(ProofOfDelivery::class, 'delivery_order_id'); }
+    public function invoice()   { return $this->hasOne(Invoice::class, 'delivery_order_id'); }
 }

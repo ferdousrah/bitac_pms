@@ -2,17 +2,17 @@
 
 namespace App\Services;
 
-use App\Models\Center;
 use App\Models\Invoice;
-use App\Models\MusakChallan;
 
 /**
- * Building a মূসক ৬.৩ — the line arithmetic, and raising one from a bill.
+ * Building a মূসক ৬.৩ — the line arithmetic, and pricing a bill's lines
+ * for the form.
  *
- * ⚠️ **The bill and the challan are ONE act.** BITAC issues them together, so
- * `InvoiceService::createFromDelivery()` calls `createFromInvoice()` straight
- * after writing the invoice. Nobody should have to remember to raise the tax
- * challan separately.
+ * ⚠️ **Nothing raises a tax challan automatically.** It was briefly wired to
+ * fire when a delivery was confirmed; BITAC did not want that coupling
+ * (2026-09-29). A challan is issued deliberately, from the bill, through the
+ * form — so that a person has checked the destination, the vehicle and the
+ * signatory before a legal document goes out.
  */
 class MusakChallanService
 {
@@ -43,91 +43,6 @@ class MusakChallanService
             'vat_amount'      => $vat,
             'total_inclusive' => $value + $sd + $vat,
         ];
-    }
-
-    /**
-     * Raise the challan that goes out with a bill.
-     *
-     * Returns null when there is nothing to put on it — a bill with no
-     * quotation behind it has no lines, and a blank tax challan is worse than
-     * no tax challan. Returns the existing one rather than a second if the
-     * invoice already has one.
-     */
-    public function createFromInvoice(Invoice $invoice, ?int $signatoryUserId = null): ?MusakChallan
-    {
-        if ($existing = $invoice->musakChallans()->first()) {
-            return $existing;
-        }
-
-        $invoice->loadMissing(['customer', 'workOrder.quotation.items', 'workOrder.items', 'deliveryOrder']);
-
-        $lines = $this->linesFor($invoice);
-        if ($lines->isEmpty()) {
-            return null;
-        }
-
-        $centre = Center::find($invoice->center_id ?? 1);
-
-        $challan = MusakChallan::create([
-            'center_id'         => $invoice->center_id,
-            'invoice_id'        => $invoice->id,
-            'delivery_order_id' => $invoice->delivery_order_id,
-            'work_order_id'     => $invoice->work_order_id,
-            'customer_id'       => $invoice->customer_id,
-            'challan_no'        => MusakChallan::generateChallanNo($invoice->center_id),
-            'issue_date'        => now()->toDateString(),
-            'issue_time'        => now()->format('H:i'),
-            'supplier_name'     => $centre?->name_bn ?: $centre?->name,
-            'supplier_bin'      => $centre?->bin_number,
-            'supplier_address'  => $centre?->address_bn ?: $centre?->address,
-            'buyer_name'        => $invoice->customer?->name,
-            'buyer_bin'         => $invoice->customer?->bin_number,
-            'buyer_address'     => $invoice->customer?->address,
-            'destination'       => $invoice->deliveryOrder?->delivery_address ?: $invoice->customer?->address,
-            'vehicle'           => $invoice->deliveryOrder?->vehicle_number,
-            // The officer who confirmed the delivery signs it. Their default
-            // signature block is resolved at render, like every other document.
-            'signatory_user_id' => $signatoryUserId ?? auth()->id(),
-            'status'            => 'issued',
-            'issued_at'         => now(),
-            'created_by'        => auth()->id(),
-        ]);
-
-        $totals = ['value' => 0.0, 'sd' => 0.0, 'vat' => 0.0, 'incl' => 0.0];
-
-        foreach ($lines as $i => $line) {
-            $figures = self::computeLine(
-                (float) $line['quantity'],
-                (float) $line['unit_price'],
-                0.0,
-                (float) $line['vat_rate'],
-            );
-
-            $challan->items()->create([
-                'sort_order' => $i,
-                'description' => $line['description'],
-                'unit'        => $line['unit'],
-                'quantity'    => $line['quantity'],
-                'unit_price'  => $line['unit_price'],
-                'sd_rate'     => 0,
-                'vat_rate'    => $line['vat_rate'],
-                ...$figures,
-            ]);
-
-            $totals['value'] += $figures['total_value'];
-            $totals['sd']    += $figures['sd_amount'];
-            $totals['vat']   += $figures['vat_amount'];
-            $totals['incl']  += $figures['total_inclusive'];
-        }
-
-        $challan->update([
-            'total_value'     => $totals['value'],
-            'total_sd'        => $totals['sd'],
-            'total_vat'       => $totals['vat'],
-            'total_inclusive' => $totals['incl'],
-        ]);
-
-        return $challan->fresh('items');
     }
 
     /**

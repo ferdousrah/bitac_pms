@@ -311,6 +311,9 @@ time against a column that did not exist.
 - **Rounding** — follow the sample: money is whole taka. 290,909 + 10% = 29,091 → a round
   320,000, exactly as the original prints. The unit price keeps its paisa, since rounding a
   per-piece price is a different thing from rounding a total.
-- **The bill and the challan are raised together.** Confirming a delivery writes the invoice and
-  the মূসক ৬.৩ in one go, issued and signed by the officer who confirmed it, with destination
-  and vehicle from the delivery order. The invoice list links straight to its challan.
+- **Delivery, bill and মূসক ৬.৩ are three separate acts.** The delivery challan belongs to the
+  delivery; the bill and the tax challan do not, and are raised whenever accounts get to them.
+  Confirming a delivery used to issue an invoice as a side effect — that now sits behind a
+  **Raise bill** button on the Delivery list, and the bill then offers **+ মূসক ৬.৩**, prefilled
+  from itself. Each refusal is a redirect + flash: an unconfirmed delivery cannot be billed, and
+  billing twice lands on the existing bill.

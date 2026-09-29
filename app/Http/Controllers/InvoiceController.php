@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DeliveryOrder;
 use App\Models\Invoice;
 use App\Services\InvoiceService;
 use Illuminate\Http\Request;
@@ -64,6 +65,37 @@ class InvoiceController extends Controller
                 'dir'    => $dir,
             ],
         ]);
+    }
+
+    /**
+     * Raise the bill for a delivery.
+     *
+     * ⚠️ This used to happen inside `DeliveryController@complete`, so
+     * confirming a delivery silently issued an invoice. BITAC wanted them apart
+     * (2026-09-29): the **delivery challan** belongs to the delivery, but
+     * billing is accounts' own act, done whenever they get to it. The মূসক ৬.৩
+     * then comes off the bill, equally deliberately.
+     *
+     * Refusals are a redirect + flash, never `abort()` — a second click on a
+     * stale list must read as a message, not a crash.
+     */
+    public function storeFromDelivery(DeliveryOrder $delivery)
+    {
+        if ($delivery->status !== 'delivered') {
+            return back()->with('error', 'This delivery has not been confirmed yet, so there is nothing to bill.');
+        }
+
+        if ($existing = $delivery->invoice) {
+            return redirect()->route('invoices.show', $existing)
+                ->with('error', "This delivery is already billed on {$existing->invoice_number}.");
+        }
+
+        $invoice = $this->service->createFromDelivery($delivery);
+
+        \App\Services\CustomerNotifyService::invoiceIssued($invoice->fresh('customer', 'workOrder'));
+
+        return redirect()->route('invoices.show', $invoice)
+            ->with('success', "Bill {$invoice->invoice_number} raised.");
     }
 
     public function show(Invoice $invoice)
