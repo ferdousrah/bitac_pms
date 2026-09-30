@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Section;
 use App\Models\WorkOrder;
 use App\Services\PcdReleaseService;
+use App\Support\SignatureBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -438,26 +439,26 @@ class WorkOrderSectionController extends Controller
         $routingHtml .= '</tbody></table>';
 
         // ── Signature footer — three blocks per paper format (English)
-        //   The Prepared By cell auto-fills from work_orders.prepared_by:
-        //   signature image (if user.signature_path exists), name, designation.
+        //   Prepared By = work_orders.prepared_by. Their DEFAULT signature
+        //   block (Profile → Signatures) prints on its own — the scan already
+        //   carries name and designation, so typing them underneath would
+        //   print them twice. With no signature uploaded, the name and
+        //   designation are typed instead so the sheet still says who.
         //   Verified By / Approved By stay blank for hand-signing on the print.
         $preparer = $workOrder->preparedBy;
-        $sigImg   = '';
-        if ($preparer && $preparer->signature_path) {
-            $sigPath = storage_path('app/public/' . ltrim($preparer->signature_path, '/'));
-            if (is_file($sigPath)) {
-                // mPDF embeds local file:// images cleanly.
-                $sigImg = '<img src="file://' . str_replace('\\', '/', $sigPath) . '" '
-                    . 'style="max-height: 38pt; max-width: 80%;" />';
-            }
-        }
-        $preparerName = $preparer ? $esc($preparer->name) : '';
-        $preparerDesg = $preparer ? $esc($preparer->designation ?? '') : '';
+        $sigPath  = $preparer?->signatureAbsolutePath();
 
-        $preparedCell = '<div style="min-height: 46pt; padding-bottom: 4pt;">' . $sigImg . '</div>'
-            . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; color: #000;"><b>Prepared By</b></div>'
-            . ($preparerName !== '' ? '<div style="font-size: 9.5pt; color: #000; margin-top: 1pt;">' . $preparerName . '</div>' : '')
-            . ($preparerDesg !== '' ? '<div style="font-size: 8.5pt; color: #555; margin-top: 1pt;">' . $preparerDesg . '</div>' : '');
+        $preparedCell = '<div style="min-height: 46pt; padding-bottom: 4pt;">'
+            . ($sigPath ? SignatureBlock::html($sigPath, [], imageMaxWidthPt: 150) : '')
+            . '</div>'
+            . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; color: #000;"><b>Prepared By</b></div>';
+
+        if ($preparer && !$sigPath) {
+            $preparedCell .= '<div style="font-size: 9.5pt; color: #000; margin-top: 1pt;">' . $esc($preparer->name) . '</div>'
+                . (($preparer->designation ?? '') !== ''
+                    ? '<div style="font-size: 8.5pt; color: #555; margin-top: 1pt;">' . $esc($preparer->designation) . '</div>'
+                    : '');
+        }
 
         $blankCell = fn (string $label) => '<div style="min-height: 46pt;">&nbsp;</div>'
             . '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; color: #000;"><b>' . $label . '</b></div>';
