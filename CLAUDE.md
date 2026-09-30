@@ -735,6 +735,8 @@ tail -f storage/logs/laravel.log
 | Email Mailables | `app/Mail/DocumentMail.php` (multi-attach), `app/Mail/RfqLetterMail.php` |
 | Transactional data wipe | `app/Http/Controllers/Admin/SystemResetController.php` |
 | Deployment guide | `docs/DEPLOYMENT.md` (Coolify + Dockerfile) |
+| Client's own workflow + the Excel costing model it replaced | `docs/DOMAIN_NOTES.md` (paper forms in `client resource/`) |
+| Task list, BITAC's decisions, what's outstanding | `docs/IED_BACKLOG.md` |
 
 ## 📦 What's Been Built (Feature Inventory)
 
