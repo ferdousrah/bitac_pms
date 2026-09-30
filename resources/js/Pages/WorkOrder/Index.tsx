@@ -17,7 +17,7 @@ const STATUS: Record<string, { badge: string; icon: string }> = {
 };
 
 const PRIORITY: Record<string, string> = {
-    low: 'bg-slate-50 text-slate-600 border-slate-200', normal: 'bg-blue-50 text-blue-600 border-blue-200', urgent: 'bg-red-50 text-red-600 border-red-200',
+    low: 'bg-slate-50 text-slate-600 border-slate-200', normal: 'bg-blue-50 text-blue-600 border-blue-200', high: 'bg-amber-50 text-amber-700 border-amber-200', urgent: 'bg-red-50 text-red-600 border-red-200',
 };
 
 export default function WorkOrderIndex({ workOrders, filters, statusList }: any) {
