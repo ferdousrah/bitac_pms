@@ -64,7 +64,21 @@ class NotifyService
     }
 
     /**
-     * Notify all users with any of the given permissions.
+     * Notify every user who holds a permission — optionally only at one centre.
+     *
+     * Recipients are chosen by **who holds the permission**, directly or
+     * through any role. Two things follow from that, and both have bitten:
+     *
+     *  ⚠️ **Granting a permission to a role puts that role on this fan-out.**
+     *    A super admin can already open any screen via `Gate::before`, so
+     *    granting them a permission adds no access — only notifications they
+     *    did not ask for. Grant for access, not out of habit.
+     *
+     *  ⚠️ **`User` has no `CenterScope`**, so without `$centerId` this reaches
+     *    holders at *every* BITAC centre. Pass the document's centre for
+     *    anything centre-specific. Users with **no centre set are always
+     *    included**: not notifying someone at all is a worse failure than a
+     *    little cross-centre noise, and unset centres are real in this data.
      */
     public static function toPermission(
         string $permission,
@@ -75,13 +89,18 @@ class NotifyService
         string $icon = 'fi-rr-bell',
         string $color = 'blue',
         ?array $data = null,
+        ?int $centerId = null,
     ): void {
         // Resilient lookup: if the permission row doesn't exist yet (e.g. a
         // fresh deploy without the matching seeder), don't crash the caller —
         // just log and silently skip the fan-out. The feature itself keeps
         // working; only the notification is lost.
         try {
-            $userIds = User::permission($permission)->pluck('id')->toArray();
+            $userIds = User::permission($permission)
+                ->when($centerId !== null, fn ($q) => $q->where(
+                    fn ($w) => $w->where('center_id', $centerId)->orWhereNull('center_id')
+                ))
+                ->pluck('id')->toArray();
         } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
             \Log::warning("NotifyService::toPermission — permission '{$permission}' does not exist. "
                 . "Run the seeder + php artisan permission:cache-reset to fix.");

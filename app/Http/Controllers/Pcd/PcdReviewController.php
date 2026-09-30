@@ -143,6 +143,7 @@ class PcdReviewController extends Controller
             $message,
             "/pcd/job-planning/{$workOrder->id}",
             'fi-rr-clipboard-list',
+            centerId: $workOrder->center_id,
         );
 
         return redirect()->route('pcd.inbox.index')
@@ -182,6 +183,7 @@ class PcdReviewController extends Controller
             "WO {$workOrder->wo_number} ({$workOrder->customer?->name}) was sent back by PCD.\n\nReason: {$reason}",
             "/ied/work-orders/{$workOrder->id}",
             'fi-rr-undo',
+            centerId: $workOrder->center_id,
         );
 
         return redirect()->route('pcd.inbox.index')

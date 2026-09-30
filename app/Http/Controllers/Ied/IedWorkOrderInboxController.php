@@ -245,6 +245,7 @@ class IedWorkOrderInboxController extends Controller
             "/pcd/inbox/{$workOrder->id}",
             'fi-rr-tools',
             'brand',
+            centerId: $workOrder->center_id,
         );
 
         // Notify the customer — their work order is now in production planning.

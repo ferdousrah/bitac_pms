@@ -43,12 +43,16 @@ return new class extends Migration
             ['name' => 'review pcd-inbox', 'guard_name' => 'web'],
         );
 
-        // নির্বাহী প্রকৌশলী is the Executive Engineer role. A super admin gets it
-        // too, or the only people who could unblock the queue would be the ones
-        // who cannot see it.
-        foreach (['Executive Engineer', 'super-admin', 'super_admin'] as $roleName) {
-            Role::where('name', $roleName)->first()?->givePermissionTo($permission);
-        }
+        // নির্বাহী প্রকৌশলী is the Executive Engineer role.
+        //
+        // ⚠️ **Deliberately NOT granted to super-admin.** `Gate::before` in
+        // AuthServiceProvider already lets a super admin open any screen, so
+        // granting it would change nothing about access — but it WOULD put
+        // every super admin on the notification fan-out for every work order,
+        // because `NotifyService::toPermission()` picks recipients by who
+        // holds the permission. Access and being told about it are different
+        // things; this permission is the second one.
+        Role::where('name', 'Executive Engineer')->first()?->givePermissionTo($permission);
 
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
     }
