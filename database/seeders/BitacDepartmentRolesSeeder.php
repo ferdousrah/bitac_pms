@@ -59,14 +59,15 @@ class BitacDepartmentRolesSeeder extends Seeder
 
         // IED Officer — handles RFQ → Quotation → IED→PCD handoff
         $ied = Role::firstOrCreate(['name' => 'ied-officer']);
-        $ied->syncPermissions([
+        $iedPermissions = [
             'view dashboard',
             'view rfqs', 'create rfqs', 'edit rfqs',
             'view quotations', 'create quotations', 'edit quotations',
             'submit quotation-to-customer', 'create quotation-revision',
             'access ied',
             'view cost-estimates', 'create cost-estimates', 'edit cost-estimates',
-        ]);
+        ];
+        $ied->syncPermissions($iedPermissions);
 
         // PCD Officer — the generic name for the planning job. BITAC's own
         // staff are assigned the designation roles below; this stays as the
@@ -88,23 +89,30 @@ class BitacDepartmentRolesSeeder extends Seeder
         $pcd->syncPermissions($pcdPermissions);
 
         /*
-         * BITAC's own two PCD designations, and why the work is split:
+         * BITAC's own designations. ⚠️ **The department is part of the name**:
+         * there is an Executive Engineer in IED *and* one in PCD, so the title
+         * alone says nothing about what the role should be able to do.
          *
-         *   নির্বাহী প্রকৌশলী  (Executive Engineer) → PCD Inbox.
-         *     Reads a work order as it arrives from IED and forwards it on, or
-         *     sends it back.
-         *   সহকারী প্রকৌশলী (Assistant Engineer) → Job Planning.
-         *     Job number, material requisition, routing, operation sheets,
-         *     release to the shops, and the deliveries that follow.
+         *   Executive Engineer (IED)  — RFQs, quotations, cost estimates,
+         *                               approvals.
+         *   Executive Engineer (PCD)  → PCD Inbox. Reads a work order as it
+         *                               arrives from IED and forwards it on,
+         *                               or sends it back.
+         *   Assistant Engineer (PCD)  → Job Planning. Job number, material
+         *                               requisition, routing, operation
+         *                               sheets, release, deliveries.
          *
-         * ⚠️ Neither holds the other's permission. Accepting the work and
-         * planning it are two jobs held by two people; giving the planner
+         * ⚠️ Neither PCD role holds the other's permission. Accepting the work
+         * and planning it are two jobs held by two people; giving the planner
          * `review pcd-inbox` would collapse the step back into one.
          */
-        Role::firstOrCreate(['name' => 'Executive Engineer'])
+        Role::firstOrCreate(['name' => 'Executive Engineer (IED)'])
+            ->syncPermissions($iedPermissions);
+
+        Role::firstOrCreate(['name' => 'Executive Engineer (PCD)'])
             ->syncPermissions(['view dashboard', 'view work-orders', 'access pcd', 'review pcd-inbox']);
 
-        Role::firstOrCreate(['name' => 'Assistant Engineer'])
+        Role::firstOrCreate(['name' => 'Assistant Engineer (PCD)'])
             ->syncPermissions($pcdPermissions);
 
         // Shop In-Charge — sees only their shop's jobs
