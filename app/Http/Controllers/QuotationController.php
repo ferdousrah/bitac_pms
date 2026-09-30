@@ -2399,7 +2399,7 @@ HTML;
             // financial year it counts towards in Target vs Achievement — a
             // January work order keyed in July belongs to January.
             'customer_wo_date'  => 'nullable|date',
-            'priority'          => 'nullable|in:normal,high,urgent',
+            'priority'          => 'nullable|in:low,normal,high,urgent',
             'due_date'          => 'nullable|date',
             'notes'             => 'nullable|string|max:1000',
             // Customer's PO / authorisation document — audit trail + legal proof
