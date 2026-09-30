@@ -11,8 +11,9 @@ use App\Support\SignatureBlock;
  * and the standalone RFQ letters so the format stays identical everywhere.
  *
  * Layout:  Ref No. (top-left) / Date (top-right) → Subject → customer Ref →
- *          body → recipient (bottom-left) + signatory (bottom-right) with the
- *          "For / Director (Centre Head)" sign-off line.
+ *          body → recipient (bottom-left) + signatory (bottom-right). Signed →
+ *          the signature image alone; unsigned → "Yours faithfully", the typed
+ *          lines and the "For / Director (Centre Head)" sign-off.
  */
 class OfficialLetterRenderer
 {
@@ -78,15 +79,22 @@ class OfficialLetterRenderer
             $signerPhone !== '' ? $L['phone'] . ' ' . $num($signerPhone) : '',
         ];
 
+        // ⚠️ A signed letter prints the image and NOTHING around it. The scan
+        // is the whole block BITAC's officers sign with, so a typed "Yours
+        // faithfully," above it and "For — Director (Centre Head)" under it
+        // only repeated what the officer's own block already says. The
+        // UNSIGNED letter keeps both, with the typed lines between them, so it
+        // still reads as a complete sign-off.
+        $isSigned = $signaturePath && is_file($signaturePath);
+
         // Right-aligned: on the printed BITAC letter the signature block sits
         // against the right margin, not floating in the middle of its column.
         $signerCol = '<div style="' . $lf . ' font-size: 11pt; color: #000; text-align: right;">'
-            . '<div style="margin-bottom: 30pt;">' . $L['yours'] . '</div>'
+            . ($isSigned ? '' : '<div style="margin-bottom: 30pt;">' . $L['yours'] . '</div>')
             . SignatureBlock::html($signaturePath, $typedLines, blankHeightPt: 46, imageMaxWidthPt: 190, align: 'right')
-            // The "পক্ষে / For — Director (Centre Head)" sign-off is the office
-            // acting, not the signatory's own details, so it always prints.
-            . '<div style="margin-top: 6pt; color: #a349a4;">' . $L['for'] . '</div>'
-            . '<div style="color: #a349a4;">' . $L['director'] . ' ' . $signerCenter . $dot . '</div>'
+            . ($isSigned ? '' :
+                '<div style="margin-top: 6pt; color: #a349a4;">' . $L['for'] . '</div>'
+                . '<div style="color: #a349a4;">' . $L['director'] . ' ' . $signerCenter . $dot . '</div>')
             . '</div>';
 
         $bodyHtml = $d['bodyHtml'] ?? '';

@@ -376,7 +376,8 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 
 ### Official letter format (one renderer for all letters)
 - **`app/Services/OfficialLetterRenderer.php`** `buildHtml($d, $lang)` is the SINGLE source of the BITAC letterhead letter body (Bangla + English). Used by the quotation **forwarding letter** and the standalone **RFQ letters** — never re-implement the HTML.
-- Layout: Ref No (top-left) / Date (top-right) → Subject → customer Ref → body (justified, no indent, salutation lives in the body) → recipient bottom-left + signatory bottom-right with the **"পক্ষে / For — পরিচালক (কেন্দ্র প্রধান) / Director (Centre Head)"** sign-off.
+- Layout: Ref No (top-left) / Date (top-right) → Subject → customer Ref → body (justified, no indent, salutation lives in the body) → recipient bottom-left + signatory bottom-right.
+- ⚠️ **A signed letter prints the signature image ALONE** — no "Yours faithfully / আপনার বিশ্বস্ত" above it and no **"পক্ষে / For — পরিচালক (কেন্দ্র প্রধান) / Director (Centre Head)"** under it (BITAC, 2026-09-30): the uploaded block already says it. Only an **unsigned** letter prints those two lines around the typed name. Applies to every letter through `OfficialLetterRenderer` — quotation forwarding letter, RFQ letters, the bill's forwarding letter.
 - **Signatory ink colour = `#a349a4`** (purple) everywhere (cost estimate, quotation PDF, letters). Labels stay black.
 - Bangla = `font-family: siyamrupali` + Bangla digits; English = default font.
 - Re-quotation: title is just "RE-QUOTATION" (no `(n)`); revision number appended to the END of the Ref No → `…028.51.(2)`.
