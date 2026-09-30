@@ -67,7 +67,7 @@ export default function RoleCreateEdit({ role, grouped_permissions, assigned }: 
             .map(g => ({
                 ...g,
                 permissions: g.permissions.filter(p =>
-                    p.name.toLowerCase().includes(q) || g.group.toLowerCase().includes(q)
+                    p.name.toLowerCase().includes(q) || p.label.toLowerCase().includes(q) || g.group.toLowerCase().includes(q)
                 ),
             }))
             .filter(g => g.permissions.length > 0);
@@ -228,8 +228,16 @@ export default function RoleCreateEdit({ role, grouped_permissions, assigned }: 
                                                                     onChange={() => togglePermission(perm.name)}
                                                                     className="rounded border-surface-300 text-brand-500 focus:ring-brand-400 focus:ring-2 focus:ring-offset-0 cursor-pointer"
                                                                 />
-                                                                <span className={`text-xs flex-1 truncate ${checked ? 'text-surface-900 font-medium' : 'text-surface-600'}`}>
-                                                                    {perm.name}
+                                                                <span className={`text-xs flex-1 min-w-0 ${checked ? 'text-surface-900 font-medium' : 'text-surface-600'}`}>
+                                                                    {/* A renamed screen gets a descriptive label; the raw permission name still shows under it. */}
+                                                                    {perm.label.toLowerCase() === perm.name.toLowerCase() ? (
+                                                                        <span className="block truncate">{perm.name}</span>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span className="block">{perm.label}</span>
+                                                                            <span className="block truncate text-[10px] font-mono text-surface-400">{perm.name}</span>
+                                                                        </>
+                                                                    )}
                                                                 </span>
                                                                 {checked && (
                                                                     <i className="fi fi-rr-check text-brand-500 text-[10px] leading-none" />

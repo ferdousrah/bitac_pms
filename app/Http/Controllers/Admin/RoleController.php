@@ -117,12 +117,33 @@ class RoleController extends Controller
      * "view rfqs"            → group "Rfqs"
      * "create qc-inspections" → group "Qc Inspections"
      */
+    /**
+     * Permissions whose stored name no longer says which screen they open.
+     *
+     * ⚠️ `view pcd-inbox` is what opens **Job Planning**: the screen was
+     * renamed when the real PCD Inbox (the Executive Engineer's review step,
+     * `review pcd-inbox`) was put in front of it, but the permission kept its
+     * name so every role holding it kept working. Grouped by name, the role
+     * screen showed it under "Pcd Inbox" and "Job Planning" appeared nowhere.
+     * The names stay as they are — the sidebar, routes and seeders all key on
+     * them; this only changes what the admin reads.
+     *
+     * name => [group, label]
+     */
+    private const DISPLAY = [
+        'view pcd-inbox'   => ['PCD Job Planning', 'Job Planning — open the planning desk (PCD → Job Planning)'],
+        'review pcd-inbox' => ['PCD Inbox', 'PCD Inbox — review and forward to Job Planning (PCD → PCD Inbox)'],
+    ];
+
     private function groupedPermissions(): array
     {
         $verbs = ['view', 'create', 'edit', 'delete', 'manage', 'approve', 'reject', 'convert', 'run', 'start', 'stop', 'log', 'download', 'export', 'complete'];
 
         return Permission::orderBy('name')->get()
             ->groupBy(function ($p) use ($verbs) {
+                if (isset(self::DISPLAY[$p->name])) {
+                    return self::DISPLAY[$p->name][0];
+                }
                 $parts = explode(' ', $p->name, 2);
                 if (count($parts) === 2 && in_array($parts[0], $verbs, true)) {
                     $resource = $parts[1];
@@ -139,9 +160,10 @@ class RoleController extends Controller
                 'group'       => $group,
                 'permissions' => $items->map(fn($p) => [
                     'name'  => $p->name,
-                    'label' => ucfirst($p->name),
+                    'label' => self::DISPLAY[$p->name][1] ?? ucfirst($p->name),
                 ])->values(),
             ])
+            ->sortBy('group')
             ->values()
             ->toArray();
     }
