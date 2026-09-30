@@ -68,9 +68,11 @@ class BitacDepartmentRolesSeeder extends Seeder
             'view cost-estimates', 'create cost-estimates', 'edit cost-estimates',
         ]);
 
-        // PCD Officer — receives jobs from IED, handles MR + Section Assign + Op Sheet
+        // PCD Officer — the generic name for the planning job. BITAC's own
+        // staff are assigned the designation roles below; this stays as the
+        // canonical definition of what the job can do.
         $pcd = Role::firstOrCreate(['name' => 'pcd-officer']);
-        $pcd->syncPermissions([
+        $pcdPermissions = [
             'view dashboard',
             'view work-orders',
             'access pcd', 'view pcd-inbox',
@@ -82,7 +84,28 @@ class BitacDepartmentRolesSeeder extends Seeder
             // Delivery Orders moved from Delivery & Billing to PCD — the
             // department that ran the job also ships it.
             'view delivery', 'create delivery', 'complete delivery',
-        ]);
+        ];
+        $pcd->syncPermissions($pcdPermissions);
+
+        /*
+         * BITAC's own two PCD designations, and why the work is split:
+         *
+         *   নির্বাহী প্রকৌশলী  (Executive Engineer) → PCD Inbox.
+         *     Reads a work order as it arrives from IED and forwards it on, or
+         *     sends it back.
+         *   সহকারী প্রকৌশলী (Assistant Engineer) → Job Planning.
+         *     Job number, material requisition, routing, operation sheets,
+         *     release to the shops, and the deliveries that follow.
+         *
+         * ⚠️ Neither holds the other's permission. Accepting the work and
+         * planning it are two jobs held by two people; giving the planner
+         * `review pcd-inbox` would collapse the step back into one.
+         */
+        Role::firstOrCreate(['name' => 'Executive Engineer'])
+            ->syncPermissions(['view dashboard', 'view work-orders', 'access pcd', 'review pcd-inbox']);
+
+        Role::firstOrCreate(['name' => 'Assistant Engineer'])
+            ->syncPermissions($pcdPermissions);
 
         // Shop In-Charge — sees only their shop's jobs
         $shop = Role::firstOrCreate(['name' => 'shop-incharge']);
