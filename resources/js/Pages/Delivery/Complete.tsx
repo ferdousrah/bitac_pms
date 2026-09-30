@@ -1,11 +1,13 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useRef, useState, useEffect } from 'react';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 export default function DeliveryComplete({ delivery }: any) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isSigning, setIsSigning] = useState(false);
     const [, setHasSig] = useState(false);
+    const [challanOpen, setChallanOpen] = useState(false);
 
     const { data, setData, post, errors, processing } = useForm({
         received_by: '',
@@ -78,7 +80,19 @@ export default function DeliveryComplete({ delivery }: any) {
                         </div>
                         <div className="text-xs opacity-80 mt-0.5">Customer: {delivery.customer}</div>
                     </div>
+                    <button type="button" onClick={() => setChallanOpen(true)}
+                        className="ml-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-white border border-red-200 hover:bg-red-50 transition-colors">
+                        <i className="fi fi-rr-file-pdf text-sm leading-none" /> Challan PDF
+                    </button>
                 </div>
+
+                <PdfPopupModal
+                    open={challanOpen}
+                    pdfUrl={challanOpen ? `/delivery/${delivery.id}/pdf?preview=base64` : null}
+                    title={`Challan ${delivery.challan_number}`}
+                    subtitle={delivery.wo_number}
+                    onClose={() => setChallanOpen(false)}
+                />
 
                 <form onSubmit={submit} className="space-y-6">
                     <div className="card">
