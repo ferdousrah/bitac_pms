@@ -22,7 +22,7 @@ class DeliveryChallanService
      */
     public function generatePdf(DeliveryOrder $delivery): string
     {
-        $delivery->load(['workOrder.product', 'workOrder.customer', 'workOrder.items', 'workOrder.quotation.items.product']);
+        $delivery->load(['workOrder.product', 'workOrder.customer', 'workOrder.items.product', 'workOrder.quotation.items']);
         $wo       = $delivery->workOrder;
         $customer = $wo->customer;
 
@@ -41,7 +41,8 @@ class DeliveryChallanService
         // have reworded them on the work order), else the quotation's.
         $source = $wo->items->isNotEmpty()
             ? $wo->items->map(fn ($i) => ['desc' => $i->description ?: $i->product?->name, 'qty' => $i->quantity, 'unit' => $i->unit])
-            : ($wo->quotation?->items ?? collect())->map(fn ($i) => ['desc' => $i->description ?: $i->product?->name, 'qty' => $i->quantity, 'unit' => $i->unit]);
+            // QuotationItem has no product relation — its description is the line.
+            : ($wo->quotation?->items ?? collect())->map(fn ($i) => ['desc' => $i->description, 'qty' => $i->quantity, 'unit' => 'pcs']);
         if ($source->isEmpty()) {
             $source = collect([['desc' => $wo->product?->name, 'qty' => $delivery->quantity_delivered, 'unit' => 'pcs']]);
         }
