@@ -22,7 +22,7 @@ class WorkOrderSectionController extends Controller
             'rfq.items.product',
             'quotation.rfq.items.product',
             'items',
-            'createdBy',
+            'preparedBy',
         ]);
 
         // Job items come from work_order_items (the PCD-editable copy) when
@@ -73,7 +73,11 @@ class WorkOrderSectionController extends Controller
                 'created_at'     => $workOrder->created_at->format('d/m/Y'),
                 // Y-m-d for the editable date input on the form.
                 'due_date'       => $workOrder->due_date?->format('Y-m-d'),
-                'prepared_by'    => $workOrder->createdBy?->name ?? auth()->user()?->name ?? '—',
+                // Prepared By is the PCD officer who fills this form, not whoever
+                // issued the WO in IED (`created_by`). Until the form is first
+                // saved nobody is stamped, so it is the person looking at it —
+                // exactly who `update()` will stamp. After that it stays put.
+                'prepared_by'    => $workOrder->preparedBy?->name ?? auth()->user()?->name ?? '—',
             ],
             'job_items' => $jobItems,
             'assigned_sections' => $workOrder->sections->map(fn($s) => [
