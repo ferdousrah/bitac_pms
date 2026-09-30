@@ -420,7 +420,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                 </div>
                             </div>
                             <div className="shrink-0">
-                                <Link href="/pcd/inbox" className="btn-outline btn-sm">
+                                <Link href="/pcd/job-planning" className="btn-outline btn-sm">
                                     <i className="fi fi-rr-arrow-left mr-1.5" />
                                     Back to Inbox
                                 </Link>

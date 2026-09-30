@@ -696,7 +696,7 @@ export default function SectionAssign({
                         <div className="card sticky bottom-4 z-10 shadow-premium-lg">
                             <div className="card-body flex items-center justify-between gap-2">
                                 <Link
-                                    href={`/pcd/inbox/${work_order.id}`}
+                                    href={`/pcd/job-planning/${work_order.id}`}
                                     className="btn-outline"
                                 >
                                     <i className="fi fi-rr-arrow-left text-xs leading-none" />

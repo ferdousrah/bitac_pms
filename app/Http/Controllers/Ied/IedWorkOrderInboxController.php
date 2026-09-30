@@ -215,8 +215,12 @@ class IedWorkOrderInboxController extends Controller
 
         // Job numbers are set by PCD manually once the WO lands in their
         // inbox — don't allocate them on this side.
+        // ⚠️ Goes to **`pcd_review`**, not straight to the planning desk. The
+        // নির্বাহী প্রকৌশলী reads it first and forwards it on (BITAC,
+        // 2026-09-30). `pcd_handoff_at/by` still records THIS act — when it
+        // reached PCD at all; the boss's forward has its own stamp.
         $workOrder->update([
-            'status'         => 'pcd_pending',
+            'status'         => 'pcd_review',
             'pcd_handoff_at' => now(),
             'pcd_handoff_by' => auth()->id(),
             'notes'          => $updatedNotes,
@@ -224,17 +228,19 @@ class IedWorkOrderInboxController extends Controller
 
         // Notify PCD officers — include the IED note in the message body
         // so the most actionable context is on the notification itself.
-        $pcdMessage = "WO {$workOrder->wo_number} ({$workOrder->customer?->name}) has been accepted by IED and is awaiting PCD setup.";
+        $pcdMessage = "WO {$workOrder->wo_number} ({$workOrder->customer?->name}) has been accepted by IED and is awaiting PCD review.";
         if ($note !== '') {
             $pcdMessage .= "\n\nNote from IED: {$note}";
         }
         if ($itemNoteCount > 0) {
             $pcdMessage .= "\n\n(+{$itemNoteCount} per-item note" . ($itemNoteCount === 1 ? '' : 's') . " attached.)";
         }
+        // The boss is notified, not the planning desk — nothing is plannable
+        // until the work order has been through review.
         NotifyService::toPermission(
-            'view pcd-inbox',
+            'review pcd-inbox',
             'work_order_forwarded_to_pcd',
-            'New Work Order — PCD action required',
+            'New Work Order — PCD review required',
             $pcdMessage,
             "/pcd/inbox/{$workOrder->id}",
             'fi-rr-tools',

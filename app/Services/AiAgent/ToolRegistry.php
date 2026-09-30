@@ -44,6 +44,7 @@ class ToolRegistry
         'quotations'             => ['url' => '/quotations',                 'label' => 'Quotations'],
         // PCD
         'pcd inbox'              => ['url' => '/pcd/inbox',                  'label' => 'PCD Inbox'],
+        'job planning'           => ['url' => '/pcd/job-planning',          'label' => 'Job Planning'],
         'material requisitions'  => ['url' => '/pcd/material-requisitions',  'label' => 'Material Requisitions'],
         'work orders'            => ['url' => '/work-orders',                'label' => 'Work Orders'],
         'operation sheets'       => ['url' => '/operation-sheets',           'label' => 'Operation Sheets'],

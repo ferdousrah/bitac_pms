@@ -101,7 +101,7 @@ class OperationSheetController extends Controller
         // where the per-item creator surface lives.
         $itemId = $request->integer('item_id') ?: null;
         if (!$itemId && $workOrder->items->isNotEmpty()) {
-            return redirect()->route('pcd.inbox.show', $workOrder)
+            return redirect()->route('pcd.job-planning.show', $workOrder)
                 ->with('error', 'Pick an item to create its Operation Sheet.');
         }
 

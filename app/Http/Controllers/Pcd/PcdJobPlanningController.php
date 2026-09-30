@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
-class PcdInboxController extends Controller
+class PcdJobPlanningController extends Controller
 {
     public function index()
     {
@@ -53,7 +53,7 @@ class PcdInboxController extends Controller
             'op_sheet_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['operation_sheet']['done'])->count(),
         ];
 
-        return Inertia::render('Pcd/Inbox', [
+        return Inertia::render('Pcd/JobPlanning', [
             'jobs'  => $jobs,
             'stats' => $stats,
         ]);
@@ -204,7 +204,7 @@ class PcdInboxController extends Controller
                     'kind'         => $f->kind,
                     // Streamed through the controller so the PDF popup's base64
                     // mode bypasses IDM/FDM intercept.
-                    'url'          => route('pcd.inbox.files.show', $f),
+                    'url'          => route('pcd.job-planning.files.show', $f),
                     'filename'     => $f->original_name,
                     'extension'    => $f->extension,
                     'human_size'   => $f->human_size,
@@ -405,7 +405,7 @@ class PcdInboxController extends Controller
             ]);
         }
 
-        return redirect()->route('pcd.inbox.index')
+        return redirect()->route('pcd.job-planning.index')
             ->with('success', "Job #{$workOrder->job_number} closed.");
     }
 

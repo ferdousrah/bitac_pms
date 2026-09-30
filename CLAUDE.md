@@ -591,6 +591,19 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 2028 change is a cabinet decision, not law yet, so `LAST_JULY_START_YEAR` and
 `FIRST_APRIL_START_YEAR` are the only two things to move if it shifts again.
 
+## 📥 PCD Inbox → Job Planning — the boss reads it first (2026-09-30)
+
+> BITAC's flow: IED forwards → **নির্বাহী প্রকৌশলী** sees a work order has arrived, reads it, and passes it on → only then is the job number, MR, routing and op sheet prepared.
+
+- ⚠️ **The screen that used to be called "PCD Inbox" was never an inbox** — work did not arrive there, it was *done* there. It is **Job Planning** now (`/pcd/job-planning`, `PcdJobPlanningController`, `Pages/Pcd/JobPlanning.tsx`, routes `pcd.job-planning.*`), and the name **PCD Inbox** moved to the new first stop where work actually lands.
+- **New status `pcd_review`, in FRONT of `pcd_pending`.** `pcd_pending` keeps its old meaning — "on the planning desk" — so **every work order already in flight stayed exactly where it was** and nothing had to be re-forwarded by hand. `status` is `varchar(30)`, so no enum widening.
+- **`Pcd\PcdReviewController`** (`/pcd/inbox`, `Pages/Pcd/{Inbox,Review}.tsx`): list, read, **Forward to Job Planning** (optional note) or **Send back to IED** (reason **required** — a work order coming back with no explanation is one that got lost). Sending back sets `ied_pending` and clears `pcd_handoff_at/by`, so it reappears in the IED Work Order Inbox; IED is notified.
+- **Two different permissions, deliberately**: **`review pcd-inbox`** (the boss) and **`view pcd-inbox`** (the planner). Accepting the work and planning it are two jobs. The permission is created by migration `..._000051_add_pcd_review_step` and granted to the **Executive Engineer** role — which exists in the live database but **not in any seeder**, so the migration is the only thing that grants it.
+- `pcd_handoff_at/by` still records **IED's** act (when it reached PCD at all); the boss's forward has its own **`pcd_forwarded_at`/`pcd_forwarded_by`/`pcd_review_note`**. The IED handoff note and the review note are both appended to `notes`, tagged `[IED → PCD · name, date]` / `[PCD Review · name, date]`.
+- **IED now notifies `review pcd-inbox`, not `view pcd-inbox`** — nothing is plannable until review is done. The boss's forward then notifies the planners.
+- ⚠️ **A stale `/pcd/inbox/{id}` link redirects to the planning desk** rather than refusing: notifications written before this step existed point there, and an old link must land somewhere useful. Deciding on a work order that has already moved on is a redirect + flash naming its current status, never an `abort()`.
+- ⚠️ **`pcd_forwarded_at/by` and `pcd_review_note` had to go into `WorkOrder::$fillable`** — mass assignment drops anything missing from it *silently*, so the forward worked while the stamp was never written. (Same trap as `CostEstimate::approval_status`.)
+
 ## 📝 Work order acceptance goes through an approval chain (2026-09)
 
 - A work order issued from an approved quotation lands `ied_pending` in the IED inbox. Accepting it was guarded by **`permission:view rfqs` alone**, with no check on who created it — so whoever issued the WO could immediately wave it through to PCD.

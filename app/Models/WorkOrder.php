@@ -14,6 +14,10 @@ class WorkOrder extends Model
         'job_category_id',
         'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'department', 'customer_po_no', 'created_by', 'prepared_by',
         'pcd_handoff_at', 'pcd_handoff_by', 'released_to_shops_at', 'released_by',
+        // The নির্বাহী প্রকৌশলী passing it from the PCD Inbox to the
+        // planning desk. ⚠️ Mass assignment drops anything missing here
+        // silently — the stamp simply never gets written.
+        'pcd_forwarded_at', 'pcd_forwarded_by', 'pcd_review_note',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
         // The date on the CUSTOMER's own work order — what decides which
         // financial year this counts towards, not when it was keyed in.
@@ -26,6 +30,7 @@ class WorkOrder extends Model
             'due_date'             => 'date',
             'customer_wo_date'     => 'date',
             'pcd_handoff_at'       => 'datetime',
+            'pcd_forwarded_at'     => 'datetime',
             'released_to_shops_at' => 'datetime',
             'cancelled_at'         => 'datetime',
         ];
@@ -41,6 +46,7 @@ class WorkOrder extends Model
         return match($this->status) {
             'draft'              => 'Draft',
             'ied_pending'        => 'Awaiting IED Acceptance',
+            'pcd_review'         => 'Awaiting PCD Review',
             'pcd_pending'        => 'In Production Planning',
             'released_to_shops'  => 'Released to Shops',
             'approved'           => 'Approved',
@@ -60,6 +66,7 @@ class WorkOrder extends Model
         return match($this->status) {
             'draft'              => 'gray',
             'ied_pending'        => 'amber',
+            'pcd_review'         => 'violet',
             'pcd_pending'        => 'blue',
             'released_to_shops'  => 'indigo',
             'approved'           => 'blue',
@@ -117,6 +124,7 @@ class WorkOrder extends Model
     public function createdBy()    { return $this->belongsTo(User::class, 'created_by'); }
     public function preparedBy()   { return $this->belongsTo(User::class, 'prepared_by'); }
     public function pcdHandoffBy() { return $this->belongsTo(User::class, 'pcd_handoff_by'); }
+    public function pcdForwardedBy() { return $this->belongsTo(User::class, 'pcd_forwarded_by'); }
     public function cancelledBy()  { return $this->belongsTo(User::class, 'cancelled_by'); }
 
     public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }

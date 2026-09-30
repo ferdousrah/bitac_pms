@@ -3,7 +3,8 @@
 use App\Http\Controllers\Admin\ApprovalChainController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Pcd\MaterialRequisitionController as PcdMaterialRequisitionController;
-use App\Http\Controllers\Pcd\PcdInboxController;
+use App\Http\Controllers\Pcd\PcdJobPlanningController;
+use App\Http\Controllers\Pcd\PcdReviewController;
 use App\Http\Controllers\Pcd\WorkOrderSectionController;
 use App\Http\Controllers\Admin\BrandingController;
 use App\Http\Controllers\Admin\MachineController;
@@ -487,12 +488,26 @@ Route::middleware(['auth'])->group(function () {
         ->name('cost-estimates.export.pdf');
 
     // PCD Module
+    // ─── PCD Inbox — where a work order ARRIVES, and the নির্বাহী প্রকৌশলী
+    // reads it and passes it on (or sends it back to IED). A different
+    // permission from the planning desk: accepting the work and planning it
+    // are two jobs.
+    Route::prefix('pcd')->middleware('permission:review pcd-inbox')->name('pcd.')->group(function () {
+        Route::get('/inbox', [PcdReviewController::class, 'index'])->name('inbox.index');
+        Route::get('/inbox/{workOrder}', [PcdReviewController::class, 'show'])->name('inbox.show');
+        Route::post('/inbox/{workOrder}/forward', [PcdReviewController::class, 'forward'])->name('inbox.forward');
+        Route::post('/inbox/{workOrder}/send-back', [PcdReviewController::class, 'sendBack'])->name('inbox.send-back');
+    });
+
+    // ─── Job Planning — the desk. Job number, material requisition, section
+    // routing, operation sheets, release to the shops. This is the screen that
+    // used to be called "PCD Inbox"; work never arrived there, it was done there.
     Route::prefix('pcd')->middleware('permission:view pcd-inbox')->name('pcd.')->group(function () {
-        Route::get('/inbox', [PcdInboxController::class, 'index'])->name('inbox.index');
-        Route::get('/inbox/{workOrder}', [PcdInboxController::class, 'show'])->name('inbox.show');
-        Route::get('/inbox/files/{file}', [PcdInboxController::class, 'file'])->name('inbox.files.show');
-        Route::post('/inbox/{workOrder}/cancel', [PcdInboxController::class, 'cancel'])->name('inbox.cancel');
-        Route::post('/inbox/{workOrder}/job-number', [PcdInboxController::class, 'setJobNumber'])->name('inbox.set-job-number');
+        Route::get('/job-planning', [PcdJobPlanningController::class, 'index'])->name('job-planning.index');
+        Route::get('/job-planning/{workOrder}', [PcdJobPlanningController::class, 'show'])->name('job-planning.show');
+        Route::get('/job-planning/files/{file}', [PcdJobPlanningController::class, 'file'])->name('job-planning.files.show');
+        Route::post('/job-planning/{workOrder}/cancel', [PcdJobPlanningController::class, 'cancel'])->name('job-planning.cancel');
+        Route::post('/job-planning/{workOrder}/job-number', [PcdJobPlanningController::class, 'setJobNumber'])->name('job-planning.set-job-number');
 
         // Material Requisitions
         Route::resource('material-requisitions', PcdMaterialRequisitionController::class);

@@ -188,7 +188,7 @@ class WorkOrderSectionController extends Controller
         // Try to release if other PCD steps are also done
         PcdReleaseService::tryRelease($workOrder->fresh());
 
-        return redirect()->route('pcd.inbox.show', $workOrder)
+        return redirect()->route('pcd.job-planning.show', $workOrder)
             ->with('success', 'Section assignment saved.');
     }
 
