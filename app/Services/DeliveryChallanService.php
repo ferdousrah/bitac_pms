@@ -6,133 +6,111 @@ use App\Models\DeliveryOrder;
 
 class DeliveryChallanService
 {
+    /** Ruled rows the item table is padded to, as on BITAC's printed challan. */
+    private const RULED_ROWS = 20;
+
     /**
-     * Render a BITAC-style Delivery Challan PDF via mPDF + letterhead.
-     * Returns the binary bytes.
+     * Render the Delivery Challan PDF on the BITAC letterhead. Returns the bytes.
+     *
+     * The layout is BITAC's own printed challan (the one PCD's Executive
+     * Engineer signs), transcribed rather than designed: No. / Date, the
+     * party's name and address, their Purchase Order No. and date, the Job
+     * No., a ruled Part No. | Description | Quantity table padded with blank
+     * lines, then the receiver's block bottom-left and the Executive Engineer,
+     * Production Control Division bottom-right — both left blank to be signed
+     * by hand on the paper.
      */
     public function generatePdf(DeliveryOrder $delivery): string
     {
-        $delivery->load(['workOrder.product', 'workOrder.customer', 'pod']);
+        $delivery->load(['workOrder.product', 'workOrder.customer', 'workOrder.items', 'workOrder.quotation.items.product']);
         $wo       = $delivery->workOrder;
         $customer = $wo->customer;
-        $pod      = $delivery->pod;
 
-        $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $esc = fn ($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $qtyFmt = fn ($q) => rtrim(rtrim(number_format((float) $q, 2, '.', ''), '0'), '.');
 
-        $chal   = $esc($delivery->challan_number);
-        $date   = $delivery->scheduled_date?->format('d/m/Y') ?? $delivery->created_at?->format('d/m/Y') ?? '';
-        $woNo   = $esc($wo->wo_number ?? '—');
-        $jobNo  = $esc($wo->job_number ?? '—');
-        $cust   = $esc($customer?->name ?? '—');
-        $addr   = $esc($delivery->delivery_address ?? $customer?->address ?? '—');
-        $vehicle= $esc($delivery->vehicle_number ?? '—');
-        $driver = $esc($delivery->driver_name ?? '—');
+        $chal  = $esc($delivery->challan_number);
+        $date  = ($delivery->scheduled_date ?? $delivery->created_at)?->format('d-m-Y') ?? '';
+        $name  = $esc($customer?->name ?? '');
+        $addr  = $esc(trim((string) ($delivery->delivery_address ?: $customer?->address ?: '')));
+        $poNo  = $esc($wo->customer_po_no ?? '');
+        $poDt  = $wo->customer_wo_date?->format('d-m-Y') ?? '';
+        $jobNo = $esc($wo->job_number ?? '');
 
-        $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
-            . '<tr>'
-            .   '<td style="font-size: 11pt;"><span class="bn" style="font-family: nikosh;">নং -</span> ' . $chal . '</td>'
-            .   '<td style="font-size: 11pt; text-align: right;"><span class="bn" style="font-family: nikosh;">তারিখঃ</span> ' . $esc($date) . ' <span class="bn" style="font-family: nikosh;">খ্রিঃ</span></td>'
-            . '</tr>'
-            . '</table>';
-
-        $title = '<div style="text-align: center; margin-bottom: 12pt;">'
-            . '<div class="bn" style="font-family: nikosh; font-size: 13pt;">ডেলিভারি চালান</div>'
-            . '<div style="font-size: 11pt; margin-top: 1pt; font-weight: bold;">(DELIVERY CHALLAN)</div>'
-            . '</div>';
-
-        $header = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt; border-collapse: collapse; border: 0.75pt solid #000;">'
-            . '<tr>'
-            .   '<td width="55%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; line-height: 1.5;">'
-            .     '<div style="font-size: 9pt; color: #555; text-transform: uppercase; letter-spacing: 0.4pt; margin-bottom: 3pt;">Deliver To</div>'
-            .     '<div style="font-weight: bold; font-size: 11pt;">' . $cust . '</div>'
-            .     '<div style="color: #444;">' . nl2br($addr, false) . '</div>'
-            .   '</td>'
-            .   '<td width="45%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; line-height: 1.6;">'
-            .     '<div><b>Challan No:</b> ' . $chal . '</div>'
-            .     '<div><b>Job No:</b> ' . $jobNo . '</div>'
-            .     '<div><b>WO No:</b> ' . $woNo . '</div>'
-            .     '<div><b>Vehicle:</b> ' . $vehicle . '</div>'
-            .     '<div><b>Driver:</b> ' . $driver . '</div>'
-            .   '</td>'
-            . '</tr>'
-            . '</table>';
-
-        // Items — pull from work order's quotation items, fall back to product line
-        $rows = '';
-        $items = $wo->quotation?->items ?? collect();
-        // A delivery ships a specific quantity (quantity_delivered) — for a
-        // single-item job that's what the challan must show, NOT the full ordered
-        // qty. (Multi-item per-line partial delivery is a future enhancement.)
-        $isSingleItem = $items->count() === 1;
-        if ($items->isNotEmpty()) {
-            $idx = 0;
-            foreach ($items as $it) {
-                $idx++;
-                $qty = $isSingleItem
-                    ? (float) $delivery->quantity_delivered
-                    : (float) ($it->quantity ?? 0);
-                $rows .= '<tr>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">' . str_pad($idx, 2, '0', STR_PAD_LEFT) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 9pt;">' . nl2br($esc($it->description ?? $it->product?->name ?? '—'), false) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">' . number_format($qty, 2) . '</td>'
-                    . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">' . $esc($it->unit ?? 'pcs') . '</td>'
-                    . '</tr>';
-            }
-        } else {
-            $rows .= '<tr>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">01</td>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt 8pt; font-size: 9pt;">' . $esc($wo->product?->name ?? '—') . '</td>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">' . number_format((float) $delivery->quantity_delivered, 2) . '</td>'
-                . '<td style="border: 0.75pt solid #000; padding: 5pt 6pt; text-align: center; font-size: 9pt;">pcs</td>'
-                . '</tr>';
+        // ── Lines: PCD's own copy of the job items when it has one (it may
+        // have reworded them on the work order), else the quotation's.
+        $source = $wo->items->isNotEmpty()
+            ? $wo->items->map(fn ($i) => ['desc' => $i->description ?: $i->product?->name, 'qty' => $i->quantity, 'unit' => $i->unit])
+            : ($wo->quotation?->items ?? collect())->map(fn ($i) => ['desc' => $i->description ?: $i->product?->name, 'qty' => $i->quantity, 'unit' => $i->unit]);
+        if ($source->isEmpty()) {
+            $source = collect([['desc' => $wo->product?->name, 'qty' => $delivery->quantity_delivered, 'unit' => 'pcs']]);
+        }
+        // A delivery ships a specific quantity. For a single-item job that is
+        // what the challan shows, not the full order (per-line partial
+        // delivery of a multi-item job is not modelled yet).
+        if ($source->count() === 1) {
+            $source = $source->map(fn ($l) => ['qty' => $delivery->quantity_delivered] + $l);
         }
 
-        $itemsTable = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin-bottom: 10pt;">'
-            . '<thead><tr style="background: #f3f4f6;">'
-            .   '<th width="8%"  style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt;">SL</th>'
-            .   '<th             style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt; text-align: left;">Item Description</th>'
-            .   '<th width="15%" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt;">Quantity</th>'
-            .   '<th width="12%" style="border: 0.75pt solid #000; padding: 6pt; font-size: 10pt;">Unit</th>'
+        $cell = 'border-left: 0.75pt solid #000; border-right: 0.75pt solid #000; border-bottom: 0.5pt solid #000; font-size: 11pt; vertical-align: top;';
+        $rows = '';
+        foreach ($source->values() as $i => $l) {
+            $unit = trim((string) ($l['unit'] ?? ''));
+            $rows .= '<tr>'
+                . '<td style="' . $cell . ' padding: 3pt 6pt; text-align: center;">' . str_pad((string) ($i + 1), 2, '0', STR_PAD_LEFT) . '.</td>'
+                . '<td style="' . $cell . ' padding: 3pt 8pt; line-height: 1.3;">' . nl2br($esc($l['desc'] ?? ''), false) . '</td>'
+                . '<td style="' . $cell . ' padding: 3pt 6pt;">' . $esc($qtyFmt($l['qty'] ?? 0) . ($unit !== '' ? ' ' . ucfirst($unit) : '')) . '</td>'
+                . '</tr>';
+        }
+        for ($i = $source->count(); $i < self::RULED_ROWS; $i++) {
+            $rows .= '<tr><td style="' . $cell . ' height: 15pt;">&nbsp;</td><td style="' . $cell . '">&nbsp;</td><td style="' . $cell . '">&nbsp;</td></tr>';
+        }
+
+        $th = 'border: 0.75pt solid #000; padding: 3pt 6pt; font-size: 11pt; font-weight: bold;';
+        $items = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin-top: 4pt;">'
+            . '<thead><tr>'
+            .   '<th width="12%" style="' . $th . ' text-align: center;">Part No.</th>'
+            .   '<th style="' . $th . ' text-align: left;">Description</th>'
+            .   '<th width="14%" style="' . $th . ' text-align: left;">Quantity</th>'
             . '</tr></thead>'
             . '<tbody>' . $rows . '</tbody>'
             . '</table>';
 
-        $notesBlock = '';
-        if (trim((string) $delivery->notes) !== '') {
-            $notesBlock = '<div style="border: 0.75pt solid #000; padding: 8pt 10pt; margin-bottom: 12pt; font-size: 9pt; line-height: 1.5;">'
-                . '<div style="font-weight: bold; margin-bottom: 3pt;">Transport Notes</div>'
-                . nl2br($esc($delivery->notes), false)
-                . '</div>';
-        }
+        $line = fn (string $label, string $value) => '<div style="font-size: 11pt; margin-bottom: 3pt;">' . $label . ' ' . $value . '</div>';
 
-        $podBlock = '';
-        if ($pod) {
-            $podBlock = '<div style="border: 0.75pt solid #000; padding: 8pt 10pt; margin-bottom: 12pt; font-size: 9pt; background: #ecfdf5;">'
-                . '<div style="font-weight: bold; margin-bottom: 3pt;">Proof of Delivery</div>'
-                . 'Received by: <b>' . $esc($pod->received_by) . '</b> on ' . $esc(\Carbon\Carbon::parse($pod->received_at)->format('d/m/Y H:i'))
-                . '</div>';
-        }
+        $head = '<div style="text-align: center; font-size: 14pt; font-weight: bold; margin: 2pt 0 14pt;">DELIVERY CHALLAN</div>'
+            . '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 4pt;">'
+            .   '<tr>'
+            .     '<td style="font-size: 12pt; font-weight: bold;">No. ' . $chal . '</td>'
+            .     '<td style="font-size: 12pt; text-align: right;">Date: ' . $esc($date) . '</td>'
+            .   '</tr>'
+            . '</table>'
+            . $line('Name:', $name)
+            . $line('Address:', nl2br($addr, false))
+            . '<div style="height: 8pt;"></div>'
+            . $line('Purchase Order No:', $poNo . ($poDt !== '' ? '. &nbsp; Date: ' . $esc($poDt) . '.' : ''))
+            . '<div style="height: 6pt;"></div>'
+            . $line('Job No:', $jobNo);
 
-        $signature = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 28pt;">'
+        // Each block is its own small table: the empty row is the space for
+        // the pen, and the rule is the top border of the cell under it. mPDF
+        // draws cell borders reliably; borders on a <div> in a table cell come
+        // out the width of the text, or under every <br> line.
+        $sig = fn (string $inner) => '<td width="38%" style="vertical-align: bottom;">'
+            . '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">'
+            .   '<tr><td style="height: 40pt;">&nbsp;</td></tr>'
+            .   '<tr><td style="border-top: 0.75pt solid #000; padding-top: 3pt; font-size: 11pt; font-weight: bold; line-height: 1.45;">' . $inner . '</td></tr>'
+            . '</table>'
+            . '</td>';
+
+        $signatures = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
-            .   '<td width="50%" style="font-size: 10pt; vertical-align: bottom;">'
-            .     '<div style="min-height: 40pt;"></div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; display: inline-block; min-width: 70%;">'
-            .       '<div style="font-weight: bold;">Dispatched By</div>'
-            .       '<div style="color: #555; font-size: 9pt;">BITAC Stores</div>'
-            .     '</div>'
-            .   '</td>'
-            .   '<td width="50%" style="font-size: 10pt; vertical-align: bottom; text-align: right;">'
-            .     '<div style="min-height: 40pt;"></div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; display: inline-block; min-width: 70%; text-align: center;">'
-            .       '<div style="font-weight: bold;">Received By</div>'
-            .       '<div style="color: #555; font-size: 9pt;">Customer\'s Representative</div>'
-            .     '</div>'
-            .   '</td>'
+            .   $sig('Signature of receiver<br>Name:<br>Designation:<br>Phone Number:')
+            .   '<td width="24%">&nbsp;</td>'
+            .   $sig('Signature<br>Executive Engineer<br>Production Control Division<br>Phone Number:')
             . '</tr>'
             . '</table>';
 
-        $body = $memoBlock . $title . $header . $itemsTable . $notesBlock . $podBlock . $signature;
-        return app(BitacLetterhead::class)->render($body, "Delivery Challan {$delivery->challan_number}");
+        return app(BitacLetterhead::class)->render($head . $items . $signatures, "Delivery Challan {$delivery->challan_number}");
     }
 }

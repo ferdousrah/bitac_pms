@@ -109,9 +109,19 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                 </Link>
                                             </td>
                                             <td>
-                                                <span className="font-mono font-semibold text-brand-600">
+                                                <button
+                                                    type="button"
+                                                    title="Open the challan to view or print"
+                                                    onClick={() => setPdfPopup({
+                                                        open: true,
+                                                        url: `/delivery/${d.id}/pdf?preview=base64`,
+                                                        title: `Challan ${d.challan_number}`,
+                                                        subtitle: d.wo_number,
+                                                    })}
+                                                    className="font-mono font-semibold text-brand-600 hover:underline text-left"
+                                                >
                                                     {d.challan_number}
-                                                </span>
+                                                </button>
                                             </td>
                                             <td>
                                                 <Link
@@ -150,7 +160,7 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                             open: true,
                                                             url: `/delivery/${d.id}/pdf?preview=base64`,
                                                             title: `Challan ${d.challan_number}`,
-                                                            subtitle: d.work_order_number,
+                                                            subtitle: d.wo_number,
                                                         })}
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
                                                         <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
