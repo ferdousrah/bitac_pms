@@ -31,27 +31,27 @@ const money = (n: number) =>
 const TONES = {
     sky: {
         tile: 'bg-sky-100 text-sky-700', row: 'border-sky-200 bg-sky-50/40 hover:bg-sky-50',
-        head: 'text-sky-700', btn: 'bg-sky-600 hover:bg-sky-500',
+        head: 'text-sky-700', btn: 'bg-white text-sky-700 border border-sky-200 hover:bg-sky-50',
     },
     emerald: {
         tile: 'bg-emerald-100 text-emerald-700', row: 'border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50',
-        head: 'text-emerald-700', btn: 'bg-emerald-600 hover:bg-emerald-500',
+        head: 'text-emerald-700', btn: 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50',
     },
     violet: {
         tile: 'bg-violet-100 text-violet-700', row: 'border-violet-200 bg-violet-50/40 hover:bg-violet-50',
-        head: 'text-violet-700', btn: 'bg-violet-600 hover:bg-violet-500',
+        head: 'text-violet-700', btn: 'bg-white text-violet-700 border border-violet-200 hover:bg-violet-50',
     },
     teal: {
         tile: 'bg-teal-100 text-teal-700', row: 'border-teal-200 bg-teal-50/40 hover:bg-teal-50',
-        head: 'text-teal-700', btn: 'bg-teal-600 hover:bg-teal-500',
+        head: 'text-teal-700', btn: 'bg-white text-teal-700 border border-teal-200 hover:bg-teal-50',
     },
     amber: {
         tile: 'bg-amber-100 text-amber-700', row: 'border-amber-200 bg-amber-50/40 hover:bg-amber-50',
-        head: 'text-amber-700', btn: 'bg-amber-600 hover:bg-amber-500',
+        head: 'text-amber-700', btn: 'bg-white text-amber-700 border border-amber-200 hover:bg-amber-50',
     },
     slate: {
         tile: 'bg-surface-200 text-surface-600', row: 'border-surface-200 bg-surface-50/60 hover:bg-surface-100',
-        head: 'text-surface-500', btn: 'bg-surface-600 hover:bg-surface-500',
+        head: 'text-surface-500', btn: 'bg-white text-surface-600 border border-surface-200 hover:bg-surface-50',
     },
 } as const;
 
@@ -59,9 +59,9 @@ type Tone = keyof typeof TONES;
 
 const statusChip = (text: string, tone: 'slate' | 'amber' | 'green') => {
     const tones = {
-        slate: 'bg-white/80 text-surface-600 border-surface-200',
-        amber: 'bg-white/80 text-amber-700 border-amber-300',
-        green: 'bg-white/80 text-emerald-700 border-emerald-300',
+        slate: 'bg-white text-surface-600 border-surface-200',
+        amber: 'bg-white text-amber-700 border-amber-200',
+        green: 'bg-white text-emerald-700 border-emerald-200',
     };
     return `text-[9px] px-1.5 py-0.5 rounded border font-bold uppercase tracking-wide ${tones[tone]}`;
 };
@@ -113,7 +113,7 @@ export default function JobDocuments({ documents, className = '' }: { documents:
             <div className="flex items-center gap-1.5 shrink-0">
                 {badge}
                 <button type="button" onClick={onOpen} title="Open PDF"
-                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white shadow-sm transition-colors ${TONES[tone].btn}`}>
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-colors ${TONES[tone].btn}`}>
                     <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> PDF
                 </button>
             </div>
@@ -121,21 +121,22 @@ export default function JobDocuments({ documents, className = '' }: { documents:
     );
 
     return (
-        <div className={`rounded-2xl border-2 border-emerald-200 bg-white shadow-sm overflow-hidden animate-fade-in ${className}`}>
-            {/* A coloured band, so the card is found at a glance on a long page. */}
-            <div className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-between gap-3">
+        <div className={`rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden animate-fade-in ${className}`}>
+            {/* A tinted band, so the card is found at a glance on a long page
+                without shouting over the content inside it. */}
+            <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                         <i className="fi fi-rr-folder-open text-sm leading-none" />
                     </div>
                     <div className="min-w-0">
-                        <h3 className="text-sm font-bold leading-tight">Documents</h3>
-                        <p className="text-[11px] text-white/80 leading-tight mt-0.5">
+                        <h3 className="text-sm font-bold text-emerald-900 leading-tight">Documents</h3>
+                        <p className="text-[11px] text-emerald-700/70 leading-tight mt-0.5">
                             Everything that came with this job from IED
                         </p>
                     </div>
                 </div>
-                <span className="shrink-0 min-w-[28px] h-7 px-2 rounded-lg bg-white text-emerald-700 text-sm font-extrabold flex items-center justify-center">
+                <span className="shrink-0 min-w-[28px] h-7 px-2 rounded-lg bg-emerald-100 text-emerald-700 text-sm font-extrabold flex items-center justify-center">
                     {count}
                 </span>
             </div>

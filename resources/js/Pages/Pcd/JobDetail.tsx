@@ -891,28 +891,28 @@ export default function JobDetail({ job, checklist }: Props) {
                             these two are where PCD's own work is, so the page says
                             so at a glance. Documents is emerald — that one is
                             reference, these are to be done. */}
-                        <div className="rounded-2xl border-2 border-indigo-200 bg-white shadow-sm overflow-hidden">
-                            <div className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white">
+                        <div className="rounded-2xl border border-indigo-200 bg-white shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                                        <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
                                             <i className="fi fi-rr-route text-sm leading-none" />
                                         </div>
                                         <div className="min-w-0">
-                                            <h3 className="text-sm font-bold leading-tight">Work Order</h3>
-                                            <p className="text-[11px] text-white/80 leading-tight mt-0.5">
+                                            <h3 className="text-sm font-bold text-indigo-900 leading-tight">Work Order</h3>
+                                            <p className="text-[11px] text-indigo-700/70 leading-tight mt-0.5">
                                                 Routing of production shops — each shop picks up this job in sequence.
                                             </p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <span className="min-w-[28px] h-7 px-2 rounded-lg bg-white text-indigo-700 text-sm font-extrabold flex items-center justify-center">
+                                        <span className="min-w-[28px] h-7 px-2 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-extrabold flex items-center justify-center">
                                             {job.sections.length}
                                         </span>
                                         <button
                                             type="button"
                                             onClick={() => openPdf(`/pcd/work-orders/${job.id}/pdf`, 'Work Order', job.job_number ? `Job #${job.job_number}` : job.wo_number)}
-                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-white/20 hover:bg-white/30 transition-colors"
+                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 transition-colors"
                                         >
                                             <i className="fi fi-rr-file-pdf text-[11px] leading-none" />
                                             PDF
@@ -920,7 +920,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                         {job.sections.length > 0 && (
                                             <Link
                                                 href={sectionsHref}
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-white/20 hover:bg-white/30 transition-colors"
+                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 transition-colors"
                                             >
                                                 <i className="fi fi-rr-edit text-[11px] leading-none" />
                                                 Edit
@@ -986,24 +986,24 @@ export default function JobDetail({ job, checklist }: Props) {
                         {/* Operation Sheets — per item (single consolidated section).
                             Each WO item has its own sheet/routing; falls back to the
                             legacy single-sheet view / empty state when no items. */}
-                        <div id="operation-sheets" className="rounded-2xl border-2 border-indigo-200 bg-white shadow-sm overflow-hidden">
-                            <div className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white">
+                        <div id="operation-sheets" className="rounded-2xl border border-indigo-200 bg-white shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                                        <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
                                             <i className="fi fi-rr-list-check text-sm leading-none" />
                                         </div>
                                         <div className="min-w-0">
-                                            <h3 className="text-sm font-bold leading-tight">
+                                            <h3 className="text-sm font-bold text-indigo-900 leading-tight">
                                                 Operation Sheet{(job.item_operation_sheets?.length ?? 0) > 1 ? 's — per item' : ''}
                                             </h3>
-                                            <p className="text-[11px] text-white/80 leading-tight mt-0.5">
+                                            <p className="text-[11px] text-indigo-700/70 leading-tight mt-0.5">
                                                 Machine and operator for every step of the job.
                                             </p>
                                         </div>
                                     </div>
                                     {checklist.operation_sheet.items_total > 0 && (
-                                        <span className="shrink-0 h-7 px-2.5 rounded-lg bg-white text-indigo-700 text-sm font-extrabold flex items-center justify-center">
+                                        <span className="shrink-0 h-7 px-2.5 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-extrabold flex items-center justify-center">
                                             {checklist.operation_sheet.items_covered}/{checklist.operation_sheet.items_total}
                                         </span>
                                     )}
