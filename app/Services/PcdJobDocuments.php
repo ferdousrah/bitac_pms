@@ -12,8 +12,9 @@ use Illuminate\Support\Collection;
  *
  * BITAC's rule (2026-10-03): when IED forwards a job, **everything that
  * belongs to that work goes with it** — the customer's RFQ letter, the approved
- * quotation, **every Gate Pass In raised against it**, and the **cost
- * estimate(s)** it was priced from. PCD should not have to go and find them.
+ * quotation, **every gate pass raised against it — In and Out** — and the
+ * **cost estimate(s)** it was priced from. PCD should not have to go and
+ * find them.
  *
  * ⚠️ **One packer, used by BOTH PCD screens** — the inbox (`PcdReviewController`,
  * where the নির্বাহী প্রকৌশলী decides) and the planning desk
@@ -32,7 +33,7 @@ class PcdJobDocuments
     /**
      * Everything PCD should be able to open for this job.
      *
-     * @return array{rfq_letter: ?array, quotation: ?array, gate_passes_in: array, cost_estimates: array, attachments: array}
+     * @return array{rfq_letter: ?array, quotation: ?array, gate_passes: array, cost_estimates: array, attachments: array}
      */
     public function for(WorkOrder $workOrder): array
     {
@@ -41,7 +42,7 @@ class PcdJobDocuments
         return [
             'rfq_letter'     => $this->rfqLetter($rfq),
             'quotation'      => $this->quotation($workOrder),
-            'gate_passes_in' => $this->gatePassesIn($workOrder, $rfq),
+            'gate_passes'    => $this->gatePasses($workOrder, $rfq),
             'cost_estimates' => $this->costEstimates($workOrder, $rfq),
             'attachments'    => $this->attachments($workOrder),
         ];
@@ -81,21 +82,25 @@ class PcdJobDocuments
     }
 
     /**
-     * Gate Pass **In** — the material and samples that physically arrived for
-     * this job. Out passes are not included: BITAC asked for the inward paper,
-     * which is what PCD needs to know what is on the floor.
+     * Every gate pass on this job — **In and Out both**.
+     *
+     * The In pass says what physically arrived; the Out says what went back.
+     * PCD needs both to know what is actually on the floor right now, so each
+     * row carries its `direction` and the card groups them under BITAC's own
+     * labels, **Gate Pass In** and **Gate Pass Out**.
      */
-    private function gatePassesIn(WorkOrder $workOrder, $rfq): array
+    private function gatePasses(WorkOrder $workOrder, $rfq): array
     {
         if (! $rfq) {
             return [];
         }
 
         return $this->passes($rfq)
-            ->where('direction', 'in')
+            ->sortBy([['direction', 'asc'], ['pass_date', 'desc']])
             ->map(fn (GatePass $gp) => [
                 'id'         => $gp->id,
                 'pass_no'    => $gp->pass_no,
+                'direction'  => $gp->direction,
                 'status'     => $gp->status,
                 'pass_date'  => $gp->pass_date?->format('d M Y'),
                 'party_name' => $gp->party_name,

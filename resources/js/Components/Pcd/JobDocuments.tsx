@@ -4,9 +4,10 @@ import PdfPopupModal from '@/Components/PdfPopupModal';
 export interface JobDocumentSet {
     rfq_letter: { label: string; title: string; date: string | null; extension: string; pdf_url: string } | null;
     quotation: { label: string; amount: number; status: string; pdf_url: string } | null;
-    gate_passes_in: Array<{
-        id: number; pass_no: string | null; status: string; pass_date: string | null;
-        party_name: string | null; item_count: number; items: string[]; pdf_url: string;
+    gate_passes: Array<{
+        id: number; pass_no: string | null; direction: 'in' | 'out'; status: string;
+        pass_date: string | null; party_name: string | null; item_count: number;
+        items: string[]; pdf_url: string;
     }>;
     cost_estimates: Array<{
         id: number; estimate_no: string | null; job_name: string | null; part_no: string | null;
@@ -41,7 +42,7 @@ export default function JobDocuments({ documents, className = '' }: { documents:
     const d = documents;
     const count =
         (d?.rfq_letter ? 1 : 0) + (d?.quotation ? 1 : 0) +
-        (d?.gate_passes_in?.length ?? 0) + (d?.cost_estimates?.length ?? 0) +
+        (d?.gate_passes?.length ?? 0) + (d?.cost_estimates?.length ?? 0) +
         (d?.attachments?.length ?? 0);
 
     const open = (url: string, title: string) => setPdf({ url, title });
@@ -119,25 +120,32 @@ export default function JobDocuments({ documents, className = '' }: { documents:
                     </div>
                 )}
 
-                {d?.gate_passes_in?.length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">
-                            Gate Pass In{d.gate_passes_in.length !== 1 ? ` (${d.gate_passes_in.length})` : ''}
-                        </p>
-                        {d.gate_passes_in.map((gp) => (
-                            <Row key={gp.id}
-                                title={gp.pass_no || `Pass #${gp.id}`}
-                                subtitle={[
-                                    gp.pass_date,
-                                    gp.party_name,
-                                    `${gp.item_count} item${gp.item_count !== 1 ? 's' : ''}`,
-                                    gp.items.slice(0, 2).join(', '),
-                                ].filter(Boolean).join(' · ')}
-                                badge={<span className={chip(gp.status.replace(/_/g, ' '))}>{gp.status.replace(/_/g, ' ')}</span>}
-                                onOpen={() => open(gp.pdf_url, gp.pass_no || `Gate Pass #${gp.id}`)} />
-                        ))}
-                    </div>
-                )}
+                {/* Grouped under BITAC's own labels. What came IN says what is on
+                    the floor; what went OUT says what has gone back. */}
+                {(['in', 'out'] as const).map((direction) => {
+                    const passes = (d?.gate_passes ?? []).filter((gp) => gp.direction === direction);
+                    if (passes.length === 0) return null;
+                    const label = direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out';
+                    return (
+                        <div key={direction} className="space-y-2">
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">
+                                {label}{passes.length !== 1 ? ` (${passes.length})` : ''}
+                            </p>
+                            {passes.map((gp) => (
+                                <Row key={gp.id}
+                                    title={gp.pass_no || `Pass #${gp.id}`}
+                                    subtitle={[
+                                        gp.pass_date,
+                                        gp.party_name,
+                                        `${gp.item_count} item${gp.item_count !== 1 ? 's' : ''}`,
+                                        gp.items.slice(0, 2).join(', '),
+                                    ].filter(Boolean).join(' · ')}
+                                    badge={<span className={chip(gp.status.replace(/_/g, ' '))}>{gp.status.replace(/_/g, ' ')}</span>}
+                                    onOpen={() => open(gp.pdf_url, gp.pass_no || `${label} #${gp.id}`)} />
+                            ))}
+                        </div>
+                    );
+                })}
 
                 {d?.attachments?.length > 0 && (
                     <div className="space-y-2">

@@ -30,7 +30,7 @@ class PcdDocumentController extends Controller
 {
     public function __construct(private PcdJobDocuments $documents) {}
 
-    /** A Gate Pass In raised against this job's RFQ. */
+    /** A gate pass — In or Out — raised against this job's RFQ. */
     public function gatePass(Request $request, WorkOrder $workOrder, GatePass $gatePass)
     {
         $rfq = $workOrder->rfq ?: $workOrder->quotation?->rfq;
