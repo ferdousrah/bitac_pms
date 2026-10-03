@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WorkOrder;
 use App\Services\NotifyService;
 use App\Services\PcdJobDocuments;
+use App\Services\PcdReleaseService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -49,13 +50,174 @@ class PcdReviewController extends Controller
                 'notes'          => $wo->notes,
             ]);
 
+        // Planned and waiting to be let onto the shop floor — the second half
+        // of this officer's job. Same screen, because it is the same person.
+        $releases = WorkOrder::with(['customer', 'items', 'sections.section'])
+            ->where('status', 'pcd_release_pending')
+            ->orderBy('release_requested_at')
+            ->get()
+            ->map(fn (WorkOrder $wo) => [
+                'id'            => $wo->id,
+                'wo_number'     => $wo->wo_number,
+                'job_number'    => $wo->job_number,
+                'customer'      => $wo->customer?->name,
+                'quantity'      => (float) $wo->quantity,
+                'item_count'    => $wo->items->count(),
+                'shop_count'    => $wo->sections->count(),
+                'shops'         => $wo->sections->sortBy('sequence')
+                    ->map(fn ($s) => $s->section?->name)->filter()->values()->all(),
+                'due_date'      => $wo->due_date?->format('d M Y'),
+                'requested_at'  => $wo->release_requested_at?->format('d M Y, h:i A'),
+                'waiting_days'  => $wo->release_requested_at?->diffInDays(now()),
+            ]);
+
         return Inertia::render('Pcd/Inbox', [
-            'jobs'  => $jobs,
+            'jobs'     => $jobs,
+            'releases' => $releases,
             'stats' => [
-                'waiting' => $jobs->count(),
-                'overdue' => $jobs->where('waiting_days', '>=', 2)->count(),
+                'waiting'  => $jobs->count(),
+                'overdue'  => $jobs->where('waiting_days', '>=', 2)->count(),
+                'releases' => $releases->count(),
             ],
         ]);
+    }
+
+    /**
+     * What the নির্বাহী প্রকৌশলী reads before letting a job onto the floor.
+     *
+     * The routing the সহকারী প্রকৌশলী set, the operation sheet behind each
+     * item, and the papers the job arrived with.
+     */
+    public function showRelease(WorkOrder $workOrder)
+    {
+        if ($workOrder->status !== 'pcd_release_pending') {
+            return redirect()->route('pcd.inbox.index')
+                ->with('error', "WO {$workOrder->wo_number} is not waiting for release — it is {$workOrder->status_label}.");
+        }
+
+        $workOrder->load([
+            'customer', 'items', 'quotation.rfq', 'rfq.gatePasses.items', 'files',
+            'sections.section', 'operationSheets.steps.section', 'operationSheets.steps.machine',
+            'operationSheets.workOrderItem', 'materialRequisitions',
+        ]);
+
+        return Inertia::render('Pcd/Release', [
+            'job' => [
+                'id'            => $workOrder->id,
+                'wo_number'     => $workOrder->wo_number,
+                'job_number'    => $workOrder->job_number,
+                'customer'      => $workOrder->customer?->name,
+                'quantity'      => (float) $workOrder->quantity,
+                'priority'      => $workOrder->priority,
+                'due_date'      => $workOrder->due_date?->format('d M Y'),
+                'notes'         => $workOrder->notes,
+                'requested_at'  => $workOrder->release_requested_at?->format('d M Y, h:i A'),
+                'mr_count'      => $workOrder->materialRequisitions->count(),
+                'pdf_url'       => "/pcd/job/{$workOrder->id}/work-order/pdf?preview=base64",
+                'sections'      => $workOrder->sections->sortBy('sequence')->values()
+                    ->map(fn ($s) => [
+                        'id'         => $s->id,
+                        'sequence'   => $s->sequence,
+                        'name'       => $s->section?->name,
+                        'code'       => $s->section?->code,
+                        'weight_pct' => (float) ($s->weight_pct ?? 0),
+                    ])->all(),
+                'items' => $workOrder->items->map(function ($item) use ($workOrder) {
+                    $sheet = $workOrder->operationSheets->firstWhere('work_order_item_id', $item->id);
+                    return [
+                        'id'           => $item->id,
+                        'description'  => $item->description,
+                        'quantity'     => (float) $item->quantity,
+                        'unit'         => $item->unit,
+                        'sheet_number' => $sheet?->sheet_number,
+                        'step_count'   => $sheet?->steps->count() ?? 0,
+                        'steps'        => $sheet
+                            ? $sheet->steps->sortBy('sequence')->values()->map(fn ($st) => [
+                                'sequence'   => $st->sequence,
+                                'operation'  => $st->operation_name ?? $st->description,
+                                'section'    => $st->section?->name,
+                                'machine'    => $st->machine?->name,
+                                'target_qty' => (float) ($st->target_qty ?? 0),
+                            ])->all()
+                            : [],
+                        'sheet_pdf_url' => $sheet
+                            ? "/pcd/job/{$workOrder->id}/operation-sheets/{$sheet->id}/pdf?preview=base64"
+                            : null,
+                    ];
+                })->values(),
+            ],
+            'documents' => app(PcdJobDocuments::class)->for($workOrder),
+        ]);
+    }
+
+    /** Let it onto the shop floor. */
+    public function approveRelease(Request $request, WorkOrder $workOrder)
+    {
+        if ($blocker = $this->releaseBlocker($workOrder)) {
+            return $blocker;
+        }
+
+        $data = $request->validate(['note' => 'nullable|string|max:2000']);
+        $note = trim((string) ($data['note'] ?? ''));
+
+        if ($note !== '') {
+            $stamp = '[Release · ' . (auth()->user()?->name ?? 'PCD') . ', ' . now()->format('d M Y') . '] ' . $note;
+            $workOrder->update(['notes' => trim(($workOrder->notes ? $workOrder->notes . "\n\n" : '') . $stamp)]);
+        }
+
+        PcdReleaseService::approveRelease($workOrder->fresh());
+
+        return redirect()->route('pcd.inbox.index')
+            ->with('success', "WO {$workOrder->wo_number} released to the shops.");
+    }
+
+    /**
+     * Send it back to the planning desk.
+     *
+     * Back to `pcd_pending` with the reason on the record, so the সহকারী
+     * প্রকৌশলী can see what to change. The reason is required: a job
+     * coming back with no explanation is a job that got lost.
+     */
+    public function rejectRelease(Request $request, WorkOrder $workOrder)
+    {
+        if ($blocker = $this->releaseBlocker($workOrder)) {
+            return $blocker;
+        }
+
+        $data   = $request->validate(['reason' => 'required|string|max:2000']);
+        $reason = trim($data['reason']);
+        $stamp  = '[Release returned · ' . (auth()->user()?->name ?? 'PCD') . ', ' . now()->format('d M Y') . '] ' . $reason;
+
+        $workOrder->update([
+            'status'               => 'pcd_pending',
+            'release_requested_at' => null,
+            'notes'                => trim(($workOrder->notes ? $workOrder->notes . "\n\n" : '') . $stamp),
+        ]);
+
+        NotifyService::toPermission(
+            'view pcd-inbox',
+            'job_release_returned',
+            'Job sent back to planning',
+            "WO {$workOrder->wo_number} ({$workOrder->customer?->name}) was not released.\n\nReason: {$reason}",
+            "/pcd/job-planning/{$workOrder->id}",
+            'fi-rr-undo',
+            'amber',
+            centerId: $workOrder->center_id,
+        );
+
+        return redirect()->route('pcd.inbox.index')
+            ->with('success', "WO {$workOrder->wo_number} sent back to Job Planning.");
+    }
+
+    /** Only a job actually waiting for release can be decided on. */
+    private function releaseBlocker(WorkOrder $workOrder)
+    {
+        if ($workOrder->status === 'pcd_release_pending') {
+            return null;
+        }
+
+        return redirect()->route('pcd.inbox.index')
+            ->with('error', "WO {$workOrder->wo_number} is not waiting for release — it is {$workOrder->status_label}.");
     }
 
     /**

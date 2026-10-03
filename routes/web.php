@@ -494,6 +494,18 @@ Route::middleware(['auth'])->group(function () {
     // are two jobs.
     Route::prefix('pcd')->middleware('permission:review pcd-inbox')->name('pcd.')->group(function () {
         Route::get('/inbox', [PcdReviewController::class, 'index'])->name('inbox.index');
+
+        // Releasing a planned job to the shops — the second half of this
+        // officer's job.
+        //
+        // ⚠️ These MUST be declared before `/inbox/{workOrder}`. Laravel matches
+        // in registration order and takes the first hit, so with the parameter
+        // route first, `/pcd/inbox/release/5` binds `release` as the work order
+        // and 404s on the model.
+        Route::get('/inbox/release/{workOrder}', [PcdReviewController::class, 'showRelease'])->name('inbox.release.show');
+        Route::post('/inbox/release/{workOrder}/approve', [PcdReviewController::class, 'approveRelease'])->name('inbox.release.approve');
+        Route::post('/inbox/release/{workOrder}/reject', [PcdReviewController::class, 'rejectRelease'])->name('inbox.release.reject');
+
         Route::get('/inbox/{workOrder}', [PcdReviewController::class, 'show'])->name('inbox.show');
         Route::post('/inbox/{workOrder}/forward', [PcdReviewController::class, 'forward'])->name('inbox.forward');
         Route::post('/inbox/{workOrder}/send-back', [PcdReviewController::class, 'sendBack'])->name('inbox.send-back');
@@ -511,6 +523,10 @@ Route::middleware(['auth'])->group(function () {
                 ->name('gate-pass.pdf');
             Route::get('cost-estimates/{costEstimate}/pdf', [\App\Http\Controllers\Pcd\PcdDocumentController::class, 'costEstimate'])
                 ->name('cost-estimate.pdf');
+            Route::get('work-order/pdf', [\App\Http\Controllers\Pcd\PcdDocumentController::class, 'workOrder'])
+                ->name('work-order.pdf');
+            Route::get('operation-sheets/{operationSheet}/pdf', [\App\Http\Controllers\Pcd\PcdDocumentController::class, 'operationSheet'])
+                ->name('operation-sheet.pdf');
         });
 
     // ─── Job Planning — the desk. Job number, material requisition, section

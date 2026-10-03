@@ -17,7 +17,7 @@ class PcdJobPlanningController extends Controller
         // Cancelled jobs stay visible in PCD inbox (marked as closed) but are
         // hidden from production shops. PCD keeps the audit record on-screen.
         $jobs = WorkOrder::with(['customer', 'quotation', 'rfq.items', 'cancelledBy'])
-            ->whereIn('status', ['pcd_pending', 'released_to_shops', 'cancelled'])
+            ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops', 'cancelled'])
             ->latest('pcd_handoff_at')
             ->get()
             ->map(function ($wo) {

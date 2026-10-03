@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Pcd;
 use App\Http\Controllers\CostEstimateController;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Ied\GatePassController;
+use App\Http\Controllers\OperationSheetController;
+use App\Models\OperationSheet;
 use App\Models\CostEstimate;
 use App\Models\GatePass;
 use App\Models\WorkOrder;
 use App\Services\PcdJobDocuments;
+use App\Http\Controllers\Pcd\WorkOrderSectionController;
 use Illuminate\Http\Request;
 
 /**
@@ -42,6 +45,24 @@ class PcdDocumentController extends Controller
         );
 
         return app(GatePassController::class)->pdf($request, $gatePass);
+    }
+
+    /** The routing slip itself — what the Executive Engineer is approving. */
+    public function workOrder(Request $request, WorkOrder $workOrder)
+    {
+        return app(WorkOrderSectionController::class)->pdf($request, $workOrder);
+    }
+
+    /** An operation sheet belonging to this job. */
+    public function operationSheet(Request $request, WorkOrder $workOrder, OperationSheet $operationSheet)
+    {
+        abort_unless(
+            (int) $operationSheet->work_order_id === (int) $workOrder->id,
+            404,
+            'That operation sheet does not belong to this job.',
+        );
+
+        return app(OperationSheetController::class)->pdf($request, $operationSheet);
     }
 
     /** A cost estimate this job was priced from. */

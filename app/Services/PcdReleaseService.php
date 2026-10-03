@@ -13,13 +13,21 @@ use App\Services\NotifyService;
  *   2. Section Assignment (sequential shop list)
  *   3. Operation Sheet (with at least one step)
  *
- * Once all three are done, the WO transitions from `pcd_pending` to `released_to_shops`,
- * and the first section in the sequence is marked `ready` so shop in-charge can pick it up.
+ * ⚠️ **Finishing those three no longer reaches the shops.** BITAC's rule
+ * (2026-10-03): the সহকারী প্রকৌশলী plans the job, but the
+ * **Executive Engineer (PCD)** reads what was planned and releases it. So the
+ * checklist completing moves the work order to **`pcd_release_pending`** and
+ * tells him; `approveRelease()` is what actually opens the shop floor.
  */
 class PcdReleaseService
 {
     /**
-     * Check if all PCD activities are complete and release if so.
+     * Planning is finished — send the job up for release approval.
+     *
+     * Called from every screen that can complete a gate (MR, routing, op
+     * sheet). It is **idempotent**: a job already waiting on approval, or
+     * already on the shop floor, is left alone, so the five call sites cannot
+     * bounce it around or notify twice.
      */
     public static function tryRelease(WorkOrder $workOrder): bool
     {
@@ -28,11 +36,43 @@ class PcdReleaseService
             return false;
         }
 
-        if ($workOrder->released_to_shops_at) {
-            return true; // Already released
+        if ($workOrder->released_to_shops_at || $workOrder->status === 'pcd_release_pending') {
+            return true; // already released, or already waiting on the নির্বাহী প্রকৌশলী
         }
 
-        // Mark first section as `ready` (others stay `pending`)
+        $workOrder->update([
+            'status'               => 'pcd_release_pending',
+            'release_requested_at' => now(),
+        ]);
+
+        NotifyService::toPermission(
+            'review pcd-inbox',
+            'job_awaiting_release_approval',
+            'Job ready for release — your approval needed',
+            "Job #{$workOrder->job_number} ({$workOrder->wo_number}) has been planned and is waiting to be released to the shops.",
+            "/pcd/inbox/release/{$workOrder->id}",
+            'fi-rr-shield-check',
+            'brand',
+            centerId: $workOrder->center_id,
+        );
+
+        return true;
+    }
+
+    /**
+     * The নির্বাহী প্রকৌশলী releases the job to the shops.
+     *
+     * This is the act `released_to_shops_at` / `released_by` have always
+     * recorded — the moment work actually reaches the floor. The first routing
+     * section goes `ready` and its shop is told; the rest stay `pending` until
+     * the job is transferred to them.
+     */
+    public static function approveRelease(WorkOrder $workOrder): bool
+    {
+        if ($workOrder->released_to_shops_at) {
+            return true;    // already on the floor
+        }
+
         $first = $workOrder->sections()->orderBy('sequence')->first();
         if ($first) {
             $first->update(['status' => 'ready']);
@@ -44,7 +84,6 @@ class PcdReleaseService
             'released_by'          => auth()->id(),
         ]);
 
-        // Notify shop in-charges of the first section
         if ($first && $first->section) {
             NotifyService::toPermission(
                 'view shop-inbox',
@@ -54,6 +93,7 @@ class PcdReleaseService
                 "/work-orders/{$workOrder->id}",
                 'fi-rr-tools',
                 'green',
+                centerId: $workOrder->center_id,
             );
         }
 

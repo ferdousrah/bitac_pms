@@ -55,7 +55,7 @@ class MaterialRequisitionController extends Controller
             'work_order'      => $workOrder ? $this->serializeWorkOrder($workOrder) : null,
             'prefilled_items' => $prefilledItems,
             'work_orders' => WorkOrder::with('customer')
-                ->whereIn('status', ['pcd_pending', 'released_to_shops'])
+                ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops'])
                 ->orderByDesc('id')
                 ->get()
                 ->map(fn($w) => [
@@ -151,7 +151,7 @@ class MaterialRequisitionController extends Controller
             'requisition' => $this->serializeRequisition($materialRequisition),
             'work_order'  => $materialRequisition->workOrder ? $this->serializeWorkOrder($materialRequisition->workOrder) : null,
             'work_orders' => WorkOrder::with('customer')
-                ->whereIn('status', ['pcd_pending', 'released_to_shops'])
+                ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops'])
                 ->orderByDesc('id')
                 ->get()
                 ->map(fn($w) => [

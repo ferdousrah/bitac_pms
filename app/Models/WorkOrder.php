@@ -17,7 +17,7 @@ class WorkOrder extends Model
         // The নির্বাহী প্রকৌশলী passing it from the PCD Inbox to the
         // planning desk. ⚠️ Mass assignment drops anything missing here
         // silently — the stamp simply never gets written.
-        'pcd_forwarded_at', 'pcd_forwarded_by', 'pcd_review_note',
+        'pcd_forwarded_at', 'pcd_forwarded_by', 'pcd_review_note', 'release_requested_at',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
         // The date on the CUSTOMER's own work order — what decides which
         // financial year this counts towards, not when it was keyed in.
@@ -31,6 +31,7 @@ class WorkOrder extends Model
             'customer_wo_date'     => 'date',
             'pcd_handoff_at'       => 'datetime',
             'pcd_forwarded_at'     => 'datetime',
+            'release_requested_at' => 'datetime',
             'released_to_shops_at' => 'datetime',
             'cancelled_at'         => 'datetime',
         ];
@@ -48,6 +49,7 @@ class WorkOrder extends Model
             'ied_pending'        => 'Awaiting IED Acceptance',
             'pcd_review'         => 'Awaiting PCD Review',
             'pcd_pending'        => 'In Production Planning',
+            'pcd_release_pending'=> 'Awaiting Release Approval',
             'released_to_shops'  => 'Released to Shops',
             'approved'           => 'Approved',
             'in_production'      => 'In Production',
@@ -68,6 +70,7 @@ class WorkOrder extends Model
             'ied_pending'        => 'amber',
             'pcd_review'         => 'violet',
             'pcd_pending'        => 'blue',
+            'pcd_release_pending'=> 'violet',
             'released_to_shops'  => 'indigo',
             'approved'           => 'blue',
             'in_production'      => 'yellow',
