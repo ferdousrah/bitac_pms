@@ -1133,47 +1133,109 @@ export default function JobDetail({ job, checklist }: Props) {
 
                     {/* Right sidebar */}
                     <div className="space-y-6">
-                        {/* Job Details — label / right-aligned value rows */}
-                        <div className="card">
-                            <div className="card-header">
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                                    <h3 className="text-base font-semibold text-surface-900">Job Details</h3>
+                        {/* Job Details — light amber band, to match the indigo
+                            "work to do" and emerald "reference" cards. The two
+                            figures that decide the job, quantity and due date,
+                            are tiles; the rest are rows with an icon each. */}
+                        {(() => {
+                            // Due date drives the colour: overdue is the one thing
+                            // on this card that has to be impossible to miss.
+                            const due = job.due_date ? new Date(job.due_date) : null;
+                            const days = due
+                                ? Math.ceil((due.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000)
+                                : null;
+                            const dueTone = days === null ? 'surface'
+                                : days < 0 ? 'rose' : days <= 3 ? 'amber' : 'emerald';
+                            const dueTile = {
+                                surface: 'bg-surface-50 border-surface-200 text-surface-400',
+                                rose:    'bg-rose-50 border-rose-200 text-rose-700',
+                                amber:   'bg-amber-50 border-amber-200 text-amber-700',
+                                emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+                            }[dueTone];
+                            const dueNote = days === null ? 'Not set'
+                                : days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`
+                                : days === 0 ? 'Due today'
+                                : `in ${days} day${days === 1 ? '' : 's'}`;
+
+                            const priorityTone = {
+                                urgent: 'bg-rose-50 text-rose-700 border-rose-200',
+                                high:   'bg-amber-50 text-amber-700 border-amber-200',
+                                normal: 'bg-surface-100 text-surface-600 border-surface-200',
+                                low:    'bg-sky-50 text-sky-700 border-sky-200',
+                            }[(job.priority ?? 'normal') as string] ?? 'bg-surface-100 text-surface-600 border-surface-200';
+
+                            const Row = ({ icon, label, children }: any) => (
+                                <div className="flex items-center justify-between gap-3 py-2.5">
+                                    <span className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-surface-400">
+                                        <i className={`fi ${icon} text-[11px] leading-none text-surface-300`} />
+                                        {label}
+                                    </span>
+                                    {children}
                                 </div>
-                            </div>
-                            <div className="card-body py-1">
-                                <div className="divide-y divide-surface-100">
-                                    <div className="flex items-center justify-between gap-3 py-3">
-                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Quantity</span>
-                                        <span className="text-sm font-bold text-surface-900 font-mono tabular-nums">{job.quantity}</span>
+                            );
+
+                            return (
+                                <div className="rounded-2xl border border-amber-200 bg-white shadow-sm overflow-hidden">
+                                    <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2.5">
+                                        <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                            <i className="fi fi-rr-briefcase text-sm leading-none" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm font-bold text-amber-900 leading-tight">Job Details</h3>
+                                            <p className="text-[11px] text-amber-700/70 leading-tight mt-0.5">
+                                                What was ordered, and by when.
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center justify-between gap-3 py-3">
-                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Priority</span>
-                                        <span className="text-sm font-bold text-surface-900 capitalize">{job.priority}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3 py-3">
-                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Due Date</span>
-                                        <span className="text-sm font-bold text-rose-600">{formatDate(job.due_date)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3 py-3">
-                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Customer PO</span>
-                                        <span className="text-sm font-bold text-surface-900 font-mono tabular-nums">{job.customer_po_no || '—'}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3 py-3">
-                                        <span className="text-[11px] uppercase tracking-wider font-semibold text-surface-400">Handoff Date</span>
-                                        <span className="text-sm font-bold text-surface-900">{formatDateTime(job.pcd_handoff_at)}</span>
-                                    </div>
-                                    {job.notes && (
-                                        <div className="py-3">
-                                            <div className="text-[11px] uppercase tracking-wider font-semibold text-surface-400 mb-1.5">Notes</div>
-                                            <div className="text-sm text-surface-700 whitespace-pre-wrap p-3 bg-surface-50 rounded-lg border border-surface-200">
-                                                {job.notes}
+
+                                    <div className="p-4 space-y-3">
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3">
+                                                <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Quantity</p>
+                                                <p className="text-xl font-extrabold text-surface-900 tabular-nums leading-tight mt-0.5">
+                                                    {job.quantity}
+                                                </p>
+                                            </div>
+                                            <div className={`rounded-xl border p-3 ${dueTile}`}>
+                                                <p className="text-[10px] uppercase tracking-wider font-bold opacity-70">Due Date</p>
+                                                <p className="text-sm font-extrabold leading-tight mt-0.5">{formatDate(job.due_date)}</p>
+                                                <p className="text-[10px] font-semibold opacity-80 mt-0.5">{dueNote}</p>
                                             </div>
                                         </div>
-                                    )}
+
+                                        <div className="divide-y divide-surface-100">
+                                            <Row icon="fi-rr-flag" label="Priority">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-bold uppercase tracking-wide ${priorityTone}`}>
+                                                    {job.priority || 'normal'}
+                                                </span>
+                                            </Row>
+                                            <Row icon="fi-rr-document-signed" label="Customer PO">
+                                                <span className="text-sm font-bold text-surface-900 font-mono tabular-nums">
+                                                    {job.customer_po_no || <span className="text-surface-300">—</span>}
+                                                </span>
+                                            </Row>
+                                            <Row icon="fi-rr-paper-plane" label="Handoff Date">
+                                                <span className="text-sm font-semibold text-surface-700">
+                                                    {formatDateTime(job.pcd_handoff_at)}
+                                                </span>
+                                            </Row>
+                                        </div>
+
+                                        {job.notes && (
+                                            <div>
+                                                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-surface-400 mb-1.5">
+                                                    <i className="fi fi-rr-comment-alt text-[11px] leading-none text-surface-300" />
+                                                    Notes
+                                                </div>
+                                                <div className="text-sm text-surface-700 whitespace-pre-wrap p-3 bg-amber-50/60 rounded-xl border border-amber-100">
+                                                    {job.notes}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            );
+                        })()}
 
                         {/* Everything that travelled with the job from IED — the
                             same card the নির্বাহী প্রকৌশলী reads in the PCD Inbox. */}
