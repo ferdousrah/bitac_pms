@@ -19,13 +19,51 @@ export interface JobDocumentSet {
 const money = (n: number) =>
     n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const chip = (text: string, tone: 'slate' | 'amber' | 'green' = 'slate') => {
+/**
+ * One colour per kind of paper, so a glance says what is there.
+ *
+ * ⚠️ Each tone is a complete set — tile, border, hover tint, heading, button —
+ * kept together rather than spelled out at every use. Tailwind only ships
+ * classes it can see in the source, so these must stay written out in full;
+ * building a class name from a variable (`bg-${tone}-50`) silently produces
+ * nothing.
+ */
+const TONES = {
+    sky: {
+        tile: 'bg-sky-100 text-sky-700', row: 'border-sky-200 bg-sky-50/40 hover:bg-sky-50',
+        head: 'text-sky-700', btn: 'bg-sky-600 hover:bg-sky-500',
+    },
+    emerald: {
+        tile: 'bg-emerald-100 text-emerald-700', row: 'border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50',
+        head: 'text-emerald-700', btn: 'bg-emerald-600 hover:bg-emerald-500',
+    },
+    violet: {
+        tile: 'bg-violet-100 text-violet-700', row: 'border-violet-200 bg-violet-50/40 hover:bg-violet-50',
+        head: 'text-violet-700', btn: 'bg-violet-600 hover:bg-violet-500',
+    },
+    teal: {
+        tile: 'bg-teal-100 text-teal-700', row: 'border-teal-200 bg-teal-50/40 hover:bg-teal-50',
+        head: 'text-teal-700', btn: 'bg-teal-600 hover:bg-teal-500',
+    },
+    amber: {
+        tile: 'bg-amber-100 text-amber-700', row: 'border-amber-200 bg-amber-50/40 hover:bg-amber-50',
+        head: 'text-amber-700', btn: 'bg-amber-600 hover:bg-amber-500',
+    },
+    slate: {
+        tile: 'bg-surface-200 text-surface-600', row: 'border-surface-200 bg-surface-50/60 hover:bg-surface-100',
+        head: 'text-surface-500', btn: 'bg-surface-600 hover:bg-surface-500',
+    },
+} as const;
+
+type Tone = keyof typeof TONES;
+
+const statusChip = (text: string, tone: 'slate' | 'amber' | 'green') => {
     const tones = {
-        slate: 'bg-surface-100 text-surface-600 border-surface-200',
-        amber: 'bg-amber-50 text-amber-700 border-amber-200',
-        green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        slate: 'bg-white/80 text-surface-600 border-surface-200',
+        amber: 'bg-white/80 text-amber-700 border-amber-300',
+        green: 'bg-white/80 text-emerald-700 border-emerald-300',
     };
-    return `text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase ${tones[tone]}`;
+    return `text-[9px] px-1.5 py-0.5 rounded border font-bold uppercase tracking-wide ${tones[tone]}`;
 };
 
 /**
@@ -47,118 +85,146 @@ export default function JobDocuments({ documents, className = '' }: { documents:
 
     const open = (url: string, title: string) => setPdf({ url, title });
 
-    const Row = ({ title, subtitle, onOpen, badge }: any) => (
-        <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-surface-200 hover:border-brand-300 hover:bg-brand-50/30 transition-all">
-            <div className="min-w-0">
-                <div className="font-semibold text-surface-900 text-sm truncate">{title}</div>
-                {subtitle && <p className="text-[11px] text-surface-500 truncate">{subtitle}</p>}
+    const Section = ({ tone, icon, label, n, children }: {
+        tone: Tone; icon: string; label: string; n?: number; children: any;
+    }) => (
+        <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+                <i className={`fi ${icon} text-[11px] leading-none ${TONES[tone].head}`} />
+                <p className={`text-[10px] uppercase tracking-wider font-bold ${TONES[tone].head}`}>
+                    {label}{n !== undefined && n > 1 ? ` (${n})` : ''}
+                </p>
+            </div>
+            {children}
+        </div>
+    );
+
+    const Row = ({ tone, icon, title, subtitle, onOpen, badge }: {
+        tone: Tone; icon: string; title: string; subtitle?: string; onOpen: () => void; badge?: any;
+    }) => (
+        <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${TONES[tone].row}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${TONES[tone].tile}`}>
+                <i className={`fi ${icon} text-xs leading-none`} />
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="font-bold text-surface-900 text-sm truncate leading-tight">{title}</div>
+                {subtitle && <p className="text-[11px] text-surface-500 truncate mt-0.5">{subtitle}</p>}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
                 {badge}
                 <button type="button" onClick={onOpen} title="Open PDF"
-                    className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
-                    PDF
+                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white shadow-sm transition-colors ${TONES[tone].btn}`}>
+                    <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> PDF
                 </button>
             </div>
         </div>
     );
 
     return (
-        <div className={`card ${className}`}>
-            <div className="card-header">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                        <h3 className="text-base font-semibold text-surface-900">Documents</h3>
+        <div className={`rounded-2xl border-2 border-emerald-200 bg-white shadow-sm overflow-hidden animate-fade-in ${className}`}>
+            {/* A coloured band, so the card is found at a glance on a long page. */}
+            <div className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                        <i className="fi fi-rr-folder-open text-sm leading-none" />
                     </div>
-                    <span className="badge badge-slate">{count}</span>
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-bold leading-tight">Documents</h3>
+                        <p className="text-[11px] text-white/80 leading-tight mt-0.5">
+                            Everything that came with this job from IED
+                        </p>
+                    </div>
                 </div>
-                <p className="text-[11px] text-surface-400 mt-1">Everything that came with this job from IED.</p>
+                <span className="shrink-0 min-w-[28px] h-7 px-2 rounded-lg bg-white text-emerald-700 text-sm font-extrabold flex items-center justify-center">
+                    {count}
+                </span>
             </div>
 
-            <div className="card-body space-y-4">
+            <div className="p-4 space-y-4">
                 {count === 0 && (
-                    <p className="text-xs text-surface-400 py-4 text-center">
-                        No documents were attached to this job.
-                    </p>
+                    <div className="text-center py-6">
+                        <div className="w-10 h-10 rounded-xl bg-surface-100 flex items-center justify-center mx-auto mb-2">
+                            <i className="fi fi-rr-folder-open text-surface-400 text-sm leading-none" />
+                        </div>
+                        <p className="text-xs text-surface-400">No documents were attached to this job.</p>
+                    </div>
                 )}
 
                 {d?.rfq_letter && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Customer RFQ Letter</p>
-                        <Row title={d.rfq_letter.title}
-                            subtitle={`${d.rfq_letter.label}${d.rfq_letter.date ? ` · ${d.rfq_letter.date}` : ''}`}
+                    <Section tone="sky" icon="fi-rr-envelope" label="Customer RFQ Letter">
+                        <Row tone="sky" icon="fi-rr-envelope"
+                            title={d.rfq_letter.title}
+                            subtitle={[d.rfq_letter.label, d.rfq_letter.date].filter(Boolean).join(' · ')}
                             onOpen={() => open(d.rfq_letter!.pdf_url, d.rfq_letter!.title)} />
-                    </div>
+                    </Section>
                 )}
 
                 {d?.quotation && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Approved Quotation</p>
-                        <Row title={d.quotation.label}
+                    <Section tone="emerald" icon="fi-rr-coins" label="Approved Quotation">
+                        <Row tone="emerald" icon="fi-rr-coins"
+                            title={d.quotation.label}
                             subtitle={`৳ ${money(d.quotation.amount)}`}
-                            badge={<span className={chip(d.quotation.status.replace(/_/g, ' '), 'green')}>{d.quotation.status.replace(/_/g, ' ')}</span>}
+                            badge={<span className={statusChip(d.quotation.status, 'green')}>{d.quotation.status.replace(/_/g, ' ')}</span>}
                             onOpen={() => open(d.quotation!.pdf_url, d.quotation!.label)} />
-                    </div>
+                    </Section>
                 )}
 
                 {d?.cost_estimates?.length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">
-                            Cost Estimate{d.cost_estimates.length !== 1 ? `s (${d.cost_estimates.length})` : ''}
-                        </p>
-                        {d.cost_estimates.map((e) => (
-                            <Row key={e.id}
-                                title={e.estimate_no || `Estimate #${e.id}`}
-                                subtitle={[e.job_name, e.part_no ? `Part ${e.part_no}` : null, `৳ ${money(e.grand_total)}`]
-                                    .filter(Boolean).join(' · ')}
-                                badge={e.approval_status === 'approved'
-                                    ? <span className={chip('approved', 'green')}>approved</span>
-                                    : <span className={chip(e.status, 'amber')}>{e.status}</span>}
-                                onOpen={() => open(e.pdf_url, e.estimate_no || `Estimate #${e.id}`)} />
-                        ))}
-                    </div>
+                    <Section tone="violet" icon="fi-rr-calculator" label="Cost Estimate" n={d.cost_estimates.length}>
+                        <div className="space-y-1.5">
+                            {d.cost_estimates.map((e) => (
+                                <Row key={e.id} tone="violet" icon="fi-rr-calculator"
+                                    title={e.estimate_no || `Estimate #${e.id}`}
+                                    subtitle={[e.job_name, e.part_no ? `Part ${e.part_no}` : null, `৳ ${money(e.grand_total)}`]
+                                        .filter(Boolean).join(' · ')}
+                                    badge={e.approval_status === 'approved'
+                                        ? <span className={statusChip('approved', 'green')}>approved</span>
+                                        : <span className={statusChip(e.status, 'amber')}>{e.status}</span>}
+                                    onOpen={() => open(e.pdf_url, e.estimate_no || `Estimate #${e.id}`)} />
+                            ))}
+                        </div>
+                    </Section>
                 )}
 
-                {/* Grouped under BITAC's own labels. What came IN says what is on
-                    the floor; what went OUT says what has gone back. */}
+                {/* Grouped under BITAC's own labels, and given opposite colours:
+                    what came IN is on the floor, what went OUT has gone back. */}
                 {(['in', 'out'] as const).map((direction) => {
                     const passes = (d?.gate_passes ?? []).filter((gp) => gp.direction === direction);
                     if (passes.length === 0) return null;
                     const label = direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out';
+                    const tone: Tone = direction === 'in' ? 'teal' : 'amber';
+                    const icon = direction === 'in' ? 'fi-rr-sign-in-alt' : 'fi-rr-sign-out-alt';
                     return (
-                        <div key={direction} className="space-y-2">
-                            <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">
-                                {label}{passes.length !== 1 ? ` (${passes.length})` : ''}
-                            </p>
-                            {passes.map((gp) => (
-                                <Row key={gp.id}
-                                    title={gp.pass_no || `Pass #${gp.id}`}
-                                    subtitle={[
-                                        gp.pass_date,
-                                        gp.party_name,
-                                        `${gp.item_count} item${gp.item_count !== 1 ? 's' : ''}`,
-                                        gp.items.slice(0, 2).join(', '),
-                                    ].filter(Boolean).join(' · ')}
-                                    badge={<span className={chip(gp.status.replace(/_/g, ' '))}>{gp.status.replace(/_/g, ' ')}</span>}
-                                    onOpen={() => open(gp.pdf_url, gp.pass_no || `${label} #${gp.id}`)} />
-                            ))}
-                        </div>
+                        <Section key={direction} tone={tone} icon={icon} label={label} n={passes.length}>
+                            <div className="space-y-1.5">
+                                {passes.map((gp) => (
+                                    <Row key={gp.id} tone={tone} icon={icon}
+                                        title={gp.pass_no || `Pass #${gp.id}`}
+                                        subtitle={[
+                                            gp.pass_date,
+                                            gp.party_name,
+                                            `${gp.item_count} item${gp.item_count !== 1 ? 's' : ''}`,
+                                            gp.items.slice(0, 2).join(', '),
+                                        ].filter(Boolean).join(' · ')}
+                                        badge={<span className={statusChip(gp.status, 'slate')}>{gp.status.replace(/_/g, ' ')}</span>}
+                                        onOpen={() => open(gp.pdf_url, gp.pass_no || `${label} #${gp.id}`)} />
+                                ))}
+                            </div>
+                        </Section>
                     );
                 })}
 
                 {d?.attachments?.length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">
-                            Attached files ({d.attachments.length})
-                        </p>
-                        {d.attachments.map((f) => (
-                            <Row key={f.id}
-                                title={f.name || `File #${f.id}`}
-                                subtitle={f.kind ? f.kind.replace(/_/g, ' ') : undefined}
-                                onOpen={() => open(f.pdf_url, f.name || `File #${f.id}`)} />
-                        ))}
-                    </div>
+                    <Section tone="slate" icon="fi-rr-clip" label="Attached files" n={d.attachments.length}>
+                        <div className="space-y-1.5">
+                            {d.attachments.map((f) => (
+                                <Row key={f.id} tone="slate" icon="fi-rr-clip"
+                                    title={f.name || `File #${f.id}`}
+                                    subtitle={f.kind ? f.kind.replace(/_/g, ' ') : undefined}
+                                    onOpen={() => open(f.pdf_url, f.name || `File #${f.id}`)} />
+                            ))}
+                        </div>
+                    </Section>
                 )}
             </div>
 
