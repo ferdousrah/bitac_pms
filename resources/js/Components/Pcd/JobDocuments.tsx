@@ -179,7 +179,7 @@ export default function JobDocuments({ documents, className = '' }: { documents:
                                         .filter(Boolean).join(' · ')}
                                     badge={e.approval_status === 'approved'
                                         ? <span className={statusChip('approved', 'green')}>approved</span>
-                                        : <span className={statusChip(e.status, 'amber')}>{e.status}</span>}
+                                        : <span className={statusChip(e.status, 'amber')}>{e.status.replace(/_/g, ' ')}</span>}
                                     onOpen={() => open(e.pdf_url, e.estimate_no || `Estimate #${e.id}`)} />
                             ))}
                         </div>

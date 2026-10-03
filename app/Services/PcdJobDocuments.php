@@ -114,9 +114,15 @@ class PcdJobDocuments
      * What the job was priced from.
      *
      * ⚠️ A job can hold **many** estimates — costing is part by part — so this
-     * is a list, not a single document. Draft ones are included: PCD seeing a
-     * figure that is still being worked on is better than PCD seeing nothing
-     * and assuming there was no costing.
+     * is a list, not a single document.
+     *
+     * ⚠️ **Drafts are excluded** (BITAC, 2026-10-03). A draft is costing still
+     * being worked on; it was never forwarded, and showing a shelf of them
+     * buried the figure that actually counts. This is the same line the money
+     * path already draws — `RfqItemPart::effectiveEstimate()` takes the newest
+     * **non-draft** estimate. A job whose costing is all still draft therefore
+     * shows no cost estimate here, which is the honest answer: nothing was
+     * finalised.
      */
     private function costEstimates(WorkOrder $workOrder, $rfq): array
     {
@@ -126,6 +132,7 @@ class PcdJobDocuments
 
         return CostEstimate::withoutGlobalScopes()
             ->where('rfq_id', $rfq->id)
+            ->where('status', '!=', 'draft')
             ->orderBy('rfq_item_id')->orderBy('id')
             ->get()
             ->map(fn (CostEstimate $e) => [
