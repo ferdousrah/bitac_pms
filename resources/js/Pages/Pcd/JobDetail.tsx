@@ -258,6 +258,16 @@ export default function JobDetail({ job, checklist }: Props) {
     const [jobItemsOpen, setJobItemsOpen] = useState(false);
     const [docsOpen, setDocsOpen] = useState(false);
     const [mrOpen, setMrOpen] = useState(false);
+    // Open while a gate is still outstanding; folded once the job has
+    // gone to the shops — at that point the gates are history, not work.
+    const [workflowOpen, setWorkflowOpen] = useState(!checklist.released);
+    // Shown on the folded header, so collapsing never hides where it stands.
+    const gatesTotal = 3;
+    const gatesDone = [
+        checklist.material_requisition.done,
+        checklist.section_assign.done,
+        checklist.operation_sheet.done,
+    ].filter(Boolean).length;
 
     // Open any controller PDF endpoint in the popup viewer (base64 to dodge
     // download-manager intercept); falls back to a new tab on failure.
@@ -671,9 +681,28 @@ export default function JobDetail({ job, checklist }: Props) {
 
                 {/* === PCD Workflow Progress — compact release gates === */}
                 <div className="card animate-slide-up">
+                    {/* ⚠️ Only the title is the toggle, not the whole header: the
+                        header carries a PDF button, and a <button> inside a
+                        <button> is invalid HTML and stops firing. */}
                     <div className="card-header">
                         <div className="flex items-center justify-between gap-2">
-                            <h3 className="text-base font-semibold text-surface-900">PCD Workflow Progress</h3>
+                            <button
+                                type="button"
+                                onClick={() => setWorkflowOpen(o => !o)}
+                                aria-expanded={workflowOpen}
+                                className="flex items-center gap-2 min-w-0 text-left group"
+                            >
+                                <i className={`fi fi-rr-angle-${workflowOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none`} />
+                                <h3 className="text-base font-semibold text-surface-900 group-hover:text-brand-600 transition-colors">
+                                    PCD Workflow Progress
+                                </h3>
+                                {/* Folding it must not hide where the job stands. */}
+                                {!workflowOpen && (
+                                    <span className={`badge ${checklist.all_done ? 'badge-green' : 'badge-slate'}`}>
+                                        {gatesDone} of {gatesTotal} done
+                                    </span>
+                                )}
+                            </button>
                             <div className="flex items-center gap-2 shrink-0">
                                 {checklist.section_assign.done && (
                                     <button
@@ -690,10 +719,13 @@ export default function JobDetail({ job, checklist }: Props) {
                                 )}
                             </div>
                         </div>
-                        <p className="text-xs text-surface-500 mt-1">
-                            {routeTotal > 0 ? routeTotal : 3} gate{routeTotal === 1 ? '' : 's'} to release this job to the shops
-                        </p>
+                        {workflowOpen && (
+                            <p className="text-xs text-surface-500 mt-1">
+                                {routeTotal > 0 ? routeTotal : 3} gate{routeTotal === 1 ? '' : 's'} to release this job to the shops
+                            </p>
+                        )}
                     </div>
+                    {workflowOpen && (
                     <div className="card-body space-y-2.5">
                         {checklist.released && (
                             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">
@@ -730,6 +762,7 @@ export default function JobDetail({ job, checklist }: Props) {
                             </Link>
                         ))}
                     </div>
+                    )}
                 </div>
 
                 {/* Two-column grid */}
