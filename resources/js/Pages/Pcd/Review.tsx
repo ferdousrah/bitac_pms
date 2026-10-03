@@ -1,11 +1,12 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
+import JobDocuments from '@/Components/Pcd/JobDocuments';
 
 const money = (n: number) =>
     n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PcdReview({ job }: any) {
+export default function PcdReview({ job, documents }: any) {
     const [showBack, setShowBack] = useState(false);
 
     const forwardForm = useForm<any>({ note: '' });
@@ -126,6 +127,10 @@ export default function PcdReview({ job }: any) {
                     </div>
 
                     <div className="space-y-5">
+                        {/* Read the paperwork before deciding — same set the
+                            planning desk gets. */}
+                        {documents && <JobDocuments documents={documents} />}
+
                         <div className="card">
                             <div className="card-header">
                                 <div className="flex items-center gap-2">

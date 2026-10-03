@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Pcd;
 use App\Http\Controllers\Controller;
 use App\Models\WorkOrder;
 use App\Services\NotifyService;
+use App\Services\PcdJobDocuments;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -71,8 +72,8 @@ class PcdReviewController extends Controller
         }
 
         $workOrder->load([
-            'customer', 'items', 'quotation.items',
-            'rfq.items.product', 'pcdHandoffBy',
+            'customer', 'items', 'quotation.items', 'quotation.rfq',
+            'rfq.items.product', 'rfq.gatePasses.items', 'files', 'pcdHandoffBy',
         ]);
 
         return Inertia::render('Pcd/Review', [
@@ -104,6 +105,9 @@ class PcdReviewController extends Controller
                     'ied_note'    => $i->ied_note,
                 ])->values(),
             ],
+            // ⚠️ The same set the planning desk gets — one packer, so the boss
+            // and the planner can never be looking at different paperwork.
+            'documents' => app(PcdJobDocuments::class)->for($workOrder),
         ]);
     }
 

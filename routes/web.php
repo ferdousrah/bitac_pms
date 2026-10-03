@@ -499,6 +499,20 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/inbox/{workOrder}/send-back', [PcdReviewController::class, 'sendBack'])->name('inbox.send-back');
     });
 
+    // ─── The paperwork that travels with a job. Reachable from BOTH PCD
+    // screens, so the permission is either one. The work order is in the path
+    // because the document has to be proved to belong to it — see
+    // PcdDocumentController.
+    Route::prefix('pcd/job/{workOrder}')
+        ->middleware('permission:view pcd-inbox|review pcd-inbox')
+        ->name('pcd.job.')
+        ->group(function () {
+            Route::get('gate-passes/{gatePass}/pdf', [\App\Http\Controllers\Pcd\PcdDocumentController::class, 'gatePass'])
+                ->name('gate-pass.pdf');
+            Route::get('cost-estimates/{costEstimate}/pdf', [\App\Http\Controllers\Pcd\PcdDocumentController::class, 'costEstimate'])
+                ->name('cost-estimate.pdf');
+        });
+
     // ─── Job Planning — the desk. Job number, material requisition, section
     // routing, operation sheets, release to the shops. This is the screen that
     // used to be called "PCD Inbox"; work never arrived there, it was done there.

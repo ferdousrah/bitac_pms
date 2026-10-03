@@ -216,6 +216,13 @@ class PcdJobPlanningController extends Controller
                 // can review every document the job inherited without bouncing
                 // between RFQ / Quotation / WO pages.
                 'all_attachments' => $allAttachments->values(),
+                // ⚠️ Everything that travelled with the job from IED — RFQ
+                // letter, quotation, every Gate Pass In, and the cost
+                // estimate(s) it was priced from. Shared with the PCD Inbox
+                // through `PcdJobDocuments`, so both screens show the same
+                // papers; `rfq_source` / `quotation_source` / `gate_passes`
+                // above stay for the cards that already read them.
+                'documents' => app(\App\Services\PcdJobDocuments::class)->for($workOrder),
                 // What has actually left the gate against this job. PCD planned
                 // it and routed it, so PCD sees the challans too — read-only,
                 // and the Delivery module stays the place that raises them.

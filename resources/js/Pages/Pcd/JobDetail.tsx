@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import JobDocuments from '@/Components/Pcd/JobDocuments';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 
 interface ItemFile {
@@ -1156,6 +1157,10 @@ export default function JobDetail({ job, checklist }: Props) {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Everything that travelled with the job from IED — the
+                            same card the নির্বাহী প্রকৌশলী reads in the PCD Inbox. */}
+                        {(job as any).documents && <JobDocuments documents={(job as any).documents} />}
 
                         {/* Deliveries — what has actually left the gate, with its challan.
                             PCD planned and routed this job, so PCD sees the challans;
