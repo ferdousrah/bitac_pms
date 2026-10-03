@@ -148,19 +148,6 @@ interface Job {
             human_size: string | null;
         }>;
     } | null;
-    gate_passes?: Array<{
-        id: number;
-        pass_no: string;
-        direction: 'in' | 'out';
-        status: string;
-        pass_date: string | null;
-        party_name: string | null;
-        vehicle_no: string | null;
-        item_count: number;
-        items_summary: string[];
-        notes: string | null;
-        view_url: string;
-    }>;
 }
 
 interface ChecklistItem {
@@ -270,7 +257,6 @@ export default function JobDetail({ job, checklist }: Props) {
     const [sourceDocsOpen, setSourceDocsOpen] = useState(false);
     const [jobItemsOpen, setJobItemsOpen] = useState(false);
     const [docsOpen, setDocsOpen] = useState(false);
-    const [gatePassesOpen, setGatePassesOpen] = useState(true);
     const [mrOpen, setMrOpen] = useState(false);
 
     // Open any controller PDF endpoint in the popup viewer (base64 to dodge
@@ -809,80 +795,10 @@ export default function JobDetail({ job, checklist }: Props) {
                             </div>
                         )}
 
-                        {/* Gate Passes — IN/OUT passes attached to the parent RFQ */}
-                        {(job.gate_passes ?? []).length > 0 && (
-                            <div className="card">
-                                <button
-                                    type="button"
-                                    onClick={() => setGatePassesOpen(o => !o)}
-                                    className="card-header w-full flex items-center justify-between hover:bg-surface-50/60 transition-colors text-left"
-                                    aria-expanded={gatePassesOpen}
-                                >
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <i className="fi fi-rr-shield-check text-brand-600" />
-                                            <h3 className="text-base font-semibold text-surface-900">Gate Passes</h3>
-                                            <span className="badge badge-slate">{(job.gate_passes ?? []).length}</span>
-                                        </div>
-                                        <p className="text-xs text-surface-500 mt-1">
-                                            Reference samples / parts moving in and out of BITAC against this job.
-                                        </p>
-                                    </div>
-                                    <i className={`fi fi-rr-angle-${gatePassesOpen ? 'up' : 'down'} text-surface-400 text-sm leading-none shrink-0 ml-3`} />
-                                </button>
-                                {gatePassesOpen && (
-                                    <div className="card-body space-y-2">
-                                        {(job.gate_passes ?? []).map((gp: any) => {
-                                            const isIn = gp.direction === 'in';
-                                            const dirCls = isIn
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                : 'bg-amber-50 text-amber-700 border-amber-200';
-                                            const statusCls = gp.status === 'completed'
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : gp.status === 'cancelled'
-                                                    ? 'bg-rose-100 text-rose-700'
-                                                    : 'bg-surface-100 text-surface-700';
-                                            return (
-                                                <a
-                                                    key={gp.id}
-                                                    href={gp.view_url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-surface-200 hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3 min-w-0">
-                                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                            <i className={`fi ${isIn ? 'fi-rr-sign-in-alt' : 'fi-rr-sign-out-alt'} text-sm leading-none`} />
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="font-mono text-sm font-bold text-surface-900">{gp.pass_no}</span>
-                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider ${dirCls}`}>
-                                                                    {isIn ? 'IN' : 'OUT'}
-                                                                </span>
-                                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize ${statusCls}`}>{gp.status}</span>
-                                                            </div>
-                                                            <div className="text-[11px] text-surface-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                                                                <span>{gp.pass_date}</span>
-                                                                {gp.party_name && <span>· {gp.party_name}</span>}
-                                                                {gp.vehicle_no && <span>· Vehicle {gp.vehicle_no}</span>}
-                                                                <span>· {gp.item_count} item{gp.item_count === 1 ? '' : 's'}</span>
-                                                            </div>
-                                                            {gp.items_summary?.length > 0 && (
-                                                                <div className="text-[10px] text-surface-400 mt-0.5 truncate">
-                                                                    {gp.items_summary.join(', ')}{gp.item_count > gp.items_summary.length ? '…' : ''}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <i className="fi fi-rr-arrow-up-right-from-square text-[10px] text-surface-400 shrink-0" />
-                                                </a>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        {/* The standalone Gate Passes card was removed on 2026-10-03:
+                            the Documents card in the sidebar already lists every pass,
+                            In and Out, each with its PDF — so the same pass was being
+                            shown twice on one page. */}
 
                         {/* Work Order — PCD's internal routing slip. Defines the ordered
                             list of production shops the job will pass through. Shops

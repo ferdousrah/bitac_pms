@@ -85,7 +85,6 @@ class PcdJobPlanningController extends Controller
         // Reach through the quotation as a fallback so Job Items always render.
         $rfq      = $workOrder->rfq      ?? $workOrder->quotation?->rfq;
         $rfqItems = $rfq?->items ?? collect();
-        $gatePasses = $rfq?->gatePasses ?? collect();
 
         $checklist = PcdReleaseService::checklistFor($workOrder);
 
@@ -183,22 +182,10 @@ class PcdJobPlanningController extends Controller
                     'pdf_url'      => "/quotations/{$workOrder->quotation->id}/pdf?preview=base64",
                     'view_url'     => "/quotations/{$workOrder->quotation->id}",
                 ] : null,
-                // Gate passes attached to the parent RFQ — reference samples
-                // entering / leaving BITAC. Surfaced here so PCD knows about
-                // physical material that arrived (or is due to be returned).
-                'gate_passes'         => $gatePasses->map(fn ($gp) => [
-                    'id'             => $gp->id,
-                    'pass_no'        => $gp->pass_no,
-                    'direction'      => $gp->direction,
-                    'status'         => $gp->status,
-                    'pass_date'      => $gp->pass_date?->format('d M Y'),
-                    'party_name'     => $gp->party_name,
-                    'vehicle_no'     => $gp->vehicle_no,
-                    'item_count'     => $gp->items->count(),
-                    'items_summary'  => $gp->items->take(3)->map(fn ($i) => $i->description)->all(),
-                    'notes'          => $gp->notes,
-                    'view_url'       => "/ied/gate-passes/{$gp->id}",
-                ])->values(),
+                // ⚠️ The `gate_passes` prop was dropped on 2026-10-03 with the card
+                // that read it. Gate passes reach the page through `documents`
+                // below — both directions, each with a PDF link PCD can actually
+                // open, which the old prop's `/ied/gate-passes/…` URL was not.
                 'attachments'         => $workOrder->files->map(fn($f) => [
                     'id'           => $f->id,
                     'kind'         => $f->kind,
@@ -217,11 +204,11 @@ class PcdJobPlanningController extends Controller
                 // between RFQ / Quotation / WO pages.
                 'all_attachments' => $allAttachments->values(),
                 // ⚠️ Everything that travelled with the job from IED — RFQ
-                // letter, quotation, every Gate Pass In, and the cost
-                // estimate(s) it was priced from. Shared with the PCD Inbox
-                // through `PcdJobDocuments`, so both screens show the same
-                // papers; `rfq_source` / `quotation_source` / `gate_passes`
-                // above stay for the cards that already read them.
+                // letter, quotation, every gate pass (both directions) and the
+                // cost estimate(s) it was priced from. Shared with the PCD
+                // Inbox through `PcdJobDocuments`, so both screens show the
+                // same papers. `rfq_source` / `quotation_source` above stay
+                // for the Source Documents strip that still reads them.
                 'documents' => app(\App\Services\PcdJobDocuments::class)->for($workOrder),
                 // What has actually left the gate against this job. PCD planned
                 // it and routed it, so PCD sees the challans too — read-only,
