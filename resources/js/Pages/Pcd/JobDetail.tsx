@@ -1246,70 +1246,12 @@ export default function JobDetail({ job, checklist }: Props) {
                             </div>
                         </div>
 
-                        {/* Documents — Customer RFQ Letter, Approved Quotation, Customer Work Order */}
-                        {(() => {
-                            const customerWo = job.attachments?.find(a => a.kind === 'customer_po');
-                            if (!job.rfq_source && !job.quotation_source && !customerWo) return null;
-                            const fmtAmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                            return (
-                                <div className="card">
-                                    <div className="card-header">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                                            <h3 className="text-base font-semibold text-surface-900">Documents</h3>
-                                        </div>
-                                    </div>
-                                    <div className="card-body space-y-2.5">
-                                        {job.rfq_source && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPdfPopup({ open: true, url: job.rfq_source!.pdf_url, title: job.rfq_source!.title ?? 'Customer RFQ Letter', subtitle: `${job.rfq_source!.rfq_no} · ${job.customer}` })}
-                                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-50 hover:border-blue-400 text-left transition-all"
-                                            >
-                                                <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-envelope text-base leading-none" /></div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-blue-600">RFQ Letter</div>
-                                                    <div className="text-sm font-semibold text-blue-900 truncate font-mono">{job.rfq_source.rfq_no}</div>
-                                                </div>
-                                                <i className="fi fi-rr-eye text-blue-400 text-sm leading-none" />
-                                            </button>
-                                        )}
-                                        {job.quotation_source && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPdfPopup({ open: true, url: job.quotation_source!.pdf_url, title: job.quotation_source!.quotation_no, subtitle: `${job.customer} · BDT ${fmtAmt(job.quotation_source!.total_amount)}` })}
-                                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-400 text-left transition-all"
-                                            >
-                                                <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-file-invoice-dollar text-base leading-none" /></div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600">Approved Quotation</div>
-                                                    <div className="text-sm font-semibold text-emerald-900 truncate font-mono">{job.quotation_source.quotation_no}</div>
-                                                    <div className="text-[10px] text-emerald-700 font-mono">BDT {fmtAmt(job.quotation_source.total_amount)}</div>
-                                                </div>
-                                                <i className="fi fi-rr-eye text-emerald-400 text-sm leading-none" />
-                                            </button>
-                                        )}
-                                        {customerWo && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const sep = customerWo.url.includes('?') ? '&' : '?';
-                                                    setPdfPopup({ open: true, url: `${customerWo.url}${sep}preview=base64`, title: 'Customer Work Order', subtitle: job.customer_po_no ? `PO ${job.customer_po_no}` : job.customer });
-                                                }}
-                                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-50 hover:border-amber-400 text-left transition-all"
-                                            >
-                                                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-clipboard-list text-base leading-none" /></div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Customer Work Order</div>
-                                                    <div className="text-sm font-semibold text-amber-900 truncate font-mono">{job.customer_po_no ? `PO: ${job.customer_po_no}` : 'View document'}</div>
-                                                </div>
-                                                <i className="fi fi-rr-eye text-amber-400 text-sm leading-none" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })()}
+                        {/* The old Documents card (Customer RFQ Letter / Approved
+                            Quotation / Customer Work Order) was removed on 2026-10-03:
+                            <JobDocuments> above is a superset of it — same letter and
+                            quotation, plus the cost estimates, both gate pass
+                            directions and every attachment — so the page was showing
+                            two cards both called "Documents". */}
                     </div>
                 </div>
             </div>
