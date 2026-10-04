@@ -10,6 +10,9 @@ class WorkOrderSection extends Model
         'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'status',
         'started_at', 'completed_at', 'completed_by', 'notes', 'work_hours', 'qc_notes', 'remarks',
         'bottleneck_at', 'bottleneck_reason', 'bottleneck_by',
+        // WARNING: mass assignment drops anything missing from this list
+        // SILENTLY - the forward would appear to work while nothing was written.
+        'assigned_to', 'assigned_by', 'assigned_at', 'received_at', 'assign_note',
     ];
 
     protected function casts(): array
@@ -21,6 +24,8 @@ class WorkOrderSection extends Model
             'received_qty'  => 'decimal:2',
             'forwarded_qty' => 'decimal:2',
             'bottleneck_at' => 'datetime',
+            'assigned_at'   => 'datetime',
+            'received_at'   => 'datetime',
         ];
     }
 
@@ -125,6 +130,19 @@ class WorkOrderSection extends Model
     }
 
     public function workOrder()   { return $this->belongsTo(WorkOrder::class); }
+
+    /** The assistant engineer who owns this job at this shop. */
+    public function assignedTo() { return $this->belongsTo(User::class, 'assigned_to'); }
+    public function assignedBy() { return $this->belongsTo(User::class, 'assigned_by'); }
+
+    public function isAssigned(): bool { return $this->assigned_to !== null; }
+    public function isReceived(): bool { return $this->received_at !== null; }
+
+    /** Handed over but not yet taken in hand - two different facts. */
+    public function awaitingReceipt(): bool
+    {
+        return $this->isAssigned() && ! $this->isReceived();
+    }
     public function section()     { return $this->belongsTo(Section::class); }
     public function completedBy() { return $this->belongsTo(User::class, 'completed_by'); }
     public function bottleneckBy(){ return $this->belongsTo(User::class, 'bottleneck_by'); }

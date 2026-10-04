@@ -8,6 +8,8 @@ use App\Models\Section;
 use App\Models\SectionHandoff;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderSection;
+use App\Services\NotifyService;
+use App\Services\ShopAssignment;
 use App\Services\ProductionRoutingService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -68,12 +70,29 @@ class ProductionController extends Controller
                 ->values()
             : collect();
 
+        // ⚠️ An assistant engineer sees only what has been forwarded to him.
+        // A shop with no নির্বাহী প্রকৌশলী has no gate, so nothing narrows and
+        // the queue behaves exactly as it always did.
+        $ownWorkOnly = ! $isSubSection
+            && ShopAssignment::scopedToOwnWork($user, $section?->id);
+
+        if ($ownWorkOnly) {
+            $jobs = $jobs->filter(fn ($row) => (int) ($row['assigned_to_id'] ?? 0) === (int) $user->id)
+                ->values();
+        }
+
+        // What the shop head still has in hand, so it is not quietly sitting there.
+        $unassigned = (! $isSubSection && ShopAssignment::canOversee($user, $section?->id))
+            ? $jobs->filter(fn ($row) => ($row['assigned_to_id'] ?? null) === null)->count()
+            : 0;
+
         // ── Upcoming jobs — routed to this section but not yet arrived ──────
         // Jobs whose WOS here is still 'pending' while an EARLIER section is
         // already working them. They're in the pipeline heading this way; the
         // supervisor can plan machines/material ahead. (Nothing has been
         // transferred here yet — otherwise this WOS would be 'ready'/active.)
-        $upcoming = ($section && !$isSubSection)
+        // An AE plans nothing ahead for the whole shop — that is the XEN's view.
+        $upcoming = ($section && !$isSubSection && !$ownWorkOnly)
             ? WorkOrderSection::where('section_id', $section->id)
                 ->where('status', 'pending')
                 ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled', 'delivered']))
@@ -127,12 +146,24 @@ class ProductionController extends Controller
             'upcoming'          => $upcoming,
             'available_sections'=> $availableSections,
             'can_switch'        => $canSwitch,
+            // The XEN → AE flow, as this viewer sees it.
+            'shop_flow'         => [
+                'active'       => ! $isSubSection && ShopAssignment::gateActive($section?->id),
+                'can_forward'  => ! $isSubSection && ShopAssignment::canOversee($user, $section?->id),
+                'own_work_only'=> $ownWorkOnly,
+                'unassigned'   => $unassigned,
+            ],
         ]);
     }
 
     public function complete(Request $request, WorkOrderSection $workOrderSection)
     {
         $this->authorizeAccess($workOrderSection);
+        // The shop's own acts: moving work on, sending it back, flagging it.
+        // They belong to whoever oversees the shop, not to the AE holding one job.
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+            return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
+        }
 
         if (!in_array($workOrderSection->status, ['ready', 'in_progress', 'rework'])) {
             return back()->with('error', 'This section is not in a completable state.');
@@ -170,6 +201,11 @@ class ProductionController extends Controller
     public function sendBack(Request $request, WorkOrderSection $workOrderSection)
     {
         $this->authorizeAccess($workOrderSection);
+        // The shop's own acts: moving work on, sending it back, flagging it.
+        // They belong to whoever oversees the shop, not to the AE holding one job.
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+            return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
+        }
 
         if (!in_array($workOrderSection->status, ['ready', 'in_progress'])) {
             return back()->with('error', 'You can only send back from an active section.');
@@ -297,6 +333,9 @@ class ProductionController extends Controller
             return back()->with('error', 'No section assignment matches this operation step.');
         }
         $this->authorizeAccess($wos);
+        if ($blocker = ShopAssignment::workBlocker($wos, $request->user())) {
+            return back()->with('error', $blocker);
+        }
 
         $validated = $request->validate([
             'sub_section_id' => 'nullable|exists:sections,id',
@@ -335,6 +374,9 @@ class ProductionController extends Controller
             return back()->with('error', 'No section assignment matches this operation step.');
         }
         $this->authorizeAccess($wos);
+        if ($blocker = ShopAssignment::workBlocker($wos, $request->user())) {
+            return back()->with('error', $blocker);
+        }
         if (in_array($wos->status, ['completed', 'skipped'])) {
             return back()->with('error', 'This section is already completed — cannot log production.');
         }
@@ -448,6 +490,11 @@ class ProductionController extends Controller
     public function transfer(Request $request, WorkOrderSection $workOrderSection)
     {
         $this->authorizeAccess($workOrderSection);
+        // The shop's own acts: moving work on, sending it back, flagging it.
+        // They belong to whoever oversees the shop, not to the AE holding one job.
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+            return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
+        }
 
         if (!in_array($workOrderSection->status, ['ready', 'in_progress', 'rework'])) {
             return back()->with('error', 'This section is not in a state that can transfer work.');
@@ -532,6 +579,11 @@ class ProductionController extends Controller
     public function flagBottleneck(Request $request, WorkOrderSection $workOrderSection)
     {
         $this->authorizeAccess($workOrderSection);
+        // The shop's own acts: moving work on, sending it back, flagging it.
+        // They belong to whoever oversees the shop, not to the AE holding one job.
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+            return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
+        }
         $validated = $request->validate(['reason' => 'required|string|min:3|max:500']);
         $workOrderSection->update([
             'bottleneck_at'     => now(),
@@ -1082,7 +1134,204 @@ class ProductionController extends Controller
                 ->sortBy('display_order')
                 ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code])
                 ->values(),
+            // ── Who holds this job at this shop ──────────────────────────
+            'assignment' => [
+                'active'        => ShopAssignment::gateActive($workOrderSection->section_id),
+                'assigned_to'   => $workOrderSection->assignedTo?->name,
+                'assigned_to_id'=> $workOrderSection->assigned_to,
+                'assigned_by'   => $workOrderSection->assignedBy?->name,
+                'assigned_at'   => $workOrderSection->assigned_at?->format('d M Y, h:i A'),
+                'received_at'   => $workOrderSection->received_at?->format('d M Y, h:i A'),
+                'note'          => $workOrderSection->assign_note,
+                'can_forward'   => ShopAssignment::canOversee($request->user(), $workOrderSection->section_id),
+                'can_receive'   => $workOrderSection->awaitingReceipt()
+                    && (int) $workOrderSection->assigned_to === (int) $request->user()->id,
+                'can_hand_back' => $workOrderSection->isAssigned()
+                    && (int) $workOrderSection->assigned_to === (int) $request->user()->id,
+                // Why this viewer cannot work on it yet, in plain words.
+                'blocker'       => ShopAssignment::workBlocker($workOrderSection, $request->user()),
+                'assistants'    => ShopAssignment::assistants((int) $workOrderSection->section_id)
+                    ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'designation' => $u->designation])
+                    ->values(),
+                'sub_sections'  => Section::where('parent_id', $workOrderSection->section_id)
+                    ->where('is_active', true)->orderBy('display_order')
+                    ->get(['id', 'name'])->map(fn ($x) => ['id' => $x->id, 'name' => $x->name])->values(),
+            ],
         ]);
+    }
+
+    /**
+     * The নির্বাহী প্রকৌশলী hands the job on.
+     *
+     * Two ways out of his hands, and they are a choice: to one of his
+     * assistant engineers, who then owns the job at this shop, or straight to
+     * a sub-section, which puts every open step of this job on that bench.
+     *
+     * ⚠️ Refusals are a redirect + flash, never abort() — a second click from
+     * a stale tab must read as a message.
+     */
+    public function forward(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        $user = $request->user();
+        if (! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+            return back()->with('error', 'Only the নির্বাহী প্রকৌশলী of this shop forwards a job.');
+        }
+
+        $data = $request->validate([
+            'mode'           => 'required|in:engineer,sub_section',
+            'assigned_to'    => 'nullable|required_if:mode,engineer|exists:users,id',
+            'sub_section_id' => 'nullable|required_if:mode,sub_section|exists:sections,id',
+            'note'           => 'nullable|string|max:500',
+        ]);
+
+        if ($data['mode'] === 'engineer') {
+            $assistants = ShopAssignment::assistants((int) $workOrderSection->section_id);
+            if (! $assistants->contains('id', (int) $data['assigned_to'])) {
+                return back()->with('error', 'That person is not posted to this shop.');
+            }
+
+            $workOrderSection->update([
+                'assigned_to' => (int) $data['assigned_to'],
+                'assigned_by' => $user->id,
+                'assigned_at' => now(),
+                // Handing it to someone else starts the receipt again.
+                'received_at' => null,
+                'assign_note' => $data['note'] ?? null,
+            ]);
+
+            NotifyService::send(
+                (int) $data['assigned_to'],
+                'shop_job_assigned',
+                'A job has been forwarded to you',
+                trim(($workOrderSection->workOrder->wo_number ?? 'Work order')
+                    . ' at ' . ($workOrderSection->section->name ?? 'your shop')
+                    . ($data['note'] ? ' — ' . $data['note'] : '')),
+                '/production/work-orders/' . $workOrderSection->id,
+                'fi-rr-user-gear',
+                'indigo',
+            );
+
+            return back()->with('success',
+                'Forwarded to ' . ($assistants->firstWhere('id', (int) $data['assigned_to'])->name ?? 'the engineer') . '.');
+        }
+
+        // Straight to a bench. The sub-section must belong to THIS shop, or a
+        // job could be pushed onto another shop's bench by guessing an id.
+        $sub = Section::find($data['sub_section_id']);
+        if (! $sub || (int) $sub->parent_id !== (int) $workOrderSection->section_id) {
+            return back()->with('error', 'That sub-section does not belong to this shop.');
+        }
+
+        $steps = OperationStep::whereIn('operation_sheet_id',
+                $workOrderSection->workOrder->operationSheets()->pluck('id'))
+            ->where('section_id', $workOrderSection->section_id)
+            ->whereNotIn('status', ['completed', 'skipped'])
+            ->get();
+
+        foreach ($steps as $step) {
+            $step->update(['sub_section_id' => $sub->id]);
+        }
+
+        $workOrderSection->update([
+            'assigned_to' => null,
+            'assigned_by' => $user->id,
+            'assigned_at' => now(),
+            'received_at' => null,
+            'assign_note' => $data['note'] ?? null,
+        ]);
+
+        return back()->with('success', sprintf(
+            'Sent to %s — %d open step(s) moved to that sub-section.', $sub->name, $steps->count(),
+        ));
+    }
+
+    /**
+     * The assistant engineer takes the job in hand.
+     *
+     * Handed over and taken in hand are different facts, and the shop needs
+     * both: who it went to, and when they picked it up.
+     */
+    public function receive(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        $user = $request->user();
+
+        if (! $workOrderSection->isAssigned()) {
+            return back()->with('error', 'This job has not been forwarded to anyone yet.');
+        }
+        if ((int) $workOrderSection->assigned_to !== (int) $user->id
+            && ! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+            return back()->with('error',
+                'This job is with ' . ($workOrderSection->assignedTo?->name ?? 'another engineer') . '.');
+        }
+        if ($workOrderSection->isReceived()) {
+            return back()->with('error', 'This job was already received.');
+        }
+
+        $workOrderSection->update(['received_at' => now()]);
+
+        foreach (array_unique(array_filter([$workOrderSection->assigned_by])) as $xen) {
+            NotifyService::send(
+                (int) $xen,
+                'shop_job_received',
+                'Job received',
+                ($workOrderSection->workOrder->wo_number ?? 'Work order')
+                    . ' taken in hand by ' . $user->name . '.',
+                '/production/work-orders/' . $workOrderSection->id,
+                'fi-rr-check',
+                'emerald',
+            );
+        }
+
+        return back()->with('success', 'Received — the job is yours now.');
+    }
+
+    /**
+     * Hand the job back to the নির্বাহী প্রকৌশলী.
+     *
+     * A reason is required: a job coming back with no explanation is one that
+     * gets lost. (Same rule as a work order sent back from PCD.)
+     */
+    public function handBack(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        $user = $request->user();
+        $data = $request->validate(['reason' => 'required|string|max:500']);
+
+        if (! $workOrderSection->isAssigned()) {
+            return back()->with('error', 'This job is already with the নির্বাহী প্রকৌশলী.');
+        }
+        if ((int) $workOrderSection->assigned_to !== (int) $user->id
+            && ! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+            return back()->with('error', 'This job is not yours to hand back.');
+        }
+
+        $xens = ShopAssignment::xenIds((int) $workOrderSection->section_id);
+
+        $workOrderSection->update([
+            'assigned_to' => null,
+            'received_at' => null,
+            'assign_note' => $data['reason'],
+        ]);
+
+        if ($xens) {
+            NotifyService::send(
+                $xens,
+                'shop_job_returned',
+                'A job has come back to you',
+                ($workOrderSection->workOrder->wo_number ?? 'Work order')
+                    . ' returned by ' . $user->name . ' — ' . $data['reason'],
+                '/production/work-orders/' . $workOrderSection->id,
+                'fi-rr-undo',
+                'amber',
+            );
+        }
+
+        return back()->with('success', 'Handed back to the নির্বাহী প্রকৌশলী.');
     }
 
     private function authorizeAccess(WorkOrderSection $wos): void
@@ -1236,6 +1485,13 @@ class ProductionController extends Controller
             // How much this section has received from upstream (null = ungated
             // first section). Lets the queue show "5 / 10" instead of the full qty.
             'received_qty' => $wos->effectiveReceivedQty(),
+            // Who holds this job at this shop, and whether they have taken it
+            // in hand yet. Null all round on a shop that does not work this way.
+            'assigned_to'      => $wos->assignedTo?->name,
+            'assigned_to_id'   => $wos->assigned_to,
+            'assigned_at'      => $wos->assigned_at?->diffForHumans(),
+            'awaiting_receipt' => $wos->awaitingReceipt(),
+            'assign_note'      => $wos->assign_note,
             'work_order' => [
                 'id'         => $wo->id,
                 'wo_number'  => $wo->wo_number,

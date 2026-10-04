@@ -97,7 +97,7 @@ const PRIORITY_BADGE: Record<string, string> = {
     urgent: 'badge-red',
 };
 
-export default function ProductionQueue({ section, jobs, upcoming, available_sections, can_switch }: Props) {
+export default function ProductionQueue({ section, jobs, upcoming, available_sections, can_switch, shop_flow = null }: Props & { shop_flow?: any }) {
     if (!section) {
         return (
             <AppLayout header="Production">
@@ -173,9 +173,18 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                 {/* Active jobs */}
                 <div className="card">
                     <div className="card-header">
-                        <h2 className="text-base font-bold text-surface-900">Active Jobs</h2>
+                        <h2 className="text-base font-bold text-surface-900">
+                            {shop_flow?.own_work_only ? 'Your Jobs' : 'Active Jobs'}
+                        </h2>
                         <p className="text-xs text-surface-400 mt-0.5">
-                            {jobs.length} job{jobs.length === 1 ? '' : 's'} parked at {section.name}
+                            {shop_flow?.own_work_only
+                                ? `${jobs.length} job${jobs.length === 1 ? '' : 's'} forwarded to you at ${section.name}`
+                                : `${jobs.length} job${jobs.length === 1 ? '' : 's'} parked at ${section.name}`}
+                            {shop_flow?.can_forward && shop_flow?.unassigned > 0 && (
+                                <span className="ml-2 text-indigo-600 font-semibold">
+                                    · {shop_flow.unassigned} waiting with you to forward
+                                </span>
+                            )}
                         </p>
                     </div>
                     <div className="card-body p-0">
@@ -188,7 +197,7 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                         ) : (
                             <div className="divide-y divide-surface-100">
                                 {jobs.map((job) => (
-                                    <JobCard key={job.row_key} job={job} />
+                                    <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} />
                                 ))}
                             </div>
                         )}
@@ -258,7 +267,7 @@ function UpcomingCard({ u }: { u: UpcomingJob }) {
     );
 }
 
-function JobCard({ job }: { job: QueueJob }) {
+function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean } }) {
     const isAwaiting = job.status === 'awaiting_rework';
     return (
         <div className={`px-5 py-4 ${job.status === 'rework' ? 'bg-rose-50/40' : ''}`}>
@@ -276,6 +285,15 @@ function JobCard({ job }: { job: QueueJob }) {
                         {job.ready_to_transfer && (
                             <span className="badge badge-amber"><i className="fi fi-rr-paper-plane text-[9px]" /> Ready to transfer</span>
                         )}
+                        {/* Who holds this job at this shop. */}
+                        {job.assigned_to
+                            ? <span className={`badge ${job.awaiting_receipt ? 'badge-amber' : 'badge-green'}`}>
+                                <i className="fi fi-rr-user-gear text-[9px]" /> {job.assigned_to}
+                                {job.awaiting_receipt ? ' · not received' : ''}
+                              </span>
+                            : job.shop_flow_active
+                                ? <span className="badge badge-blue"><i className="fi fi-rr-inbox text-[9px]" /> to forward</span>
+                                : null}
                         <span className={`badge ${PRIORITY_BADGE[job.work_order.priority] ?? 'badge-slate'} capitalize`}>
                             {job.work_order.priority}
                         </span>

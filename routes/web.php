@@ -700,6 +700,12 @@ Route::middleware(['auth'])->group(function () {
         // View the PCD operation sheet PDF from the shop floor (production-permission gated).
         Route::get('/op-sheets/{sheet}/pdf', [\App\Http\Controllers\OperationSheetController::class, 'pdf'])->name('op-sheet.pdf');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
+        // The shop's own chain of command: the নির্বাহী প্রকৌশলী forwards a job
+        // to one of his assistant engineers (or straight to a sub-section),
+        // the engineer receives it, and can hand it back with a reason.
+        Route::post('/wos/{workOrderSection}/forward', [ProductionController::class, 'forward'])->name('wos.forward');
+        Route::post('/wos/{workOrderSection}/receive', [ProductionController::class, 'receive'])->name('wos.receive');
+        Route::post('/wos/{workOrderSection}/hand-back', [ProductionController::class, 'handBack'])->name('wos.hand-back');
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
         // Shop in-charge assigns a step to one of the shop's sub-sections.
         Route::post('/op-steps/{step}/assign-sub-section', [ProductionController::class, 'assignSubSection'])->name('op-steps.assign-sub');

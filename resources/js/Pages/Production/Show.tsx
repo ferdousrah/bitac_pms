@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ShopHandover from '@/Components/Production/ShopHandover';
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
@@ -201,7 +202,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], scoped_sub_section = null }: Props) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], scoped_sub_section = null, assignment = null }: Props & { assignment?: any }) {
     const scopedSub = scoped_sub_section;
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
@@ -243,6 +244,12 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                 : `${wos.section.name} — Job# ${wos.work_order.job_number}`
         }>
             <div className="space-y-6 animate-fade-in">
+                {/* Who holds this job at this shop. Renders nothing on a shop
+                    that does not run the নির্বাহী প্রকৌশলী → AE flow. */}
+                {assignment && !scopedSub && (
+                    <ShopHandover wosId={wos.id} assignment={assignment} />
+                )}
+
                 {/* Header */}
                 <div className="card">
                     <div className="card-body">
