@@ -426,7 +426,69 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - The **PATH is stored, not the `user_signatures` id**, per the signature convention — deleting a block later cannot blank a bill that has gone out. `SignatureResolver::resolve()` does the work, so **picking another officer's block is refused** and falls back to the signer's own default; signing with nothing picked uses the default too.
 - The PDF prints it through **`SignatureBlock::html(..., 150pt, 'left')`** in place of the blank space above the **Accounts Officer** rule — image alone, width-sized only, the role label under the rule still prints. Unsigned bills keep the blank so the layout doesn't shift. Verified by counting the pictures in the rendered PDF: 2 (emblem + gear) unsigned → 3 signed → 2 again after removing.
 - **Removing is allowed** (`unsign`, behind `confirm()`), because signing the wrong bill or with the wrong block must not be a dead end — the figure is unchanged and it can be signed again. Refusals are redirect + flash.
-- ⚠️ Found while here, **not fixed**: `Invoice::$fillable` lists **`due_date`, `issued_date`, `payment_terms`** but the `invoices` table has no such columns, so the bill page's "Due date" and payment terms are always blank and any `create()` passing them throws.
+- ⚠️ Found while here: `Invoice::$fillable` lists **`due_date`, `issued_date`, `payment_terms`** but the `invoices` table has **no such columns** — so the bill page's "Due date" was always blank and any `create()` passing them throws. The due date is **derived** now (see the payment ledger below); the stray `$fillable` entries remain.
+
+## 💵 The payment ledger — advance, part payments, deductions, security (2026-10-04)
+
+> ⚠️ **READ BEFORE TOUCHING ANYTHING ABOUT WHAT A CLIENT OWES.** A bill used to be settled all-or-nothing by `invoices.paid_amount` + a "Mark as Paid" button. BITAC's clients pay an advance before the job, then the due in instalments, and **cut security and tax out of the payment itself**.
+
+### `App\Services\PaymentLedger` is the ONLY place these figures are derived
+Three rules, each with a way of being got wrong:
+
+1. **A recoverable deduction does NOT settle the bill.** Security withheld is BITAC's money in the client's hands — it stays in the dues until a release brings it back. **Tax deducted at source DOES settle**, because it reached the treasury on BITAC's behalf against a challan. Get this backwards and either no bill is ever payable, or every retention vanishes from the dues.
+2. **An applied advance is not cash.** The `advance` row was the cash; the `advance_applied` row that spends it only moves the pool. Summing both counts the same taka twice.
+3. **`invoices.status` is derived, never typed** — kept as a column so lists stay fast, rewritten by `syncInvoiceStatus()` after every change. New status **`partially_paid`** (`status` is already `varchar(30)`).
+
+```
+bill settled  = Σ over its payments of (gross − recoverable deductions)
+bill due      = total_amount − settled
+security held = Σ recoverable deductions − Σ released
+cash received = Σ net over kinds ≠ advance_applied
+```
+
+### `payments.kind` is what keeps it honest — every row moves cash OR the pool, never both
+| kind | cash in | settles a bill | pool |
+|---|---|---|---|
+| `advance` | ✅ | ❌ | + |
+| `against_bill` | ✅ | ✅ | |
+| `advance_applied` | ❌ | ✅ | − |
+| `security_release` | ✅ | ✅ | |
+
+⚠️ **This is why there is no allocation table.** An advance is taken against the **job** (`work_order_id`, `invoice_id` NULL), and because partial delivery means one job raises **several** bills, applying it writes an `advance_applied` row per bill. `advanceFor($wo)` = Σ`advance` − Σ`advance_applied`, and `applyAdvance` refuses more than is available or more than is due.
+
+### Tables (migration `..._000057`)
+- **`payments`** — `customer_id` (required, **`restrictOnDelete`**), `work_order_id`, `invoice_id`, `payment_no` (auto via `Payment::suggestNo()`, **editable + unique**, the gate-pass convention), `kind`, `paid_on`, `gross_amount`, `method`, `bank_branch`, `reference`, `notes`, `recorded_by`.
+- **`payment_deductions`** — `deduction_type_id`, `amount`, `note`, **`released_by_payment_id`** (the release is itself a payment, so "security still held" is a plain subtraction).
+- **`payment_files`** — bank slip / cheque scan / treasury challan, multiple, each with a label. Optional.
+- **`payment_deduction_types`** — master, admin-managed at **Admin → Master Data → Deduction Types**, seeded with BITAC's real list (Security, Performance Security, AIT, উৎসে মূসক, Revenue stamp, Bank charge, LD, Rounding). ⚠️ **NATIONAL, no `HasCenter`** — deliberately like `sectors` and unlike `job_categories`, because "security held across BITAC" has to be one comparable figure. A type in use is **deactivated, not deleted**, and flipping `is_recoverable` on a used type **moves the dues on every bill that used it** — the update flash says so.
+
+### ⚠️ The backfill is the risky part (migration `..._000058`)
+Every bill already marked paid would have read **unpaid** on deploy, because the due is now derived and the ledger would be empty. The migration writes **one `against_bill` row per already-paid bill** from `paid_amount`/`paid_at`/`payment_method`/`payment_reference`/`payment_notes`/`marked_paid_by` (a bill flipped to paid with no amount = settled in full), then sets `paid` or `partially_paid`. **Idempotent** (skips bills that already have a payment), numbered `RCV-LEGACY-nnnn`, and it writes with raw `DB` so **no "bill paid" notification storm fires on deploy**. Verified by rolling it back and forward over legacy-shaped rows.
+- `invoices.paid_amount` / `paid_at` / `payment_method` / `payment_reference` / `payment_notes` / `marked_paid_by` are now a **read-only legacy snapshot** (the `users.signature_path` shape). `syncInvoiceStatus` keeps `paid_amount`/`paid_at` roughly in step so anything still reading them is not lying, but nothing else writes them.
+- ⚠️ **"Mark as Paid" is GONE.** The route survives so old links land on a flash, not a 404. Don't reintroduce a one-shot settle button: the status would be undone by the next recalculation, and it cannot express an advance, a part payment or a deduction. `CustomerNotifyService::invoicePaid` moved **into `syncInvoiceStatus`**, firing only on the transition to `paid` — the one place that knows it happened.
+
+### Guards (all redirect + flash, never `abort()`)
+- Deductions > the payment → refused (negative cash).
+- Settling **more than is due** → refused, naming the due: "record the excess as an advance on the job". A bill that reads overpaid can never balance.
+- Deleting an **advance that has been applied** → refused; undo the applications first, or the pool goes negative while the bills stay settled.
+- Releasing a retention **twice** → refused. Releasing is **one line at a time**, because the release settles the bill that line was cut from and a payment row points at one bill.
+- Deleting a `security_release` un-stamps its deduction automatically (`nullOnDelete`), so the retention goes back to being held.
+- **`Admin\CustomerManagementController@destroy` now refuses a client who has payments** — `payments.customer_id` is `restrictOnDelete` on purpose, and without the guard MySQL would throw a raw constraint error instead of saying why.
+
+### Screens
+- **Billing & Accounts → Payments** (`/payments`, `PaymentController`) — every receipt, filters (client / kind / method / date range), totals over the **cash kinds only**. Records the one thing with no bill yet: an **advance** against a job. Payments against a bill are recorded from the bill, where the due is.
+- **Billing & Accounts → Receivables** (`/receivables`, `ReceivablesController`) — client-wise **Billed / Settled / Due / Overdue / Security held / Advance in hand / Net receivable** + **ageing** (not due, 1–30, 31–60, 61–90, 90+), drill-down per client to every bill and receipt. ⚠️ Deliberately **not** financial-year scoped — what is outstanding is outstanding, the same reasoning as IED's "Jobs in Pipeline"; the buckets are the time dimension.
+- ⚠️ **Receivables is centre-scoped on BOTH the list and the drill-down**, and the drill-down's totals are summed from the same bills it lists — calling `PaymentLedger::forCustomer()` there would answer for every centre and the drill-down would exceed its own row. The **customer portal is the opposite case and uses `forCustomer`**: a client sees their whole account wherever the work was done.
+- **Bill page** — a Payments card (Billed / Settled / Security held / Due tiles, the ledger, Record Payment, inline **Apply advance** when the job has one, **Release** per held retention).
+- **Customer Portal** — their own payment history with the deductions, and a true outstanding figure. ⚠️ The portal's totals were SQL that counted a whole unpaid bill as outstanding; with instalments that overstates the debt, so it reads the ledger now.
+- Shared frontend: `Components/Payment/RecordPaymentModal.tsx` (live **gross − deductions = cash** / **settles on the bill** sum as you type, default-% prefill per type, attachments with labels) and `Components/Payment/PaymentRows.tsx`.
+
+### Dates, rounding, access
+- ⚠️ **`invoices` has no `due_date` column** (`$fillable` lists one; the column never existed). Ageing and the displayed due date come from `PaymentLedger::dueDateFor()` = issue date + **`CREDIT_DAYS` (30)**. Change that constant, not the call sites.
+- `TOLERANCE` is 0.01 — rounding noise, not a debt. A real residue is closed with the seeded **Rounding Adjustment** deduction type, explicitly, rather than a silent threshold.
+- Permissions **`view payments` / `record payments` / `delete payments`**, granted in the seeder *and* in migration 000058 (finance-officer gets all three, management gets `view`). ⚠️ **super-admin is deliberately not granted** — `Gate::before` already opens every screen, so the grant would only add notification noise. Deduction types sit behind `manage materials-master`, like sectors.
+- `payments` / `payment_deductions` / `payment_files` are transactional → in `SystemResetController::TABLES_TO_WIPE` + `Reset.tsx`, with `payments` in `STORAGE_DIRS_TO_WIPE`. **`payment_deduction_types` is master data and is preserved.**
+- ⚠️ Hit again while building: **a `nullable` field that was not sent is ABSENT from the validated array, not null** — `$data['payment_no']` threw a 500 until it became `($data['payment_no'] ?? null) ?:`. Same trap as `DeliveryController@complete`'s `notes`.
 
 ### Rich text: tables, and the allow-list that has to match (2026-09)
 > ⚠️ **`RichTextEditor` and `App\Support\LetterHtml::ALLOWED` are two halves of one thing.** A tag the toolbar can insert but the allow-list drops is stripped on save and **vanishes from the printed PDF silently**. Change them together.
@@ -768,6 +830,7 @@ tail -f storage/logs/laravel.log
 | Official letter renderer (BN/EN) | `app/Services/OfficialLetterRenderer.php` |
 | RFQ Letters module | `app/Http/Controllers/RfqLetterController.php` + `resources/js/Pages/RfqLetter/*` |
 | Email Mailables | `app/Mail/DocumentMail.php` (multi-attach), `app/Mail/RfqLetterMail.php` |
+| What a client owes (the one source) | `app/Services/PaymentLedger.php` + `PaymentController` / `ReceivablesController` |
 | Transactional data wipe | `app/Http/Controllers/Admin/SystemResetController.php` |
 | Deployment guide | `docs/DEPLOYMENT.md` (Coolify + Dockerfile) |
 | Client's own workflow + the Excel costing model it replaced | `docs/DOMAIN_NOTES.md` (paper forms in `client resource/`) |

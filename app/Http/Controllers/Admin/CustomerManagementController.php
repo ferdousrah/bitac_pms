@@ -148,6 +148,16 @@ class CustomerManagementController extends Controller
 
     public function destroy(Customer $customer)
     {
+        // ⚠️ A client with money on record cannot be deleted. `payments`
+        // restricts on delete deliberately — a receipt that vanished with a
+        // master record would be a hole in the books — and without this guard
+        // MySQL would throw a raw constraint error instead of saying why.
+        if ($customer->payments()->withoutGlobalScopes()->exists()) {
+            return back()->with('error',
+                "“{$customer->name}” has payments recorded against them and cannot be deleted. "
+                . 'Their ledger is part of the accounts.');
+        }
+
         $customer->delete();
         return redirect()->route('admin.customers.index')->with('success', 'Customer deleted.');
     }

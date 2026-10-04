@@ -21,7 +21,7 @@ const paymentMethodLabel: Record<string, string> = {
 
 const fmtBDT = (n: any) => `৳${Number(n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
-export default function CustomerInvoiceShow({ invoice }: any) {
+export default function CustomerInvoiceShow({ invoice, ledger, payments = [] }: any) {
     const isPaid = invoice.status === 'paid';
     const [showPdf, setShowPdf] = useState(false);
 
@@ -139,6 +139,74 @@ export default function CustomerInvoiceShow({ invoice }: any) {
                     <i className="fi fi-rr-arrow-left text-xs leading-none" /> Back
                 </Link>
             </div>
+
+            {/* What has been credited against this bill, and what was
+                deducted. ⚠️ Security withheld is shown as still outstanding,
+                because that is what it is until it comes back. */}
+            {(payments.length > 0 || Number(ledger?.due ?? 0) > 0.01) && (
+                <div className="rounded-2xl border border-surface-200 bg-white overflow-hidden">
+                    <div className="px-4 py-3 bg-surface-50 border-b border-surface-100">
+                        <h3 className="text-sm font-bold text-surface-900">Payment history</h3>
+                    </div>
+                    <div className="p-4 space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                            {[
+                                ['Billed', ledger?.billed ?? invoice.total_amount, 'text-surface-900'],
+                                ['Credited', ledger?.settled ?? 0, 'text-emerald-700'],
+                                ['Security held', ledger?.security_held ?? 0, 'text-amber-700'],
+                                ['Outstanding', ledger?.due ?? 0, Number(ledger?.due ?? 0) > 0.01 ? 'text-rose-700' : 'text-emerald-700'],
+                            ].map(([label, value, tone]) => (
+                                <div key={label as string} className="rounded-xl border border-surface-200 p-3">
+                                    <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">{label as string}</p>
+                                    <p className={`text-sm font-bold font-mono mt-1 ${tone}`}>{fmtBDT(value as any)}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {payments.length > 0 && (
+                            <div className="divide-y divide-surface-100">
+                                {payments.map((p: any) => (
+                                    <div key={p.payment_no} className="py-2.5 first:pt-0 last:pb-0">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-surface-900">
+                                                    {p.paid_on ?? '—'}
+                                                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border font-bold bg-surface-100 text-surface-600 border-surface-200">
+                                                        {p.kind_label}
+                                                    </span>
+                                                </p>
+                                                <p className="text-[11px] text-surface-500 mt-0.5">
+                                                    {p.method ?? ''}{p.reference ? ` · ${p.reference}` : ''}
+                                                </p>
+                                            </div>
+                                            <p className="font-mono font-bold text-surface-900 text-sm shrink-0">{fmtBDT(p.gross)}</p>
+                                        </div>
+                                        {p.deductions.length > 0 && (
+                                            <div className="mt-1.5 rounded-lg bg-surface-50 border border-surface-100 divide-y divide-surface-100">
+                                                {p.deductions.map((d: any, i: number) => (
+                                                    <div key={i} className="px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11px]">
+                                                        <span className="text-surface-600">
+                                                            {d.type}
+                                                            {d.is_recoverable && (
+                                                                <span className={`ml-1.5 px-1 py-0.5 rounded border font-bold ${d.released
+                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                    : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                                                    {d.released ? 'released' : 'held'}
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                        <span className="font-mono text-surface-600">− {fmtBDT(d.amount)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Payment instructions reminder if unpaid */}
             {!isPaid && (

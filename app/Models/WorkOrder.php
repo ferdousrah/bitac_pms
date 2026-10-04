@@ -159,6 +159,7 @@ class WorkOrder extends Model
     public function ncrs()                { return $this->hasMany(Ncr::class); }
     public function deliveryOrders()      { return $this->hasMany(DeliveryOrder::class); }
     public function invoices()            { return $this->hasMany(Invoice::class); }
+    public function payments()            { return $this->hasMany(Payment::class); }
     public function materialRequisitions(){ return $this->hasMany(MaterialRequisition::class); }
     public function sections()            { return $this->hasMany(WorkOrderSection::class)->orderBy('sequence'); }
 

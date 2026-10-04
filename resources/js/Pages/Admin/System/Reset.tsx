@@ -43,6 +43,11 @@ const GROUPS: { label: string; tables: string[] }[] = [
         tables: ['delivery_orders', 'proof_of_deliveries', 'invoices', 'completion_certificates'],
     },
     {
+        // Deduction TYPES are master data and are preserved.
+        label: 'Payments & Receipts',
+        tables: ['payments', 'payment_deductions', 'payment_files'],
+    },
+    {
         label: 'Gate Passes',
         tables: ['gate_passes', 'gate_pass_items', 'gate_pass_returns', 'gate_pass_condition_notes'],
     },

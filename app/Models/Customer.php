@@ -52,6 +52,7 @@ class Customer extends Authenticatable
 
     public function workOrders()    { return $this->hasMany(WorkOrder::class); }
     public function invoices()      { return $this->hasMany(Invoice::class); }
+    public function payments()      { return $this->hasMany(Payment::class); }
     public function notifications() { return $this->hasMany(CustomerNotification::class); }
 
     /**

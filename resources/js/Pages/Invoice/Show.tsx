@@ -4,6 +4,8 @@ import { FormEvent, useRef, useState } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 import RichTextEditor from '@/Components/RichTextEditor';
 import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
+import RecordPaymentModal from '@/Components/Payment/RecordPaymentModal';
+import PaymentRows from '@/Components/Payment/PaymentRows';
 
 const statusBadge: Record<string, string> = {
     draft: 'badge-slate',
@@ -25,7 +27,10 @@ const paymentMethodLabel: Record<string, string> = {
 const formatAmount = (amount: any, fraction = 2) =>
     `৳${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: fraction })}`;
 
-export default function InvoiceShow({ invoice, canSign = false }: any) {
+export default function InvoiceShow({
+    invoice, canSign = false, ledger, payments = [], advance,
+    deductionTypes = [], methods = {}, suggestedNo = '', canPay = {},
+}: any) {
     const [pdf, setPdf] = useState<string | null>(null);
     const [showMail, setShowMail] = useState(false);
     const mail = useForm<any>({
@@ -43,23 +48,40 @@ export default function InvoiceShow({ invoice, canSign = false }: any) {
         mail.post(`/invoices/${invoice.id}/email`, { onSuccess: () => setShowMail(false) });
     };
     const { post, processing } = useForm({});
-    const [showPay, setShowPay] = useState(false);
 
-    const payForm = useForm({
-        paid_amount: invoice.total_amount,
-        payment_method: 'bank_transfer' as 'cash' | 'cheque' | 'bank_transfer' | 'online' | 'other',
-        payment_reference: '',
-        paid_at: new Date().toISOString().slice(0, 10),
-        payment_notes: '',
+    // Collections. ⚠️ A bill is never "marked paid" any more — its status is
+    // derived from this ledger, so a one-shot button would be undone by the
+    // next recalculation and could not express an advance, a part payment or
+    // money the client deducted.
+    const [showPayment, setShowPayment] = useState(false);
+    const [releasing, setReleasing] = useState<any | null>(null);
+    const applyForm = useForm<any>({ invoice_id: invoice.id, amount: '', notes: '' });
+    const releaseForm = useForm<any>({
+        paid_on: new Date().toISOString().slice(0, 10),
+        method: 'bank_transfer',
+        reference: '',
+        notes: '',
     });
 
-    const submitPay = () => {
-        payForm.post(`/invoices/${invoice.id}/mark-paid`, {
-            onSuccess: () => setShowPay(false),
+    const isPaid = invoice.status === 'paid';
+    const due = Number(ledger?.due ?? 0);
+    const heldLines = (payments as any[])
+        .flatMap((p) => p.deductions.map((d: any) => ({ ...d, payment_no: p.payment_no })))
+        .filter((d: any) => d.is_recoverable && !d.released);
+
+    const applyAdvance = () => {
+        applyForm.post('/payments/apply-advance', {
+            preserveScroll: true,
+            onSuccess: () => applyForm.setData('amount', ''),
         });
     };
-
-    const isPaid = invoice.status === 'paid';
+    const submitRelease = (e: FormEvent) => {
+        e.preventDefault();
+        releaseForm.post(`/payments/release-security/${releasing.id}`, {
+            preserveScroll: true,
+            onSuccess: () => setReleasing(null),
+        });
+    };
 
     // The Accounts Officer signs the bill itself — their own saved blocks,
     // default preselected. Separate from signing the forwarding letter.
@@ -154,48 +176,120 @@ export default function InvoiceShow({ invoice, canSign = false }: any) {
                     </div>
                 </div>
 
-                {/* Paid receipt banner */}
-                {isPaid && (
-                    <div className="card border-emerald-300 overflow-hidden">
-                        <div className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <i className="fi fi-rr-badge-check text-base leading-none" />
-                                <span className="text-sm font-bold uppercase tracking-wider">Payment Received</span>
-                            </div>
-                            <span className="text-[11px] text-white/90">{invoice.paid_at}</span>
-                        </div>
-                        <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                            <div>
-                                <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Amount Received</div>
-                                <div className="text-lg font-bold text-emerald-700 font-mono mt-0.5">{formatAmount(invoice.paid_amount)}</div>
+                {/* ── Collections ───────────────────────────────────────
+                    What was billed, what has actually been settled, and what
+                    the client is still holding. Security withheld is a DUE,
+                    not a payment — see App\Services\PaymentLedger. */}
+                <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                <i className="fi fi-rr-sack-dollar text-sm leading-none" />
                             </div>
                             <div>
-                                <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Method</div>
-                                <div className="text-sm font-semibold text-surface-900 mt-0.5">
-                                    {paymentMethodLabel[invoice.payment_method] ?? invoice.payment_method ?? '—'}
-                                </div>
+                                <h3 className="text-sm font-bold text-emerald-900 leading-tight">Payments</h3>
+                                <p className="text-[11px] text-emerald-700/70 leading-tight mt-0.5">
+                                    Advance, part payments and what the client deducted.
+                                </p>
                             </div>
-                            {invoice.payment_reference && (
-                                <div>
-                                    <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Reference</div>
-                                    <div className="text-sm font-mono text-surface-800 mt-0.5">{invoice.payment_reference}</div>
-                                </div>
-                            )}
-                            {invoice.marked_paid_by && (
-                                <div>
-                                    <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Recorded By</div>
-                                    <div className="text-sm text-surface-800 mt-0.5">{invoice.marked_paid_by}</div>
-                                </div>
-                            )}
-                            {invoice.payment_notes && (
-                                <div className="sm:col-span-2">
-                                    <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Notes</div>
-                                    <div className="text-sm text-surface-800 mt-0.5 whitespace-pre-line">{invoice.payment_notes}</div>
-                                </div>
-                            )}
                         </div>
+                        {canPay.record && due > 0.01 && (
+                            <button type="button" onClick={() => setShowPayment(true)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-700 bg-white border border-emerald-200 hover:bg-emerald-50 transition-colors">
+                                <i className="fi fi-rr-plus text-[11px] leading-none" /> Record Payment
+                            </button>
+                        )}
                     </div>
-                )}
+
+                    <div className="p-4 space-y-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="rounded-xl border border-surface-200 p-3">
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Billed</p>
+                                <p className="text-base font-bold font-mono text-surface-900 mt-1">{formatAmount(ledger?.billed ?? 0)}</p>
+                            </div>
+                            <div className="rounded-xl border border-surface-200 p-3">
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Settled</p>
+                                <p className="text-base font-bold font-mono text-emerald-700 mt-1">{formatAmount(ledger?.settled ?? 0)}</p>
+                                <p className="text-[10px] text-surface-400 mt-0.5">cash {formatAmount(ledger?.received ?? 0)}</p>
+                            </div>
+                            <div className={`rounded-xl border p-3 ${(ledger?.security_held ?? 0) > 0 ? 'border-amber-200 bg-amber-50/60' : 'border-surface-200'}`}>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Security held</p>
+                                <p className={`text-base font-bold font-mono mt-1 ${(ledger?.security_held ?? 0) > 0 ? 'text-amber-700' : 'text-surface-400'}`}>
+                                    {formatAmount(ledger?.security_held ?? 0)}
+                                </p>
+                                <p className="text-[10px] text-surface-400 mt-0.5">still owed to BITAC</p>
+                            </div>
+                            <div className={`rounded-xl border p-3 ${due > 0.01 ? (invoice.is_overdue ? 'border-rose-200 bg-rose-50/60' : 'border-surface-200') : 'border-emerald-200 bg-emerald-50/60'}`}>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">Due</p>
+                                <p className={`text-base font-bold font-mono mt-1 ${due > 0.01 ? (invoice.is_overdue ? 'text-rose-700' : 'text-surface-900') : 'text-emerald-700'}`}>
+                                    {formatAmount(due)}
+                                </p>
+                                <p className="text-[10px] text-surface-400 mt-0.5">
+                                    {due <= 0.01 ? 'fully settled' : invoice.due_date ? `by ${invoice.due_date}` : ''}
+                                    {due > 0.01 && invoice.is_overdue ? ' · overdue' : ''}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* An advance on this job that no bill has drawn on yet. */}
+                        {canPay.record && (advance?.available ?? 0) > 0.01 && due > 0.01 && (
+                            <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3">
+                                <div className="flex flex-wrap items-end gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-sky-900">
+                                            {formatAmount(advance.available)} advance in hand on this job
+                                        </p>
+                                        <p className="text-[11px] text-sky-700/80 mt-0.5">
+                                            Applying it settles this bill without any new money arriving.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-end gap-2 ml-auto">
+                                        <input type="number" step="0.01" min="0.01"
+                                            className="form-input !py-1.5 w-32 text-right font-mono text-sm"
+                                            placeholder={Math.min(advance.available, due).toFixed(2)}
+                                            value={applyForm.data.amount}
+                                            onChange={(e) => applyForm.setData('amount', e.target.value)} />
+                                        <button type="button" onClick={applyAdvance}
+                                            disabled={applyForm.processing || !applyForm.data.amount}
+                                            className="btn-primary btn-sm bg-sky-600 hover:bg-sky-500 border-sky-600">
+                                            Apply advance
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Retentions waiting to come back. */}
+                        {heldLines.length > 0 && (
+                            <div className="rounded-xl border border-amber-200 overflow-hidden">
+                                <div className="px-3 py-2 bg-amber-50 border-b border-amber-100">
+                                    <p className="text-xs font-bold text-amber-900">Security held against this bill</p>
+                                    <p className="text-[10px] text-amber-700/80 leading-tight">
+                                        Recorded as deducted, not yet returned — it keeps the bill part-unsettled.
+                                    </p>
+                                </div>
+                                <div className="divide-y divide-amber-100">
+                                    {heldLines.map((d: any) => (
+                                        <div key={d.id} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
+                                            <span className="min-w-0 truncate">
+                                                <span className="font-semibold text-surface-800">{d.type}</span>
+                                                <span className="text-[11px] text-surface-400"> · {d.payment_no}</span>
+                                            </span>
+                                            <span className="font-mono font-bold text-amber-700 shrink-0">{formatAmount(d.amount)}</span>
+                                            {canPay.record && (
+                                                <button type="button" onClick={() => setReleasing(d)} className="btn-outline btn-sm shrink-0">
+                                                    Release
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <PaymentRows payments={payments} canDelete={canPay.delete} />
+                    </div>
+                </div>
 
                 {/* Amount Breakdown */}
                 <div className="card">
@@ -259,13 +353,14 @@ export default function InvoiceShow({ invoice, canSign = false }: any) {
                             Sign Document
                         </button>
                     )}
-                    {!isPaid && (
+                    {canPay.record && !isPaid && (
                         <button
-                            onClick={() => setShowPay(true)}
+                            type="button"
+                            onClick={() => setShowPayment(true)}
                             className="btn-primary btn-sm bg-emerald-600 hover:bg-emerald-700"
                         >
-                            <i className="fi fi-rr-badge-check text-xs leading-none" />
-                            Mark as Paid
+                            <i className="fi fi-rr-sack-dollar text-xs leading-none" />
+                            Record Payment
                         </button>
                     )}
                     {invoice.status === 'sent' && (
@@ -392,115 +487,6 @@ export default function InvoiceShow({ invoice, canSign = false }: any) {
             </div>
 
             {/* Mark-as-paid modal */}
-            {showPay && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() => !payForm.processing && setShowPay(false)}
-                >
-                    <div
-                        className="bg-white rounded-2xl max-w-md w-full shadow-2xl max-h-[90vh] flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="p-5 border-b border-surface-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                                    <i className="fi fi-rr-badge-check text-base" />
-                                </div>
-                                <div>
-                                    <h3 className="text-base font-bold text-surface-900">Record Payment</h3>
-                                    <p className="text-xs text-surface-500">{invoice.invoice_number} · {invoice.customer}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-5 space-y-4 overflow-y-auto">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="form-group">
-                                    <label className="form-label">Amount Received <span className="text-red-500">*</span></label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0.01"
-                                        value={payForm.data.paid_amount}
-                                        onChange={(e) => payForm.setData('paid_amount', e.target.value as any)}
-                                        className="form-input font-mono"
-                                    />
-                                    {payForm.errors.paid_amount && <p className="form-error">{payForm.errors.paid_amount}</p>}
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Payment Date <span className="text-red-500">*</span></label>
-                                    <input
-                                        type="date"
-                                        value={payForm.data.paid_at}
-                                        onChange={(e) => payForm.setData('paid_at', e.target.value)}
-                                        className="form-input"
-                                    />
-                                    {payForm.errors.paid_at && <p className="form-error">{payForm.errors.paid_at}</p>}
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Payment Method <span className="text-red-500">*</span></label>
-                                <select
-                                    value={payForm.data.payment_method}
-                                    onChange={(e) => payForm.setData('payment_method', e.target.value as any)}
-                                    className="form-select"
-                                >
-                                    <option value="bank_transfer">Bank Transfer</option>
-                                    <option value="cheque">Cheque</option>
-                                    <option value="online">Online / Mobile Banking</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">
-                                    Reference <span className="form-label-optional">Cheque No / Transaction ID</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={payForm.data.payment_reference}
-                                    onChange={(e) => payForm.setData('payment_reference', e.target.value)}
-                                    className="form-input font-mono"
-                                    placeholder="e.g. CHQ-987654 or TX-2026-9182734"
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Notes <span className="form-label-optional">optional</span></label>
-                                <textarea
-                                    value={payForm.data.payment_notes}
-                                    onChange={(e) => payForm.setData('payment_notes', e.target.value)}
-                                    rows={3}
-                                    className="form-input"
-                                    style={{ resize: 'vertical' }}
-                                    placeholder="Bank name, branch, payer reference, etc."
-                                />
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-surface-50 border-t border-surface-100 flex items-center justify-end gap-2 rounded-b-2xl">
-                            <button type="button" onClick={() => setShowPay(false)} disabled={payForm.processing} className="btn-outline">
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={submitPay}
-                                disabled={payForm.processing || !payForm.data.paid_amount}
-                                className="btn bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                                {payForm.processing ? (
-                                    <><i className="fi fi-rr-spinner animate-spin text-sm" /> Saving...</>
-                                ) : (
-                                    <><i className="fi fi-rr-badge-check text-sm" /> Mark Paid</>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Send the three that travel together. */}
             {showMail && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
@@ -622,6 +608,70 @@ export default function InvoiceShow({ invoice, canSign = false }: any) {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            <RecordPaymentModal
+                open={showPayment}
+                onClose={() => setShowPayment(false)}
+                kind="against_bill"
+                invoiceId={invoice.id}
+                invoiceNumber={invoice.invoice_number}
+                dueAmount={due}
+                deductionTypes={deductionTypes}
+                methods={methods}
+                suggestedNo={suggestedNo}
+            />
+
+            {/* Releasing one retention line. One at a time, because the
+                release settles the bill that line was cut from. */}
+            {releasing && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setReleasing(null)} />
+                    <form onSubmit={submitRelease} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                        <div className="px-5 py-3 border-b border-surface-100">
+                            <h3 className="text-sm font-bold text-surface-900">
+                                Release {formatAmount(releasing.amount)} — {releasing.type}
+                            </h3>
+                            <p className="text-[11px] text-surface-500 mt-0.5">
+                                Deducted on {releasing.payment_no}. Releasing it settles that much of this bill.
+                            </p>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Received on <span className="text-red-500">*</span></label>
+                                    <input type="date" className="form-input" value={releaseForm.data.paid_on}
+                                        onChange={(e) => releaseForm.setData('paid_on', e.target.value)} />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Method <span className="text-red-500">*</span></label>
+                                    <select className="form-input" value={releaseForm.data.method}
+                                        onChange={(e) => releaseForm.setData('method', e.target.value)}>
+                                        {Object.entries(methods).map(([v, l]) => (
+                                            <option key={v} value={v}>{l as string}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Reference <span className="form-label-optional">Optional</span></label>
+                                <input className="form-input" value={releaseForm.data.reference}
+                                    onChange={(e) => releaseForm.setData('reference', e.target.value)} />
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Notes <span className="form-label-optional">Optional</span></label>
+                                <textarea className="form-textarea" rows={2} value={releaseForm.data.notes}
+                                    onChange={(e) => releaseForm.setData('notes', e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="px-5 py-3 border-t border-surface-100 flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => setReleasing(null)} className="btn-ghost">Cancel</button>
+                            <button type="submit" disabled={releaseForm.processing} className="btn-primary">
+                                <i className="fi fi-rr-check text-xs leading-none" /> Record release
+                            </button>
+                        </div>
+                    </form>
                 </div>
             )}
 

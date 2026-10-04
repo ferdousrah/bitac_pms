@@ -91,6 +91,8 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'Bills / Invoices', href: '/invoices', icon: 'fi-rr-receipt', permission: 'view invoices' },
             { label: 'মূসক ৬.৩',          href: '/musak-challans', icon: 'fi-rr-file-invoice', permission: 'view invoices' },
+            { label: 'Payments',         href: '/payments',       icon: 'fi-rr-sack-dollar',  permission: 'view payments' },
+            { label: 'Receivables',      href: '/receivables',    icon: 'fi-rr-chart-pie',    permission: 'view payments' },
         ],
     },
     {
@@ -133,6 +135,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Operations',     href: '/admin/operations',     icon: 'fi-rr-tools',                permission: 'manage operations-master' },
                 { label: 'Job Categories', href: '/admin/job-categories', icon: 'fi-rr-tags',                 permission: 'manage materials-master' },
                 { label: 'Client Sectors', href: '/admin/sectors',        icon: 'fi-rr-building',             permission: 'manage materials-master' },
+                { label: 'Deduction Types', href: '/admin/payment-deduction-types', icon: 'fi-rr-scissors',    permission: 'manage materials-master' },
                 { label: 'QC Checkpoints', href: '/admin/qc-checkpoints', icon: 'fi-rr-shield-check',         permission: 'manage materials-master' },
                 { label: 'Products',       href: '/admin/products',       icon: 'fi-rr-box',                  permission: 'manage materials-master' },
                 { label: 'Gate Pass Notes', href: '/admin/gate-pass-condition-notes', icon: 'fi-rr-shield', permission: 'manage gate-pass-notes' },

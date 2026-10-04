@@ -764,6 +764,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::get('{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::post('{invoice}/acknowledge', [InvoiceController::class, 'acknowledge'])->name('invoices.acknowledge');
+        // Kept so old links and bookmarks land on a message, not a 404.
         Route::post('{invoice}/mark-paid', [InvoiceController::class, 'markPaid'])->name('invoices.mark-paid');
 
         // The forwarding letter that travels with the bill, and sending the
@@ -779,6 +780,28 @@ Route::middleware(['auth'])->group(function () {
             Route::post('{invoice}/sign', [InvoiceController::class, 'sign'])->name('invoices.sign');
             Route::delete('{invoice}/sign', [InvoiceController::class, 'unsign'])->name('invoices.unsign');
         });
+    });
+
+    // ─── Payments ledger: advance, part payments, deductions, security ────
+    // Collections are their own desk — see App\Services\PaymentLedger for the
+    // three rules every figure here obeys.
+    Route::middleware('permission:view payments')->group(function () {
+        Route::get('payments', [\App\Http\Controllers\PaymentController::class, 'index'])->name('payments.index');
+        Route::get('receivables', [\App\Http\Controllers\ReceivablesController::class, 'index'])->name('receivables.index');
+        Route::get('receivables/{customer}', [\App\Http\Controllers\ReceivablesController::class, 'show'])->name('receivables.show');
+
+        Route::middleware('permission:record payments')->group(function () {
+            Route::post('payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');
+            Route::post('payments/apply-advance', [\App\Http\Controllers\PaymentController::class, 'applyAdvance'])
+                ->name('payments.apply-advance');
+            // One retention line at a time — the release settles the bill the
+            // security was cut from, and a payment row points at one bill.
+            Route::post('payments/release-security/{deduction}', [\App\Http\Controllers\PaymentController::class, 'releaseSecurity'])
+                ->name('payments.release-security');
+        });
+
+        Route::delete('payments/{payment}', [\App\Http\Controllers\PaymentController::class, 'destroy'])
+            ->middleware('permission:delete payments')->name('payments.destroy');
     });
 
     // Reports
@@ -923,6 +946,13 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:manage materials-master')
             ->names('admin.sectors')
             ->parameters(['sectors' => 'sector'])
+            ->only(['index', 'store', 'update', 'destroy']);
+        // What a client cuts out of a payment. NATIONAL, like sectors —
+        // "security held across BITAC" has to be one comparable figure.
+        Route::resource('payment-deduction-types', \App\Http\Controllers\Admin\PaymentDeductionTypeController::class)
+            ->middleware('permission:manage materials-master')
+            ->names('admin.payment-deduction-types')
+            ->parameters(['payment-deduction-types' => 'paymentDeductionType'])
             ->only(['index', 'store', 'update', 'destroy']);
         Route::resource('qc-checkpoints', \App\Http\Controllers\Admin\QcCheckpointController::class)
             ->middleware('permission:manage materials-master')

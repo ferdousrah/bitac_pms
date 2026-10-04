@@ -38,6 +38,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view delivery', 'create delivery', 'complete delivery',
             // Invoices
             'view invoices', 'create invoices', 'download invoices',
+            // Collections: the payment ledger (advance, part payments, deductions).
+            'view payments', 'record payments', 'delete payments',
             // Reports
             'view reports', 'export reports',
             // Admin
@@ -99,6 +101,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $finance = Role::firstOrCreate(['name' => 'finance-officer']);
         $finance->syncPermissions([
             'view dashboard', 'view invoices', 'create invoices', 'download invoices',
+            'view payments', 'record payments', 'delete payments',
             'view reports', 'export reports',
         ]);
 

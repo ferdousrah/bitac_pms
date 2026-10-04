@@ -34,6 +34,11 @@ class SystemResetController extends Controller
         'completion_certificates',
         'proof_of_deliveries',
         'delivery_orders',
+        // The payment ledger goes with the bills it settled. Its TYPES are
+        // master data (payment_deduction_types) and are preserved.
+        'payment_files',
+        'payment_deductions',
+        'payments',
         'invoices',
 
         // QC / NCRs / rework
@@ -121,6 +126,7 @@ class SystemResetController extends Controller
         'customer-responses', 'completion-certificates',
         'consultancy-requests', 'maintenance-requests',
         'signatures/approvals',
+        'payments',
     ];
 
     public function index(Request $request)

@@ -368,8 +368,27 @@ class InvoiceController extends Controller
                 'signature_url'     => $invoice->accounts_signature_path
                     ? \Storage::disk('public')->url($invoice->accounts_signature_path)
                     : null,
+                // ⚠️ `invoices` has no due_date column — it never had one, so
+                // the page showed a blank. The ledger derives it from the
+                // issue date plus the credit period.
+                'due_date'          => \App\Services\PaymentLedger::dueDateFor($invoice)?->format('d M Y'),
+                'is_overdue'        => \App\Services\PaymentLedger::isOverdue($invoice),
             ],
+            // Collections. Every figure from the one ledger service, so this
+            // page and the Receivables report can never disagree.
+            'ledger'         => \App\Services\PaymentLedger::forInvoice($invoice),
+            'payments'       => $invoice->payments()->withoutGlobalScopes()
+                ->with(['deductions.type', 'files', 'recordedBy'])->get()
+                ->map(fn ($p) => \App\Http\Controllers\PaymentController::pack($p))->values(),
+            'advance'        => \App\Services\PaymentLedger::advanceFor($invoice->workOrder),
+            'deductionTypes' => \App\Http\Controllers\PaymentController::deductionTypes(),
+            'methods'        => \App\Models\Payment::METHODS,
+            'suggestedNo'    => \App\Models\Payment::suggestNo(),
             'canSign' => auth()->user()?->can('create invoices') ?? false,
+            'canPay'  => [
+                'record' => auth()->user()?->can('record payments') ?? false,
+                'delete' => auth()->user()?->can('delete payments') ?? false,
+            ],
         ]);
     }
 
@@ -412,33 +431,20 @@ class InvoiceController extends Controller
      * Captures amount, method, reference (cheque no / TX id), payment date,
      * and an optional note. Sets status='paid' and stamps marked_paid_by.
      */
-    public function markPaid(Request $request, Invoice $invoice)
+    /**
+     * ⚠️ "Mark as Paid" is gone.
+     *
+     * A bill used to be settled in one shot by writing `paid_amount` and
+     * flipping the status. The status is now DERIVED from the payment ledger
+     * (App\Services\PaymentLedger), so a hand-set 'paid' would be undone by
+     * the next recalculation — and a one-shot button cannot express an advance,
+     * a part payment or money the client deducted. Settling a bill goes
+     * through `payments.store` instead. Old links land here and are told so.
+     */
+    public function markPaid(Invoice $invoice)
     {
-        if ($invoice->status === 'paid') {
-            return back()->with('error', 'Invoice is already marked as paid.');
-        }
-
-        $validated = $request->validate([
-            'paid_amount'       => 'required|numeric|min:0.01',
-            'payment_method'    => 'required|in:cash,cheque,bank_transfer,online,other',
-            'payment_reference' => 'nullable|string|max:100',
-            'paid_at'           => 'required|date',
-            'payment_notes'     => 'nullable|string|max:500',
-        ]);
-
-        $invoice->update([
-            'status'            => 'paid',
-            'paid_at'           => $validated['paid_at'],
-            'paid_amount'       => $validated['paid_amount'],
-            'payment_method'    => $validated['payment_method'],
-            'payment_reference' => $validated['payment_reference'] ?? null,
-            'payment_notes'     => $validated['payment_notes'] ?? null,
-            'marked_paid_by'    => auth()->id(),
-        ]);
-
-        \App\Services\CustomerNotifyService::invoicePaid($invoice->fresh(['customer', 'workOrder']));
-
-        return back()->with('success', "Invoice {$invoice->invoice_number} marked as paid.");
+        return redirect()->route('invoices.show', $invoice)->with('error',
+            'Bills are settled by recording a payment now — use “Record Payment” on this bill.');
     }
 
     /**

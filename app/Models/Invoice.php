@@ -42,6 +42,12 @@ class Invoice extends Model
     public function deliveryOrder() { return $this->belongsTo(DeliveryOrder::class); }
     public function markedPaidBy()  { return $this->belongsTo(User::class, 'marked_paid_by'); }
     public function musakChallans() { return $this->hasMany(MusakChallan::class); }
+    /**
+     * The money against this bill. ⚠️ Read it through App\Services\PaymentLedger —
+     * summing gross_amount here double counts an applied advance, and ignores
+     * that a security deduction does not settle the bill.
+     */
+    public function payments()      { return $this->hasMany(Payment::class)->orderBy('paid_on')->orderBy('id'); }
     public function signatory()     { return $this->belongsTo(User::class, 'signatory_user_id'); }
     public function accountsSignedBy() { return $this->belongsTo(User::class, 'accounts_signed_by'); }
 
