@@ -7,10 +7,16 @@ use App\Models\CenterTarget;
 use App\Services\TargetAchievementService;
 use App\Support\FinancialYear;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 
 /**
  * Target vs Achievement — taka, per centre, per financial year.
+ *
+ * ⚠️ **The report itself now lives in IED → Reports** (BITAC set the yearly
+ * figure from IED, so the report and the form that sets it belong on the same
+ * desk). This controller keeps the two things the page calls — saving a
+ * target and tracing a figure back to its work orders — and redirects its old
+ * index, because notifications and bookmarks written before the move point
+ * there and a stale link must land somewhere useful.
  *
  * A centre admin sets and sees their own centre. A super admin sees every
  * centre side by side and may set any of them.
@@ -19,35 +25,13 @@ class TargetController extends Controller
 {
     public function __construct(private TargetAchievementService $service) {}
 
+    /** The report moved to IED → Reports; old links land on it. */
     public function index(Request $request)
     {
-        $year = (string) $request->input('year', FinancialYear::current());
-        if (! FinancialYear::isValid($year)) {
-            $year = FinancialYear::current();
-        }
-
-        // A super admin looks across BITAC; everyone else sees their own centre.
-        $scopeCenterId = $this->isSuperAdmin() ? null : $this->myCenterId();
-
-        $rows = $this->service->forYear($year, $scopeCenterId);
-
-        return Inertia::render('Reports/TargetAchievement', [
-            'year'        => $year,
-            'yearLabel'   => FinancialYear::describe($year),
-            'years'       => collect(FinancialYear::options(5, 1))
-                ->map(fn ($y) => ['value' => $y, 'label' => $y . ' · ' . FinancialYear::describe($y)])
-                ->values(),
-            'rows'        => $rows,
-            'totals'      => [
-                'target'      => round(array_sum(array_column($rows, 'target')), 2),
-                'achieved'    => round(array_sum(array_column($rows, 'achieved')), 2),
-                'work_orders' => array_sum(array_column($rows, 'work_orders')),
-            ],
-            'canSetFor'   => $this->isSuperAdmin()
-                ? Center::orderBy('id')->get(['id', 'name'])
-                : Center::where('id', $this->myCenterId())->get(['id', 'name']),
-            'isSuperAdmin' => $this->isSuperAdmin(),
-        ]);
+        return redirect()->route('ied.reports', array_filter([
+            'view' => 'target',
+            'year' => $request->input('year'),
+        ]));
     }
 
     /** The work orders behind one centre's figure, so it can be traced. */
@@ -98,11 +82,16 @@ class TargetController extends Controller
         return back()->with('success', 'Target saved for ' . $validated['financial_year'] . '.');
     }
 
+    /**
+     * ⚠️ The role is `super-admin` with a HYPHEN. This asked for
+     * `super_admin`, which is a role nobody has, so it was always false — and
+     * a super admin was quietly treated as a centre admin here, seeing and
+     * setting one centre instead of all six, which is the entire point of
+     * this report. User::isSuperAdmin() is the one place that knows it.
+     */
     private function isSuperAdmin(): bool
     {
-        $u = auth()->user();
-
-        return $u && method_exists($u, 'hasRole') && $u->hasRole('super_admin');
+        return auth()->user()?->isSuperAdmin() ?? false;
     }
 
     private function myCenterId(): ?int

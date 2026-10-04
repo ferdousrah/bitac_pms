@@ -667,6 +667,18 @@ One page, four views, sharing a financial-year and centre filter — `Ied\IedRep
 - **Cancelled work orders are excluded** — IED rejecting one at the inbox sets exactly that status.
 - Every figure is traceable: clicking a centre lists the work orders behind it with their quotation and version. A total nobody can trace is a total nobody trusts.
 
+### It lives in IED → Reports now (2026-10-04)
+- BITAC set the yearly figure from IED, so the report **and the form that sets it** moved onto the same desk: **IED → Reports → Target vs Achievement** (`?view=target`, a fifth tab beside Client List / By Type & Sector / Quotation Value / Jobs in Pipeline). The standalone entry under the production Reports group is gone and **`/reports/target-achievement` redirects** there carrying the year, because notifications and bookmarks written before the move point at it.
+- Setting it needs the new permission **`set targets`** (migration `..._000059`, plus both seeders), held by **Executive Engineer (IED)**, **ied-officer** and **management**. ⚠️ `super-admin` is deliberately not granted — `Gate::before` already lets them past, so the grant would add nothing.
+- ⚠️ **The target routes had to move OUT of `permission:view reports`.** An IED officer does not hold it, so left in that group the save and the breakdown would 403 for exactly the people whose job this now is. Store is `permission:set targets`; the breakdown is `permission:view rfqs|view reports` (Spatie's `|` is OR) so both desks can trace a figure.
+- `canSetFor` arrives **empty** for a viewer without `set targets`, so the form is simply not rendered — and `TargetController@store` refuses the write as well. The screen only stays honest about what the person can do.
+- The panel is `resources/js/Components/Reports/TargetAchievementPanel.tsx`; `Pages/Reports/TargetAchievement.tsx` is deleted. It owns **no figures and no year picker** — the IED page supplies both, and the numbers still come from `TargetAchievementService`, so there is one implementation and nothing can disagree. A year with no target set says so instead of showing an empty bar.
+
+### ⚠️ `hasRole('super_admin')` is a role that does not exist
+- The role is **`super-admin`, with a hyphen** — that is what the seeder creates and what every live account carries. **`User::isSuperAdmin()`** is now the one place that knows it (it accepts both spellings).
+- This was not cosmetic here: `TargetController` and `Ied\IedReportController` both asked for `super_admin`, so the check was **always false** and a super admin was quietly scoped to a single centre — on Target vs Achievement that is the entire point of the report (seeing all six centres side by side). Both now call `User::isSuperAdmin()`.
+- ⚠️ **About a dozen other call sites still spell it `super_admin`** — `CostEstimateController` (delete/edit rights), `QuotationController` (delete/edit rights), `EntityCommentController`, and others. They are all failing closed, so nobody is over-privileged, but a super admin is being refused things they should be allowed. Changing them alters who can delete documents, so it was left for BITAC to approve rather than swept in silently.
+
 ### ⚠️ The financial year is not fixed — `App\Support\FinancialYear`
 
 | Financial year | Period |

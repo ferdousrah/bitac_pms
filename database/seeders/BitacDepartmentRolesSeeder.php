@@ -66,6 +66,8 @@ class BitacDepartmentRolesSeeder extends Seeder
             'submit quotation-to-customer', 'create quotation-revision',
             'access ied',
             'view cost-estimates', 'create cost-estimates', 'edit cost-estimates',
+            // The yearly target per centre is set from IED → Reports.
+            'set targets',
         ];
         $ied->syncPermissions($iedPermissions);
 

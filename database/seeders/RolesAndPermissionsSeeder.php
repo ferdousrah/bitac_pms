@@ -42,6 +42,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view payments', 'record payments', 'delete payments',
             // Reports
             'view reports', 'export reports',
+            // The yearly target per centre — IED sets it (see migration 000059).
+            'set targets',
             // Admin
             'manage users', 'manage roles', 'manage customers', 'view audit-log',
             // Customer
@@ -64,7 +66,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view mrp', 'view operation-sheets', 'view schedule',
             'view wip', 'view qc', 'view qc-reports',
             'view delivery', 'view invoices',
-            'view reports', 'export reports',
+            'view reports', 'export reports', 'set targets',
         ]);
 
         // 3. production-supervisor

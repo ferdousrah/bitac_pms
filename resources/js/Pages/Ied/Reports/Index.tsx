@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import TargetAchievementPanel from '@/Components/Reports/TargetAchievementPanel';
 import { Head, Link, router } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
 
@@ -10,6 +11,10 @@ const VIEWS = [
     { key: 'sector',     label: 'By Type & Sector' },
     { key: 'quotations', label: 'Quotation Value' },
     { key: 'pipeline',   label: 'Jobs in Pipeline' },
+    // ⚠️ Target vs Achievement lives here rather than under the production
+    // Reports group: BITAC set the yearly figure from IED, so the report and
+    // the form that sets it belong on the same desk.
+    { key: 'target',     label: 'Target vs Achievement' },
 ] as const;
 
 /** One colour per pipeline stage, earliest to latest. Written out in full —
@@ -37,7 +42,7 @@ const typeBadge = (t: string | null) =>
 
 export default function IedReports({
     view, year, yearLabel, years, centerId, centers = [], search = '',
-    clients, sectors, quotations, pipeline,
+    clients, sectors, quotations, pipeline, target,
 }: any) {
     const [q, setQ] = useState(search);
 
@@ -100,6 +105,17 @@ export default function IedReports({
                         )}
                     </div>
                 </div>
+
+                {/* ── Target vs Achievement ─────────────────────────────── */}
+                {view === 'target' && target && (
+                    <TargetAchievementPanel
+                        year={year}
+                        rows={target.rows}
+                        totals={target.totals}
+                        canSetFor={target.canSetFor}
+                        isSuperAdmin={target.isSuperAdmin}
+                    />
+                )}
 
                 {/* ── Client list ───────────────────────────────────────── */}
                 {view === 'clients' && clients && (

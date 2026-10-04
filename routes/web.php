@@ -814,15 +814,25 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/rejection-rate', [ReportController::class, 'rejectionRate'])->name('reports.rejection-rate');
         Route::get('/lead-time', [ReportController::class, 'leadTime'])->name('reports.lead-time');
         Route::get('/oee', [ReportController::class, 'oee'])->name('reports.oee');
-        // Target vs Achievement — taka, per centre, per financial year.
-        // Declared BEFORE the {type} export catch-all so it isn't shadowed.
+        Route::get('/{type}/export', [ReportController::class, 'export'])->name('reports.export');
+    });
+
+    // ─── Target vs Achievement ───────────────────────────────────────────
+    // ⚠️ Deliberately OUTSIDE `permission:view reports`. The report moved to
+    // IED → Reports (gated on `view rfqs`), and an IED officer does NOT hold
+    // `view reports` — left in that group, saving a target or opening a
+    // breakdown would 403 for exactly the people whose job it now is.
+    Route::prefix('reports')->group(function () {
+        // Just a redirect to the IED page; anyone signed in may follow an old link.
         Route::get('/target-achievement', [\App\Http\Controllers\TargetController::class, 'index'])
             ->name('reports.target-achievement');
+        // Spatie's `|` is OR — IED reads it, the production reports desk still can.
         Route::get('/target-achievement/{center}/breakdown', [\App\Http\Controllers\TargetController::class, 'breakdown'])
+            ->middleware('permission:view rfqs|view reports')
             ->name('reports.target-achievement.breakdown');
         Route::post('/target-achievement', [\App\Http\Controllers\TargetController::class, 'store'])
+            ->middleware('permission:set targets')
             ->name('reports.target-achievement.store');
-        Route::get('/{type}/export', [ReportController::class, 'export'])->name('reports.export');
     });
 
     // Admin

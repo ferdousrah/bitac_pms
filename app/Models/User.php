@@ -42,6 +42,22 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * ⚠️ The role is **`super-admin`**, with a hyphen — that is what the
+     * seeder creates and what every live account carries.
+     *
+     * A dozen controllers check `hasRole('super_admin')` with an underscore,
+     * which is a role that does not exist, so the check is **always false**.
+     * On Target vs Achievement that quietly cost the super admin the whole
+     * point of the report: they saw one centre instead of all six. Ask here
+     * instead of spelling it again, and accept both so an older spelling
+     * cannot resurrect the bug.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('super-admin') || $this->hasRole('super_admin');
+    }
+
     public function center()
     {
         return $this->belongsTo(Center::class);
