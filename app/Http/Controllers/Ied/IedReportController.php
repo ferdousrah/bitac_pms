@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Ied;
 use App\Http\Controllers\Controller;
 use App\Models\Center;
 use App\Services\IedReportService;
+use App\Services\Reports\IedReportSheets;
+use App\Services\ReportSheetRenderer;
 use App\Services\TargetAchievementService;
 use App\Support\FinancialYear;
 use Illuminate\Http\Request;
@@ -30,17 +32,11 @@ class IedReportController extends Controller
         private TargetAchievementService $targets,
     ) {}
 
+    public const VIEWS = ['clients', 'sector', 'quotations', 'pipeline', 'target'];
+
     public function index(Request $request)
     {
-        $year = (string) $request->input('year', FinancialYear::current());
-        if (! FinancialYear::isValid($year)) $year = FinancialYear::current();
-
-        $view = in_array($request->input('view'), ['clients', 'sector', 'quotations', 'pipeline', 'target'], true)
-            ? $request->input('view')
-            : 'clients';
-
-        // A super admin looks across BITAC; everyone else sees their own centre.
-        $centerId = $this->isSuperAdmin() ? $request->integer('center_id') ?: null : $this->myCenterId();
+        [$view, $year, $centerId] = $this->resolve($request);
 
         return Inertia::render('Ied/Reports/Index', [
             'view'      => $view,
@@ -61,6 +57,74 @@ class IedReportController extends Controller
             'quotations' => $view === 'quotations' ? $this->service->quotationValue($year, $centerId) : null,
             'pipeline'   => $view === 'pipeline'   ? $this->service->pipeline($centerId) : null,
             'target'     => $view === 'target'     ? $this->targetData($year, $centerId) : null,
+        ]);
+    }
+
+    /**
+     * The same report, on the BITAC pad.
+     *
+     * ⚠️ It asks the SAME services with the SAME filters as index(), through
+     * resolve(), and the sheet builders compute nothing — a printed figure
+     * that disagrees with the screen is the one failure nobody can explain
+     * away.
+     */
+    public function pdf(Request $request)
+    {
+        [$view, $year, $centerId] = $this->resolve($request);
+
+        $centre = $centerId ? Center::find($centerId)?->name : null;
+        $label  = FinancialYear::describe($year);
+
+        $sheet = match ($view) {
+            'sector'     => IedReportSheets::sector($label, $centre, $this->service->bySector($year, $centerId)),
+            'quotations' => IedReportSheets::quotationValue($label, $centre, $this->service->quotationValue($year, $centerId)),
+            'pipeline'   => IedReportSheets::pipeline($centre, $this->service->pipeline($centerId)),
+            'target'     => IedReportSheets::target($label, $centre, $this->targetData($year, $centerId)),
+            default      => IedReportSheets::clients($label, $centre,
+                $this->service->clients($year, $centerId, $request->input('search')),
+                $request->input('search')),
+        };
+
+        return $this->stream(app(ReportSheetRenderer::class)->render($sheet), $view, $request);
+    }
+
+    /** One place decides what is being looked at, for the screen and the print. */
+    private function resolve(Request $request): array
+    {
+        $year = (string) $request->input('year', FinancialYear::current());
+        if (! FinancialYear::isValid($year)) $year = FinancialYear::current();
+
+        $view = in_array($request->input('view'), self::VIEWS, true)
+            ? $request->input('view')
+            : 'clients';
+
+        // A super admin looks across BITAC; everyone else sees their own centre.
+        $centerId = $this->isSuperAdmin() ? $request->integer('center_id') ?: null : $this->myCenterId();
+
+        return [$view, $year, $centerId];
+    }
+
+    /**
+     * `?preview=base64` is how PdfPopupModal fetches a PDF (download managers
+     * hijack an application/pdf response); `?download=1` forces a save.
+     */
+    private function stream(string $bytes, string $name, Request $request)
+    {
+        $filename = $name . '-' . now()->format('Y-m-d') . '.pdf';
+
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline')
+                . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
         ]);
     }
 

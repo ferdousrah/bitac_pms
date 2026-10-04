@@ -8,6 +8,8 @@ use App\Models\Ncr;
 use App\Models\OperationStep;
 use App\Models\QcInspection;
 use App\Models\WorkOrder;
+use App\Services\Reports\ProductionReportSheets;
+use App\Services\ReportSheetRenderer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -25,6 +27,50 @@ use Inertia\Inertia;
  */
 class ReportController extends Controller
 {
+    /**
+     * Send the report to the screen, or to the printer.
+     *
+     * ⚠️ **Same method, same URL, same filters.** `?pdf=1` (or the
+     * `?preview=base64` that PdfPopupModal fetches with) turns the page into a
+     * sheet on the BITAC pad. Going through one method is what guarantees the
+     * print was built from the figures the screen was built from; a separate
+     * pdf action would have to re-run the queries, and re-running is how two
+     * answers appear.
+     */
+    private function respond(Request $request, string $page, string $type, array $data, array $filters)
+    {
+        $wantsPdf = $request->boolean('pdf') || $request->input('preview') === 'base64';
+
+        if (! $wantsPdf) {
+            return Inertia::render($page, ['data' => $data, 'filters' => $filters]);
+        }
+
+        $sheet = match ($type) {
+            'oee'            => ProductionReportSheets::oee($data, $filters),
+            'lead-time'      => ProductionReportSheets::leadTime($data, $filters),
+            'rejection-rate' => ProductionReportSheets::rejectionRate($data, $filters),
+            default          => ProductionReportSheets::production($data, $filters),
+        };
+
+        $bytes    = app(ReportSheetRenderer::class)->render($sheet);
+        $filename = $type . '-' . now()->format('Y-m-d') . '.pdf';
+
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $filename,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline')
+                . '; filename="' . $filename . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
+    }
+
     /** Resolve a from/to date window from request, defaulting to current month. */
     private function dateWindow(Request $request): array
     {
@@ -96,20 +142,21 @@ class ReportController extends Controller
                 ];
             });
 
-        return Inertia::render('Reports/Production', [
-            'data' => [
+        $data = [
                 'total_wo'      => $totalWo,
                 'completed'     => $completed,
                 'in_production' => $inProduction,
                 'overdue'       => $overdue,
                 'by_month'      => $byMonth,
                 'work_orders'   => $workOrders,
-            ],
-            'filters' => [
+        ];
+
+        $filters = [
                 'from' => $from->toDateString(),
                 'to'   => $to->toDateString(),
-            ],
-        ]);
+        ];
+
+        return $this->respond($request, 'Reports/Production', 'production', $data, $filters);
     }
 
     public function rejectionRate(Request $request)
@@ -159,8 +206,7 @@ class ReportController extends Controller
             ->sortByDesc('rate')
             ->values();
 
-        return Inertia::render('Reports/RejectionRate', [
-            'data' => [
+        $data = [
                 'total_inspections' => $total,
                 'total_passed'      => $passed,
                 'total_failed'      => $failed,
@@ -170,12 +216,14 @@ class ReportController extends Controller
                 'open_ncrs'         => $openNcrs,
                 'by_defect_type'    => $defectRows,
                 'by_product'        => $byProduct,
-            ],
-            'filters' => [
+        ];
+
+        $filters = [
                 'from' => $from->toDateString(),
                 'to'   => $to->toDateString(),
-            ],
-        ]);
+        ];
+
+        return $this->respond($request, 'Reports/RejectionRate', 'rejection-rate', $data, $filters);
     }
 
     public function leadTime(Request $request)
@@ -221,19 +269,20 @@ class ReportController extends Controller
             ->sortByDesc('count')
             ->values();
 
-        return Inertia::render('Reports/LeadTime', [
-            'data' => [
+        $data = [
                 'avg_lead_time' => $avgLeadTime,
                 'min_lead_time' => (int) $minLeadTime,
                 'max_lead_time' => (int) $maxLeadTime,
                 'work_orders'   => $rows,
                 'by_product'    => $byProduct,
-            ],
-            'filters' => [
+        ];
+
+        $filters = [
                 'from' => $from->toDateString(),
                 'to'   => $to->toDateString(),
-            ],
-        ]);
+        ];
+
+        return $this->respond($request, 'Reports/LeadTime', 'lead-time', $data, $filters);
     }
 
     /**
@@ -300,19 +349,20 @@ class ReportController extends Controller
                 ];
             })->values();
 
-        return Inertia::render('Reports/OEE', [
-            'data' => [
+        $data = [
                 'oee'          => $oee,
                 'availability' => $availability,
                 'performance'  => $performance,
                 'quality'      => $quality,
                 'by_machine'   => $byMachine,
-            ],
-            'filters' => [
+        ];
+
+        $filters = [
                 'from' => $from->toDateString(),
                 'to'   => $to->toDateString(),
-            ],
-        ]);
+        ];
+
+        return $this->respond($request, 'Reports/OEE', 'oee', $data, $filters);
     }
 
     public function export(Request $request, string $type)

@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ReportPdfButton from '@/Components/Reports/ReportPdfButton';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 const COLORS = ['#10b981', '#ef4444', '#f59e0b'];
@@ -26,7 +27,7 @@ const STAT_CONFIG = [
     { key: 'open_ncrs',         label: 'Open NCRs',          icon: 'fi-rr-triangle-warning', gradient: 'from-orange-400 to-orange-600', suffix: '' },
 ];
 
-export default function RejectionRateReport({ data }: any) {
+export default function RejectionRateReport({ data, filters }: any) {
     const pieData = [
         { name: 'Passed',      value: data?.total_passed ?? 0 },
         { name: 'Failed',      value: data?.total_failed ?? 0 },
@@ -36,6 +37,17 @@ export default function RejectionRateReport({ data }: any) {
     return (
         <AppLayout header="Rejection Rate Report">
             <div className="space-y-6 animate-fade-in">
+                {/* The same report, on the BITAC pad. */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-surface-400">
+                        {filters?.from && filters?.to ? `${filters.from} – ${filters.to}` : ''}
+                    </p>
+                    <ReportPdfButton
+                        url={`/reports/rejection-rate?pdf=1${filters?.from ? `&from=${filters.from}&to=${filters.to}` : ''}`}
+                        title="Rejection Rate Report"
+                        subtitle={filters?.from ? `${filters.from} – ${filters.to}` : undefined}
+                    />
+                </div>
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {STAT_CONFIG.map(s => (

@@ -334,10 +334,17 @@ Route::middleware(['auth'])->group(function () {
             ->name('musak-challans.pdf');
     });
 
-    // ─── IED commercial reports (clients, sectors, quotation value, pipeline) ──
-    Route::get('ied/reports', [\App\Http\Controllers\Ied\IedReportController::class, 'index'])
-        ->middleware('permission:view rfqs')
-        ->name('ied.reports');
+    // ─── IED commercial reports (clients, sectors, quotation value,
+    //     pipeline, target vs achievement) ──────────────────────────────────
+    Route::middleware('permission:view rfqs')->group(function () {
+        Route::get('ied/reports', [\App\Http\Controllers\Ied\IedReportController::class, 'index'])
+            ->name('ied.reports');
+        // The same report on the BITAC pad. ⚠️ Declared BEFORE nothing in
+        // particular, but it takes the SAME query string as the page, which is
+        // what makes the print and the screen agree.
+        Route::get('ied/reports/pdf', [\App\Http\Controllers\Ied\IedReportController::class, 'pdf'])
+            ->name('ied.reports.pdf');
+    });
 
     // ─── IED Stakeholder Forms ──────────────────────────────
     Route::prefix('ied/stakeholder-forms')->middleware('permission:view stakeholder-forms')->name('ied.stakeholder-forms.')->group(function () {

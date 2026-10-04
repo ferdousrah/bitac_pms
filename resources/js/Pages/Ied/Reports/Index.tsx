@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ReportPdfButton from '@/Components/Reports/ReportPdfButton';
 import TargetAchievementPanel from '@/Components/Reports/TargetAchievementPanel';
 import { Head, Link, router } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
@@ -100,9 +101,24 @@ export default function IedReports({
                                     placeholder="Client name…" className="form-input text-sm w-56" />
                             </form>
                         )}
-                        {view !== 'pipeline' && (
-                            <p className="text-xs text-surface-400 ml-auto">{yearLabel}</p>
-                        )}
+                        <div className="ml-auto flex items-center gap-3">
+                            {view !== 'pipeline' && (
+                                <p className="text-xs text-surface-400">{yearLabel}</p>
+                            )}
+                            {/* Prints the tab that is open, with the filters
+                                that are set — the server reads the same query
+                                string the page was loaded with. */}
+                            <ReportPdfButton
+                                url={`/ied/reports/pdf?${new URLSearchParams({
+                                    view,
+                                    year,
+                                    ...(centerId ? { center_id: String(centerId) } : {}),
+                                    ...(view === 'clients' && search ? { search } : {}),
+                                }).toString()}`}
+                                title={VIEWS.find((v) => v.key === view)?.label ?? 'Report'}
+                                subtitle={view === 'pipeline' ? undefined : yearLabel}
+                            />
+                        </div>
                     </div>
                 </div>
 

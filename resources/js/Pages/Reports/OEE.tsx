@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ReportPdfButton from '@/Components/Reports/ReportPdfButton';
 import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
 
 function OeeGauge({ value, label, color, gradient, icon }: { value: number; label: string; color: string; gradient: string; icon: string }) {
@@ -26,10 +27,21 @@ function OeeGauge({ value, label, color, gradient, icon }: { value: number; labe
     );
 }
 
-export default function OEEReport({ data }: any) {
+export default function OEEReport({ data, filters }: any) {
     return (
         <AppLayout header="OEE — Overall Equipment Effectiveness">
             <div className="space-y-6 animate-fade-in">
+                {/* The same report, on the BITAC pad. */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-surface-400">
+                        {filters?.from && filters?.to ? `${filters.from} – ${filters.to}` : ''}
+                    </p>
+                    <ReportPdfButton
+                        url={`/reports/oee?pdf=1${filters?.from ? `&from=${filters.from}&to=${filters.to}` : ''}`}
+                        title="OEE"
+                        subtitle={filters?.from ? `${filters.from} – ${filters.to}` : undefined}
+                    />
+                </div>
                 {/* Formula */}
                 <div className="glass px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-center gap-3">

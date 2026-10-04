@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ReportPdfButton from '@/Components/Reports/ReportPdfButton';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -60,9 +61,16 @@ export default function ProductionReport({ data, filters }: any) {
                         <button onClick={apply} className="btn-primary btn-sm">
                             <i className="fi fi-rr-filter leading-none text-xs" /> Apply
                         </button>
-                        <a href={`/reports/production/export?from=${from}&to=${to}`} className="btn-outline btn-sm sm:ml-auto">
-                            <i className="fi fi-rr-download leading-none text-xs" /> Export CSV
-                        </a>
+                        <div className="flex items-center gap-2 sm:ml-auto">
+                            <ReportPdfButton
+                                url={`/reports/production?pdf=1&from=${from}&to=${to}`}
+                                title="Production Report"
+                                subtitle={`${from} – ${to}`}
+                            />
+                            <a href={`/reports/production/export?from=${from}&to=${to}`} className="btn-outline btn-sm">
+                                <i className="fi fi-rr-download leading-none text-xs" /> Export CSV
+                            </a>
+                        </div>
                     </div>
                 </div>
 

@@ -1,4 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
+import ReportPdfButton from '@/Components/Reports/ReportPdfButton';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function ChartTooltip({ active, payload, label }: any) {
@@ -23,10 +24,21 @@ const STAT_CONFIG = [
     { key: 'max_lead_time', label: 'Max Lead Time', icon: 'fi-rr-hourglass-end',  gradient: 'from-red-400 to-red-600' },
 ];
 
-export default function LeadTimeReport({ data }: any) {
+export default function LeadTimeReport({ data, filters }: any) {
     return (
         <AppLayout header="Lead Time Report">
             <div className="space-y-6 animate-fade-in">
+                {/* The same report, on the BITAC pad. */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-surface-400">
+                        {filters?.from && filters?.to ? `${filters.from} – ${filters.to}` : ''}
+                    </p>
+                    <ReportPdfButton
+                        url={`/reports/lead-time?pdf=1${filters?.from ? `&from=${filters.from}&to=${filters.to}` : ''}`}
+                        title="Lead Time Report"
+                        subtitle={filters?.from ? `${filters.from} – ${filters.to}` : undefined}
+                    />
+                </div>
                 {/* KPIs */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {STAT_CONFIG.map(s => (

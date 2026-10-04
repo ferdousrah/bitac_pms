@@ -657,6 +657,27 @@ One page, four views, sharing a financial-year and centre filter — `Ied\IedRep
   `TargetAchievementService`, so the two reports can never disagree. Cancelled work orders are
   excluded everywhere.
 
+## 🖨 Every report prints (2026-10-04)
+
+> All nine — IED's five (Client List, By Type & Sector, Quotation Value, Jobs in Pipeline, Target vs Achievement) and the four shop-floor ones (Production, OEE, Lead Time, Rejection Rate) — plus Receivables, which already did.
+
+- **`App\Services\ReportSheetRenderer` is the one renderer.** A report is a title, a line saying what was asked for, some headline figures, one or more tables and a note; nine of them differ only in those contents. Each describes a **sheet** (`title_bn`, `title_en`, `subtitle`, `landscape`, `tiles[]`, `sections[]`, `notes`, `signatories[]`) and this lays it out. Nine bespoke renderers would be nine copies of the same table CSS drifting apart.
+- The sheets live in **`App\Services\Reports\IedReportSheets`** and **`ProductionReportSheets`**. ⚠️ **They compute nothing** — they format figures the report already worked out. A second copy of the arithmetic is how a printed total comes to disagree with the screen.
+- ⚠️ **`ReceivablesReportRenderer` was moved onto the shared renderer too.** It had its own copy of the table CSS, which is how one sheet quietly stops looking like the rest. Its 22-assertion test passed unchanged before and after, which is what made the refactor safe to do at all.
+
+### How the print gets the screen's figures
+- **Production reports: same method, same URL** — `?pdf=1` (or the `?preview=base64` that `PdfPopupModal` fetches with) makes `ReportController::respond()` return a sheet instead of an Inertia page. A separate pdf action would have to re-run the queries, and re-running is how two answers appear.
+- **IED reports: `GET ied/reports/pdf`** taking the **same query string** as the page (`view`, `year`, `center_id`, `search`), both going through `IedReportController::resolve()` so the screen and the print cannot ask different questions. An unknown `view` falls back to the client list rather than failing.
+- `?download=1` forces a save; otherwise it opens inline. Frontend: **`Components/Reports/ReportPdfButton.tsx`** (button + popup) on every report page.
+
+### Things that bite when printing
+- ⚠️ **No ৳ inside a figure column.** The symbol is Bengali script, so mPDF's `autoScriptToLang` wraps any number carrying it in `.lang_bn` and sets it in Nikosh — that column then sits at a different weight and width from its neighbours. `ReportSheetRenderer::money()` deliberately adds no sign; the unit is stated once in the subtitle.
+- ⚠️ **No warning glyph (⚠️) in PRINTED text.** It is in neither Tinos nor Nikosh, so mPDF substitutes **DejaVuSansCondensed** and the sheet carries a third face. The OEE note did exactly this and was caught by asserting on the embedded fonts. Warnings belong in the code, not on BITAC paper.
+- ⚠️ **Landscape is not cosmetic.** Past about six columns a figure wraps, and a wrapped figure cannot be read down a column. Production, OEE, Lead Time, Jobs in Pipeline and Receivables are `landscape`; the rest are portrait.
+- ⚠️ **A report hands over Eloquent Collections as often as arrays** (`by_month`, `work_orders`, …). `array_map`/`array_column` die on a Collection, and they die at *print* time, not on the screen — so the sheet builders normalise through `self::rows()`.
+- ⚠️ When testing page size: **`round()` returns a float**, so `=== 595` against an int is always false and every page reads as the wrong size. Cast it.
+- Verified for all nine: the route answers, the bytes are a PDF, the page is A4 the right way round, nothing crosses the 18mm margin, the title and signatories are on it, **only Tinos and Nikosh are embedded**, `preview=base64` works, and the printed pipeline total equals the screen's own prop.
+
 ## 🎯 Target vs Achievement (2026-09)
 
 > Taka, per centre, per financial year. `Reports → Target vs Achievement`.
