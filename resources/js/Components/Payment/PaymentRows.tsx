@@ -92,7 +92,7 @@ export default function PaymentRows({
                             </p>
                         </div>
                         <div className="text-right shrink-0">
-                            <p className="font-mono font-bold text-surface-900 text-sm">{money(p.gross)}</p>
+                            <p className="tabular-nums font-bold text-surface-900 text-sm">{money(p.gross)}</p>
                             <p className="text-[11px] text-surface-500">
                                 {p.is_cash ? `cash ${money(p.net)}` : 'no cash — advance spent'}
                             </p>
@@ -120,12 +120,12 @@ export default function PaymentRows({
                                         )}
                                         {d.note && <span className="text-surface-400"> · {d.note}</span>}
                                     </span>
-                                    <span className="font-mono text-surface-600 shrink-0">− {money(d.amount)}</span>
+                                    <span className="tabular-nums text-surface-600 shrink-0">− {money(d.amount)}</span>
                                 </div>
                             ))}
                             <div className="px-2.5 py-1.5 flex items-center justify-between text-[11px] font-bold">
                                 <span className="text-surface-600">Settles on the bill</span>
-                                <span className="font-mono text-surface-900">{money(p.settled)}</span>
+                                <span className="tabular-nums text-surface-900">{money(p.settled)}</span>
                             </div>
                         </div>
                     )}

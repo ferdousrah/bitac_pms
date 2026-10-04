@@ -50,7 +50,7 @@ export default function CustomerLedger({
                     ].map(([label, value, tone]) => (
                         <div key={label} className="card"><div className="card-body !p-3">
                             <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">{label}</p>
-                            <p className={`text-base font-bold mt-1 font-mono ${tone}`}>{value}</p>
+                            <p className={`text-base font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
                         </div></div>
                     ))}
                 </div>
@@ -79,7 +79,7 @@ export default function CustomerLedger({
                                             {s.invoice}
                                         </Link>
                                     )}
-                                    <span className="font-mono font-bold text-amber-700 shrink-0">{money(s.amount)}</span>
+                                    <span className="tabular-nums font-bold text-amber-700 shrink-0">{money(s.amount)}</span>
                                 </div>
                             ))}
                         </div>
@@ -133,7 +133,7 @@ export default function CustomerLedger({
                                                 </p>
                                             </div>
                                             <div className="text-right shrink-0">
-                                                <p className="font-mono text-sm font-bold text-surface-900">{money(inv.billed)}</p>
+                                                <p className="tabular-nums text-sm font-bold text-surface-900">{money(inv.billed)}</p>
                                                 <p className="text-[11px]">
                                                     <span className="text-emerald-700">{money(inv.settled)} settled</span>
                                                     {inv.due > 0.01 && <span className="text-surface-500"> · {money(inv.due)} due</span>}

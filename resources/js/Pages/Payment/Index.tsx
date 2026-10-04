@@ -78,7 +78,7 @@ export default function PaymentIndex({
                     ].map(([label, value, tone]) => (
                         <div key={label} className="card"><div className="card-body">
                             <p className="text-[11px] uppercase tracking-wider font-bold text-surface-400">{label}</p>
-                            <p className={`text-xl font-bold mt-1 font-mono ${tone}`}>{value}</p>
+                            <p className={`text-xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
                         </div></div>
                     ))}
                 </div>

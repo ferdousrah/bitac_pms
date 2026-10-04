@@ -213,7 +213,7 @@ export default function RecordPaymentModal({
                             <label className="form-label">
                                 Amount paid <span className="text-red-500">*</span>
                             </label>
-                            <input type="number" step="0.01" min="0.01" className="form-input text-right font-mono"
+                            <input type="number" step="0.01" min="0.01" className="form-input text-right tabular-nums"
                                 value={form.data.gross_amount}
                                 onChange={(e) => form.setData('gross_amount', e.target.value)} />
                             {form.errors.gross_amount && <p className="form-error">{form.errors.gross_amount as any}</p>}
@@ -280,7 +280,7 @@ export default function RecordPaymentModal({
                                                     ))}
                                                 </select>
                                                 <input type="number" step="0.01" min="0"
-                                                    className="form-input w-32 text-right font-mono text-sm"
+                                                    className="form-input w-32 text-right tabular-nums text-sm"
                                                     placeholder="0.00" value={line.amount}
                                                     onChange={(e) => setLine(i, { amount: e.target.value })} />
                                                 <button type="button" onClick={() => removeLine(i)}
@@ -308,24 +308,24 @@ export default function RecordPaymentModal({
                     <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3 space-y-1.5 text-sm">
                         <div className="flex justify-between">
                             <span className="text-surface-600">Amount paid</span>
-                            <span className="font-mono">{money(gross)}</span>
+                            <span className="tabular-nums">{money(gross)}</span>
                         </div>
                         {totals.deducted > 0 && (
                             <div className="flex justify-between text-surface-600">
                                 <span>Less deductions</span>
-                                <span className="font-mono">− {money(totals.deducted)}</span>
+                                <span className="tabular-nums">− {money(totals.deducted)}</span>
                             </div>
                         )}
                         <div className="flex justify-between font-bold border-t border-surface-200 pt-1.5">
                             <span className="text-surface-900">Cash received</span>
-                            <span className={`font-mono ${totals.net < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                            <span className={`tabular-nums ${totals.net < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
                                 {money(totals.net)}
                             </span>
                         </div>
                         {kind === 'against_bill' && (
                             <div className="flex justify-between text-xs pt-1">
                                 <span className="text-surface-500">Settles on the bill</span>
-                                <span className="font-mono font-semibold text-surface-800">{money(totals.settles)}</span>
+                                <span className="tabular-nums font-semibold text-surface-800">{money(totals.settles)}</span>
                             </div>
                         )}
                         {totals.held > 0 && (
