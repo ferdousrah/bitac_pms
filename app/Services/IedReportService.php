@@ -16,11 +16,68 @@ use Illuminate\Support\Facades\DB;
  */
 class IedReportService
 {
-    /** Work not finished and not abandoned — what is still in the pipe. */
-    public const PIPELINE_STATUSES = [
-        'draft', 'ied_pending', 'pcd_pending', 'released_to_shops', 'approved',
-        'in_production', 'qc_hold', 'qc_passed', 'ready_for_delivery', 'partially_delivered',
+    /**
+     * The pipeline in the words BITAC uses, not in internal status names.
+     *
+     * "Released to Shops", "QC Hold" and "Approved" are states the software
+     * keeps; a manager reading a report wants the six steps the work actually
+     * goes through. The order here IS the order the report prints.
+     *
+     * ⚠️ **`quoted` has no work-order status and never will** — a quotation
+     * that has gone to the customer but produced no work order yet is not in
+     * `work_orders` at all. It is counted from `quotations`, which is why this
+     * report starts where IED's own work starts. See quotedRows().
+     *
+     * ⚠️ **Every open status must appear in exactly one stage.** `pcd_review`
+     * and `pcd_release_pending` were added long after this report and nobody
+     * put them in the old flat list, so a work order sitting with the
+     * নির্বাহী প্রকৌশলী was simply invisible here. assertStagesCoverStatuses()
+     * in the test suite is what stops that happening again.
+     */
+    public const PIPELINE_STAGES = [
+        'quoted'        => ['label' => 'Quoted',              'statuses' => []],
+        'wo_received'   => ['label' => 'Work Order Received', 'statuses' => ['draft', 'approved', 'ied_pending', 'pcd_review']],
+        'planning'      => ['label' => 'Production Planning', 'statuses' => ['pcd_pending', 'pcd_release_pending']],
+        'in_production' => ['label' => 'In Production',       'statuses' => ['released_to_shops', 'in_production']],
+        'qc'            => ['label' => 'QC',                  'statuses' => ['qc_hold']],
+        'ready'         => ['label' => 'Ready to Deliver',    'statuses' => ['qc_passed', 'ready_for_delivery', 'partially_delivered']],
     ];
+
+    /**
+     * Quotation statuses that mean "given to the customer and still live".
+     *
+     * ⚠️ `approved` is NOT here: a quotation is approved internally before it
+     * is sent, so it has not been quoted to anybody yet. `superseded` and
+     * `customer_rejected` are dead, and `converted` already became a work
+     * order — counting any of them would inflate the front of the pipe.
+     */
+    public const QUOTED_STATUSES = ['sent_to_customer', 'revision_requested', 'customer_accepted'];
+
+    /**
+     * ⚠️ The pipeline is defined by what it EXCLUDES, not by a list of what it
+     * includes.
+     *
+     * It used to be an explicit list of open statuses, and when `pcd_review`
+     * and `pcd_release_pending` were added nobody extended it — so those work
+     * orders were not merely miscategorised, they were **invisible**, and the
+     * report's own headline count was wrong. Selecting by exclusion means a
+     * status added tomorrow still shows up. An unmapped status lands in the
+     * first stage rather than vanishing, which is the right way for a report
+     * to fail; the test suite asserts that none is unmapped.
+     */
+    public const CLOSED_STATUSES = ['delivered', 'cancelled'];
+
+    /** Which stage a work order's status belongs to. */
+    public static function stageFor(string $status): ?string
+    {
+        foreach (self::PIPELINE_STAGES as $key => $stage) {
+            if (in_array($status, $stage['statuses'], true)) {
+                return $key;
+            }
+        }
+
+        return null;
+    }
 
     /**
      * A work order's date for reporting: the customer's own work-order date,
@@ -189,12 +246,107 @@ class IedReportService
      */
     public function pipeline(?int $centerId = null): array
     {
-        $rows = DB::table('work_orders')
+        $rows = $this->quotedRows($centerId)->concat($this->workOrderRows($centerId));
+
+        // One bucket per stage, in the declared order, present even when empty
+        // — a stage that disappears when nothing is in it makes the report
+        // read differently from one week to the next.
+        $byStage = [];
+        foreach (self::PIPELINE_STAGES as $key => $stage) {
+            $byStage[$key] = ['stage' => $key, 'label' => $stage['label'], 'jobs' => 0, 'value' => 0.0];
+        }
+
+        foreach ($rows as $r) {
+            $byStage[$r['stage']]['jobs']++;
+            $byStage[$r['stage']]['value'] += (float) $r['value'];
+        }
+        foreach ($byStage as &$st) $st['value'] = round($st['value'], 2);
+        unset($st);
+
+        // The table reads like the pipeline above it: by stage, then by what
+        // is due soonest, with undated work last.
+        $order = array_flip(array_keys(self::PIPELINE_STAGES));
+        $sorted = $rows->sort(function ($a, $b) use ($order) {
+            return [$order[$a['stage']], $a['due_date'] === null, (string) $a['due_date']]
+               <=> [$order[$b['stage']], $b['due_date'] === null, (string) $b['due_date']];
+        })->values();
+
+        // A job still being planned may have no quotation against it yet; its
+        // value is genuinely unknown, not zero, and the report says so rather
+        // than quietly dragging the total down.
+        $unquoted = $sorted->filter(fn ($r) => $r['quotation'] === null)->count();
+
+        return [
+            'stages' => array_values($byStage),
+            'total'  => [
+                'jobs'       => $sorted->count(),
+                'quoted'     => $byStage['quoted']['jobs'],
+                'work_orders'=> $sorted->count() - $byStage['quoted']['jobs'],
+                'value'      => round($sorted->sum('value'), 2),
+                'unquoted'   => $unquoted,
+            ],
+            'jobs' => $sorted->all(),
+        ];
+    }
+
+    /**
+     * Quotations given to the customer that no work order has come in against.
+     *
+     * ⚠️ The guard is on the **RFQ**, not on the quotation: a work order is
+     * issued against one version, so checking only `work_orders.quotation_id`
+     * would leave the other versions of the same job sitting in "Quoted" for
+     * ever. If any live work order exists for the RFQ, the job has moved on.
+     */
+    private function quotedRows(?int $centerId): \Illuminate\Support\Collection
+    {
+        return DB::table('quotations')
+            ->leftJoin('customers', 'customers.id', '=', 'quotations.customer_id')
+            ->whereIn('quotations.status', self::QUOTED_STATUSES)
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('work_orders')
+                ->whereColumn('work_orders.rfq_id', 'quotations.rfq_id')
+                ->where('work_orders.status', '<>', 'cancelled'))
+            ->when($centerId, fn ($q) => $q->where('quotations.center_id', $centerId))
+            ->select(
+                'quotations.id',
+                'quotations.version',
+                'quotations.memo_no',
+                'quotations.status',
+                'quotations.rfq_id',
+                'quotations.total_amount as value',
+                DB::raw('customers.name as customer'),
+                DB::raw('COALESCE(DATE(quotations.sent_to_customer_at), quotations.memo_date, DATE(quotations.created_at)) as started')
+            )
+            ->get()
+            ->map(fn ($r) => [
+                'id'         => (int) $r->id,
+                'kind'       => 'quotation',
+                'stage'      => 'quoted',
+                'stage_label'=> self::PIPELINE_STAGES['quoted']['label'],
+                'wo_number'  => null,
+                'job_number' => null,
+                'rfq_id'     => $r->rfq_id ? (int) $r->rfq_id : null,
+                'status'     => $r->status,
+                'customer'   => $r->customer,
+                // A quotation carries no delivery date — the customer has not
+                // ordered yet, so there is nothing to be late for.
+                'due_date'   => null,
+                'started'    => $r->started,
+                'value'      => round((float) $r->value, 2),
+                'quotation'  => $this->quotationRef((int) $r->id, (int) $r->version, $r->memo_no, $r->status),
+                'overdue'    => false,
+            ]);
+    }
+
+    /** Work orders that are neither delivered nor cancelled. */
+    private function workOrderRows(?int $centerId): \Illuminate\Support\Collection
+    {
+        $today = now()->startOfDay();
+
+        return DB::table('work_orders')
             ->leftJoin('quotations', 'quotations.id', '=', 'work_orders.quotation_id')
             ->leftJoin('customers', 'customers.id', '=', 'work_orders.customer_id')
-            ->whereIn('work_orders.status', self::PIPELINE_STATUSES)
+            ->whereNotIn('work_orders.status', self::CLOSED_STATUSES)
             ->when($centerId, fn ($q) => $q->where('work_orders.center_id', $centerId))
-            ->orderByRaw('work_orders.due_date IS NULL, work_orders.due_date')
             ->select(
                 'work_orders.id',
                 'work_orders.wo_number',
@@ -203,66 +355,46 @@ class IedReportService
                 'work_orders.due_date',
                 DB::raw($this->woDateExpr() . ' as started'),
                 DB::raw('customers.name as customer'),
-                DB::raw('COALESCE(quotations.total_amount, 0) as value'),
                 // ⚠️ A work order carries no money of its own — the figure is
-                // the quotation it was issued against. Carry the quotation
-                // itself so the number can be traced back to the paper it came
-                // from, and so a job with NO quotation reads as "not quoted"
-                // rather than as a quoted zero.
+                // the quotation it was issued against. A job with NO quotation
+                // must read as "not quoted", never as a quoted zero.
+                DB::raw('COALESCE(quotations.total_amount, 0) as value'),
                 DB::raw('work_orders.quotation_id as quotation_id'),
                 DB::raw('quotations.version as quotation_version'),
                 DB::raw('quotations.memo_no as quotation_memo_no'),
                 DB::raw('quotations.status as quotation_status')
             )
-            ->get();
-
-        $byStage = [];
-        foreach ($rows as $r) {
-            $byStage[$r->status] ??= ['status' => $r->status, 'jobs' => 0, 'value' => 0.0];
-            $byStage[$r->status]['jobs']++;
-            $byStage[$r->status]['value'] += (float) $r->value;
-        }
-        foreach ($byStage as &$st) $st['value'] = round($st['value'], 2);
-        unset($st);
-
-        // Keep the pipeline in workflow order, not alphabetical.
-        $order = array_flip(self::PIPELINE_STATUSES);
-        usort($byStage, fn ($a, $b) => ($order[$a['status']] ?? 99) <=> ($order[$b['status']] ?? 99));
-
-        $today = now()->startOfDay();
-
-        // A job still being planned may have no quotation against it yet; its
-        // value is genuinely unknown, not zero, and the report says so rather
-        // than quietly dragging the total down.
-        $unquoted = $rows->filter(fn ($r) => ! $r->quotation_id)->count();
-
-        return [
-            'stages' => array_values($byStage),
-            'total'  => [
-                'jobs'     => $rows->count(),
-                'value'    => round($rows->sum('value'), 2),
-                'unquoted' => $unquoted,
-            ],
-            'jobs'   => $rows->map(fn ($r) => [
-                'id'         => $r->id,
+            ->get()
+            ->map(fn ($r) => [
+                'id'         => (int) $r->id,
+                'kind'       => 'work_order',
+                'stage'      => self::stageFor($r->status) ?? 'wo_received',
+                'stage_label'=> self::PIPELINE_STAGES[self::stageFor($r->status) ?? 'wo_received']['label'],
                 'wo_number'  => $r->wo_number,
                 'job_number' => $r->job_number,
+                'rfq_id'     => null,
                 'status'     => $r->status,
                 'customer'   => $r->customer,
                 'due_date'   => $r->due_date,
                 'started'    => $r->started,
                 'value'      => round((float) $r->value, 2),
-                // The same reference the quotation screens use, so it is
-                // recognisable: Q-00142 v2.
-                'quotation'  => $r->quotation_id ? [
-                    'id'      => (int) $r->quotation_id,
-                    'ref'     => 'Q-' . str_pad((string) $r->quotation_id, 5, '0', STR_PAD_LEFT),
-                    'version' => (int) $r->quotation_version,
-                    'memo_no' => $r->quotation_memo_no,
-                    'status'  => $r->quotation_status,
-                ] : null,
+                'quotation'  => $r->quotation_id
+                    ? $this->quotationRef((int) $r->quotation_id, (int) $r->quotation_version,
+                        $r->quotation_memo_no, $r->quotation_status)
+                    : null,
                 'overdue'    => $r->due_date !== null && $today->gt($r->due_date),
-            ])->all(),
+            ]);
+    }
+
+    /** The same reference the quotation screens use, so it is recognisable. */
+    private function quotationRef(int $id, int $version, ?string $memoNo, ?string $status): array
+    {
+        return [
+            'id'      => $id,
+            'ref'     => 'Q-' . str_pad((string) $id, 5, '0', STR_PAD_LEFT),
+            'version' => $version,
+            'memo_no' => $memoNo,
+            'status'  => $status,
         ];
     }
 }
