@@ -141,7 +141,11 @@ export default function Receivables({ rows = [], filters, totals, ageing, bucket
                             </div>
                         </div>
 
-                        <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 divide-x divide-y divide-surface-100 border-t lg:border-t-0 border-surface-100">
+                        {/* ⚠️ Separators come from a 1px gap over a tinted background, not
+                                from divide-x/divide-y. In a CSS grid `divide-y` puts a top
+                                border on every child after the first, so cells 2 and 3 of the
+                                FIRST row get a stray rule above them. */}
+                        <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 gap-px bg-surface-100 border-t lg:border-t-0 border-surface-100">
                             {[
                                 { label: 'Billed', value: billed, tone: 'text-surface-800', hint: `${rows.length} client${rows.length !== 1 ? 's' : ''}` },
                                 { label: 'Settled', value: settled, tone: 'text-emerald-600', hint: 'cash + tax at source' },
@@ -150,7 +154,7 @@ export default function Receivables({ rows = [], filters, totals, ageing, bucket
                                 { label: 'Advance in hand', value: totals.advance_available, tone: totals.advance_available > 0 ? 'text-sky-600' : 'text-surface-300', hint: "client's money" },
                                 { label: 'Net receivable', value: totals.net_receivable, tone: 'text-surface-900', hint: 'due − advance' },
                             ].map((cell) => (
-                                <div key={cell.label} className="p-4 -ml-px -mt-px">
+                                <div key={cell.label} className="bg-white p-4">
                                     <p className="text-[10px] uppercase tracking-wider font-bold text-surface-400">{cell.label}</p>
                                     <p className={`text-lg font-bold tabular-nums mt-1 leading-tight ${cell.tone}`}>
                                         {money(cell.value)}
