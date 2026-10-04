@@ -646,6 +646,8 @@ One page, four views, sharing a financial-year and centre filter — `Ied\IedRep
 - **By Type & Sector** — jobs folded into Government / Private, then sector. **Unclassified customers are shown, not hidden**, so a gap in the data is never mistaken for a gap in the work.
 - **Quotation Value** — what was quoted in the year, how much turned into work, and a month-by-month bar. ⚠️ Counts quotations that actually **reached the customer** (drafts and `pending_approval` excluded — a draft was not "given"), dated by `sent_to_customer_at` → `memo_date` → `created_at`. **`superseded` is excluded**, or a revised quotation would be counted twice for the same job.
 - **Jobs in Pipeline** — everything neither delivered nor cancelled, by stage in workflow order, plus the job list with overdue flagged. Deliberately **not** year-scoped: what is open is open, whenever it started.
+  - The money column is the **Quoted value**, and each row names **which quotation** it came from (`Q-00142 v2`, linked, with the memo no beneath) — a work order carries no money of its own, so a figure nobody can trace to a quotation is a figure nobody trusts. Same traceability rule as Target vs Achievement.
+  - ⚠️ **A job with no quotation reads “not quoted” and prints a dash, never ৳0.00.** Its value is unknown, not zero; the headline states how many such jobs there are and leaves them out of the total, so the stage figures and the row figures still sum to it exactly.
 - Work-order money comes from the linked quotation and work-order dates use
   `COALESCE(customer_wo_date, DATE(created_at))` — the same expressions as
   `TargetAchievementService`, so the two reports can never disagree. Cancelled work orders are

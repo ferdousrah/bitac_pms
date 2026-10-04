@@ -166,8 +166,8 @@ export default function IedReports({
                                                             style={{ width: `${t.value > 0 ? (s.value / t.value) * 100 : 0}%` }} />
                                                     </div>
                                                 </td>
-                                                <td className="px-3 py-2 text-right font-mono text-surface-500 w-16">{s.jobs}</td>
-                                                <td className="px-4 py-2 text-right font-mono font-semibold w-32">{taka(s.value)}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums text-surface-500 w-16">{s.jobs}</td>
+                                                <td className="px-4 py-2 text-right tabular-nums font-semibold w-32">{taka(s.value)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -247,8 +247,13 @@ export default function IedReports({
                                 <p className="text-xl font-bold text-surface-900 mt-1">{pipeline.total.jobs}</p>
                             </div></div>
                             <div className="card"><div className="card-body">
-                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">Value in the pipe</p>
+                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">Quoted value in the pipe</p>
                                 <p className="text-xl font-bold text-surface-900 mt-1">{taka(pipeline.total.value)}</p>
+                                {pipeline.total.unquoted > 0 && (
+                                    <p className="text-[11px] text-amber-600 font-semibold mt-1">
+                                        {pipeline.total.unquoted} job{pipeline.total.unquoted !== 1 ? 's' : ''} not quoted yet — not in this figure
+                                    </p>
+                                )}
                             </div></div>
                         </div>
 
@@ -286,13 +291,14 @@ export default function IedReports({
                                             <th className="text-left px-4 py-2">WO</th>
                                             <th className="text-left px-3 py-2">Customer</th>
                                             <th className="text-left px-3 py-2 w-40">Stage</th>
+                                            <th className="text-left px-3 py-2 w-32">Quotation</th>
                                             <th className="text-left px-3 py-2 w-28">Due</th>
-                                            <th className="text-right px-4 py-2 w-32">Value</th>
+                                            <th className="text-right px-4 py-2 w-32">Quoted value</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pipeline.jobs.length === 0 ? (
-                                            <tr><td colSpan={5} className="text-center py-10 text-sm text-surface-400">Nothing open.</td></tr>
+                                            <tr><td colSpan={6} className="text-center py-10 text-sm text-surface-400">Nothing open.</td></tr>
                                         ) : pipeline.jobs.map((j: any) => (
                                             <tr key={j.id} className="border-b border-surface-50 hover:bg-surface-50/60">
                                                 <td className="px-4 py-2.5">
@@ -304,13 +310,33 @@ export default function IedReports({
                                                 <td className="px-3 py-2.5 text-surface-700">{j.customer ?? '—'}</td>
                                                 <td className="px-3 py-2.5 text-xs text-surface-600">{STATUS_LABELS[j.status] ?? j.status}</td>
                                                 <td className="px-3 py-2.5 text-xs">
+                                                    {j.quotation ? (
+                                                        <>
+                                                            <Link href={`/quotations/${j.quotation.id}`}
+                                                                className="font-mono text-[11px] font-semibold text-brand-600 hover:text-brand-700">
+                                                                {j.quotation.ref}{j.quotation.version > 1 ? ` v${j.quotation.version}` : ''}
+                                                            </Link>
+                                                            {j.quotation.memo_no && (
+                                                                <p className="text-[10px] text-surface-400 truncate max-w-[9rem]"
+                                                                    title={j.quotation.memo_no}>{j.quotation.memo_no}</p>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-[11px] font-semibold text-amber-600">not quoted</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2.5 text-xs">
                                                     {j.due_date
                                                         ? <span className={j.overdue ? 'text-rose-600 font-semibold' : 'text-surface-500'}>
                                                             {j.due_date}{j.overdue ? ' · overdue' : ''}
                                                           </span>
                                                         : <span className="text-surface-400">—</span>}
                                                 </td>
-                                                <td className="px-4 py-2.5 text-right font-mono">{taka(j.value)}</td>
+                                                <td className="px-4 py-2.5 text-right tabular-nums">
+                                                    {j.quotation
+                                                        ? <span className="font-semibold text-surface-900">{taka(j.value)}</span>
+                                                        : <span className="text-surface-300">—</span>}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>

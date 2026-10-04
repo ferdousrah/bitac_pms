@@ -203,7 +203,16 @@ class IedReportService
                 'work_orders.due_date',
                 DB::raw($this->woDateExpr() . ' as started'),
                 DB::raw('customers.name as customer'),
-                DB::raw('COALESCE(quotations.total_amount, 0) as value')
+                DB::raw('COALESCE(quotations.total_amount, 0) as value'),
+                // ⚠️ A work order carries no money of its own — the figure is
+                // the quotation it was issued against. Carry the quotation
+                // itself so the number can be traced back to the paper it came
+                // from, and so a job with NO quotation reads as "not quoted"
+                // rather than as a quoted zero.
+                DB::raw('work_orders.quotation_id as quotation_id'),
+                DB::raw('quotations.version as quotation_version'),
+                DB::raw('quotations.memo_no as quotation_memo_no'),
+                DB::raw('quotations.status as quotation_status')
             )
             ->get();
 
@@ -222,9 +231,18 @@ class IedReportService
 
         $today = now()->startOfDay();
 
+        // A job still being planned may have no quotation against it yet; its
+        // value is genuinely unknown, not zero, and the report says so rather
+        // than quietly dragging the total down.
+        $unquoted = $rows->filter(fn ($r) => ! $r->quotation_id)->count();
+
         return [
             'stages' => array_values($byStage),
-            'total'  => ['jobs' => $rows->count(), 'value' => round($rows->sum('value'), 2)],
+            'total'  => [
+                'jobs'     => $rows->count(),
+                'value'    => round($rows->sum('value'), 2),
+                'unquoted' => $unquoted,
+            ],
             'jobs'   => $rows->map(fn ($r) => [
                 'id'         => $r->id,
                 'wo_number'  => $r->wo_number,
@@ -234,6 +252,15 @@ class IedReportService
                 'due_date'   => $r->due_date,
                 'started'    => $r->started,
                 'value'      => round((float) $r->value, 2),
+                // The same reference the quotation screens use, so it is
+                // recognisable: Q-00142 v2.
+                'quotation'  => $r->quotation_id ? [
+                    'id'      => (int) $r->quotation_id,
+                    'ref'     => 'Q-' . str_pad((string) $r->quotation_id, 5, '0', STR_PAD_LEFT),
+                    'version' => (int) $r->quotation_version,
+                    'memo_no' => $r->quotation_memo_no,
+                    'status'  => $r->quotation_status,
+                ] : null,
                 'overdue'    => $r->due_date !== null && $today->gt($r->due_date),
             ])->all(),
         ];
