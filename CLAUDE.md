@@ -418,6 +418,16 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - ⚠️ **The letter endpoint is a full save, not a patch.** The form posts every field, so an omitted field genuinely means "cleared". Don't PUT a subset.
 - `InvoiceController@downloadPdf` gained `?preview=base64`, so `PdfPopupModal` can show the bill and `email()` can reuse the generator instead of a second copy of it.
 
+### The Accounts Officer signs the bill (2026-10-04)
+> BITAC: once a bill is generated the accounts desk signs it, and that signature prints on the bill itself.
+
+- **Sign Document** on the bill page (`POST invoices/{invoice}/sign`, `DELETE` to take it off) opens `SignaturePicker` with the signer's own saved blocks, default preselected. Gated by **`permission:create invoices`** — the desk that raises a bill is the desk that signs it, so no new permission. `canSign` is a prop on `Invoice/Show`.
+- ⚠️ **It does NOT reuse `signature_path` / `signatory_user_id`.** Those are the **forwarding letter's** (migration 000049), signed by whoever sends the bill out — often a different officer on a different day. The bill carries its own **`accounts_signature_path` / `accounts_signed_by` / `accounts_signed_at`** (migration 000056), or saving the letter would silently re-sign the bill.
+- The **PATH is stored, not the `user_signatures` id**, per the signature convention — deleting a block later cannot blank a bill that has gone out. `SignatureResolver::resolve()` does the work, so **picking another officer's block is refused** and falls back to the signer's own default; signing with nothing picked uses the default too.
+- The PDF prints it through **`SignatureBlock::html(..., 150pt, 'left')`** in place of the blank space above the **Accounts Officer** rule — image alone, width-sized only, the role label under the rule still prints. Unsigned bills keep the blank so the layout doesn't shift. Verified by counting the pictures in the rendered PDF: 2 (emblem + gear) unsigned → 3 signed → 2 again after removing.
+- **Removing is allowed** (`unsign`, behind `confirm()`), because signing the wrong bill or with the wrong block must not be a dead end — the figure is unchanged and it can be signed again. Refusals are redirect + flash.
+- ⚠️ Found while here, **not fixed**: `Invoice::$fillable` lists **`due_date`, `issued_date`, `payment_terms`** but the `invoices` table has no such columns, so the bill page's "Due date" and payment terms are always blank and any `create()` passing them throws.
+
 ### Rich text: tables, and the allow-list that has to match (2026-09)
 > ⚠️ **`RichTextEditor` and `App\Support\LetterHtml::ALLOWED` are two halves of one thing.** A tag the toolbar can insert but the allow-list drops is stripped on save and **vanishes from the printed PDF silently**. Change them together.
 

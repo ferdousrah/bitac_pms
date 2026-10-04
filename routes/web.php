@@ -772,6 +772,13 @@ Route::middleware(['auth'])->group(function () {
         Route::put('{invoice}/letter', [InvoiceController::class, 'updateLetter'])->name('invoices.letter.update');
         Route::get('{invoice}/letter/pdf', [InvoiceController::class, 'letterPdf'])->name('invoices.letter.pdf');
         Route::post('{invoice}/email', [InvoiceController::class, 'email'])->name('invoices.email');
+
+        // The Accounts Officer signs the bill itself. Same desk that raises
+        // one, so the same permission — and separate from signing the letter.
+        Route::middleware('permission:create invoices')->group(function () {
+            Route::post('{invoice}/sign', [InvoiceController::class, 'sign'])->name('invoices.sign');
+            Route::delete('{invoice}/sign', [InvoiceController::class, 'unsign'])->name('invoices.unsign');
+        });
     });
 
     // Reports

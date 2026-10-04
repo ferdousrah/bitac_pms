@@ -1,8 +1,9 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, useForm } from '@inertiajs/react';
-import { FormEvent, useState } from 'react';
+import { Link, router, useForm, usePage } from '@inertiajs/react';
+import { FormEvent, useRef, useState } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 import RichTextEditor from '@/Components/RichTextEditor';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 
 const statusBadge: Record<string, string> = {
     draft: 'badge-slate',
@@ -24,7 +25,7 @@ const paymentMethodLabel: Record<string, string> = {
 const formatAmount = (amount: any, fraction = 2) =>
     `৳${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: fraction })}`;
 
-export default function InvoiceShow({ invoice }: any) {
+export default function InvoiceShow({ invoice, canSign = false }: any) {
     const [pdf, setPdf] = useState<string | null>(null);
     const [showMail, setShowMail] = useState(false);
     const mail = useForm<any>({
@@ -59,6 +60,31 @@ export default function InvoiceShow({ invoice }: any) {
     };
 
     const isPaid = invoice.status === 'paid';
+
+    // The Accounts Officer signs the bill itself — their own saved blocks,
+    // default preselected. Separate from signing the forwarding letter.
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
+    const sigRef = useRef<SignaturePickerHandle>(null);
+    const [showSign, setShowSign] = useState(false);
+    const [signing, setSigning] = useState(false);
+
+    const doSign = () => {
+        setSigning(true);
+        const choice = sigRef.current?.value();
+        router.post(`/invoices/${invoice.id}/sign`, {
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }, {
+            preserveScroll: true,
+            onFinish: () => setSigning(false),
+            onSuccess: () => setShowSign(false),
+        });
+    };
+
+    const removeSignature = () => {
+        if (!confirm('Remove the signature from this bill?')) return;
+        router.delete(`/invoices/${invoice.id}/sign`, { preserveScroll: true });
+    };
 
     return (
         <AppLayout header={`Invoice — ${invoice.invoice_number}`}>
@@ -223,6 +249,16 @@ export default function InvoiceShow({ invoice }: any) {
                         <i className="fi fi-rr-file-pdf text-xs leading-none" />
                         View PDF
                     </a>
+                    {canSign && !invoice.signed && (
+                        <button
+                            type="button"
+                            onClick={() => setShowSign(true)}
+                            className="btn-primary btn-sm"
+                        >
+                            <i className="fi fi-rr-signature text-xs leading-none" />
+                            Sign Document
+                        </button>
+                    )}
                     {!isPaid && (
                         <button
                             onClick={() => setShowPay(true)}
@@ -266,6 +302,40 @@ export default function InvoiceShow({ invoice }: any) {
                         Back
                     </Link>
                 </div>
+
+                {/* Signed by the accounts desk — what prints over the
+                    Accounts Officer rule on the bill. */}
+                {invoice.signed && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                <i className="fi fi-rr-badge-check text-sm leading-none" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-emerald-900">
+                                    Signed by {invoice.signed_by ?? 'the accounts desk'}
+                                </p>
+                                <p className="text-[11px] text-emerald-700/80 mt-0.5">
+                                    {invoice.signed_at ?? ''} · this signature prints on the bill.
+                                </p>
+                                {invoice.signature_url && (
+                                    <img src={invoice.signature_url} alt="Signature"
+                                        className="mt-2 max-h-24 bg-white rounded-lg border border-emerald-100 p-1.5" />
+                                )}
+                            </div>
+                        </div>
+                        {canSign && (
+                            <div className="flex flex-col gap-2 shrink-0">
+                                <button type="button" onClick={() => setShowSign(true)} className="btn-outline btn-sm">
+                                    <i className="fi fi-rr-signature text-xs leading-none" /> Re-sign
+                                </button>
+                                <button type="button" onClick={removeSignature} className="btn-ghost btn-sm text-red-600">
+                                    <i className="fi fi-rr-trash text-xs leading-none" /> Remove
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* What travels with this bill. */}
                 <div className="card">
@@ -517,6 +587,41 @@ export default function InvoiceShow({ invoice }: any) {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {/* Sign the bill */}
+            {showSign && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        onClick={() => !signing && setShowSign(false)} />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+                        <div className="px-5 py-3 border-b border-surface-100 flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                                <i className="fi fi-rr-signature text-sm leading-none" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-surface-900">
+                                    Sign {invoice.invoice_number}
+                                </h3>
+                                <p className="text-[11px] text-surface-500 leading-tight mt-0.5">
+                                    Your signature prints over the Accounts Officer line on the bill.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-5">
+                            <SignaturePicker ref={sigRef} signatures={mySignatures} padHeight={110} />
+                        </div>
+                        <div className="px-5 py-3 border-t border-surface-100 flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => setShowSign(false)} disabled={signing}
+                                className="btn-ghost">Cancel</button>
+                            <button type="button" onClick={doSign} disabled={signing} className="btn-primary">
+                                {signing
+                                    ? <><i className="fi fi-rr-spinner animate-spin text-xs leading-none" /> Signing…</>
+                                    : <><i className="fi fi-rr-check text-xs leading-none" /> Sign Document</>}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

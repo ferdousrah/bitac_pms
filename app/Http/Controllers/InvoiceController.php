@@ -326,7 +326,7 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy', 'musakChallans', 'customer']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy', 'musakChallans', 'customer', 'accountsSignedBy']);
 
         return Inertia::render('Invoice/Show', [
             'invoice' => [
@@ -361,7 +361,15 @@ class InvoiceController extends Controller
                 'emailed_at'        => $invoice->emailed_at?->format('d M Y, h:i A'),
                 'musak_challan'     => $invoice->musakChallans->first()?->only(['id', 'challan_no']),
                 'customer_email'    => $invoice->customer?->email ?? $invoice->workOrder?->customer?->email,
+                // The accounts desk's signature on the bill itself.
+                'signed'            => $invoice->isAccountsSigned(),
+                'signed_by'         => $invoice->accountsSignedBy?->name,
+                'signed_at'         => $invoice->accounts_signed_at?->format('d M Y, h:i A'),
+                'signature_url'     => $invoice->accounts_signature_path
+                    ? \Storage::disk('public')->url($invoice->accounts_signature_path)
+                    : null,
             ],
+            'canSign' => auth()->user()?->can('create invoices') ?? false,
         ]);
     }
 
@@ -431,5 +439,66 @@ class InvoiceController extends Controller
         \App\Services\CustomerNotifyService::invoicePaid($invoice->fresh(['customer', 'workOrder']));
 
         return back()->with('success', "Invoice {$invoice->invoice_number} marked as paid.");
+    }
+
+    /**
+     * The Accounts Officer signs the bill.
+     *
+     * BITAC's rule: once a bill is generated the accounts desk signs it, and
+     * that signature prints on the document itself. It is a separate act from
+     * signing the forwarding letter that travels with it, and it is stored in
+     * its own columns for exactly that reason (migration 000056).
+     *
+     * Only the PATH is kept, so deleting the signature later cannot blank a
+     * bill that has already gone out.
+     */
+    public function sign(Request $request, Invoice $invoice)
+    {
+        $data = $request->validate(SignatureResolver::rules());
+
+        $path = SignatureResolver::resolve(
+            $data['user_signature_id'] ?? null,
+            $data['signature'] ?? null,
+            'signatures/invoices',
+        );
+
+        // Nothing picked and nothing drawn — fall back to the signer's own
+        // default block, the same way every other signing screen does.
+        $path ??= SignatureResolver::defaultPathFor(auth()->id());
+
+        if (! $path) {
+            return back()->with('error',
+                'No signature to sign with — add one under Profile → Signatures first.');
+        }
+
+        $invoice->update([
+            'accounts_signature_path' => $path,
+            'accounts_signed_by'      => auth()->id(),
+            'accounts_signed_at'      => now(),
+        ]);
+
+        return back()->with('success', "Bill {$invoice->invoice_number} signed.");
+    }
+
+    /**
+     * Take the signature back off.
+     *
+     * Signing the wrong bill, or signing with the wrong block, must not be a
+     * dead end — the figure is still the same figure and the bill can be
+     * signed again. The stamp is cleared, not overwritten with a blank.
+     */
+    public function unsign(Invoice $invoice)
+    {
+        if (! $invoice->isAccountsSigned()) {
+            return back()->with('error', 'This bill is not signed.');
+        }
+
+        $invoice->update([
+            'accounts_signature_path' => null,
+            'accounts_signed_by'      => null,
+            'accounts_signed_at'      => null,
+        ]);
+
+        return back()->with('success', 'Signature removed.');
     }
 }

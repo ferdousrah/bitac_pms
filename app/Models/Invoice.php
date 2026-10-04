@@ -15,6 +15,9 @@ class Invoice extends Model
         'status', 'issued_at', 'issued_date', 'due_date', 'payment_terms',
         'paid_at', 'paid_amount', 'payment_method', 'payment_reference',
         'payment_notes', 'marked_paid_by',
+        // The Accounts Officer's signature on the bill itself — see
+        // migration 000056 for why this is not the letter's signature.
+        'accounts_signature_path', 'accounts_signed_by', 'accounts_signed_at',
         // The forwarding letter that travels with the bill.
         'memo_no', 'forwarding_letter_subject', 'forwarding_letter', 'recipient_block',
         'customer_ref_no', 'customer_ref_date', 'signatory_user_id', 'signature_path',
@@ -29,6 +32,7 @@ class Invoice extends Model
             'paid_amount'       => 'decimal:2',
             'customer_ref_date' => 'date',
             'letter_issued_at'  => 'datetime',
+            'accounts_signed_at' => 'datetime',
             'emailed_at'        => 'datetime',
         ];
     }
@@ -39,4 +43,11 @@ class Invoice extends Model
     public function markedPaidBy()  { return $this->belongsTo(User::class, 'marked_paid_by'); }
     public function musakChallans() { return $this->hasMany(MusakChallan::class); }
     public function signatory()     { return $this->belongsTo(User::class, 'signatory_user_id'); }
+    public function accountsSignedBy() { return $this->belongsTo(User::class, 'accounts_signed_by'); }
+
+    /** Has the accounts desk signed the bill itself (not the letter)? */
+    public function isAccountsSigned(): bool
+    {
+        return trim((string) $this->accounts_signature_path) !== '';
+    }
 }

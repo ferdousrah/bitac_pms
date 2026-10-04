@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
+use App\Support\SignatureBlock;
+use Illuminate\Support\Facades\Storage;
 
 class InvoiceService
 {
@@ -64,7 +66,7 @@ class InvoiceService
      */
     public function generatePdf(Invoice $invoice): string
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer', 'workOrder.quotation.items', 'deliveryOrder']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'workOrder.quotation.items', 'deliveryOrder', 'accountsSignedBy.center']);
 
         $wo        = $invoice->workOrder;
         $customer  = $wo->customer;
@@ -210,10 +212,25 @@ class InvoiceService
             . '</div>';
 
         // ── Signature block ───────────────────────────────────────
+        // The Accounts Officer signs the bill once it is generated, and the
+        // signature prints over the Accounts Officer rule. The image is the
+        // whole scanned block (pen stroke + name + designation), so
+        // SignatureBlock prints it alone — the role label under the rule is
+        // the office speaking and stays either way. Unsigned bills keep the
+        // blank space so the layout does not jump.
+        $accountsSig = $invoice->accounts_signature_path
+            ? Storage::disk('public')->path($invoice->accounts_signature_path)
+            : null;
+        $accountsSig = ($accountsSig && is_file($accountsSig)) ? $accountsSig : null;
+
+        $accountsSpace = $accountsSig
+            ? SignatureBlock::html($accountsSig, [], 40, 150, 'left')
+            : '<div style="min-height: 40pt;"></div>';
+
         $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 28pt;">'
             . '<tr>'
             .   '<td width="50%" style="font-size: 10pt; color: #000; vertical-align: bottom;">'
-            .     '<div style="min-height: 40pt;"></div>'
+            .     $accountsSpace
             .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; margin-top: 2pt; display: inline-block; min-width: 70%;">'
             .       '<div style="font-weight: bold;">Accounts Officer</div>'
             .       '<div style="color: #555; font-size: 9pt;">Accounts &amp; Finance</div>'
