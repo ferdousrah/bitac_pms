@@ -31,11 +31,16 @@ class BitacLetterhead
      * @param string       $language      'bn' (default — Bangla/bilingual letterhead) or
      *                                    'en' (English-only — for foreign clients).
      */
-    public function render(string $bodyHtml, string $documentTitle = 'BITAC PMS Document', ?Center $center = null, string $language = 'bn'): string
+    /**
+     * @param  array  $overrides  mPDF config, e.g. ['format' => 'A4-L'] for a
+     *                            wide report. The letterhead block is laid out
+     *                            in percentages, so it follows the page width.
+     */
+    public function render(string $bodyHtml, string $documentTitle = 'BITAC PMS Document', ?Center $center = null, string $language = 'bn', array $overrides = []): string
     {
         $center   = $this->resolveCenter($center);
         $language = in_array($language, ['bn', 'en'], true) ? $language : 'bn';
-        $mpdf     = $this->buildMpdf($documentTitle);
+        $mpdf     = $this->buildMpdf($documentTitle, $overrides);
 
         // No watermark. A faded BITAC gear used to sit behind the page to
         // suggest a preprinted pad; even at 4% opacity it read as a smudge

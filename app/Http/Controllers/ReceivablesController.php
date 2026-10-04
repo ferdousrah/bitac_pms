@@ -30,6 +30,61 @@ class ReceivablesController extends Controller
 {
     public function index(Request $request)
     {
+        $data = $this->build($request);
+
+        return Inertia::render('Payment/Receivables', [
+            'rows'    => $data['rows'],
+            'filters' => $data['filters'],
+            'totals'  => $data['totals'],
+            'ageing'  => $data['ageing'],
+            'bucketLabels' => PaymentLedger::BUCKET_LABELS,
+            'creditDays'   => PaymentLedger::CREDIT_DAYS,
+        ]);
+    }
+
+    /**
+     * The printed report — the same figures, on the BITAC pad.
+     *
+     * ⚠️ Landscape. Seven money columns plus a client name do not fit A4
+     * portrait without wrapping, and a receivables figure that wraps is a
+     * figure nobody can read down a column.
+     */
+    public function pdf(Request $request)
+    {
+        $data = $this->build($request);
+        $bytes = app(\App\Services\ReceivablesReportRenderer::class)->render($data);
+
+        $name = 'receivables-' . now()->format('Y-m-d') . '.pdf';
+
+        // `?preview=base64` is how PdfPopupModal fetches a PDF (download
+        // managers hijack an application/pdf response).
+        if ($request->input('preview') === 'base64') {
+            return response()->json([
+                'filename' => $name,
+                'size'     => strlen($bytes),
+                'data'     => base64_encode($bytes),
+            ]);
+        }
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline')
+                . '; filename="' . $name . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
+    }
+
+    /**
+     * Work out every figure once.
+     *
+     * ⚠️ The screen and the print MUST come through here. A printed total
+     * that disagrees with the screen is the one failure nobody can explain
+     * away, and it is exactly what two copies of this loop would produce.
+     *
+     * @return array{rows:\Illuminate\Support\Collection,totals:array,ageing:array,filters:array}
+     */
+    private function build(Request $request): array
+    {
         $onlyDue = $request->boolean('only_due', true);
         $search  = trim((string) $request->input('search'));
 
@@ -125,7 +180,18 @@ class ReceivablesController extends Controller
 
         $rows = $rows->sortByDesc('due')->values();
 
-        return Inertia::render('Payment/Receivables', [
+        // ⚠️ Recompute the ageing from the rows that SURVIVED the filters.
+        // It used to be summed over every bill before filtering, so searching
+        // for one client still showed everybody's ageing — on a printed sheet
+        // that is a summary that contradicts the table under it.
+        $ageing = array_fill_keys(PaymentLedger::BUCKETS, 0.0);
+        foreach ($rows as $row) {
+            foreach (PaymentLedger::BUCKETS as $bucket) {
+                $ageing[$bucket] += (float) ($row['ageing'][$bucket] ?? 0);
+            }
+        }
+
+        return [
             'rows'    => $rows,
             'filters' => ['search' => $search, 'only_due' => $onlyDue],
             'totals'  => [
@@ -138,9 +204,7 @@ class ReceivablesController extends Controller
                 'net_receivable'    => round($rows->sum('net_receivable'), 2),
             ],
             'ageing'       => array_map(fn ($v) => round($v, 2), $ageing),
-            'bucketLabels' => PaymentLedger::BUCKET_LABELS,
-            'creditDays'   => PaymentLedger::CREDIT_DAYS,
-        ]);
+        ];
     }
 
     /**

@@ -788,6 +788,10 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:view payments')->group(function () {
         Route::get('payments', [\App\Http\Controllers\PaymentController::class, 'index'])->name('payments.index');
         Route::get('receivables', [\App\Http\Controllers\ReceivablesController::class, 'index'])->name('receivables.index');
+        // ⚠️ BEFORE the {customer} route. Laravel matches in registration
+        // order and takes the first hit, so declared after it, /receivables/pdf
+        // would bind "pdf" as the customer and 404 on the model.
+        Route::get('receivables/pdf', [\App\Http\Controllers\ReceivablesController::class, 'pdf'])->name('receivables.pdf');
         Route::get('receivables/{customer}', [\App\Http\Controllers\ReceivablesController::class, 'show'])->name('receivables.show');
 
         Route::middleware('permission:record payments')->group(function () {

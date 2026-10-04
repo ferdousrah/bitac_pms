@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const money = (n: number) =>
     `৳${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -27,6 +28,14 @@ const bucketTone: Record<string, string> = {
  */
 export default function Receivables({ rows = [], filters, totals, ageing, bucketLabels, creditDays }: any) {
     const [search, setSearch] = useState(filters.search ?? '');
+    const [showPdf, setShowPdf] = useState(false);
+
+    // The print carries the SAME filters, so what is on screen is what comes
+    // out of the printer.
+    const pdfQuery = new URLSearchParams({
+        ...(filters.search ? { search: filters.search } : {}),
+        only_due: filters.only_due ? '1' : '0',
+    }).toString();
 
     const go = (patch: Record<string, any>) => {
         router.get('/receivables', {
@@ -46,9 +55,14 @@ export default function Receivables({ rows = [], filters, totals, ageing, bucket
                         and any <strong>advance already in hand</strong>. Ageing runs from {creditDays} days
                         after a bill was issued.
                     </p>
-                    <Link href="/payments" className="btn-outline btn-sm shrink-0">
-                        <i className="fi fi-rr-receipt text-xs leading-none" /> All payments
-                    </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button type="button" onClick={() => setShowPdf(true)} className="btn-danger btn-sm">
+                            <i className="fi fi-rr-file-pdf text-xs leading-none" /> Print / PDF
+                        </button>
+                        <Link href="/payments" className="btn-outline btn-sm">
+                            <i className="fi fi-rr-receipt text-xs leading-none" /> All payments
+                        </Link>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -170,6 +184,14 @@ export default function Receivables({ rows = [], filters, totals, ageing, bucket
                     </div>
                 </div>
             </div>
+
+            <PdfPopupModal
+                open={showPdf}
+                pdfUrl={showPdf ? `/receivables/pdf?${pdfQuery}` : null}
+                title="Statement of Receivables"
+                subtitle={`As on ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                onClose={() => setShowPdf(false)}
+            />
         </AppLayout>
     );
 }
