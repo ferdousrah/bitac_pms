@@ -145,13 +145,20 @@ class BitacDepartmentRolesSeeder extends Seeder
         // ⚠️ He must NOT hold `assign shop-jobs` — that permission IS the
         // definition of the XEN, so granting it would make every assistant a
         // XEN and the forward/receive flow would quietly do nothing.
-        Role::firstOrCreate(['name' => 'Assistant Engineer (Shop)'])
-            ->syncPermissions([
-                'view dashboard',
-                'view production',
-                'view work-orders',
-                'submit maintenance-requests',
-            ]);
+        //
+        // ⚠️ AE and SAE are the SAME THING to the system (BITAC, 2026-10-06):
+        // there is no third layer. Whoever holds a job may pass it on, so an AE
+        // hands it to his SAE with the same action the XEN used. The two roles
+        // exist only so the admin can assign by the designation a person
+        // actually holds; their permission sets are identical.
+        $shopEngineer = [
+            'view dashboard',
+            'view production',
+            'view work-orders',
+            'submit maintenance-requests',
+        ];
+        Role::firstOrCreate(['name' => 'Assistant Engineer (Shop)'])->syncPermissions($shopEngineer);
+        Role::firstOrCreate(['name' => 'Sub-Assistant Engineer (Shop)'])->syncPermissions($shopEngineer);
 
         // QC Officer
         $qc = Role::firstOrCreate(['name' => 'qc-officer']);

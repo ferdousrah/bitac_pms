@@ -267,7 +267,7 @@ function UpcomingCard({ u }: { u: UpcomingJob }) {
     );
 }
 
-function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean } }) {
+function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean } }) {
     const isAwaiting = job.status === 'awaiting_rework';
     return (
         <div className={`px-5 py-4 ${job.status === 'rework' ? 'bg-rose-50/40' : ''}`}>
@@ -290,6 +290,7 @@ function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; await
                             ? <span className={`badge ${job.awaiting_receipt ? 'badge-amber' : 'badge-green'}`}>
                                 <i className="fi fi-rr-user-gear text-[9px]" /> {job.assigned_to}
                                 {job.awaiting_receipt ? ' · not received' : ''}
+                                {job.assigned_by ? ` · from ${job.assigned_by}` : ''}
                               </span>
                             : job.shop_flow_active
                                 ? <span className="badge badge-blue"><i className="fi fi-rr-inbox text-[9px]" /> to forward</span>

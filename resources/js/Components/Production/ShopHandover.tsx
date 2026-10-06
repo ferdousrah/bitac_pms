@@ -10,6 +10,8 @@ export interface Assignment {
     received_at: string | null;
     note: string | null;
     can_forward: boolean;
+    /** Sending the WHOLE job to a bench moves every open step — the XEN's call. */
+    can_send_to_sub: boolean;
     can_receive: boolean;
     can_hand_back: boolean;
     blocker: string | null;
@@ -114,7 +116,9 @@ export default function ShopHandover({ wosId, assignment }: { wosId: number; ass
                         {assignment.can_forward && (
                             <button type="button" onClick={() => setShowForward(true)} className="btn-primary btn-sm">
                                 <i className="fi fi-rr-paper-plane text-xs leading-none" />
-                                {held ? 'Re-forward' : 'Forward'}
+                                {held
+                                    ? (assignment.can_send_to_sub ? 'Re-forward' : 'Pass on')
+                                    : 'Forward'}
                             </button>
                         )}
                     </div>
@@ -143,10 +147,13 @@ export default function ShopHandover({ wosId, assignment }: { wosId: number; ass
                             </p>
                         </div>
                         <div className="p-5 space-y-3">
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className={`grid gap-2 ${assignment.can_send_to_sub ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                 {[
                                     { key: 'engineer', label: 'To an engineer', hint: 'He receives it and owns the job here' },
-                                    { key: 'sub_section', label: 'To a sub-section', hint: 'Every open step moves to that bench' },
+                                    // ⚠️ Only the XEN: it moves every open step at once.
+                                    ...(assignment.can_send_to_sub
+                                        ? [{ key: 'sub_section', label: 'To a sub-section', hint: 'Every open step moves to that bench' }]
+                                        : []),
                                 ].map((opt) => (
                                     <label key={opt.key}
                                         className={`p-3 rounded-xl border cursor-pointer transition-colors ${forward.data.mode === opt.key

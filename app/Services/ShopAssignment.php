@@ -75,6 +75,45 @@ class ShopAssignment
     }
 
     /**
+     * May this person hand this job on to someone else at the shop?
+     *
+     * The XEN always can. **So can whoever is holding it** — BITAC's flow is
+     * that the নির্বাহী প্রকৌশলী gives a job to an AE, and the AE may pass it
+     * to his SAE (having assigned the sub-section, or not). AE and SAE are the
+     * same thing to the system; the chain is simply "whoever has it may pass
+     * it on", which is one rule instead of a hierarchy to keep in step.
+     *
+     * Receiving first is NOT required: forwarding is not working on the job,
+     * and "this one is for the furnace bench" is a decision someone can make
+     * at a glance.
+     */
+    public static function canForward(WorkOrderSection $wos, ?User $user): bool
+    {
+        if (! $user) return false;
+        if (self::canOversee($user, $wos->section_id)) return true;
+
+        return $wos->assigned_to !== null && (int) $wos->assigned_to === (int) $user->id;
+    }
+
+    /**
+     * Who a job goes back to when it is handed back.
+     *
+     * To whoever forwarded it — an SAE gives it back to his AE, not over the
+     * AE's head to the নির্বাহী প্রকৌশলী. Null means "back to the XEN", which
+     * is where it lands when the forwarder was the XEN himself, has left, or
+     * is no longer posted to this shop.
+     */
+    public static function handBackTarget(WorkOrderSection $wos): ?int
+    {
+        $forwarder = $wos->assigned_by;
+        if (! $forwarder || (int) $forwarder === (int) $wos->assigned_to) return null;
+
+        return self::assistants((int) $wos->section_id)->contains('id', (int) $forwarder)
+            ? (int) $forwarder
+            : null;
+    }
+
+    /**
      * Why this person cannot work on this job yet — null when they may.
      *
      * Three answers, and they are different things: the job is somebody

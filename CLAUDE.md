@@ -562,6 +562,15 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **Production Show** carries `Components/Production/ShopHandover.tsx` — the band saying who holds it, with Forward / Receive / Hand back, and the blocker spelled out in plain words. ⚠️ It renders **nothing** when the shop does not work this way, and is hidden in a sub-section view (the bench works to its steps; the handover is not about it).
 - ⚠️ Found while building: the stylesheet defines only `badge-amber|blue|green|purple|red|slate`. `badge-indigo` and `badge-emerald` render as unstyled spans — grep the built CSS after adding one.
 
+#### AE and SAE are the same thing to the system (2026-10-06)
+> BITAC: *"AE r SAE eder alada kono layer nai"* — a job reaches the in-charge, who sends it to an AE for sub-section assignment **or assigns the sub-section himself**; the AE assigns the sub-section and logs the output, **or passes it to his SAE** to do either.
+
+- ⚠️ **There is no third layer, deliberately.** `Assistant Engineer (Shop)` and **`Sub-Assistant Engineer (Shop)`** (migration `..._000062`) carry **identical permissions**; the two roles exist only so the admin can assign by the designation a person actually holds, the way `Executive Engineer (PCD)` / `Assistant Engineer (PCD)` read on the Users screen. Both are "posted to the shop and not the XEN", so `ShopAssignment::assistants()` picks them up with no special case. Neither holds `assign shop-jobs`.
+- **The rule is "whoever holds a job may pass it on"** — `ShopAssignment::canForward()` = the XEN, **or the current assignee**. One rule instead of a hierarchy to keep in step. Receiving first is **not** required to forward: forwarding is not working on the job.
+- ⚠️ **Sending the WHOLE job to a sub-section stays the XEN's call** (`can_send_to_sub`) because it moves every open step at once. An AE assigns a sub-section **per operation** on the job page, which is the normal path — and that assignment **survives being passed on**, so "AE assigns the bench, SAE logs the output" works exactly as described.
+- ⚠️ **A hand-back goes to whoever forwarded it** (`ShopAssignment::handBackTarget()`) — an SAE returns the job to his AE, not over the AE's head to the নির্বাহী প্রকৌশলী. It lands with the XEN only when the forwarder *was* the XEN, or has left the shop.
+- ⚠️ **An engineer's queue also shows what he passed on** (`assigned_by = me`), badged with who holds it now. An AE who gave a job to his SAE still answers for it, so it must not vanish off his list.
+
 ### Maintenance is its own module, not part of PCD (2026-10-06)
 - ⚠️ **Maintenance Requests used to sit in the PCD sidebar group.** The moment `shop-incharge` was given `submit maintenance-requests`, a **PCD** menu appeared in the shop in-charge's sidebar with a single item under it — which reads as "the in-charge has been handed PCD access". He had not been; the menu was lying about him.
 - It is now its own group, **Maintenance**, placed after Production: a request comes from the shop floor, management approves it (`approve maintenance-requests`) and maintenance performs it (`perform maintenance`). It was never PCD's.

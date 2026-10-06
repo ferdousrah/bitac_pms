@@ -77,8 +77,12 @@ class ProductionController extends Controller
             && ShopAssignment::scopedToOwnWork($user, $section?->id);
 
         if ($ownWorkOnly) {
-            $jobs = $jobs->filter(fn ($row) => (int) ($row['assigned_to_id'] ?? 0) === (int) $user->id)
-                ->values();
+            // His own work, AND anything he passed on — an AE who gave a job to
+            // his SAE still answers for it, so it must not vanish off his list.
+            $jobs = $jobs->filter(fn ($row) =>
+                (int) ($row['assigned_to_id'] ?? 0) === (int) $user->id
+                || (int) ($row['assigned_by_id'] ?? 0) === (int) $user->id
+            )->values();
         }
 
         // What the shop head still has in hand, so it is not quietly sitting there.
@@ -1143,7 +1147,10 @@ class ProductionController extends Controller
                 'assigned_at'   => $workOrderSection->assigned_at?->format('d M Y, h:i A'),
                 'received_at'   => $workOrderSection->received_at?->format('d M Y, h:i A'),
                 'note'          => $workOrderSection->assign_note,
-                'can_forward'   => ShopAssignment::canOversee($request->user(), $workOrderSection->section_id),
+                'can_forward'   => ShopAssignment::canForward($workOrderSection, $request->user()),
+                // Sending the WHOLE job to a bench moves every open step, so it
+                // stays the XEN's call; an AE assigns sub-sections per step.
+                'can_send_to_sub' => ShopAssignment::canOversee($request->user(), $workOrderSection->section_id),
                 'can_receive'   => $workOrderSection->awaitingReceipt()
                     && (int) $workOrderSection->assigned_to === (int) $request->user()->id,
                 'can_hand_back' => $workOrderSection->isAssigned()
@@ -1175,8 +1182,14 @@ class ProductionController extends Controller
         $this->authorizeAccess($workOrderSection);
 
         $user = $request->user();
-        if (! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
-            return back()->with('error', 'Only the নির্বাহী প্রকৌশলী of this shop forwards a job.');
+        // The XEN always may; so may whoever is holding the job, because an AE
+        // passes work to his SAE. AE and SAE are the same thing here — the rule
+        // is simply "whoever has it may pass it on".
+        if (! ShopAssignment::canForward($workOrderSection, $user)) {
+            return back()->with('error', $workOrderSection->isAssigned()
+                ? 'This job is with ' . ($workOrderSection->assignedTo?->name ?? 'another engineer')
+                  . ' — only they or the নির্বাহী প্রকৌশলী can pass it on.'
+                : 'Only the নির্বাহী প্রকৌশলী of this shop forwards a job.');
         }
 
         $data = $request->validate([
@@ -1217,8 +1230,17 @@ class ProductionController extends Controller
                 'Forwarded to ' . ($assistants->firstWhere('id', (int) $data['assigned_to'])->name ?? 'the engineer') . '.');
         }
 
-        // Straight to a bench. The sub-section must belong to THIS shop, or a
-        // job could be pushed onto another shop's bench by guessing an id.
+        // Straight to a bench. ⚠️ This moves EVERY open step of the job, so it
+        // stays a shop-level act — an AE assigns a sub-section step by step on
+        // the job page instead.
+        if (! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+            return back()->with('error',
+                'Sending the whole job to a sub-section is the নির্বাহী প্রকৌশলী\'s call — '
+                . 'assign the sub-section per operation, or forward it to an engineer.');
+        }
+
+        // The sub-section must belong to THIS shop, or a job could be pushed
+        // onto another shop's bench by guessing an id.
         $sub = Section::find($data['sub_section_id']);
         if (! $sub || (int) $sub->parent_id !== (int) $workOrderSection->section_id) {
             return back()->with('error', 'That sub-section does not belong to this shop.');
@@ -1310,17 +1332,23 @@ class ProductionController extends Controller
             return back()->with('error', 'This job is not yours to hand back.');
         }
 
-        $xens = ShopAssignment::xenIds((int) $workOrderSection->section_id);
+        // Back to whoever forwarded it — an SAE gives it to his AE, not over
+        // the AE's head to the নির্বাহী প্রকৌশলী. Null = back to the XEN.
+        $target = ShopAssignment::handBackTarget($workOrderSection);
 
         $workOrderSection->update([
-            'assigned_to' => null,
+            'assigned_to' => $target,
             'received_at' => null,
             'assign_note' => $data['reason'],
         ]);
 
-        if ($xens) {
+        $tell = $target
+            ? [$target]
+            : ShopAssignment::xenIds((int) $workOrderSection->section_id);
+
+        if ($tell) {
             NotifyService::send(
-                $xens,
+                $tell,
                 'shop_job_returned',
                 'A job has come back to you',
                 ($workOrderSection->workOrder->wo_number ?? 'Work order')
@@ -1331,7 +1359,9 @@ class ProductionController extends Controller
             );
         }
 
-        return back()->with('success', 'Handed back to the নির্বাহী প্রকৌশলী.');
+        return back()->with('success', $target
+            ? 'Handed back to ' . (\App\Models\User::find($target)?->name ?? 'the engineer who sent it') . '.'
+            : 'Handed back to the নির্বাহী প্রকৌশলী.');
     }
 
     private function authorizeAccess(WorkOrderSection $wos): void
@@ -1489,6 +1519,8 @@ class ProductionController extends Controller
             // in hand yet. Null all round on a shop that does not work this way.
             'assigned_to'      => $wos->assignedTo?->name,
             'assigned_to_id'   => $wos->assigned_to,
+            'assigned_by'      => $wos->assignedBy?->name,
+            'assigned_by_id'   => $wos->assigned_by,
             'assigned_at'      => $wos->assigned_at?->diffForHumans(),
             'awaiting_receipt' => $wos->awaitingReceipt(),
             'assign_note'      => $wos->assign_note,
