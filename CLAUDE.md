@@ -562,6 +562,20 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **Production Show** carries `Components/Production/ShopHandover.tsx` — the band saying who holds it, with Forward / Receive / Hand back, and the blocker spelled out in plain words. ⚠️ It renders **nothing** when the shop does not work this way, and is hidden in a sub-section view (the bench works to its steps; the handover is not about it).
 - ⚠️ Found while building: the stylesheet defines only `badge-amber|blue|green|purple|red|slate`. `badge-indigo` and `badge-emerald` render as unstyled spans — grep the built CSS after adding one.
 
+#### Which roles a shop's people need (migration `..._000061`)
+⚠️ **Every `/production/*` route is behind `permission:view production`** — the queue, a job's page, forward, receive, transfer, logging output, all of it. `shop-incharge` did **not** hold it, so migration 000060 made the নির্বাহী প্রকৌশলী the XEN of his shop while leaving him unable to open the screen where that means anything. Only `super-admin` and `section_supervisor` held it, and `section_supervisor` was meant for a *sub-section's* supervisor.
+
+| Role | Holds | Is |
+|---|---|---|
+| **`shop-incharge`** | the old shop set **+ `view production` + `submit maintenance-requests` + `assign shop-jobs`** | the **XEN** |
+| **`Assistant Engineer (Shop)`** (new) | `view dashboard`, `view production`, `view work-orders`, `submit maintenance-requests` | an **AE** |
+
+- ⚠️ **`Assistant Engineer (Shop)` deliberately does NOT hold `assign shop-jobs`** — that permission *is* the definition of who the XEN is, so granting it would make every assistant a XEN and the forward/receive flow would quietly do nothing.
+- **Both are posted to the SHOP** by `users.section_id` (not to a sub-section). A sub-section's own supervisor keeps `section_supervisor` + `section_id` = the bench, and is untouched by any of this.
+- **AE1 / AE2 / AE3 are people, not roles.** The Forward dialog lists whoever is posted to the shop and is not a XEN, so a shop with five assistants needs no change.
+- The migration uses `givePermissionTo`, not `syncPermissions`, so a re-run cannot strip something an admin added by hand. Its `down()` **refuses to delete the assistant role while anyone is on it** — rolling back must not quietly unassign real people from their job. Verified both ways.
+- ⚠️ The test suite now assigns the **real roles** rather than hand-granting permissions, which is the only thing that proves the roles are usable. It would have caught this gap on the day.
+
 ### Phase 7 — Partial QC + Partial Delivery (done)
 - **Principle:** QC and Delivery are now quantity-tracked, not whole-WO. A 5-of-10 QC pass releases only 5; a 5-of-10 delivery leaves the job **Partially Delivered**, not Delivered.
 - **WO qty ledger (`WorkOrder`):** `qcPassedQty()` (Σ `qc_inspections.qty_passed` for pass/conditional; fully-QC'd statuses = full order for legacy), `deliveredQty()` (Σ delivered DOs' `quantity_delivered`), `committedDeliveryQty()` (scheduled+delivered), `deliverableQty()` = qcPassed − committed. New WO status **`partially_delivered`** (amber; label/color + frontend badge maps in WorkOrder Index/Show).

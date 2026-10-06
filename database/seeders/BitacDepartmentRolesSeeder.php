@@ -118,6 +118,9 @@ class BitacDepartmentRolesSeeder extends Seeder
             ->syncPermissions($pcdPermissions);
 
         // Shop In-Charge — sees only their shop's jobs
+        // Shop In-charge = the shop's নির্বাহী প্রকৌশলী (XEN). `assign shop-jobs`
+        // is what makes him one: he forwards a job to an assistant engineer or
+        // to a sub-section, and they receive it. See App\Services\ShopAssignment.
         $shop = Role::firstOrCreate(['name' => 'shop-incharge']);
         $shop->syncPermissions([
             'view dashboard',
@@ -127,7 +130,28 @@ class BitacDepartmentRolesSeeder extends Seeder
             'mark shop-operation-complete',
             'view shop-floor', 'start jobs', 'stop jobs', 'log downtime',
             'view wip',
+            // ⚠️ Every /production/* route is behind `view production` — without
+            // it he cannot open the module he supervises, and `assign shop-jobs`
+            // means nothing. (Migration 000061 adds it on live databases.)
+            'view production',
+            'submit maintenance-requests',
+            'assign shop-jobs',
         ]);
+
+        // Assistant Engineer under a shop's XEN. Posted to the SHOP (not a
+        // sub-section) by `users.section_id`; he receives the jobs forwarded to
+        // him, assigns the sub-sections and logs the output.
+        //
+        // ⚠️ He must NOT hold `assign shop-jobs` — that permission IS the
+        // definition of the XEN, so granting it would make every assistant a
+        // XEN and the forward/receive flow would quietly do nothing.
+        Role::firstOrCreate(['name' => 'Assistant Engineer (Shop)'])
+            ->syncPermissions([
+                'view dashboard',
+                'view production',
+                'view work-orders',
+                'submit maintenance-requests',
+            ]);
 
         // QC Officer
         $qc = Role::firstOrCreate(['name' => 'qc-officer']);
