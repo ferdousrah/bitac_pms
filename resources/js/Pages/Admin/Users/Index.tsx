@@ -150,6 +150,7 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
                             <table className="premium-table">
                                 <thead>
                                     <tr>
+                                        <th className="w-12 text-right">Sl</th>
                                         <th>Name</th>
                                         <th>Email</th>
                                         <th>Section</th>
@@ -159,8 +160,14 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.map((user: any) => (
+                                    {rows.map((user: any, i: number) => (
                                         <tr key={user.id}>
+                                            {/* The paginator's own `from` is the serial of its first
+                                                row, so the numbering runs on across the pages
+                                                instead of restarting at 1 on page 2. */}
+                                            <td className="text-right text-xs text-surface-400 tabular-nums">
+                                                {(users?.from ?? 1) + i}
+                                            </td>
                                             <td>
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
