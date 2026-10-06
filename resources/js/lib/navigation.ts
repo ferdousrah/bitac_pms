@@ -61,7 +61,14 @@ export const mainGroups: NavGroup[] = [
             { label: 'PCD Inbox',            href: '/pcd/inbox',                 icon: 'fi-rr-inbox',           permission: 'review pcd-inbox', badgeKey: 'pcd_review' },
             { label: 'Job Planning',         href: '/pcd/job-planning',          icon: 'fi-rr-clipboard-list',  permission: 'view pcd-inbox', badgeKey: 'pcd_pending' },
             { label: 'Material Requisitions',href: '/pcd/material-requisitions', icon: 'fi-rr-clipboard-list',  permission: 'create material-requisitions' },
-            { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permission: 'view work-orders' },
+            // ⚠️ Gated on PCD MEMBERSHIP, not on `view work-orders`.
+            // `view work-orders` is held by nearly every role — the shop
+            // engineers, QC, sales, procurement — so this one entry made a
+            // "PCD" group appear in all their sidebars with a single item in
+            // it, reading as if they had been given PCD access. They keep the
+            // permission, so every link to a job still works for them; the
+            // shop reaches the same screen through its own Production menu.
+            { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permissionAny: ['view pcd-inbox', 'review pcd-inbox', 'create material-requisitions'] },
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
             { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
@@ -73,8 +80,21 @@ export const mainGroups: NavGroup[] = [
         icon: 'fi-rr-industry-windows',
         // Per-section submenu items are injected dynamically by flatGroups()
         // from the productionSections shared prop. Each shop section
-        // (Mold & Pattern, CNC, Welding, …) becomes its own submenu link.
-        items: [],
+        // (Mold & Pattern, CNC, Welding, …) becomes its own submenu link, and
+        // they are PREPENDED to whatever is listed here.
+        items: [
+            // ⚠️ Gated on `view production`, NOT `view work-orders`. The Jobs
+            // list is a shared screen that lives in the PCD group, and PCD's
+            // copy is gated on `view work-orders` — which a shop engineer
+            // holds, so a "PCD" menu appeared in his sidebar with one item in
+            // it, reading as if he had been handed PCD access. `view
+            // production` is held by the shop roles and nobody else, so the
+            // shop reaches the same screen through its own menu.
+            //
+            // A super admin holds both and so sees Jobs twice; that is the
+            // whole cost, and nobody else is affected.
+            { label: 'Jobs', href: '/work-orders', icon: 'fi-rr-briefcase', permission: 'view production' },
+        ],
     },
     {
         // ⚠️ Maintenance is NOT part of PCD. It used to sit in the PCD group,

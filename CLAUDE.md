@@ -571,6 +571,15 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - ⚠️ **A hand-back goes to whoever forwarded it** (`ShopAssignment::handBackTarget()`) — an SAE returns the job to his AE, not over the AE's head to the নির্বাহী প্রকৌশলী. It lands with the XEN only when the forwarder *was* the XEN, or has left the shop.
 - ⚠️ **An engineer's queue also shows what he passed on** (`assigned_by = me`), badged with who holds it now. An AE who gave a job to his SAE still answers for it, so it must not vanish off his list.
 
+### A department menu must mean department membership (2026-10-06)
+> Twice now a shop engineer's sidebar grew a **PCD** group with one item under it, because a permission he legitimately held was the gate on an item that lived in PCD's menu. The menu was telling him — and anyone looking over his shoulder — that he had PCD access.
+
+- **Maintenance Requests** was gated on `submit maintenance-requests` inside the PCD group → now its own **Maintenance** group.
+- **Jobs** (`/work-orders`) was gated on **`view work-orders`**, which nearly every role holds — the shop engineers, QC, sales, procurement. They all got a one-item PCD menu. PCD's entry is now gated on **PCD membership** (`permissionAny: view pcd-inbox | review pcd-inbox | create material-requisitions`), which still covers `pcd-officer`, both PCD engineers and `management`.
+- The shop reaches the same screen through **its own menu**: a static **Jobs** item in the **Production** group gated on **`view production`** — held by `shop-incharge`, the AE/SAE shop roles and `section_supervisor`, and by nobody in PCD. (`flatGroups()` PREPENDS the dynamic section queues to that group's own items, so a static entry survives.)
+- ⚠️ **Nobody lost a permission**, only a menu entry they should not have had: QC, sales and procurement still hold `view work-orders`, so every in-app link to a job still works for them. A super admin holds both gates and so sees Jobs twice — that is the whole cost, and it affects nobody else.
+- **The rule:** gate a nav item on *being in that department*, not on *being able to open the screen*. The two are different, and only the first belongs in a menu heading.
+
 ### Maintenance is its own module, not part of PCD (2026-10-06)
 - ⚠️ **Maintenance Requests used to sit in the PCD sidebar group.** The moment `shop-incharge` was given `submit maintenance-requests`, a **PCD** menu appeared in the shop in-charge's sidebar with a single item under it — which reads as "the in-charge has been handed PCD access". He had not been; the menu was lying about him.
 - It is now its own group, **Maintenance**, placed after Production: a request comes from the shop floor, management approves it (`approve maintenance-requests`) and maintenance performs it (`perform maintenance`). It was never PCD's.
