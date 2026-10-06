@@ -607,6 +607,15 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - The hint under the field spells out the choice, because the field itself cannot: post to the **shop** for the in-charge and his AE / SAE, to an indented **↳ sub-section** only for whoever runs that bench.
 - A sub-section whose parent is inactive is still appended rather than dropped, so it cannot silently vanish from the picker.
 
+### The user list could not reach everyone on it (2026-10-06)
+- ⚠️ **`Admin\UserController@index` paginated 15 and `Admin/Users/Index.tsx` rendered no pagination links at all** — so with 16 staff the sixteenth account was **unreachable through the UI**, and the header read "15 users registered" because it printed `rows.length` (this page) and called it the total. It now prints **`users.total`** and says which page of how many. A paginated list with no links is worse than no pagination: it looks complete.
+- **One search box covers name, email, designation, section name, section code and role name** (`orWhereHas` on `section` and `roles`). Typing "CNC" or "Assistant Engineer" and getting nothing is what makes a search box feel broken, and a list of staff is exactly what people search by job rather than by name.
+- ⚠️ **Filtering a shop deliberately does NOT sweep in its benches.** Posting is per section — a shop's XEN and his AE/SAE are on the shop itself, a bench's supervisor is on the bench — so picking the shop answers "who is posted to the shop", and the bench is its own choice. The test asserts it.
+- `section_id=none` is a real option (**— Not assigned —**): all 16 live users currently have `section_id` NULL, so "who has nowhere to work" is the first question this screen has to answer.
+- The **Section column** shows the posting and, for a bench, `↳ under <shop>`; the picker reuses **`Section::hierarchicalOptions()`**, so the list and the create form read identically. ⚠️ That helper is **`shops()`-only** (pre-existing) — the four `functional` sections are not offerable, which matches what can actually be assigned.
+- Status is **Active & inactive / Active only / Inactive only**, and an unrecognised value is ignored rather than treated as `false` — `where('is_active', $v === 'active')` on a typo would have hidden every active user.
+- `paginate(20)->withQueryString()` so the links carry the filters; the empty state says when it is the filters' doing rather than always offering "create the first user account".
+
 #### Which roles a shop's people need (migration `..._000061`)
 ⚠️ **Every `/production/*` route is behind `permission:view production`** — the queue, a job's page, forward, receive, transfer, logging output, all of it. `shop-incharge` did **not** hold it, so migration 000060 made the নির্বাহী প্রকৌশলী the XEN of his shop while leaving him unable to open the screen where that means anything. Only `super-admin` and `section_supervisor` held it, and `section_supervisor` was meant for a *sub-section's* supervisor.
 

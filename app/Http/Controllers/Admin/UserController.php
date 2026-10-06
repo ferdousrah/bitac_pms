@@ -13,17 +13,41 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $query = User::with('roles');
+        $query = User::with(['roles', 'section.parent']);
 
-        // Search
-        if ($search = $request->input('search')) {
+        // ⚠️ One box, every obvious thing someone types: a name, an email, a
+        // designation, the section they are posted to, or their role. Looking
+        // for "CNC" or "Assistant Engineer" and getting nothing is what makes a
+        // search box feel broken.
+        if ($search = trim((string) $request->input('search'))) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('designation', 'like', "%{$search}%")
+                  ->orWhereHas('section', fn ($x) => $x->where('name', 'like', "%{$search}%")
+                      ->orWhere('code', 'like', "%{$search}%"))
+                  ->orWhereHas('roles', fn ($x) => $x->where('name', 'like', "%{$search}%"));
             });
         }
 
-        // Sorting
+        if ($role = $request->input('role')) {
+            $query->whereHas('roles', fn ($q) => $q->where('name', $role));
+        }
+
+        // A shop's own people are posted to the shop; its benches are separate
+        // sections, so filtering a shop deliberately does NOT sweep them in —
+        // pick the bench to see the bench.
+        if ($sectionId = $request->integer('section_id')) {
+            $query->where('section_id', $sectionId);
+        }
+        if ($request->input('section_id') === 'none') {
+            $query->whereNull('section_id');
+        }
+
+        if (in_array($request->input('status'), ['active', 'inactive'], true)) {
+            $query->where('is_active', $request->input('status') === 'active');
+        }
+
         $sort = $request->input('sort', 'id');
         $dir  = $request->input('dir', 'desc');
         $allowed = ['id', 'name', 'email', 'created_at'];
@@ -33,22 +57,35 @@ class UserController extends Controller
             $query->latest();
         }
 
-        $users = $query->paginate(15)->withQueryString()
-            ->through(fn($u) => [
-                'id'         => $u->id,
-                'name'       => $u->name,
-                'email'      => $u->email,
-                'roles'      => $u->roles->pluck('name'),
-                'is_active'  => (bool) $u->is_active,
-                'created_at' => $u->created_at->format('d/m/Y'),
+        $users = $query->paginate(20)->withQueryString()
+            ->through(fn ($u) => [
+                'id'          => $u->id,
+                'name'        => $u->name,
+                'email'       => $u->email,
+                'designation' => $u->designation,
+                'roles'       => $u->roles->pluck('name'),
+                'section'     => $u->section ? [
+                    'name'        => $u->section->name,
+                    'code'        => $u->section->code,
+                    // Whether this is a shop or a bench inside one is the whole
+                    // difference in what the person does — say which.
+                    'parent_name' => $u->section->parent?->name,
+                ] : null,
+                'is_active'   => (bool) $u->is_active,
+                'created_at'  => $u->created_at->format('d/m/Y'),
             ]);
 
         return Inertia::render('Admin/Users/Index', [
-            'users' => $users,
-            'filters' => [
-                'search' => $request->input('search', ''),
-                'sort'   => $sort,
-                'dir'    => $dir,
+            'users'    => $users,
+            'roles'    => Role::orderBy('name')->pluck('name'),
+            'sections' => \App\Models\Section::hierarchicalOptions(),
+            'filters'  => [
+                'search'     => $request->input('search', ''),
+                'role'       => $request->input('role', ''),
+                'section_id' => $request->input('section_id', ''),
+                'status'     => $request->input('status', ''),
+                'sort'       => $sort,
+                'dir'        => $dir,
             ],
         ]);
     }
