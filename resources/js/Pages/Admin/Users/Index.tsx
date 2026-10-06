@@ -33,6 +33,17 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
     const activeFilters = [filters.search, filters.role, filters.section_id, filters.status]
         .filter((v) => v !== '' && v !== undefined && v !== null).length;
 
+    // ⚠️ `can_delete` is decided by the SERVER (super admin, and the account has
+    // done nothing). Deleting one that has worked cascades to their quotations
+    // and work orders, so a row the guard would refuse is never offered here.
+    const destroy = (user: any) => {
+        if (! confirm(
+            `Delete ${user.name} permanently?\n\nThis account has no work against it, so nothing else is removed. `
+            + `To retire someone who HAS worked, use Deactivate instead \u2014 their work stays on the record.`
+        )) return;
+        router.delete(`/admin/users/${user.id}`, { preserveScroll: true });
+    };
+
     return (
         <AppLayout header="User Management">
             <div className="space-y-6 animate-fade-in">
@@ -222,6 +233,15 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
                                                             Activate
                                                         </button>
                                                     )}
+                                                    {user.can_delete && (
+                                                        <button
+                                                            onClick={() => destroy(user)}
+                                                            className="btn-ghost btn-xs !text-rose-600 hover:!bg-rose-50"
+                                                            title="Delete this account (it has no work against it)"
+                                                        >
+                                                            <i className="fi fi-rr-trash leading-none" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -295,6 +315,15 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
                                             >
                                                 <i className="fi fi-rr-check mr-1" />
                                                 Activate
+                                            </button>
+                                        )}
+                                        {user.can_delete && (
+                                            <button
+                                                onClick={() => destroy(user)}
+                                                className="btn-ghost btn-xs !text-rose-600 hover:!bg-rose-50"
+                                                title="Delete this account (it has no work against it)"
+                                            >
+                                                <i className="fi fi-rr-trash leading-none" />
                                             </button>
                                         )}
                                     </div>

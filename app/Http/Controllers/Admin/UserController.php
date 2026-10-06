@@ -57,7 +57,17 @@ class UserController extends Controller
             $query->latest();
         }
 
-        $users = $query->paginate(20)->withQueryString()
+        $users = $query->paginate(20);
+
+        // Only a super admin may delete, so only they pay for working out
+        // which rows could be — and even then it is nine queries for the whole
+        // page, not nine per row. A row the guard would refuse is not offered.
+        $viewer = $request->user();
+        $canDelete = $viewer?->isSuperAdmin()
+            ? array_diff(User::hardDeletableIds($users->pluck('id')->all()), [$viewer->id])
+            : [];
+
+        $users = $users->withQueryString()
             ->through(fn ($u) => [
                 'id'          => $u->id,
                 'name'        => $u->name,
@@ -73,6 +83,7 @@ class UserController extends Controller
                 ] : null,
                 'is_active'   => (bool) $u->is_active,
                 'created_at'  => $u->created_at->format('d/m/Y'),
+                'can_delete'  => in_array($u->id, $canDelete, true),
             ]);
 
         return Inertia::render('Admin/Users/Index', [
@@ -254,6 +265,13 @@ class UserController extends Controller
      */
     public function destroy(User $user)
     {
+        // The route is behind `role:super-admin`; this says so again, because
+        // an account and everything hanging off it is not something to lose to
+        // a route file someone widened by accident.
+        if (! auth()->user()?->isSuperAdmin()) {
+            return back()->with('error', 'Only a super admin can delete a staff account. Deactivate it instead.');
+        }
+
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot delete your own account.');
         }

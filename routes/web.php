@@ -888,7 +888,17 @@ Route::middleware(['auth'])->group(function () {
 
     // Admin
     Route::prefix('admin')->group(function () {
+        // ⚠️ Deleting a staff account is SUPER-ADMIN ONLY, and it is a role
+        // check, not a permission — `manage users` is held by ordinary admins,
+        // and the cascade behind this route takes a person's quotations and
+        // work orders (with the whole money ledger) with them. The controller
+        // still refuses an account that has worked; this decides who may even
+        // delete one that hasn't.
+        Route::delete('users/{user}', [UserController::class, 'destroy'])
+            ->middleware('role:super-admin|super_admin')
+            ->name('admin.users.destroy');
         Route::resource('users', UserController::class)
+            ->except(['destroy'])
             ->middleware('permission:manage users')
             ->names('admin.users');
         Route::post('users/{user}/deactivate', [UserController::class, 'deactivate'])

@@ -69,25 +69,67 @@ class User extends Authenticatable
      */
     public function destructiveFootprint(): array
     {
-        $counts = [
-            'quotations'        => \App\Models\Quotation::withoutGlobalScopes()->where('created_by', $this->id)->count(),
-            'work orders'       => \App\Models\WorkOrder::withoutGlobalScopes()->where('created_by', $this->id)->count(),
-            'QC inspections'    => \DB::table('qc_inspections')->where('inspector_id', $this->id)->count(),
-            'rework orders'     => \DB::table('rework_orders')->where('created_by', $this->id)->count(),
-            'quotation approvals'    => \DB::table('quotation_approvals')->where('approver_id', $this->id)->count(),
-            'cost estimate approvals'=> \DB::table('cost_estimate_approvals')->where('approver_id', $this->id)->count(),
-            'work order approvals'   => \DB::table('work_order_approvals')->where('approver_id', $this->id)->count(),
-            'stakeholder forms' => \DB::table('stakeholder_forms')->where('created_by', $this->id)->count(),
-            'service demand logs' => \DB::table('service_demand_logs')->where('logged_by', $this->id)->count(),
-        ];
+        $counts = [];
+        foreach (self::CASCADE_PATHS as $label => [$table, $column]) {
+            $counts[$label] = \DB::table($table)->where($column, $this->id)->count();
+        }
 
         return array_filter($counts);
     }
+
+    /**
+     * Every CASCADE path into `users`: label => [table, column].
+     *
+     * ⚠️ One list, because the per-user footprint and the bulk check the user
+     * list uses must never disagree. A row offered as deletable that the guard
+     * then refuses is exactly the button we are trying not to ship.
+     *
+     * Raw `DB::table` rather than the models, so no global scope (CenterScope)
+     * can hide work that the database would still cascade away.
+     */
+    private const CASCADE_PATHS = [
+        'quotations'              => ['quotations', 'created_by'],
+        'work orders'             => ['work_orders', 'created_by'],
+        'QC inspections'          => ['qc_inspections', 'inspector_id'],
+        'rework orders'           => ['rework_orders', 'created_by'],
+        'quotation approvals'     => ['quotation_approvals', 'approver_id'],
+        'cost estimate approvals' => ['cost_estimate_approvals', 'approver_id'],
+        'work order approvals'    => ['work_order_approvals', 'approver_id'],
+        'stakeholder forms'       => ['stakeholder_forms', 'created_by'],
+        'service demand logs'     => ['service_demand_logs', 'logged_by'],
+    ];
 
     /** Nothing of theirs would be destroyed, so the row may simply go. */
     public function canBeHardDeleted(): bool
     {
         return $this->destructiveFootprint() === [];
+    }
+
+    /**
+     * Which of these accounts have done nothing, so may be hard-deleted.
+     *
+     * ⚠️ Asking each row `canBeHardDeleted()` is nine queries PER USER — 180 on
+     * a page of twenty. This answers for the whole page in nine, by looking for
+     * the ids that appear anywhere and taking the complement.
+     *
+     * @param  array<int>  $ids
+     * @return array<int>  the subset that is safe to delete
+     */
+    public static function hardDeletableIds(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (! $ids) {
+            return [];
+        }
+
+        $busy = [];
+        foreach (self::CASCADE_PATHS as [$table, $column]) {
+            foreach (\DB::table($table)->whereIn($column, $ids)->distinct()->pluck($column) as $id) {
+                $busy[(int) $id] = true;
+            }
+        }
+
+        return array_values(array_diff($ids, array_keys($busy)));
     }
 
     public function isSuperAdmin(): bool
