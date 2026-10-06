@@ -571,6 +571,15 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - ⚠️ **A hand-back goes to whoever forwarded it** (`ShopAssignment::handBackTarget()`) — an SAE returns the job to his AE, not over the AE's head to the নির্বাহী প্রকৌশলী. It lands with the XEN only when the forwarder *was* the XEN, or has left the shop.
 - ⚠️ **An engineer's queue also shows what he passed on** (`assigned_by = me`), badged with who holds it now. An AE who gave a job to his SAE still answers for it, so it must not vanish off his list.
 
+### What a shop engineer may see on a Job (2026-10-06)
+> He holds `view work-orders` so he can read the job he is working on. That must not hand him the money on it, nor actions belonging to PCD or procurement.
+
+- ⚠️ **The whole `work-orders` resource sat behind `view work-orders` alone** — a permission nearly every role holds — so a shop engineer, a QC inspector or a sales officer could **create, edit or delete a work order**. The narrower permissions already existed (`create work-orders` / `edit work-orders`, both super-admin) and were simply not used. The resource is split across all three now.
+- ⚠️ **`create`/`store` must be registered BEFORE `index`/`show`.** Laravel matches in registration order, so with `work-orders/{work_order}` first, `/work-orders/create` binds "create" as the work order and 404s — **for everyone, super admin included**. Caught by the test, which expected a 403 and got a 404. (Fourth time in this codebase; see the receivables PDF and the PCD release routes.)
+- ⚠️ **The customer's price is withheld from the PAYLOAD, not hidden in the UI.** `workOrder.quotation` is only serialised when the viewer holds `view quotations`. Hiding the card still ships the figure in the page source, where anyone can read it — the test asserts the amount does not appear in the Inertia JSON at all.
+- The Actions card gates each button on **the permission its own route demands**, so a button is never offered to someone the server would turn away: **Production Cycle** `view production` (the shop's own view), **Reroute Sections** `view pcd-inbox`, **Run MRP** `view mrp`. **New Job** on the list is gated on `create work-orders`.
+- ⚠️ **The status-transition buttons were removed: they posted to `/work-orders/{id}/transition`, a route that does not exist**, so every one of them 404'd. A job's status is moved by the act that moves it — PCD releasing it, the shop transferring, QC passing it, a delivery being confirmed — not by typing a status on this page. **Approve WO** has a real route and stays.
+
 ### A department menu must mean department membership (2026-10-06)
 > Twice now a shop engineer's sidebar grew a **PCD** group with one item under it, because a permission he legitimately held was the gate on an item that lived in PCD's menu. The menu was telling him — and anyone looking over his shoulder — that he had PCD access.
 

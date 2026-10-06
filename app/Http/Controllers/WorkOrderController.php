@@ -46,6 +46,8 @@ class WorkOrderController extends Controller
         }
 
         return Inertia::render('WorkOrder/Index', [
+            // Raising a job is not something every viewer may do.
+            'can' => ['create' => auth()->user()?->can('create work-orders') ?? false],
             'workOrders' => $query->paginate(15)->withQueryString()->through(fn($wo) => [
                 'id'           => $wo->id,
                 'wo_number'    => $wo->wo_number,
@@ -181,7 +183,12 @@ class WorkOrderController extends Controller
                 'is_overdue'   => $workOrder->is_overdue,
                 'notes'        => $workOrder->notes,
                 'created_at'   => $workOrder->created_at->format('d M Y'),
-                'quotation'    => $workOrder->quotation ? [
+                // ⚠️ The customer's PRICE is withheld from the payload, not
+                // merely hidden in the UI. Hiding a card still ships the figure
+                // in the page source, where anyone can read it — and a shop
+                // engineer holds `view work-orders` so he can read the job he
+                // is working on, which must not mean reading what it sold for.
+                'quotation'    => ($user->can('view quotations') && $workOrder->quotation) ? [
                     'id'           => $workOrder->quotation->id,
                     'version'      => $workOrder->quotation->version,
                     'total_amount' => $workOrder->quotation->total_amount,
@@ -227,6 +234,20 @@ class WorkOrderController extends Controller
             ],
             'canApprove'     => $canApprove,
             'canTransitionTo'=> $nextStates,
+            // ⚠️ What this viewer may SEE on the job, not merely open.
+            // A shop engineer has `view work-orders` so he can read the job he
+            // is working on — that must not hand him the money on it, nor
+            // actions belonging to PCD or procurement.
+            'can' => [
+                // The Linked Quotation card is the customer's PRICE.
+                'see_money' => $user->can('view quotations'),
+                // Rerouting is PCD's; the route itself is behind view pcd-inbox.
+                'reroute'   => $user->can('view pcd-inbox'),
+                'mrp'       => $user->can('view mrp'),
+                // The production cycle is the shop's own view of its work.
+                'cycle'     => $user->can('view production'),
+                'edit'      => $user->can('edit work-orders'),
+            ],
         ]);
     }
 

@@ -20,7 +20,7 @@ const PRIORITY: Record<string, string> = {
     low: 'bg-slate-50 text-slate-600 border-slate-200', normal: 'bg-blue-50 text-blue-600 border-blue-200', high: 'bg-amber-50 text-amber-700 border-amber-200', urgent: 'bg-red-50 text-red-600 border-red-200',
 };
 
-export default function WorkOrderIndex({ workOrders, filters, statusList }: any) {
+export default function WorkOrderIndex({ workOrders, filters, statusList, can = {} }: any) {
     const [search, setSearch] = useState(filters?.search ?? '');
     const applyFilters = (ov: Record<string, string> = {}) => {
         router.get('/work-orders', { search: ov.search ?? search, status: ov.status ?? filters?.status ?? '', priority: ov.priority ?? filters?.priority ?? '', sort: filters?.sort, dir: filters?.dir }, { preserveState: true, replace: true });
@@ -37,9 +37,13 @@ export default function WorkOrderIndex({ workOrders, filters, statusList }: any)
                         <h1 className="page-title">Jobs</h1>
                         <p className="page-subtitle">Customer production jobs across the shop floor · {workOrders?.total ?? 0} records</p>
                     </div>
-                    <Link href="/work-orders/create" className="btn-primary">
-                        <i className="fi fi-rr-plus text-xs leading-none" /> New Job
-                    </Link>
+                    {/* Raising a job is not something every viewer may do — a shop
+                        engineer and a QC inspector both hold `view work-orders`. */}
+                    {can.create && (
+                        <Link href="/work-orders/create" className="btn-primary">
+                            <i className="fi fi-rr-plus text-xs leading-none" /> New Job
+                        </Link>
+                    )}
                 </div>
 
                 <div className="card transition-all duration-300 hover:shadow-premium-lg">

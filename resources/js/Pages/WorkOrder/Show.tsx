@@ -28,13 +28,7 @@ const stepStatusBadge: Record<string, string> = {
     completed: 'badge-green',
 };
 
-export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate, bottlenecks = [] }: any) {
-    const transition = (status: string) => {
-        if (confirm(`Transition to "${status.replace(/_/g, ' ')}"?`)) {
-            router.post(`/work-orders/${workOrder.id}/transition`, { status });
-        }
-    };
-
+export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate, bottlenecks = [], can = {} }: any) {
     return (
         <AppLayout header={`Job# ${workOrder.job_number ?? '—'}`}>
             <div className="space-y-6 max-w-6xl animate-fade-in">
@@ -108,7 +102,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                     </div>
 
                     {/* Transition Buttons */}
-                    {(canApprove || (canTransitionTo && canTransitionTo.length > 0)) && (
+                    {canApprove && (
                         <div className="card-body border-t border-surface-100 flex gap-2 flex-wrap">
                             {canApprove && workOrder.status === 'draft' && (
                                 <button
@@ -118,12 +112,13 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                     <i className="fi fi-rr-check text-xs leading-none" /> Approve WO
                                 </button>
                             )}
-                            {canTransitionTo?.map((s: string) => (
-                                <button key={s} onClick={() => transition(s)} className="btn-outline btn-sm">
-                                    <i className="fi fi-rr-arrow-right text-xs leading-none" />
-                                    {s.replace(/_/g, ' ')}
-                                </button>
-                            ))}
+                            {/* ⚠️ The status-transition buttons were removed: they
+                                posted to /work-orders/{id}/transition, a route
+                                that does not exist, so every one of them 404'd.
+                                A job's status is moved by the act that moves it —
+                                PCD releasing it, the shop transferring, QC
+                                passing it, a delivery being confirmed — not by
+                                typing a status here. */}
                         </div>
                     )}
                 </div>
@@ -238,8 +233,10 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                             );
                         })()}
 
-                        {/* Quotation */}
-                        {workOrder.quotation && (
+                        {/* Quotation — the customer's PRICE. A shop engineer
+                            reads the job he is working on; that must not hand
+                            him the money on it. */}
+                        {can.see_money && workOrder.quotation && (
                             <div className="card animate-slide-up">
                                 <div className="card-header">
                                     <h3 className="text-sm font-bold text-surface-900">Linked Quotation</h3>
@@ -548,13 +545,20 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                 <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Actions</h3>
                             </div>
                             <div className="card-body space-y-2">
-                                <Link href={`/production/work-orders/${workOrder.id}/cycle`} className="btn-outline btn-sm w-full justify-center">
-                                    <i className="fi fi-rr-time-past text-xs leading-none" /> Production Cycle
-                                </Link>
-                                <Link href={`/pcd/work-orders/${workOrder.id}/reroute`} className="btn-outline btn-sm w-full justify-center">
-                                    <i className="fi fi-rr-shuffle text-xs leading-none" /> Reroute Sections
-                                </Link>
-                                {workOrder.item_operation_sheets?.some((row: any) => row.sheet) && (
+                                {/* Each of these is gated on the permission its own
+                                    route demands, so a button is never offered to
+                                    someone the server would turn away. */}
+                                {can.cycle && (
+                                    <Link href={`/production/work-orders/${workOrder.id}/cycle`} className="btn-outline btn-sm w-full justify-center">
+                                        <i className="fi fi-rr-time-past text-xs leading-none" /> Production Cycle
+                                    </Link>
+                                )}
+                                {can.reroute && (
+                                    <Link href={`/pcd/work-orders/${workOrder.id}/reroute`} className="btn-outline btn-sm w-full justify-center">
+                                        <i className="fi fi-rr-shuffle text-xs leading-none" /> Reroute Sections
+                                    </Link>
+                                )}
+                                {can.mrp && workOrder.item_operation_sheets?.some((row: any) => row.sheet) && (
                                     <Link href={`/mrp/${workOrder.id}`} className="btn-outline btn-sm w-full justify-center">
                                         <i className="fi fi-rr-calculator text-xs leading-none" /> Run MRP
                                     </Link>

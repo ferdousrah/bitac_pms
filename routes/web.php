@@ -644,8 +644,24 @@ Route::middleware(['auth'])->group(function () {
         ->name('rfq-letters.duplicate');
 
     // Work Orders
+    // ⚠️ The whole resource used to sit behind `view work-orders` alone — a
+    // permission nearly every role holds — so a shop engineer, a QC inspector
+    // or a sales officer could create, edit or delete a work order. The
+    // narrower permissions already existed and were simply not used.
+    // ⚠️ create/store FIRST: Laravel matches in registration order, so with
+    // `work-orders/{work_order}` registered ahead of it, `/work-orders/create`
+    // binds "create" as the work order and 404s — for everyone, super admin
+    // included. (Fourth time in this codebase; see the receivables PDF and the
+    // PCD release routes.)
     Route::resource('work-orders', WorkOrderController::class)
+        ->only(['create', 'store'])
+        ->middleware('permission:create work-orders');
+    Route::resource('work-orders', WorkOrderController::class)
+        ->only(['index', 'show'])
         ->middleware('permission:view work-orders');
+    Route::resource('work-orders', WorkOrderController::class)
+        ->only(['edit', 'update', 'destroy'])
+        ->middleware('permission:edit work-orders');
     Route::post('work-orders/{workOrder}/approve', [WorkOrderController::class, 'approve'])
         ->middleware('permission:approve work-orders')
         ->name('work-orders.approve');
