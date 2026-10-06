@@ -678,7 +678,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('production-messages.attachment');
 
     // ─── Maintenance Requests (shop-floor → manager → technician flow) ───
-    Route::prefix('maintenance-requests')->name('maintenance-requests.')->group(function () {
+    // ⚠️ The list and a request's page had NO permission at all — any signed-in
+    // user could open them. Gated on the maintenance vocabulary that already
+    // existed (Spatie's `|` is OR): whoever raises one, approves one, performs
+    // one, or oversees the lot. Each action below keeps its own tighter gate.
+    Route::prefix('maintenance-requests')->name('maintenance-requests.')
+        ->middleware('permission:submit maintenance-requests|approve maintenance-requests|perform maintenance|view maintenance-requests')
+        ->group(function () {
         Route::get('/',                       [\App\Http\Controllers\MaintenanceRequestController::class, 'index'])->name('index');
         Route::get('/create',                 [\App\Http\Controllers\MaintenanceRequestController::class, 'create'])->middleware('permission:submit maintenance-requests')->name('create');
         Route::post('/',                      [\App\Http\Controllers\MaintenanceRequestController::class, 'store'])->middleware('permission:submit maintenance-requests')->name('store');

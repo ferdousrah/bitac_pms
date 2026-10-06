@@ -562,6 +562,11 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **Production Show** carries `Components/Production/ShopHandover.tsx` — the band saying who holds it, with Forward / Receive / Hand back, and the blocker spelled out in plain words. ⚠️ It renders **nothing** when the shop does not work this way, and is hidden in a sub-section view (the bench works to its steps; the handover is not about it).
 - ⚠️ Found while building: the stylesheet defines only `badge-amber|blue|green|purple|red|slate`. `badge-indigo` and `badge-emerald` render as unstyled spans — grep the built CSS after adding one.
 
+### Maintenance is its own module, not part of PCD (2026-10-06)
+- ⚠️ **Maintenance Requests used to sit in the PCD sidebar group.** The moment `shop-incharge` was given `submit maintenance-requests`, a **PCD** menu appeared in the shop in-charge's sidebar with a single item under it — which reads as "the in-charge has been handed PCD access". He had not been; the menu was lying about him.
+- It is now its own group, **Maintenance**, placed after Production: a request comes from the shop floor, management approves it (`approve maintenance-requests`) and maintenance performs it (`perform maintenance`). It was never PCD's.
+- ⚠️ **The list and a request's page had NO permission middleware at all** — any signed-in user could open them. They are gated now on the maintenance vocabulary that already existed, as an OR: `submit maintenance-requests|approve maintenance-requests|perform maintenance|view maintenance-requests`. Each action inside keeps its own tighter gate. Verified: the shop in-charge and management open it, a QC inspector no longer does, and the in-charge still gets 403 on both PCD screens — the sidebar now says the same thing the gates do.
+
 #### Which roles a shop's people need (migration `..._000061`)
 ⚠️ **Every `/production/*` route is behind `permission:view production`** — the queue, a job's page, forward, receive, transfer, logging output, all of it. `shop-incharge` did **not** hold it, so migration 000060 made the নির্বাহী প্রকৌশলী the XEN of his shop while leaving him unable to open the screen where that means anything. Only `super-admin` and `section_supervisor` held it, and `section_supervisor` was meant for a *sub-section's* supervisor.
 

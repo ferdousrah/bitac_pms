@@ -60,7 +60,6 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'PCD Inbox',            href: '/pcd/inbox',                 icon: 'fi-rr-inbox',           permission: 'review pcd-inbox', badgeKey: 'pcd_review' },
             { label: 'Job Planning',         href: '/pcd/job-planning',          icon: 'fi-rr-clipboard-list',  permission: 'view pcd-inbox', badgeKey: 'pcd_pending' },
-            { label: 'Maintenance Requests', href: '/maintenance-requests',      icon: 'fi-rr-wrench-simple',   permission: 'submit maintenance-requests', badgeKey: 'maintenance_pending' },
             { label: 'Material Requisitions',href: '/pcd/material-requisitions', icon: 'fi-rr-clipboard-list',  permission: 'create material-requisitions' },
             { label: 'Jobs',                 href: '/work-orders',               icon: 'fi-rr-briefcase',       permission: 'view work-orders' },
             { label: 'Operation Sheets',     href: '/operation-sheets',          icon: 'fi-rr-document',        permission: 'view operation-sheets' },
@@ -76,6 +75,18 @@ export const mainGroups: NavGroup[] = [
         // from the productionSections shared prop. Each shop section
         // (Mold & Pattern, CNC, Welding, …) becomes its own submenu link.
         items: [],
+    },
+    {
+        // ⚠️ Maintenance is NOT part of PCD. It used to sit in the PCD group,
+        // so a shop in-charge given `submit maintenance-requests` saw a "PCD"
+        // menu appear with one item in it — which reads as having been handed
+        // PCD access. A request comes from the shop floor, is approved by
+        // management and performed by maintenance; it is its own module.
+        label: 'Maintenance',
+        icon: 'fi-rr-wrench-simple',
+        items: [
+            { label: 'Maintenance Requests', href: '/maintenance-requests', icon: 'fi-rr-wrench-simple', permission: 'submit maintenance-requests', badgeKey: 'maintenance_pending' },
+        ],
     },
     {
         label: 'Quality',
