@@ -11,31 +11,10 @@ use Inertia\Inertia;
 
 class MachineController extends Controller
 {
-    /**
-     * Active production shops + their sub-sections, ordered as a one-level tree
-     * (each shop followed by its sub-sections) with parent context — so the
-     * machine form's section dropdown reads hierarchically.
-     */
+    /** Shops with their sub-sections, ordered and labelled — see Section. */
     private function sectionOptions()
     {
-        $all = Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code', 'parent_id']);
-        $byParent = $all->whereNotNull('parent_id')->groupBy('parent_id');
-        $nameById = $all->pluck('name', 'id');
-        $ordered = collect();
-        foreach ($all->whereNull('parent_id') as $top) {
-            $ordered->push($top);
-            foreach ($byParent->get($top->id, collect()) as $c) $ordered->push($c);
-        }
-        foreach ($all->whereNotNull('parent_id') as $c) {
-            if (!$ordered->contains('id', $c->id)) $ordered->push($c);
-        }
-        return $ordered->map(fn ($s) => [
-            'id'          => $s->id,
-            'name'        => $s->name,
-            'code'        => $s->code,
-            'parent_id'   => $s->parent_id,
-            'parent_name' => $s->parent_id ? ($nameById[$s->parent_id] ?? null) : null,
-        ])->values();
+        return Section::hierarchicalOptions();
     }
 
     public function index(Request $request)

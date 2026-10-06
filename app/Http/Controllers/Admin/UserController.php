@@ -57,7 +57,7 @@ class UserController extends Controller
     {
         return Inertia::render('Admin/Users/CreateEdit', [
             'roles'    => Role::pluck('name'),
-            'sections' => \App\Models\Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'sections' => \App\Models\Section::hierarchicalOptions(),
         ]);
     }
 
@@ -123,7 +123,7 @@ class UserController extends Controller
                 'section_id'=> $user->section_id,
             ],
             'roles'    => Role::pluck('name'),
-            'sections' => \App\Models\Section::active()->shops()->orderBy('display_order')->get(['id', 'name', 'code']),
+            'sections' => \App\Models\Section::hierarchicalOptions(),
         ]);
     }
 

@@ -255,11 +255,26 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
                                     className="form-select"
                                 >
                                     <option value="">— Not assigned to a section —</option>
+                                    {/* ⚠️ A flat list cannot say which of these is a SHOP and which
+                                        is a bench inside one, and the two mean different jobs. The
+                                        parent must stay selectable (a shop's XEN and his engineers
+                                        are posted to the shop itself), so an <optgroup> is wrong
+                                        here — sub-sections are indented and name their parent, the
+                                        same convention as the machine form. */}
                                     {sections?.map((s: any) => (
-                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                        <option key={s.id} value={s.id}>
+                                            {s.parent_id
+                                                ? `   ↳ ${s.name} (${s.code}) — under ${s.parent_name}`
+                                                : `${s.name} (${s.code})`}
+                                        </option>
                                     ))}
                                 </select>
-                                <p className="form-hint">Required for section supervisors. Their Production queue filters by this section.</p>
+                                <p className="form-hint">
+                                    Post someone to the <strong>shop</strong> itself if they run it or work
+                                    for whoever does — the in-charge (নির্বাহী প্রকৌশলী) and his AE / SAE.
+                                    Post them to an indented <strong>↳ sub-section</strong> only if they
+                                    run that bench: they then see just the steps assigned to it.
+                                </p>
                                 {errors.section_id && <p className="form-error">{errors.section_id}</p>}
                             </div>
 
