@@ -28,7 +28,7 @@ const stepStatusBadge: Record<string, string> = {
     completed: 'badge-green',
 };
 
-export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate, bottlenecks = [], can = {} }: any) {
+export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, completion_certificate, bottlenecks = [], can = {}, documents = null }: any) {
     return (
         <AppLayout header={`Job# ${workOrder.job_number ?? '—'}`}>
             <div className="space-y-6 max-w-6xl animate-fade-in">
@@ -535,6 +535,78 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                 </div>
                                 <div className="card-body">
                                     <p className="text-sm text-surface-700 whitespace-pre-line">{workOrder.notes}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── Documents ───────────────────────────────────
+                            What came with the job: the work order PCD issued,
+                            and whatever the client sent in — drawings and
+                            sample photos off the RFQ. The shop should not have
+                            to go hunting for either. */}
+                        {documents && (
+                            <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden animate-slide-up">
+                                <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                        <i className="fi fi-rr-folder-open text-sm leading-none" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-bold text-emerald-900 leading-tight">Documents</h3>
+                                        <p className="text-[11px] text-emerald-700/70 leading-tight mt-0.5">
+                                            The issued work order, and what the client sent in.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 space-y-4">
+                                    <a href={documents.work_order_pdf} target="_blank" rel="noreferrer"
+                                        className="flex items-center gap-3 p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-50 transition-colors">
+                                        <div className="w-9 h-9 rounded-lg bg-white text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-100">
+                                            <i className="fi fi-rr-file-pdf text-sm leading-none" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-indigo-900 leading-tight">Work Order</p>
+                                            <p className="text-[11px] text-indigo-700/70 leading-tight mt-0.5">
+                                                Issued by PCD — the routing this job runs to
+                                            </p>
+                                        </div>
+                                        <i className="fi fi-rr-arrow-up-right-from-square text-[11px] leading-none text-indigo-400 ml-auto shrink-0" />
+                                    </a>
+
+                                    {documents.items.length === 0 ? (
+                                        <p className="text-xs text-surface-400">
+                                            No drawing or sample came in with this job.
+                                        </p>
+                                    ) : documents.items.map((item: any) => (
+                                        <div key={item.id}>
+                                            <p className="text-[11px] font-bold text-surface-500 uppercase tracking-wider mb-2">
+                                                {item.part_no ? `${item.part_no} · ` : ''}{item.description ?? 'Item'}
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {item.files.map((f: any) => (
+                                                    <a key={f.id} href={f.url} target="_blank" rel="noreferrer"
+                                                        title={f.filename ?? ''}
+                                                        className={`group rounded-xl border overflow-hidden transition-colors ${f.kind === 'drawing'
+                                                            ? 'border-sky-200 hover:bg-sky-50'
+                                                            : 'border-violet-200 hover:bg-violet-50'}`}>
+                                                        {f.is_image ? (
+                                                            <img src={f.url} alt={f.filename ?? ''}
+                                                                className="w-20 h-20 object-cover" />
+                                                        ) : (
+                                                            <div className="w-20 h-20 flex flex-col items-center justify-center gap-1 bg-surface-50">
+                                                                <i className="fi fi-rr-file text-surface-400 text-base leading-none" />
+                                                                <span className="text-[9px] font-bold text-surface-500">{f.extension ?? 'FILE'}</span>
+                                                            </div>
+                                                        )}
+                                                        <span className={`block text-[9px] font-bold text-center py-1 ${f.kind === 'drawing'
+                                                            ? 'bg-sky-50 text-sky-700' : 'bg-violet-50 text-violet-700'}`}>
+                                                            {f.kind === 'drawing' ? 'Drawing' : 'Sample'}
+                                                        </span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}

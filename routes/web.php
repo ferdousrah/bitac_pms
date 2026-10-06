@@ -662,6 +662,15 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('work-orders', WorkOrderController::class)
         ->only(['edit', 'update', 'destroy'])
         ->middleware('permission:edit work-orders');
+    // ⚠️ A deliberate SECOND door onto the work order PDF. PCD's own
+    // `pcd.work-orders.pdf` is gated by `view pcd-inbox`, which nobody on the
+    // shop floor holds — linking straight at it would hand them a document
+    // they cannot open. Same generator, same bytes, gated by `view
+    // work-orders`: whoever may read the job may print its work order. (The
+    // production op-sheet PDF has exactly this shape; don't "tidy" it away.)
+    Route::get('work-orders/{workOrder}/sheet-pdf', [\App\Http\Controllers\Pcd\WorkOrderSectionController::class, 'pdf'])
+        ->middleware('permission:view work-orders')
+        ->name('work-orders.sheet-pdf');
     Route::post('work-orders/{workOrder}/approve', [WorkOrderController::class, 'approve'])
         ->middleware('permission:approve work-orders')
         ->name('work-orders.approve');

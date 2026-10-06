@@ -96,6 +96,9 @@ class WorkOrderController extends Controller
             'ncrs',
             'deliveryOrders.pod',
             'invoices',
+            // The customer's own drawings and sample photos travel with the job.
+            'items.rfqItem.drawings',
+            'items.rfqItem.samplePhotos',
         ]);
 
         $delivery = $workOrder->deliveryOrders->first();
@@ -234,6 +237,43 @@ class WorkOrderController extends Controller
             ],
             'canApprove'     => $canApprove,
             'canTransitionTo'=> $nextStates,
+            // ── What came with the job ───────────────────────────────────
+            // PCD's issued work order, and whatever the client sent in. The
+            // shop should not have to go hunting for either.
+            'documents' => [
+                'work_order_pdf' => route('work-orders.sheet-pdf', $workOrder),
+                'items' => $workOrder->items->map(function ($item) {
+                    $rfqItem = $item->rfqItem;
+
+                    $map = function ($file, string $kind) {
+                        $ext = strtolower($file->extension
+                            ?? pathinfo($file->original_name ?? '', PATHINFO_EXTENSION));
+
+                        return [
+                            'id'        => $file->id,
+                            'url'       => $file->url,
+                            'filename'  => $file->original_name,
+                            'extension' => $ext ? strtoupper($ext) : null,
+                            'is_image'  => in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true),
+                            'kind'      => $kind,
+                        ];
+                    };
+
+                    $files = $rfqItem
+                        ? collect($rfqItem->drawings ?? [])->map(fn ($f) => $map($f, 'drawing'))
+                            ->merge(collect($rfqItem->samplePhotos ?? [])->map(fn ($f) => $map($f, 'sample')))
+                            ->values()->all()
+                        : [];
+
+                    return [
+                        'id'          => $item->id,
+                        'sequence'    => $item->display_order,
+                        'part_no'     => $item->part_no,
+                        'description' => $item->description ?? $item->product?->name,
+                        'files'       => $files,
+                    ];
+                })->filter(fn ($row) => $row['files'] !== [])->values(),
+            ],
             // ⚠️ What this viewer may SEE on the job, not merely open.
             // A shop engineer has `view work-orders` so he can read the job he
             // is working on — that must not hand him the money on it, nor
