@@ -190,11 +190,13 @@ class WorkOrderSectionController extends Controller
             }
         });
 
-        // Try to release if other PCD steps are also done
-        PcdReleaseService::tryRelease($workOrder->fresh());
+        // Planning may be complete now — say so if this save is what sent the
+        // job up to the নির্বাহী প্রকৌশলী.
+        $sentUp = PcdReleaseService::tryRelease($workOrder->fresh());
 
         return redirect()->route('pcd.job-planning.show', $workOrder)
-            ->with('success', 'Section assignment saved.');
+            ->with('success', 'Section assignment saved.'
+                . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     /**

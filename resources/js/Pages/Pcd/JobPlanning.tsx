@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 
 const STATUS_BADGE: Record<string, string> = {
-    pcd_pending:       'badge-amber',
-    released_to_shops: 'badge-green',
-    cancelled:         'badge-red',
+    pcd_pending:         'badge-amber',
+    pcd_release_pending: 'badge-purple',
+    released_to_shops:   'badge-green',
+    cancelled:           'badge-red',
 };
 
 const PRIORITY_BADGE: Record<string, string> = {
@@ -17,7 +18,9 @@ const PRIORITY_BADGE: Record<string, string> = {
 };
 
 const statusLabel = (status: string): string =>
-    status === 'released_to_shops' ? 'Released from PCD to shop' : (status ?? '').replace(/_/g, ' ');
+    status === 'released_to_shops' ? 'Released from PCD to shop'
+        : status === 'pcd_release_pending' ? 'Awaiting release approval'
+        : (status ?? '').replace(/_/g, ' ');
 
 export default function PcdInbox({ jobs, stats }: any) {
     const [cancelJob, setCancelJob] = useState<any>(null);
@@ -25,10 +28,11 @@ export default function PcdInbox({ jobs, stats }: any) {
     const [attachments, setAttachments] = useState<File[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [search, setSearch] = useState('');
-    const [tab, setTab] = useState<'all' | 'released' | 'wo_pending' | 'op_sheet_pending'>('all');
+    const [tab, setTab] = useState<'all' | 'awaiting_release' | 'released' | 'wo_pending' | 'op_sheet_pending'>('all');
 
     const q = search.trim().toLowerCase();
     const filteredJobs = (jobs as any[]).filter((job) => {
+        if (tab === 'awaiting_release' && job.status !== 'pcd_release_pending') return false;
         if (tab === 'released' && job.status !== 'released_to_shops') return false;
         if (tab === 'wo_pending' && (job.status === 'cancelled' || job.checklist?.section_assign?.done)) return false;
         if (tab === 'op_sheet_pending' && (job.status === 'cancelled' || job.checklist?.operation_sheet?.done)) return false;
@@ -101,9 +105,12 @@ export default function PcdInbox({ jobs, stats }: any) {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                {/* Seven tiles now, so the row steps 2 → 4 → 7 rather than
+                    leaving the last one stranded on a line of its own. */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                     <StatTile label="Total Jobs" value={stats.total} icon="fi-rr-clipboard-list" color="blue" tag="in scope" />
                     <StatTile label="Pending PCD" value={stats.pending} icon="fi-rr-time-check" color="amber" tag="clear" />
+                    <StatTile label="Awaiting Release" value={stats.awaiting_release} icon="fi-rr-hourglass-end" color="purple" />
                     <StatTile label="Released to Shops" value={stats.released} icon="fi-rr-check-circle" color="green" tag="live" />
                     <StatTile label="WO Pending" value={stats.wo_pending ?? 0} icon="fi-rr-sitemap" color="amber" tag="action" />
                     <StatTile label="Op Sheet Pending" value={stats.op_sheet_pending ?? 0} icon="fi-rr-document" color="red" tag="action" />
@@ -129,7 +136,7 @@ export default function PcdInbox({ jobs, stats }: any) {
                             />
                         </div>
                         <div className="flex items-center gap-0.5 bg-surface-100 rounded-lg p-0.5">
-                            {([['all', 'All'], ['released', 'Released'], ['wo_pending', 'WO Pending'], ['op_sheet_pending', 'Op Sheet Pending']] as const).map(([key, lbl]) => (
+                            {([['all', 'All'], ['awaiting_release', 'Awaiting Release'], ['released', 'Released'], ['wo_pending', 'WO Pending'], ['op_sheet_pending', 'Op Sheet Pending']] as const).map(([key, lbl]) => (
                                 <button
                                     key={key}
                                     type="button"
@@ -372,6 +379,9 @@ function StatTile({ label, value, icon, color, tag }: any) {
         blue:  { box: 'bg-blue-50 text-blue-600',       tag: 'bg-blue-50 text-blue-600' },
         amber: { box: 'bg-amber-50 text-amber-600',     tag: 'bg-amber-50 text-amber-600' },
         green: { box: 'bg-emerald-50 text-emerald-600', tag: 'bg-emerald-50 text-emerald-600' },
+        // ⚠️ An unknown colour falls back to blue without a word, so a tile
+        // added with a name that is not here just looks wrong.
+        purple:{ box: 'bg-purple-50 text-purple-600',   tag: 'bg-purple-50 text-purple-600' },
         red:   { box: 'bg-red-50 text-red-600',         tag: 'bg-red-50 text-red-600' },
         rose:  { box: 'bg-rose-50 text-rose-600',       tag: 'bg-rose-50 text-rose-600' },
     };

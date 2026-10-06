@@ -46,6 +46,9 @@ class PcdJobPlanningController extends Controller
         $stats = [
             'total'      => $jobs->count(),
             'pending'    => $jobs->where('status', 'pcd_pending')->count(),
+            // Planning done, sitting with the নির্বাহী প্রকৌশলী. Its own figure,
+            // because it is neither still being planned nor on the shop floor.
+            'awaiting_release' => $jobs->where('status', 'pcd_release_pending')->count(),
             'released'   => $jobs->where('status', 'released_to_shops')->count(),
             'cancelled'  => $jobs->where('status', 'cancelled')->count(),
             'mr_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['material_requisition']['done'])->count(),

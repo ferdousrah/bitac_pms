@@ -18,9 +18,25 @@ use App\Services\NotifyService;
  * **Executive Engineer (PCD)** reads what was planned and releases it. So the
  * checklist completing moves the work order to **`pcd_release_pending`** and
  * tells him; `approveRelease()` is what actually opens the shop floor.
+ *
+ * ⚠️ **Unless no one holds `review pcd-inbox` at that centre**, in which case
+ * the job is released as it always was — a gate with nobody behind it must not
+ * hold the work up. See `reviewerIds()`.
  */
 class PcdReleaseService
 {
+    /**
+     * The sentence to add to the planner's own flash when their save is what
+     * completed the planning.
+     *
+     * ⚠️ The নির্বাহী প্রকৌশলী was notified from the day this gate was built,
+     * but the **planner** was told nothing: they saved the op sheet, read
+     * "Operation sheet created." and a green "Ready" badge, and had no way to
+     * know the job had just gone up for someone else's approval. An approval
+     * step nobody is told about reads as a job that has stalled.
+     */
+    public const SENT_FOR_APPROVAL = ' Planning is complete — the job has gone to the নির্বাহী প্রকৌশলী (PCD) for release approval.';
+
     /**
      * Planning is finished — send the job up for release approval.
      *
@@ -28,6 +44,11 @@ class PcdReleaseService
      * sheet). It is **idempotent**: a job already waiting on approval, or
      * already on the shop floor, is left alone, so the five call sites cannot
      * bounce it around or notify twice.
+     *
+     * ⚠️ Returns true **only when this call is what sent it up**, so a caller
+     * can say so once. It used to return true for "planning is complete",
+     * which on a second save would have repeated the message about something
+     * that happened yesterday.
      */
     public static function tryRelease(WorkOrder $workOrder): bool
     {
@@ -37,7 +58,22 @@ class PcdReleaseService
         }
 
         if ($workOrder->released_to_shops_at || $workOrder->status === 'pcd_release_pending') {
-            return true; // already released, or already waiting on the নির্বাহী প্রকৌশলী
+            return false; // already released, or already waiting on the নির্বাহী প্রকৌশলী
+        }
+
+        // ⚠️ **No reviewer at this centre → release as it always did.** Nobody
+        // holds `review pcd-inbox` until BITAC assigns someone the
+        // `Executive Engineer (PCD)` role, and parking the job at
+        // `pcd_release_pending` then was a DEAD END: `NotifyService` silently
+        // skips an empty fan-out, so nobody was told and nobody could release
+        // it — the job simply stopped, looking planned and done. Same shape as
+        // `ShopAssignment::gateActive()` and an empty quotation approval chain:
+        // a gate with no one behind it must not hold the work up.
+        $reviewers = static::reviewerIds($workOrder);
+        if (! $reviewers) {
+            static::approveRelease($workOrder);
+
+            return false;   // nothing went up, so there is nothing to announce
         }
 
         $workOrder->update([
@@ -45,18 +81,47 @@ class PcdReleaseService
             'release_requested_at' => now(),
         ]);
 
-        NotifyService::toPermission(
-            'review pcd-inbox',
+        NotifyService::send(
+            $reviewers,
             'job_awaiting_release_approval',
             'Job ready for release — your approval needed',
             "Job #{$workOrder->job_number} ({$workOrder->wo_number}) has been planned and is waiting to be released to the shops.",
             "/pcd/inbox/release/{$workOrder->id}",
             'fi-rr-shield-check',
             'brand',
-            centerId: $workOrder->center_id,
         );
 
         return true;
+    }
+
+    /**
+     * Who may release this job — the holders of `review pcd-inbox` at its
+     * centre, plus anyone with no centre set.
+     *
+     * ⚠️ The SAME lookup decides whether the gate is live and who is notified.
+     * Two copies of this rule and the job could be held up for an officer who
+     * was never told about it. The centre-less are included for the reason
+     * `NotifyService::toPermission` includes them: BITAC's live Executive
+     * Engineer has no centre, and not reaching someone at all is the worse
+     * failure.
+     *
+     * @return array<int>
+     */
+    private static function reviewerIds(WorkOrder $workOrder): array
+    {
+        try {
+            return \App\Models\User::permission('review pcd-inbox')
+                ->when($workOrder->center_id !== null, fn ($q) => $q->where(
+                    fn ($w) => $w->where('center_id', $workOrder->center_id)->orWhereNull('center_id')
+                ))
+                ->pluck('id')->all();
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            // A deploy without the seeder. No gate rather than a stuck job.
+            \Log::warning("PcdReleaseService — permission 'review pcd-inbox' does not exist; "
+                . 'releasing without approval. Run the seeder + permission:cache-reset.');
+
+            return [];
+        }
     }
 
     /**
@@ -138,6 +203,11 @@ class PcdReleaseService
             ],
             'all_done'  => $progress['all_done'],
             'released'  => $workOrder->released_to_shops_at !== null,
+            // Planning is done and it is sitting with the নির্বাহী প্রকৌশলী.
+            // This is a THIRD state, not "done" — the planner's screen used to
+            // show the same green "Ready" for it as for a released job.
+            'awaiting_release'     => $workOrder->status === 'pcd_release_pending',
+            'release_requested_at' => $workOrder->release_requested_at?->format('d M Y, h:i A'),
         ];
     }
 }

@@ -126,12 +126,14 @@ class MaterialRequisitionController extends Controller
         });
 
         // If saved as approved, try to release WO to shops
+        $sentUp = false;
         if ($mr->status === 'approved' || $mr->status === 'issued') {
-            PcdReleaseService::tryRelease($mr->workOrder);
+            $sentUp = PcdReleaseService::tryRelease($mr->workOrder);
         }
 
         return redirect()->route('pcd.material-requisitions.show', $mr)
-            ->with('success', "Material Requisition {$mr->mrn_number} created.");
+            ->with('success', "Material Requisition {$mr->mrn_number} created."
+                . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     public function show(MaterialRequisition $materialRequisition)
@@ -179,12 +181,14 @@ class MaterialRequisitionController extends Controller
             $this->saveItems($materialRequisition, $validated['items']);
         });
 
+        $sentUp = false;
         if (in_array($materialRequisition->status, ['approved', 'issued'])) {
-            PcdReleaseService::tryRelease($materialRequisition->workOrder);
+            $sentUp = PcdReleaseService::tryRelease($materialRequisition->workOrder);
         }
 
         return redirect()->route('pcd.material-requisitions.show', $materialRequisition)
-            ->with('success', 'Material Requisition updated.');
+            ->with('success', 'Material Requisition updated.'
+                . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     public function destroy(MaterialRequisition $materialRequisition)
@@ -225,9 +229,10 @@ class MaterialRequisitionController extends Controller
 
         // `sent_to_ims` counts as MR-done from PCD's perspective, so try to release
         // the WO if Section Assignment + Operation Sheet are also in place.
-        PcdReleaseService::tryRelease($materialRequisition->workOrder);
+        $sentUp = PcdReleaseService::tryRelease($materialRequisition->workOrder);
 
-        return back()->with('success', "Requisition pushed to IMS. Reference: {$result['reference']}");
+        return back()->with('success', "Requisition pushed to IMS. Reference: {$result['reference']}"
+            . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     /**

@@ -171,6 +171,8 @@ interface Checklist {
     operation_sheet: ChecklistOpSheetItem;
     all_done: boolean;
     released: boolean;
+    awaiting_release: boolean;
+    release_requested_at: string | null;
 }
 
 interface Props {
@@ -614,7 +616,11 @@ export default function JobDetail({ job, checklist }: Props) {
                                         <h3 className="text-lg font-bold text-surface-900 truncate">{routeLabel}</h3>
                                     </div>
                                     <p className="text-xs text-surface-500 mt-0.5">
-                                        {checklist.released ? `Released from PCD to shop · ${job.released_at}` : 'Not yet released'} · stage {routeStage} of {routeTotal}
+                                        {checklist.released
+                                            ? `Released from PCD to shop · ${job.released_at}`
+                                            : checklist.awaiting_release
+                                                ? 'Awaiting the নির্বাহী প্রকৌশলী’s release approval'
+                                                : 'Not yet released'} · stage {routeStage} of {routeTotal}
                                     </p>
                                 </div>
                                 <div className="text-right shrink-0">
@@ -698,8 +704,14 @@ export default function JobDetail({ job, checklist }: Props) {
                                 </h3>
                                 {/* Folding it must not hide where the job stands. */}
                                 {!workflowOpen && (
-                                    <span className={`badge ${checklist.all_done ? 'badge-green' : 'badge-slate'}`}>
-                                        {gatesDone} of {gatesTotal} done
+                                    <span className={`badge ${
+                                        checklist.released ? 'badge-green'
+                                            : checklist.awaiting_release ? 'badge-purple'
+                                            : checklist.all_done ? 'badge-green' : 'badge-slate'
+                                    }`}>
+                                        {checklist.awaiting_release
+                                            ? 'With the নির্বাহী প্রকৌশলী'
+                                            : `${gatesDone} of ${gatesTotal} done`}
                                     </span>
                                 )}
                             </button>
@@ -714,14 +726,18 @@ export default function JobDetail({ job, checklist }: Props) {
                                         Work Order PDF
                                     </button>
                                 )}
-                                {checklist.all_done && !checklist.released && (
+                                {checklist.awaiting_release ? (
+                                    <span className="badge badge-purple">
+                                        <i className="fi fi-rr-hourglass-end mr-1" />Awaiting release approval
+                                    </span>
+                                ) : checklist.all_done && !checklist.released && (
                                     <span className="badge badge-green"><i className="fi fi-rr-check-circle mr-1" />Ready</span>
                                 )}
                             </div>
                         </div>
                         {workflowOpen && (
                             <p className="text-xs text-surface-500 mt-1">
-                                {routeTotal > 0 ? routeTotal : 3} gate{routeTotal === 1 ? '' : 's'} to release this job to the shops
+                                {routeTotal > 0 ? routeTotal : 3} gate{routeTotal === 1 ? '' : 's'} to finish planning — the নির্বাহী প্রকৌশলী (PCD) then releases the job to the shops
                             </p>
                         )}
                     </div>
@@ -731,6 +747,26 @@ export default function JobDetail({ job, checklist }: Props) {
                             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">
                                 <i className="fi fi-rr-check-circle text-base leading-none" />
                                 <span><span className="font-semibold">Released from PCD to shop</span> · {formatDateTime(job.released_at)}</span>
+                            </div>
+                        )}
+                        {/* The planner's save finishes the planning; it does NOT
+                            reach the shop floor. Say where the job actually is,
+                            or an approval step reads as a job that has stalled. */}
+                        {checklist.awaiting_release && (
+                            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-sm">
+                                <i className="fi fi-rr-hourglass-end text-base leading-none mt-0.5" />
+                                <div>
+                                    <div className="font-semibold">
+                                        Planning complete — sent to the নির্বাহী প্রকৌশলী (PCD) for release approval
+                                    </div>
+                                    <div className="text-xs text-purple-700 mt-0.5">
+                                        {checklist.release_requested_at
+                                            ? `Waiting since ${checklist.release_requested_at}. `
+                                            : ''}
+                                        He reads the routing and the operation sheets, then releases the job to the shops.
+                                        Nothing reaches the shop floor until he does.
+                                    </div>
+                                </div>
                             </div>
                         )}
                         {steps.map((step) => (

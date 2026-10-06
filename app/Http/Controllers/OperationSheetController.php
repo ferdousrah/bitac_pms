@@ -281,10 +281,12 @@ class OperationSheetController extends Controller
             ]);
         }
 
-        // Try to release WO to shops
-        PcdReleaseService::tryRelease($workOrder->fresh());
+        // Planning may be complete now — tell the planner if their save is
+        // what sent the job up to the নির্বাহী প্রকৌশলী.
+        $sentUp = PcdReleaseService::tryRelease($workOrder->fresh());
 
-        return redirect()->route('operation-sheets.show', $sheet)->with('success', 'Operation sheet created.');
+        return redirect()->route('operation-sheets.show', $sheet)
+            ->with('success', 'Operation sheet created.' . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     public function edit(OperationSheet $sheet)
