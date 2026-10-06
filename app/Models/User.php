@@ -53,6 +53,43 @@ class User extends Authenticatable
      * instead of spelling it again, and accept both so an older spelling
      * cannot resurrect the bug.
      */
+    /**
+     * What would be DESTROYED if this account were hard-deleted.
+     *
+     * ⚠️ These foreign keys are ON DELETE CASCADE, so deleting a user does not
+     * merely orphan their work — it takes it. `work_orders.created_by` is the
+     * worst: a work order carries its deliveries, invoices, payments, QC
+     * inspections, operation sheets and production logs down with it.
+     *
+     * Retiring someone is `is_active = false` (Deactivate), which LoginRequest
+     * honours. This exists so the admin delete can refuse, naming what it
+     * would have destroyed.
+     *
+     * @return array<string,int> label => count, only what is non-empty
+     */
+    public function destructiveFootprint(): array
+    {
+        $counts = [
+            'quotations'        => \App\Models\Quotation::withoutGlobalScopes()->where('created_by', $this->id)->count(),
+            'work orders'       => \App\Models\WorkOrder::withoutGlobalScopes()->where('created_by', $this->id)->count(),
+            'QC inspections'    => \DB::table('qc_inspections')->where('inspector_id', $this->id)->count(),
+            'rework orders'     => \DB::table('rework_orders')->where('created_by', $this->id)->count(),
+            'quotation approvals'    => \DB::table('quotation_approvals')->where('approver_id', $this->id)->count(),
+            'cost estimate approvals'=> \DB::table('cost_estimate_approvals')->where('approver_id', $this->id)->count(),
+            'work order approvals'   => \DB::table('work_order_approvals')->where('approver_id', $this->id)->count(),
+            'stakeholder forms' => \DB::table('stakeholder_forms')->where('created_by', $this->id)->count(),
+            'service demand logs' => \DB::table('service_demand_logs')->where('logged_by', $this->id)->count(),
+        ];
+
+        return array_filter($counts);
+    }
+
+    /** Nothing of theirs would be destroyed, so the row may simply go. */
+    public function canBeHardDeleted(): bool
+    {
+        return $this->destructiveFootprint() === [];
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->hasRole('super-admin') || $this->hasRole('super_admin');

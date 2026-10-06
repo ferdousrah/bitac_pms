@@ -202,9 +202,37 @@ class UserController extends Controller
         return back()->with('success', 'User activated.');
     }
 
+    /**
+     * Hard-delete an account — only one that has done nothing.
+     *
+     * ⚠️ `quotations.created_by` and `work_orders.created_by` are ON DELETE
+     * CASCADE, so deleting a user does not orphan their work, it TAKES it —
+     * and a work order carries its deliveries, invoices, payments, QC
+     * inspections, operation sheets and production logs down with it. This
+     * used to be an unguarded `$user->delete()`.
+     *
+     * Retiring someone who has worked is **Deactivate** (`is_active = false`,
+     * which LoginRequest honours): the account stops working, and everything
+     * they did stays on the record with their name on it.
+     */
     public function destroy(User $user)
     {
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'You cannot delete your own account.');
+        }
+
+        if ($footprint = $user->destructiveFootprint()) {
+            $what = collect($footprint)->map(fn ($n, $label) => "{$n} {$label}")->implode(', ');
+
+            return back()->with('error', sprintf(
+                'Deleting %s would also destroy %s. Deactivate the account instead — '
+                . 'it stops working and their work stays on the record.',
+                $user->name, $what,
+            ));
+        }
+
         $user->delete();
+
         return redirect()->route('admin.users.index')->with('success', 'User deleted.');
     }
 

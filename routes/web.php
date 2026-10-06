@@ -147,7 +147,14 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/profile/signatures', [UserSignatureController::class, 'store'])->name('profile.signatures.store');
     Route::patch('/profile/signatures/{signature}/default', [UserSignatureController::class, 'setDefault'])->name('profile.signatures.default');
     Route::delete('/profile/signatures/{signature}', [UserSignatureController::class, 'destroy'])->name('profile.signatures.destroy');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    // NOTE: there is deliberately no `profile.destroy`. A staff member must not
+    // be able to delete their own account: `quotations.created_by` and
+    // `work_orders.created_by` are ON DELETE CASCADE, so one person and their
+    // own password would take with them every quotation and work order they
+    // raised — and with the work orders their deliveries, invoices, payments,
+    // QC inspections and production logs. Retiring an account is an admin act,
+    // and the tool for it is Deactivate (users.is_active; LoginRequest refuses
+    // an inactive staff login).
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');

@@ -81,24 +81,16 @@ class ProfileController extends Controller
         return Redirect::route('profile.edit');
     }
 
-    /**
-     * Delete the user's account.
+    /*
+     * There is deliberately NO destroy() here.
+     *
+     * A staff member must not be able to delete their own account:
+     * `quotations.created_by` and `work_orders.created_by` are ON DELETE
+     * CASCADE, so one person and their own password would take with them every
+     * quotation and work order they raised — and with the work orders their
+     * deliveries, invoices, payments, QC inspections, operation sheets and
+     * production logs. Retiring an account is an admin act, and the tool for
+     * it is Deactivate (`users.is_active`; LoginRequest refuses an inactive
+     * staff login).
      */
-    public function destroy(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'password' => ['required', 'current_password'],
-        ]);
-
-        $user = $request->user();
-
-        Auth::logout();
-
-        $user->delete();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return Redirect::to('/');
-    }
 }

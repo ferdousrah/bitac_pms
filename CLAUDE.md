@@ -800,6 +800,17 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ The unique on the settings table is now **`(center_id, document_type, level)`** (`qas_center_doc_level_unique`) — without the type, a work-order level 1 would collide with a quotation level 1 at the same centre. `center_id` stays leftmost so it still backs the centre foreign key. `ApprovalChainController::destroy` re-sequences **within one document type**, or deleting a quotation step would renumber the work-order chain.
 - The inbox Show page renders the chain with each step's state, badges the viewer's own row, and disables Accept/Reject with the reason when it is not their turn.
 
+## ☠️ Nobody deletes a staff account that has worked (2026-10-06)
+
+> Reported from the live system: a shop engineer's **Profile Settings** offered **Delete Account** — "permanently delete your account and all of its data".
+
+- ⚠️ **It would have done far more than delete an account.** `quotations.created_by` and `work_orders.created_by` are **ON DELETE CASCADE**, and a work order carries down with it: `work_order_items`, `work_order_sections`, `operation_sheets` → `operation_steps` → `production_logs` / `operator_assignments`, `material_requisitions`, `qc_inspections` → `ncrs` → `rework_orders`, `section_handoffs`, `delivery_orders` → `proof_of_deliveries`, **`invoices` → `payments` → `payment_deductions` / `payment_files`**, and `completion_certificates`. One person, their own password, two clicks — and the quotations and work orders they had ever raised, with the whole money ledger hanging off them, were gone. 22 foreign keys into `users` are CASCADE; the other 62 are `SET NULL`.
+- **The self-delete is gone root and branch**: the `profile.destroy` route, `ProfileController@destroy`, and `Profile/Partials/DeleteUserForm.tsx`. A note sits where the method was so nobody restores Breeze's default. `DELETE /profile` now answers 405.
+- **Retiring someone is Deactivate**, which already existed and already works: `users.is_active` / `deactivated_at` / `deactivation_reason` on **Admin → Users**, and `LoginRequest` refuses an inactive staff login (verified: the account cannot sign in afterwards). The account stops working and **everything they did stays on the record with their name on it** — which is what a government system needs, not a hole where the work used to be.
+- **`Admin\UserController@destroy` was an unguarded `$user->delete()`** — the same cascade, one click from the user list. It now refuses with a redirect + flash **naming what would have been destroyed** ("would also destroy 1 work orders") and pointing at Deactivate, and it refuses deleting your own account. An account that has genuinely done nothing — a mistyped one created an hour ago — still deletes cleanly.
+- **`User::destructiveFootprint()`** is what decides: counts over every CASCADE path (quotations, work orders, QC inspections, rework orders, the three approval tables, stakeholder forms, service demand logs), returning only what is non-empty. `canBeHardDeleted()` is `=== []`.
+- ⚠️ The test **proves the cascade from `information_schema`** rather than assuming it, so if someone later changes a foreign key to `SET NULL` the guard's reason is re-checked rather than quietly outliving its cause.
+
 ## ⚠️ A row must never be written with NO centre (2026-09-29)
 
 > Reported from the live system: the approval chain screen listed **Md Rakib Hassan → Mir Md. Anisuzzaman**, yet Quotation #18 sat pending with the **Director General**, who is not in the chain at all.

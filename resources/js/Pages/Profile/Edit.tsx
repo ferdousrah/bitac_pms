@@ -1,7 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { PageProps } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
 import SignatureManager, { UserSignatureItem } from '@/Components/SignatureManager';
@@ -104,23 +103,6 @@ export default function Edit({
                     </div>
                 </div>
 
-                {/* Delete Account */}
-                <div className="card animate-slide-up border-red-100">
-                    <div className="card-header">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
-                                <i className="fi fi-rr-trash text-red-500 text-sm leading-none" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-surface-900">Delete Account</h3>
-                                <p className="text-xs text-surface-400">Permanently delete your account and all of its data</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="card-body">
-                        <DeleteUserForm />
-                    </div>
-                </div>
             </div>
         </AppLayout>
     );
