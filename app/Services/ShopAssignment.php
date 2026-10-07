@@ -42,8 +42,16 @@ class ShopAssignment
      * The answer is an admin act, and this is the sentence that says so.
      *
      * Returns null when the gate is live (there is nothing to explain).
+     *
+     * ⚠️ **Two parts, and they have different audiences.** `fact` is for
+     * whoever is standing on the job page — they are the one who wonders where
+     * Forward went, and gating the whole thing behind `manage users` meant the
+     * person who hit the problem saw nothing at all. `fix` is the admin step
+     * and goes only to someone who can actually take it.
+     *
+     * @return array{fact: string, fix: ?string}|null
      */
-    public static function setupHint(?int $shopId): ?string
+    public static function setupHint(?int $shopId, bool $canManageUsers = false): ?array
     {
         if ($shopId === null || self::gateActive($shopId)) {
             return null;
@@ -52,16 +60,24 @@ class ShopAssignment
         $posted = self::staff($shopId)->count();
         $shop = \App\Models\Section::withoutGlobalScopes()->find($shopId)?->name ?? 'this shop';
 
-        return $posted === 0
-            ? "Nobody is posted to {$shop} yet, so this job cannot be handed to anyone — "
-                . 'anyone with access to the shop can work on it directly. To run the shop through its '
-                . 'নির্বাহী প্রকৌশলী, go to Admin → Users and set a person’s Section to ' . $shop
-                . ', with the role Shop In-charge (the XEN) — then Assistant Engineer (Shop) or '
-                . 'Sub-Assistant Engineer (Shop) for the engineers under him.'
-            : "{$posted} " . ($posted === 1 ? 'person is' : 'people are') . " posted to {$shop}, but none of them "
-                . 'holds the Shop In-charge role, so there is no নির্বাহী প্রকৌশলী to forward this job — '
-                . 'everyone posted here can work on it directly. Give one of them the Shop In-charge role in '
-                . 'Admin → Users to turn on Forward / Receive.';
+        $fact = $posted === 0
+            ? "Nobody is posted to {$shop}, so this job is not held by any one person — "
+                . 'everyone who can open the shop may work on it directly. Assigning a sub-section '
+                . 'per operation (below) still works and is saved straight away.'
+            : "{$posted} " . ($posted === 1 ? 'person is' : 'people are') . " posted to {$shop}, but none "
+                . 'is the shop in-charge, so there is nobody to forward this job to — everyone posted '
+                . 'here may work on it directly. Assigning a sub-section per operation (below) still '
+                . 'works and is saved straight away.';
+
+        $fix = $posted === 0
+            ? 'To run this shop through its নির্বাহী প্রকৌশলী: Admin → Users, set a person’s Section to '
+                . $shop . ' and give them the Shop In-charge role (the XEN), then Assistant Engineer (Shop) '
+                . 'or Sub-Assistant Engineer (Shop) for the engineers under him. Forward / Receive appears '
+                . 'as soon as one in-charge exists.'
+            : 'Give one of them the Shop In-charge role in Admin → Users and Forward / Receive appears here; '
+                . 'the others keep Assistant Engineer (Shop) or Sub-Assistant Engineer (Shop).';
+
+        return ['fact' => $fact, 'fix' => $canManageUsers ? $fix : null];
     }
 
     /** @return array<int,int> the XENs posted to this shop */

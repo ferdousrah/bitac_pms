@@ -15,8 +15,11 @@ export interface Assignment {
     can_receive: boolean;
     can_hand_back: boolean;
     blocker: string | null;
-    /** Why this shop has no chain of command — only for someone who can fix it. */
-    setup_hint?: string | null;
+    /**
+     * Why this shop has no chain of command. `fact` is for whoever is on the
+     * page; `fix` is the admin step and arrives only for someone who can take it.
+     */
+    setup_hint?: { fact: string; fix: string | null } | null;
     assistants: { id: number; name: string; designation: string | null }[];
     sub_sections: { id: number; name: string }[];
 }
@@ -54,11 +57,14 @@ export default function ShopHandover({ wosId, assignment }: { wosId: number; ass
         return (
             <div className="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-3.5 flex items-start gap-2.5">
                 <i className="fi fi-rr-users-alt text-surface-400 text-base leading-none mt-0.5" />
-                <div className="min-w-0">
+                <div className="min-w-0 space-y-1">
                     <div className="text-xs font-bold text-surface-700">
-                        No shop in-charge — this job is not assigned to a person
+                        No shop in-charge — this job is not held by a person
                     </div>
-                    <p className="text-[11px] text-surface-500 mt-1 leading-relaxed">{assignment.setup_hint}</p>
+                    <p className="text-[11px] text-surface-500 leading-relaxed">{assignment.setup_hint.fact}</p>
+                    {assignment.setup_hint.fix && (
+                        <p className="text-[11px] text-brand-700 leading-relaxed">{assignment.setup_hint.fix}</p>
+                    )}
                 </div>
             </div>
         );

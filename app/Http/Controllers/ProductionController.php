@@ -1146,11 +1146,13 @@ class ProductionController extends Controller
             // ── Who holds this job at this shop ──────────────────────────
             'assignment' => [
                 'active'        => ShopAssignment::gateActive($workOrderSection->section_id),
-                // Why there is no Forward / no person to assign — shown only to
-                // someone who can actually fix it, so it is not noise on the floor.
-                'setup_hint'    => $request->user()?->can('manage users')
-                    ? ShopAssignment::setupHint($workOrderSection->section_id)
-                    : null,
+                // Why there is no Forward / no person to assign. The FACT goes
+                // to whoever is on the page — they are the one wondering where
+                // it went; only the admin step is gated.
+                'setup_hint'    => ShopAssignment::setupHint(
+                    $workOrderSection->section_id,
+                    (bool) $request->user()?->can('manage users'),
+                ),
                 'assigned_to'   => $workOrderSection->assignedTo?->name,
                 'assigned_to_id'=> $workOrderSection->assigned_to,
                 'assigned_by'   => $workOrderSection->assignedBy?->name,
