@@ -81,6 +81,8 @@ interface Wos {
         product: string | null;
         quantity: number;
         job_type: string;
+        /** The routing sheet PCD issued, through production's own door. */
+        pdf_url?: string | null;
         due_date: string | null;
     };
 }
@@ -571,14 +573,35 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                         </div>
                     </div>
 
-                    {/* Documents — operation sheet + reference drawings/samples */}
-                    {docItems.length > 0 && (
+                    {/* Documents — the work order PCD issued, the operation
+                        sheet, and what the client sent in. */}
+                    {(docItems.length > 0 || wos.work_order?.pdf_url) && (
                         <div className="card">
                             <div className="card-header">
                                 <h3 className="text-sm font-bold text-surface-900">Documents</h3>
-                                <p className="text-xs text-surface-400 mt-0.5">Operation sheet &amp; references</p>
+                                <p className="text-xs text-surface-400 mt-0.5">Work order, operation sheet &amp; references</p>
                             </div>
                             <div className="card-body space-y-4">
+                                {/* What PCD routed this job on. It belongs at the
+                                    top: the operation sheet is one item's steps,
+                                    this is the whole job's routing. */}
+                                {wos.work_order?.pdf_url && (
+                                    <button type="button"
+                                        onClick={() => setPdfPopup({
+                                            open: true,
+                                            url: `${wos.work_order.pdf_url}?preview=base64`,
+                                            title: 'Work Order',
+                                            subtitle: wos.work_order.job_number
+                                                ? `Job #${wos.work_order.job_number}`
+                                                : wos.work_order.wo_number,
+                                        })}
+                                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-indigo-900 bg-indigo-100 hover:bg-indigo-200 border border-indigo-200 shadow-sm transition-colors">
+                                        <i className="fi fi-rr-file-pdf text-xs leading-none" /> Work Order from PCD
+                                        {wos.work_order.wo_number && (
+                                            <span className="font-mono font-normal opacity-70">· {wos.work_order.wo_number}</span>
+                                        )}
+                                    </button>
+                                )}
                                 {docItems.map((block, i) => (
                                     <div key={block.item?.id ?? `doc-${i}`} className="space-y-2">
                                         {docItems.length > 1 && block.item && (

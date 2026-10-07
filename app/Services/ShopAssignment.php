@@ -32,6 +32,38 @@ class ShopAssignment
         return $shopId !== null && self::xenIds($shopId) !== [];
     }
 
+    /**
+     * Why this shop has no chain of command, for whoever can fix it.
+     *
+     * ⚠️ A shop with no XEN works exactly as it always did — that is deliberate
+     * and must stay. But the job page then shows **no Forward and no person to
+     * assign at all**, with nothing saying why, so it reads as a missing
+     * feature: "how is an Assistant Engineer ever supposed to get this job?"
+     * The answer is an admin act, and this is the sentence that says so.
+     *
+     * Returns null when the gate is live (there is nothing to explain).
+     */
+    public static function setupHint(?int $shopId): ?string
+    {
+        if ($shopId === null || self::gateActive($shopId)) {
+            return null;
+        }
+
+        $posted = self::staff($shopId)->count();
+        $shop = \App\Models\Section::withoutGlobalScopes()->find($shopId)?->name ?? 'this shop';
+
+        return $posted === 0
+            ? "Nobody is posted to {$shop} yet, so this job cannot be handed to anyone — "
+                . 'anyone with access to the shop can work on it directly. To run the shop through its '
+                . 'নির্বাহী প্রকৌশলী, go to Admin → Users and set a person’s Section to ' . $shop
+                . ', with the role Shop In-charge (the XEN) — then Assistant Engineer (Shop) or '
+                . 'Sub-Assistant Engineer (Shop) for the engineers under him.'
+            : "{$posted} " . ($posted === 1 ? 'person is' : 'people are') . " posted to {$shop}, but none of them "
+                . 'holds the Shop In-charge role, so there is no নির্বাহী প্রকৌশলী to forward this job — '
+                . 'everyone posted here can work on it directly. Give one of them the Shop In-charge role in '
+                . 'Admin → Users to turn on Forward / Receive.';
+    }
+
     /** @return array<int,int> the XENs posted to this shop */
     public static function xenIds(int $shopId): array
     {

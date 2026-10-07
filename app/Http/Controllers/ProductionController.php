@@ -951,6 +951,11 @@ class ProductionController extends Controller
                     'quantity'   => $workOrderSection->workOrder->quantity,
                     'job_type'   => $workOrderSection->workOrder->rfq?->job_type ?? 'regular',
                     'due_date'   => $workOrderSection->workOrder->due_date?->format('d M Y'),
+                    // The work order PCD issued — the routing sheet this job
+                    // arrived on. Through production's OWN door, because a
+                    // sub-section supervisor holds neither `view pcd-inbox`
+                    // nor `view work-orders`.
+                    'pdf_url'    => route('production.work-order.pdf', $workOrderSection->workOrder->id),
                 ],
             ],
             'routing'   => $workOrderSection->workOrder->sections->map(fn($s) => [
@@ -1141,6 +1146,11 @@ class ProductionController extends Controller
             // ── Who holds this job at this shop ──────────────────────────
             'assignment' => [
                 'active'        => ShopAssignment::gateActive($workOrderSection->section_id),
+                // Why there is no Forward / no person to assign — shown only to
+                // someone who can actually fix it, so it is not noise on the floor.
+                'setup_hint'    => $request->user()?->can('manage users')
+                    ? ShopAssignment::setupHint($workOrderSection->section_id)
+                    : null,
                 'assigned_to'   => $workOrderSection->assignedTo?->name,
                 'assigned_to_id'=> $workOrderSection->assigned_to,
                 'assigned_by'   => $workOrderSection->assignedBy?->name,

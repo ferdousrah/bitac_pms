@@ -15,6 +15,8 @@ export interface Assignment {
     can_receive: boolean;
     can_hand_back: boolean;
     blocker: string | null;
+    /** Why this shop has no chain of command — only for someone who can fix it. */
+    setup_hint?: string | null;
     assistants: { id: number; name: string; designation: string | null }[];
     sub_sections: { id: number; name: string }[];
 }
@@ -42,7 +44,25 @@ export default function ShopHandover({ wosId, assignment }: { wosId: number; ass
     });
     const handBack = useForm<any>({ reason: '' });
 
-    if (!assignment.active) return null;
+    // ⚠️ A shop with no নির্বাহী প্রকৌশলী works exactly as it always did, and
+    // that stays. But showing NOTHING read as a missing feature — "how does an
+    // Assistant Engineer ever get this job?" — so an admin is told that turning
+    // it on is their act. Everyone else still sees nothing.
+    if (!assignment.active) {
+        if (!assignment.setup_hint) return null;
+
+        return (
+            <div className="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-3.5 flex items-start gap-2.5">
+                <i className="fi fi-rr-users-alt text-surface-400 text-base leading-none mt-0.5" />
+                <div className="min-w-0">
+                    <div className="text-xs font-bold text-surface-700">
+                        No shop in-charge — this job is not assigned to a person
+                    </div>
+                    <p className="text-[11px] text-surface-500 mt-1 leading-relaxed">{assignment.setup_hint}</p>
+                </div>
+            </div>
+        );
+    }
 
     const submitForward = (e: FormEvent) => {
         e.preventDefault();

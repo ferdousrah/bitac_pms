@@ -737,6 +737,13 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'clearBottleneck'])->name('wos.bottleneck.clear');
         // View the PCD operation sheet PDF from the shop floor (production-permission gated).
         Route::get('/op-sheets/{sheet}/pdf', [\App\Http\Controllers\OperationSheetController::class, 'pdf'])->name('op-sheet.pdf');
+        // ⚠️ And the WORK ORDER PCD issued — a third door onto the same routing
+        // sheet, gated by `view production`. `pcd.work-orders.pdf` needs
+        // `view pcd-inbox` and `work-orders.sheet-pdf` needs `view work-orders`,
+        // and **`section_supervisor` holds NEITHER** — a bench supervisor
+        // standing at this page would be handed a document he cannot open.
+        Route::get('/work-orders/{workOrder}/sheet-pdf', [\App\Http\Controllers\Pcd\WorkOrderSectionController::class, 'pdf'])
+            ->name('work-order.pdf');
         Route::post('/wos/{workOrderSection}/send-back', [ProductionController::class, 'sendBack'])->name('send-back');
         // The shop's own chain of command: the নির্বাহী প্রকৌশলী forwards a job
         // to one of his assistant engineers (or straight to a sub-section),
