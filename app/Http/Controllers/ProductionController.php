@@ -361,6 +361,75 @@ class ProductionController extends Controller
     }
 
     /**
+     * Name the person responsible for THIS operation.
+     *
+     * BITAC: the in-charge (or the AE holding the job) picks the bench for an
+     * operation **and who does it**. That is how an Assistant or Sub-Assistant
+     * Engineer finds the work on their own screen — the job-level handover
+     * (`forward`) is about the whole job at the shop, and a job can be held by
+     * one person while three operations carry three different names.
+     *
+     * Posting an empty value clears it, because naming the wrong person must
+     * not be a dead end.
+     */
+    public function assignStepUser(Request $request, OperationStep $step)
+    {
+        $wo  = $step->operationSheet->workOrder;
+        $wos = WorkOrderSection::where('work_order_id', $wo->id)
+            ->where('section_id', $step->section_id)
+            ->first();
+        if (!$wos) {
+            return back()->with('error', 'No section assignment matches this operation step.');
+        }
+        $this->authorizeAccess($wos);
+        if ($blocker = ShopAssignment::workBlocker($wos, $request->user())) {
+            return back()->with('error', $blocker);
+        }
+
+        $validated = $request->validate([
+            'assigned_to' => 'nullable|exists:users,id',
+        ]);
+        $userId = ($validated['assigned_to'] ?? null) ?: null;
+
+        // ⚠️ The person must actually work at this shop or one of its benches —
+        // otherwise an operation could be pinned on anyone by guessing an id.
+        if ($userId && ! ShopAssignment::workforce((int) $step->section_id)->contains('id', (int) $userId)) {
+            return back()->with('error', 'That person is not posted to this shop or any of its sub-sections.');
+        }
+
+        $was = (int) $step->assigned_to;
+        $step->update([
+            'assigned_to' => $userId,
+            'assigned_by' => $userId ? $request->user()->id : null,
+            'assigned_at' => $userId ? now() : null,
+        ]);
+
+        // Tell them, but only when it actually changed hands — re-picking the
+        // same name on a second save must not notify again.
+        if ($userId && $userId !== $was) {
+            NotifyService::send(
+                [$userId],
+                'operation_assigned',
+                'An operation is yours — ' . $step->operation_name,
+                sprintf(
+                    'Job #%s at %s: %s. Assigned by %s.',
+                    $wo->job_number ?? $wo->wo_number,
+                    $wos->section?->name ?? 'the shop',
+                    $step->operation_name,
+                    $request->user()->name,
+                ),
+                "/production/wos/{$wos->id}",
+                'fi-rr-user-gear',
+                'blue',
+            );
+        }
+
+        return back()->with('success', $userId
+            ? 'Operation assigned to ' . (\App\Models\User::find($userId)?->name ?? 'that person') . '.'
+            : 'Operation assignment cleared.');
+    }
+
+    /**
      * Record a daily, item-wise production entry for a step (partial quantity).
      * Bumps the step's completed_qty, derives its status (in_progress / completed
      * when the target is met), and re-syncs the section so finished pieces can
@@ -1041,6 +1110,11 @@ class ProductionController extends Controller
                     'operator'          => $s->operator?->name,
                     'sub_section'       => $s->subSection?->name,
                     'sub_section_id'    => $s->sub_section_id,
+                    // Who is responsible for this one operation.
+                    'assigned_to'       => $s->assigned_to,
+                    'assigned_to_name'  => $s->assignedTo?->name,
+                    'assigned_by_name'  => $s->assignedBy?->name,
+                    'assigned_at'       => $s->assigned_at?->format('d M Y, h:i A'),
                     'estimated_hours'   => (float) $s->estimated_hours,
                     'actual_hours'      => (float) ($s->actual_hours ?? 0),
                     'weight_pct'        => (float) ($s->weight_pct ?? 0),
@@ -1137,6 +1211,15 @@ class ProductionController extends Controller
                     ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name, 'employee_id' => $o->employee_id])
                     ->values();
             })(),
+            // Whose name can go on an operation here: the shop's own people AND
+            // the supervisors of its benches. Wider than the Forward dialog's
+            // list, which is only the engineers the whole job can be handed to.
+            'step_assignees' => ShopAssignment::workforce((int) $workOrderSection->section_id)
+                ->map(fn ($u) => [
+                    'id'          => $u->id,
+                    'name'        => $u->name,
+                    'designation' => $u->designation,
+                ])->values(),
             // Sub-sections of THIS shop — the in-charge assigns each step to one
             // after the job arrives (PCD only routes to the shop, not the sub-shop).
             'sub_sections' => $workOrderSection->section->children
@@ -1451,6 +1534,11 @@ class ProductionController extends Controller
                 'steps_total'    => $sectionSteps->count(),
                 'steps_done'     => $sectionSteps->whereIn('status', ['completed', 'skipped'])->count(),
                 'ready_to_transfer' => !$openHere && $pendingTransfer,
+                // Open operations here named on the viewer — this is what makes
+                // "assign a person" land on that person's own screen.
+                'my_steps'       => $sectionSteps
+                    ->whereNotIn('status', ['completed', 'skipped'])
+                    ->where('assigned_to', auth()->id())->count(),
             ]));
         }
 
@@ -1491,6 +1579,9 @@ class ProductionController extends Controller
                 'steps_total'    => $subSteps->count(),
                 'steps_done'     => $subSteps->whereIn('status', ['completed', 'skipped'])->count(),
                 'sub_section_id' => $subId,
+                'my_steps'       => $subSteps
+                    ->whereNotIn('status', ['completed', 'skipped'])
+                    ->where('assigned_to', auth()->id())->count(),
             ]));
         }
         return $rows;

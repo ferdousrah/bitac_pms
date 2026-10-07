@@ -21,6 +21,8 @@ interface QueueJob {
     received_qty: number | null;
     sub_section_id: number | null;
     ready_to_transfer?: boolean;
+    /** Open operations on this row named on ME. */
+    my_steps?: number;
     work_order: {
         id: number;
         wo_number: string;
@@ -284,6 +286,13 @@ function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; assig
                         </span>
                         {job.ready_to_transfer && (
                             <span className="badge badge-amber"><i className="fi fi-rr-paper-plane text-[9px]" /> Ready to transfer</span>
+                        )}
+                        {/* Operations named on me — an engineer has to be able to
+                            pick his own work out of the shop's whole queue. */}
+                        {!!job.my_steps && job.my_steps > 0 && (
+                            <span className="badge badge-blue">
+                                <i className="fi fi-rr-user text-[9px]" /> {job.my_steps} operation{job.my_steps === 1 ? '' : 's'} yours
+                            </span>
                         )}
                         {/* Who holds this job at this shop. */}
                         {job.assigned_to

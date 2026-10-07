@@ -754,6 +754,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/op-steps/{step}/mark', [ProductionController::class, 'markStep'])->name('op-steps.mark');
         // Shop in-charge assigns a step to one of the shop's sub-sections.
         Route::post('/op-steps/{step}/assign-sub-section', [ProductionController::class, 'assignSubSection'])->name('op-steps.assign-sub');
+        // Who is responsible for this one operation — the bench's select above
+        // says WHERE, this says WHO, and it is how an AE/SAE finds the work.
+        Route::post('/op-steps/{step}/assign-user', [ProductionController::class, 'assignStepUser'])->name('op-steps.assign-user');
         // Quantity-based daily production logging.
         Route::post('/op-steps/{step}/log', [ProductionController::class, 'logProduction'])->name('op-steps.log');
         Route::delete('/production-logs/{productionLog}', [ProductionController::class, 'deleteProductionLog'])->name('logs.destroy');

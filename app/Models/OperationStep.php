@@ -9,6 +9,9 @@ class OperationStep extends Model
     protected $fillable = [
         'operation_sheet_id', 'sequence', 'operation_name', 'operation_id',
         'section_id', 'sub_section_id', 'machine_id', 'operator_id', 'estimated_hours', 'weight_pct',
+        // Who is responsible for THIS operation (not who holds the job at
+        // the shop — that is work_order_sections.assigned_to).
+        'assigned_to', 'assigned_by', 'assigned_at',
         'target_qty', 'completed_qty',
         'status', 'actual_hours', 'started_at', 'completed_at', 'tooling_notes', 'qc_notes',
     ];
@@ -21,6 +24,7 @@ class OperationStep extends Model
             'weight_pct'      => 'decimal:2',
             'target_qty'      => 'decimal:2',
             'completed_qty'   => 'decimal:2',
+            'assigned_at'     => 'datetime',
             'started_at'      => 'datetime',
             'completed_at'    => 'datetime',
         ];
@@ -29,6 +33,8 @@ class OperationStep extends Model
     public function operationSheet()    { return $this->belongsTo(OperationSheet::class); }
     public function section()           { return $this->belongsTo(Section::class); }
     public function subSection()        { return $this->belongsTo(Section::class, 'sub_section_id'); }
+    public function assignedTo()        { return $this->belongsTo(User::class, 'assigned_to'); }
+    public function assignedBy()        { return $this->belongsTo(User::class, 'assigned_by'); }
     public function machine()           { return $this->belongsTo(Machine::class); }
     public function operator()          { return $this->belongsTo(Operator::class); }
     public function operation()         { return $this->belongsTo(MachiningOperation::class); }

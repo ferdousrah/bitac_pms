@@ -95,6 +95,31 @@ class ShopAssignment
      * ⚠️ Staff of a SUB-section are not here. A sub-section is a destination,
      * not a person — forwarding to one is the other half of the XEN's choice.
      */
+    /**
+     * Who may be named on an OPERATION at this shop.
+     *
+     * ⚠️ Wider than `assistants()` on purpose, and for a different question.
+     * `assistants()` answers "who can the whole job be handed to" — the XEN's
+     * own engineers, him excluded. This answers "whose name goes on this
+     * operation", which is anyone who works here: the in-charge himself, his
+     * AE/SAEs, **and the supervisors of the benches under the shop** — a step
+     * sent to Heavy Section is done by someone posted to Heavy Section, who is
+     * not in `assistants()` at all.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public static function workforce(int $shopId)
+    {
+        $benchIds = \App\Models\Section::withoutGlobalScopes()
+            ->where('parent_id', $shopId)->pluck('id');
+
+        return User::withoutGlobalScopes()
+            ->whereIn('section_id', $benchIds->push($shopId)->all())
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+    }
+
     public static function assistants(int $shopId)
     {
         return self::staff($shopId)

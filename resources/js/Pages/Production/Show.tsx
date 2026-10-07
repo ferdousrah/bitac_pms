@@ -103,6 +103,11 @@ interface OpStep {
     machine_id: number | null;
     sub_section: string | null;
     sub_section_id: number | null;
+    /** Who is responsible for this one operation (not who holds the job). */
+    assigned_to: number | null;
+    assigned_to_name: string | null;
+    assigned_by_name: string | null;
+    assigned_at: string | null;
     estimated_hours: number;
     actual_hours: number;
     weight_pct: number;
@@ -189,6 +194,8 @@ interface Props {
     machines?: OptionLite[];
     operators?: OptionLite[];
     sub_sections?: OptionLite[];
+    /** Whose name can go on an operation here — shop staff + its bench supervisors. */
+    step_assignees?: { id: number; name: string; designation: string | null }[];
     scoped_sub_section?: { id: number; name: string | null } | null;
 }
 
@@ -204,7 +211,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], scoped_sub_section = null, assignment = null }: Props & { assignment?: any }) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], step_assignees = [], scoped_sub_section = null, assignment = null }: Props & { assignment?: any }) {
     const scopedSub = scoped_sub_section;
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
@@ -472,7 +479,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                         )}
                                     </div>
                                     {block.steps.map((s) => (
-                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={scopedSub ? [] : sub_sections} />
+                                        <OpStepRow key={s.id} step={s} canAct={canAct} machines={machines} operators={operators} subSections={scopedSub ? [] : sub_sections} assignees={scopedSub ? [] : step_assignees} />
                                     ))}
                                 </div>
                             ))}
@@ -678,7 +685,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     );
 }
 
-function OpStepRow({ step, canAct, machines, operators, subSections }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[] }) {
+function OpStepRow({ step, canAct, machines, operators, subSections, assignees = [] }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[]; assignees?: { id: number; name: string; designation: string | null }[] }) {
     const [busy, setBusy] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const today = new Date().toISOString().slice(0, 10);
@@ -732,6 +739,14 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
             { preserveScroll: true });
     };
 
+    // …and WHO does it. The select above says where the work goes, this says
+    // whose it is — and it is how an AE/SAE finds it on their own screen.
+    const assignUser = (userId: string) => {
+        router.post(`/production/op-steps/${step.id}/assign-user`,
+            { assigned_to: userId || undefined },
+            { preserveScroll: true });
+    };
+
     const statusBadge: Record<string, { cls: string; label: string; icon: string }> = {
         pending:     { cls: 'badge-slate', label: 'Pending',     icon: 'fi-rr-time-twenty-four' },
         in_progress: { cls: 'badge-amber', label: 'In Progress', icon: 'fi-rr-spinner' },
@@ -777,6 +792,35 @@ function OpStepRow({ step, canAct, machines, operators, subSections }: { step: O
                             </span>
                         ) : (
                             step.sub_section && <span className="text-violet-600"><i className="fi fi-rr-corner-down-right text-[10px]" /> {step.sub_section}</span>
+                        )}
+
+                        {/* Who is responsible for THIS operation. Separate from the
+                            job-level handover: a job held by one engineer can carry
+                            three different names across its operations. */}
+                        {assignees.length > 0 && canAct ? (
+                            <span className="inline-flex items-center gap-1">
+                                <i className="fi fi-rr-user text-[10px] text-sky-500" />
+                                <select
+                                    value={step.assigned_to ?? ''}
+                                    onChange={(e) => assignUser(e.target.value)}
+                                    disabled={busy}
+                                    className={`text-[11px] py-0.5 pl-1.5 pr-5 rounded-md border outline-none ${step.assigned_to ? 'border-sky-200 bg-sky-50 text-sky-700 font-semibold' : 'border-dashed border-surface-300 text-surface-500'}`}
+                                    title="Who is responsible for this operation"
+                                >
+                                    <option value="">Assign person…</option>
+                                    {assignees.map((u) => (
+                                        <option key={u.id} value={u.id}>
+                                            {u.name}{u.designation ? ` — ${u.designation}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </span>
+                        ) : (
+                            step.assigned_to_name && (
+                                <span className="text-sky-600" title={step.assigned_at ? `Assigned ${step.assigned_at}` : undefined}>
+                                    <i className="fi fi-rr-user text-[10px]" /> {step.assigned_to_name}
+                                </span>
+                            )
                         )}
                         {step.machine && <span><i className="fi fi-rr-settings text-[10px]" /> {step.machine}</span>}
                         {step.operator && <span><i className="fi fi-rr-user text-[10px]" /> {step.operator}</span>}
