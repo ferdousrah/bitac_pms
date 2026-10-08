@@ -224,6 +224,55 @@ class ShopAssignment
     }
 
     /** Should this person's queue be narrowed to what is theirs? */
+    /**
+     * Is this job theirs at this shop?
+     *
+     * Three ways it can be, and they are all real:
+     *  - the job was forwarded to them (`work_order_sections.assigned_to`);
+     *  - they forwarded it on — an AE who gave it to his SAE still answers for it;
+     *  - they are named on an **operation** of it (`operation_steps.assigned_to`),
+     *    which is its own thing: the XEN can hand out one operation without
+     *    handing over the whole job, and that person must still get at it.
+     */
+    public static function isTheirs(WorkOrderSection $wos, ?User $user): bool
+    {
+        if (! $user) return false;
+
+        if ((int) $wos->assigned_to === (int) $user->id) return true;
+        if ((int) $wos->assigned_by === (int) $user->id) return true;
+
+        return \App\Models\OperationStep::where('section_id', $wos->section_id)
+            ->where('assigned_to', $user->id)
+            ->whereHas('operationSheet', fn ($q) => $q->where('work_order_id', $wos->work_order_id))
+            ->exists();
+    }
+
+    /**
+     * May they open this job at all?
+     *
+     * ⚠️ BITAC: *"job xen jake assign korbe sei jade access pai"* — a job handed
+     * to one engineer is not everybody's to read. The page guard used to let in
+     * **anyone posted to the shop**, so the narrowing only ever existed on the
+     * queue and a direct URL walked straight past it.
+     *
+     * Still in: a shop with no XEN (works as it always did), a super admin, the
+     * XEN himself, and the shop's bench staff — a bench is scoped to its own
+     * steps, and a step only reaches a bench once somebody is named on it.
+     */
+    public static function canOpen(WorkOrderSection $wos, ?User $user): bool
+    {
+        if (! $user) return false;
+        if (! self::gateActive($wos->section_id)) return true;
+        if (self::seesEverything($user)) return true;
+        if (self::isXen($user, $wos->section_id)) return true;
+        if (self::isSubSectionStaff($user, $wos->section_id)) return true;
+
+        // Nobody holds it yet — it is still the shop's, so the shop may read it.
+        if ($wos->assigned_to === null) return true;
+
+        return self::isTheirs($wos, $user);
+    }
+
     public static function scopedToOwnWork(?User $user, ?int $shopId): bool
     {
         if (! $user || ! self::gateActive($shopId)) return false;

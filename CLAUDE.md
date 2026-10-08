@@ -571,6 +571,15 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - ⚠️ **A hand-back goes to whoever forwarded it** (`ShopAssignment::handBackTarget()`) — an SAE returns the job to his AE, not over the AE's head to the নির্বাহী প্রকৌশলী. It lands with the XEN only when the forwarder *was* the XEN, or has left the shop.
 - ⚠️ **An engineer's queue also shows what he passed on** (`assigned_by = me`), badged with who holds it now. An AE who gave a job to his SAE still answers for it, so it must not vanish off his list.
 
+##### ⚠️ A job handed to one engineer is not everybody's to open (2026-10-08)
+> BITAC: *"job xen jake assign korbe sei jade access pai."*
+
+- The narrowing only ever existed **on the queue**. `authorizeAccess` let in **anyone posted to the shop**, so a direct `/production/wos/{id}` URL walked straight past it and any engineer could read — and act on — another's job. **`ShopAssignment::canOpen()`** is the guard now, and the page 403s naming who holds it.
+- Still in: a shop with **no XEN** (works exactly as it always did), a super admin, the **XEN**, the shop's **bench staff** (they are scoped to their own steps, and a step only reaches a bench once somebody is named on it), and anyone the job **is** theirs.
+- **`ShopAssignment::isTheirs()`** is the one answer to "is this job theirs", and it has **three** legs, all real: forwarded **to** them, forwarded **by** them, **or named on an operation of it**.
+- ⚠️ **That third leg is what the per-operation assignment created.** The XEN can hand out a single operation without handing over the job, and the queue filter was job-level only — so work someone had been told to do never appeared on their list, and the page would have refused them. The filter now also passes a row with **`my_steps > 0`**. Taking the operation back closes both again.
+- An **unheld** job is still the shop's to read — `workBlocker` already says "not handed to anyone yet", and refusing to open it would leave the XEN's own staff unable to see what is waiting.
+
 ### What a shop engineer may see on a Job (2026-10-06)
 > He holds `view work-orders` so he can read the job he is working on. That must not hand him the money on it, nor actions belonging to PCD or procurement.
 

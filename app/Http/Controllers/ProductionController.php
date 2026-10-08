@@ -84,9 +84,13 @@ class ProductionController extends Controller
         if ($ownWorkOnly) {
             // His own work, AND anything he passed on — an AE who gave a job to
             // his SAE still answers for it, so it must not vanish off his list.
+            // ⚠️ …and anything he is named on OPERATION by operation. The XEN
+            // can hand out a single operation without handing over the job, and
+            // that work would otherwise never appear on his list.
             $jobs = $jobs->filter(fn ($row) =>
                 (int) ($row['assigned_to_id'] ?? 0) === (int) $user->id
                 || (int) ($row['assigned_by_id'] ?? 0) === (int) $user->id
+                || (int) ($row['my_steps'] ?? 0) > 0
             )->values();
         }
 
@@ -1478,7 +1482,15 @@ class ProductionController extends Controller
         if ($canAll) return;
         abort_unless($user->section_id, 403, 'You are not the supervisor of this section.');
         // Direct shop supervisor, OR a sub-section supervisor of a child of this shop.
-        if ($user->section_id === $wos->section_id) return;
+        if ($user->section_id === $wos->section_id) {
+            // ⚠️ Posted to the shop is not the same as being given this job.
+            // Without this a direct URL walked straight past the queue's own
+            // narrowing and any engineer could read anyone's job.
+            abort_unless(ShopAssignment::canOpen($wos, $user), 403,
+                'This job is with ' . ($wos->assignedTo?->name ?? 'another engineer') . '.');
+
+            return;
+        }
         $own = Section::find($user->section_id);
         abort_unless($own && $own->parent_id === $wos->section_id, 403,
             'You are not the supervisor of this section.');
