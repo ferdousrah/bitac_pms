@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 interface SectionLite {
     id: number;
@@ -23,6 +24,16 @@ interface QueueJob {
     ready_to_transfer?: boolean;
     /** Open operations on this row named on ME. */
     my_steps?: number;
+    /** Where the open operations are and who has them — so the list answers it. */
+    assignment_summary?: {
+        open: number;
+        sub_sections: string[];
+        no_sub_section: number;
+        no_person: number;
+        people: string[];
+    } | null;
+    op_sheet_id?: number | null;
+    work_order_pdf_url?: string | null;
     work_order: {
         id: number;
         wo_number: string;
@@ -119,6 +130,12 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
         router.get('/production/queue', { section: id }, { preserveScroll: true });
     };
 
+    // The work order and the operation sheet, read from the list itself.
+    const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>(
+        { open: false, url: null, title: '' });
+    const openPdf = (url: string, title: string, subtitle?: string) =>
+        setPdfPopup({ open: true, url, title, subtitle });
+
     return (
         <AppLayout header={`Production — ${section.name}`}>
             <div className="space-y-6 animate-fade-in">
@@ -199,7 +216,7 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                         ) : (
                             <div className="divide-y divide-surface-100">
                                 {jobs.map((job) => (
-                                    <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} />
+                                    <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
                                 ))}
                             </div>
                         )}
@@ -228,6 +245,14 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                     </div>
                 )}
             </div>
+
+            <PdfPopupModal
+                open={pdfPopup.open}
+                pdfUrl={pdfPopup.url}
+                title={pdfPopup.title}
+                subtitle={pdfPopup.subtitle}
+                onClose={() => setPdfPopup({ open: false, url: null, title: '' })}
+            />
         </AppLayout>
     );
 }
@@ -269,7 +294,7 @@ function UpcomingCard({ u }: { u: UpcomingJob }) {
     );
 }
 
-function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean } }) {
+function JobCard({ job, onPdf }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean }; onPdf: (url: string, title: string, subtitle?: string) => void }) {
     const isAwaiting = job.status === 'awaiting_rework';
     return (
         <div className={`px-5 py-4 ${job.status === 'rework' ? 'bg-rose-50/40' : ''}`}>
@@ -341,6 +366,37 @@ function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; assig
                         {job.started_at && <span className="text-surface-400">· started {job.started_at}</span>}
                     </div>
 
+                    {/* Where the open operations are and who holds them. The
+                        in-charge had to open the job to learn any of this. */}
+                    {!!job.assignment_summary && job.assignment_summary.open > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            {job.assignment_summary.sub_sections.map((name) => (
+                                <span key={name} className="inline-flex items-center gap-1 text-[11px] text-violet-700 bg-violet-50 border border-violet-200 rounded-md px-1.5 py-0.5">
+                                    <i className="fi fi-rr-corner-down-right text-[9px]" /> {name}
+                                </span>
+                            ))}
+                            {job.assignment_summary.people.map((name) => (
+                                <span key={name} className="inline-flex items-center gap-1 text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-md px-1.5 py-0.5">
+                                    <i className="fi fi-rr-user text-[9px]" /> {name}
+                                </span>
+                            ))}
+                            {/* ⚠️ The one thing that stops work moving: a bench
+                                picked with nobody named does not reach it. */}
+                            {job.assignment_summary.no_person > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
+                                    <i className="fi fi-rr-hourglass-end text-[9px]" />
+                                    {job.assignment_summary.no_person} of {job.assignment_summary.open} need a person
+                                </span>
+                            )}
+                            {job.assignment_summary.no_sub_section > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-surface-500 bg-surface-100 border border-surface-200 rounded-md px-1.5 py-0.5">
+                                    <i className="fi fi-rr-corner-down-right text-[9px]" />
+                                    {job.assignment_summary.no_sub_section} without a sub-section
+                                </span>
+                            )}
+                        </div>
+                    )}
+
                     {job.rework && (
                         <div className="mt-3 px-3 py-2.5 rounded-xl bg-rose-100/70 border border-rose-200">
                             <div className="flex items-center gap-2 text-xs">
@@ -362,7 +418,7 @@ function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; assig
                     )}
                 </div>
 
-                <div className="shrink-0">
+                <div className="shrink-0 flex flex-col items-stretch gap-1.5">
                     <Link
                         href={job.item
                             ? `/production/wos/${job.id}?item_id=${job.item.id}${job.sub_section_id ? `&sub_section=${job.sub_section_id}` : ''}`
@@ -372,6 +428,34 @@ function JobCard({ job }: { job: QueueJob & { assigned_to?: string | null; assig
                         <i className="fi fi-rr-arrow-right text-xs leading-none" />
                         Open
                     </Link>
+                    {/* The two papers the floor actually needs, without going
+                        into the job first. */}
+                    {job.work_order_pdf_url && (
+                        <button
+                            type="button"
+                            onClick={() => onPdf(
+                                `${job.work_order_pdf_url}?preview=base64`,
+                                'Work Order',
+                                job.work_order.job_number ? `Job #${job.work_order.job_number}` : job.work_order.wo_number,
+                            )}
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-indigo-900 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                        >
+                            <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> Work Order
+                        </button>
+                    )}
+                    {job.op_sheet_id && (
+                        <button
+                            type="button"
+                            onClick={() => onPdf(
+                                `/production/op-sheets/${job.op_sheet_id}/pdf?preview=base64`,
+                                'Operation Sheet',
+                                job.sheet_number ? `Sheet ${job.sheet_number}` : undefined,
+                            )}
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-amber-950 bg-amber-100 border border-amber-300 hover:bg-amber-200 transition-colors"
+                        >
+                            <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> Op Sheet
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

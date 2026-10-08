@@ -61,6 +61,11 @@ class ProductionController extends Controller
                     'workOrder.rfq:id,job_type',
                     'workOrder.items',
                     'workOrder.operationSheets.steps',
+                    // The queue names the bench and the person per row, so load
+                    // them with the steps — reading them off each step one at a
+                    // time is a query per operation on every row.
+                    'workOrder.operationSheets.steps.subSection:id,name',
+                    'workOrder.operationSheets.steps.assignedTo:id,name',
                     'section',
                 ])
                 ->get()
@@ -1546,6 +1551,10 @@ class ProductionController extends Controller
                 'my_steps'       => $sectionSteps
                     ->whereNotIn('status', ['completed', 'skipped'])
                     ->where('assigned_to', auth()->id())->count(),
+                // Where the work has been put and who has it, so the queue
+                // answers that without opening the job.
+                'assignment_summary' => $this->packAssignmentSummary($sectionSteps),
+                'op_sheet_id'    => $sheet->id,
             ]));
         }
 
@@ -1595,9 +1604,39 @@ class ProductionController extends Controller
                 'my_steps'       => $subSteps
                     ->whereNotIn('status', ['completed', 'skipped'])
                     ->where('assigned_to', auth()->id())->count(),
+                'assignment_summary' => $this->packAssignmentSummary($subSteps),
+                'op_sheet_id'    => $sheet->id,
             ]));
         }
         return $rows;
+    }
+
+    /**
+     * What the queue needs to say about an item's OPEN operations here:
+     * which benches they are on, and how many still have nobody named.
+     *
+     * ⚠️ Only open steps count. A finished operation's bench and person are
+     * history; listing them would make a job that is half done read as half
+     * unassigned.
+     *
+     * @param  \Illuminate\Support\Collection<int, OperationStep>  $steps
+     */
+    private function packAssignmentSummary($steps): array
+    {
+        $open = $steps->whereNotIn('status', ['completed', 'skipped']);
+
+        return [
+            'open'           => $open->count(),
+            // Benches actually in play, named, in order.
+            'sub_sections'   => $open->map(fn ($s) => $s->subSection?->name)
+                ->filter()->unique()->values()->all(),
+            'no_sub_section' => $open->whereNull('sub_section_id')->count(),
+            // A bench with nobody on it has NOT been handed over — the one
+            // thing the in-charge has to notice from the list.
+            'no_person'      => $open->whereNull('assigned_to')->count(),
+            'people'         => $open->map(fn ($s) => $s->assignedTo?->name)
+                ->filter()->unique()->values()->all(),
+        ];
     }
 
     private function serializeWosForQueue(WorkOrderSection $wos, array $itemContext = []): array
@@ -1660,6 +1699,11 @@ class ProductionController extends Controller
             'steps_done'    => null,
             'sub_section_id'=> null,
             'ready_to_transfer' => false,
+            'assignment_summary' => null,
+            'op_sheet_id'   => null,
+            // The work order PCD issued, through production's own door — the
+            // queue should not be a dead end for the paperwork either.
+            'work_order_pdf_url' => route('production.work-order.pdf', $wo->id),
         ], $itemContext);
     }
 }

@@ -610,6 +610,14 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **This is how an AE/SAE finds the work.** Queue rows (shop and sub-section alike) carry **`my_steps`** — open operations here named on the viewer — badged "*N operations yours*". Assigning without that would have been a label nobody ever sees.
 - ⚠️ A queue row nests the job as **`work_order.wo_number`**, not `wo_number`; a flat lookup finds nothing and reads as "the job is not on his queue".
 
+##### The queue says where the work went, and carries the paperwork (2026-10-08)
+> *"sub-section + user assign korsi but production page theke bujar upai nai, abar page er vitore jeye dekhte hosse, r … work order and Op Sheet o vitore jeye passe"*
+
+- **`packAssignmentSummary()`** puts it on the row: the **benches** in play, the **people** named, how many open operations **still need a person**, and how many have **no bench**. The in-charge had to open each job to learn any of it.
+- ⚠️ **Only OPEN operations are counted.** A finished step's bench and person are history — counting them makes a half-done job read as half unassigned, which is the opposite of the truth.
+- The row also carries **Work Order** and **Op Sheet** PDF buttons, through `PdfPopupModal`, so the two papers the floor needs are not behind a page visit. The work order goes through **production's own door** (`production.work-order.pdf`), never PCD's.
+- ⚠️ **`workOrder.operationSheets.steps.subSection` and `.assignedTo` had to be eager-loaded** — the summary reads both per operation, so without them the queue costs a query per operation on every row. The test asserts the whole queue stays under 40 queries.
+
 ##### ⚠️ A bench with nobody named on it has NOT been handed the work
 > BITAC: *"person assign na hoa porjonto sub-section e jabena."*
 
