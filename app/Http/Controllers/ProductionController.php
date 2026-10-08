@@ -53,7 +53,9 @@ class ProductionController extends Controller
         $isSubSection = $section && $section->parent_id;
         $queueSectionId = $isSubSection ? (int) $section->parent_id : ($section->id ?? null);
 
-        $jobs = $section
+        // Loaded once — the bench's Active and Upcoming tabs are two readings
+        // of the same rows, and re-querying for each is how they drift apart.
+        $activeWos = $section
             ? WorkOrderSection::activeForSection($queueSectionId)
                 ->with([
                     'workOrder.customer',
@@ -69,11 +71,13 @@ class ProductionController extends Controller
                     'section',
                 ])
                 ->get()
-                ->flatMap(fn($wos) => $isSubSection
-                    ? $this->expandWosForSubSection($wos, (int) $section->id)
-                    : $this->expandWosForQueue($wos))
-                ->values()
             : collect();
+
+        $jobs = $activeWos
+            ->flatMap(fn ($wos) => $isSubSection
+                ? $this->expandWosForSubSection($wos, (int) $section->id, 'active')
+                : $this->expandWosForQueue($wos))
+            ->values();
 
         // ⚠️ An assistant engineer sees only what has been forwarded to him.
         // A shop with no নির্বাহী প্রকৌশলী has no gate, so nothing narrows and
@@ -105,6 +109,14 @@ class ProductionController extends Controller
         // supervisor can plan machines/material ahead. (Nothing has been
         // transferred here yet — otherwise this WOS would be 'ready'/active.)
         // An AE plans nothing ahead for the whole shop — that is the XEN's view.
+        // A bench's own "upcoming": its steps are named and waiting, but the
+        // operation before them has not produced enough yet.
+        $benchUpcoming = ($section && $isSubSection)
+            ? $activeWos
+                ->flatMap(fn ($wos) => $this->expandWosForSubSection($wos, (int) $section->id, 'upcoming'))
+                ->values()
+            : collect();
+
         $upcoming = ($section && !$isSubSection && !$ownWorkOnly)
             ? WorkOrderSection::where('section_id', $section->id)
                 ->where('status', 'pending')
@@ -146,6 +158,62 @@ class ProductionController extends Controller
                 ->values()
             : collect();
 
+        // ── Completed — what this section has finished ─────────────────────
+        // A shop's own work is done when it has forwarded everything it was
+        // given (`WorkOrderSection::completed`); a bench's is done step by
+        // step. Capped, newest first: this is a record, not a worklist.
+        $completed = collect();
+        if ($section && $isSubSection) {
+            $completed = WorkOrderSection::where('section_id', $queueSectionId)
+                ->whereIn('status', ['ready', 'in_progress', 'rework', 'awaiting_rework', 'completed'])
+                ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled']))
+                ->with([
+                    'workOrder.customer',
+                    'workOrder.product',
+                    'workOrder.rfq:id,job_type',
+                    'workOrder.items',
+                    'workOrder.operationSheets.steps',
+                    // The queue names the bench and the person per row, so load
+                    // them with the steps — reading them off each step one at a
+                    // time is a query per operation on every row.
+                    'workOrder.operationSheets.steps.subSection:id,name',
+                    'workOrder.operationSheets.steps.assignedTo:id,name',
+                    'section',
+                ])
+                ->latest('id')->limit(60)->get()
+                ->flatMap(fn ($wos) => $this->expandWosForSubSection($wos, (int) $section->id, 'completed'))
+                ->values();
+        } elseif ($section) {
+            $completed = WorkOrderSection::where('section_id', $section->id)
+                ->where('status', 'completed')
+                ->whereHas('workOrder', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled']))
+                ->with([
+                    'workOrder.customer',
+                    'workOrder.product',
+                    'workOrder.rfq:id,job_type',
+                    'workOrder.items',
+                    'workOrder.operationSheets.steps',
+                    // The queue names the bench and the person per row, so load
+                    // them with the steps — reading them off each step one at a
+                    // time is a query per operation on every row.
+                    'workOrder.operationSheets.steps.subSection:id,name',
+                    'workOrder.operationSheets.steps.assignedTo:id,name',
+                    'section',
+                ])
+                ->orderByDesc('completed_at')->orderByDesc('id')->limit(60)->get()
+                ->flatMap(fn ($wos) => $this->expandWosForCompleted($wos))
+                ->values();
+        }
+
+        // An engineer's Completed is his own, exactly like his Active list.
+        if ($ownWorkOnly) {
+            $completed = $completed->filter(fn ($row) =>
+                (int) ($row['assigned_to_id'] ?? 0) === (int) $user->id
+                || (int) ($row['assigned_by_id'] ?? 0) === (int) $user->id
+                || (int) ($row['bucket_steps'] ?? 0) > 0
+            )->values();
+        }
+
         return Inertia::render('Production/Queue', [
             'section' => $section ? [
                 'id'          => $section->id,
@@ -156,7 +224,10 @@ class ProductionController extends Controller
                 'parent_name' => $isSubSection ? Section::find($section->parent_id)?->name : null,
             ] : null,
             'jobs'              => $jobs,
-            'upcoming'          => $upcoming,
+            // A bench's "heading this way" is its own steps waiting on the
+            // operation before them; a shop's is a job at an earlier section.
+            'upcoming'          => $isSubSection ? $benchUpcoming : $upcoming,
+            'completed'         => $completed,
             'available_sections'=> $availableSections,
             'can_switch'        => $canSwitch,
             // The XEN → AE flow, as this viewer sees it.
@@ -1100,14 +1171,7 @@ class ProductionController extends Controller
                 // the PREVIOUS operation at this shop has completed. The first
                 // step's input is the shop's received qty (null = ungated).
                 $firstInput = $workOrderSection->effectiveReceivedQty();
-                $capForSheet = function ($sheet) use ($sectionId, $firstInput) {
-                    $ordered = $sheet->steps->where('section_id', $sectionId)->sortBy('sequence')->values();
-                    $map = [];
-                    foreach ($ordered as $i => $s) {
-                        $map[$s->id] = $i === 0 ? $firstInput : (float) $ordered[$i - 1]->completed_qty;
-                    }
-                    return $map;
-                };
+                $capForSheet = fn ($sheet) => self::inputCapsFor($sheet, $sectionId, $firstInput);
 
                 $packStep = fn ($s, $cap = null) => [
                     'input_cap'         => $cap,
@@ -1583,10 +1647,51 @@ class ProductionController extends Controller
      * this shop's active WOS. Each row carries sub_section_id so the "Open" link
      * scopes the detail page to that sub-section's steps.
      */
-    private function expandWosForSubSection(WorkOrderSection $wos, int $subId): \Illuminate\Support\Collection
+    /**
+     * A finished section's rows — one per item that had work here.
+     *
+     * ⚠️ Deliberately NOT `expandWosForQueue`: that one only emits an item
+     * with an OPEN step (or something still to forward), which is exactly what
+     * a completed section has none of, so it would return nothing at all.
+     */
+    private function expandWosForCompleted(WorkOrderSection $wos): \Illuminate\Support\Collection
+    {
+        $wo = $wos->workOrder;
+        $rows = collect();
+        foreach ($wo->items as $idx => $item) {
+            $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
+            if (!$sheet) continue;
+            $sectionSteps = $sheet->steps->where('section_id', $wos->section_id);
+            if ($sectionSteps->isEmpty()) continue;
+            $rows->push($this->serializeWosForQueue($wos, [
+                'item' => [
+                    'id'          => $item->id,
+                    'sequence'    => $idx + 1,
+                    'description' => $item->description,
+                    'quantity'    => (float) $item->quantity,
+                    'unit'        => $item->unit ?? 'pcs',
+                ],
+                'sheet_number'   => $sheet->sheet_number,
+                'steps_total'    => $sectionSteps->count(),
+                'steps_done'     => $sectionSteps->whereIn('status', ['completed', 'skipped'])->count(),
+                'my_steps'       => 0,
+                'bucket_steps'   => $sectionSteps->where('assigned_to', auth()->id())->count(),
+                'assignment_summary' => $this->packAssignmentSummary($sectionSteps),
+                'op_sheet_id'    => $sheet->id,
+            ]));
+        }
+        if ($rows->isEmpty()) {
+            $rows->push($this->serializeWosForQueue($wos));
+        }
+
+        return $rows;
+    }
+
+    private function expandWosForSubSection(WorkOrderSection $wos, int $subId, string $bucket = 'active'): \Illuminate\Support\Collection
     {
         $wo = $wos->workOrder;
         $sectionId = $wos->section_id;
+        $firstInput = $wos->effectiveReceivedQty();
         $rows = collect();
         foreach ($wo->items as $idx => $item) {
             $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
@@ -1599,8 +1704,19 @@ class ProductionController extends Controller
                 ->where('sub_section_id', $subId)
                 ->filter(fn ($st) => $st->reachesSubSection());
             if ($subSteps->isEmpty()) continue;
-            $openHere = $subSteps->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
-            if (!$openHere) continue;
+
+            // A bench's three tabs, all about ITS own steps: what it can work
+            // on, what is waiting on the operation before it, and what it has
+            // finished.
+            $caps = self::inputCapsFor($sheet, $sectionId, $firstInput);
+            $open = $subSteps->filter(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+            $want = match ($bucket) {
+                'completed' => $subSteps->filter(fn ($s) => in_array($s->status, ['completed', 'skipped'])),
+                'upcoming'  => $open->reject(fn ($s) => self::stepIsActionable($s, $caps[$s->id] ?? null)),
+                default     => $open->filter(fn ($s) => self::stepIsActionable($s, $caps[$s->id] ?? null)),
+            };
+            if ($want->isEmpty()) continue;
+            $openHere = $want->first();
             $rows->push($this->serializeWosForQueue($wos, [
                 'item' => [
                     'id'          => $item->id,
@@ -1613,6 +1729,11 @@ class ProductionController extends Controller
                 'steps_total'    => $subSteps->count(),
                 'steps_done'     => $subSteps->whereIn('status', ['completed', 'skipped'])->count(),
                 'sub_section_id' => $subId,
+                // What this tab is actually showing, so the row can name it.
+                'bucket_steps'   => $want->count(),
+                'waiting_on'     => $bucket === 'upcoming'
+                    ? $want->map(fn ($s) => $s->operation_name)->values()->all()
+                    : [],
                 'my_steps'       => $subSteps
                     ->whereNotIn('status', ['completed', 'skipped'])
                     ->where('assigned_to', auth()->id())->count(),
@@ -1621,6 +1742,42 @@ class ProductionController extends Controller
             ]));
         }
         return $rows;
+    }
+
+    /**
+     * How much input each operation at this section actually has.
+     *
+     * Intra-shop sequential gating: a step can only work up to what the
+     * PREVIOUS operation here has completed; the first step's input is the
+     * shop's received qty (null = ungated, i.e. the entry section).
+     *
+     * ⚠️ One copy. The job page gates "Log Output" with this and the queue
+     * splits Active from Upcoming with it — two walks that disagree would put
+     * a job in a tab it cannot be worked from.
+     *
+     * @return array<int, float|null>  step id => input available
+     */
+    private static function inputCapsFor($sheet, int $sectionId, $firstInput): array
+    {
+        $ordered = $sheet->steps->where('section_id', $sectionId)->sortBy('sequence')->values();
+        $map = [];
+        foreach ($ordered as $i => $s) {
+            $map[$s->id] = $i === 0 ? $firstInput : (float) $ordered[$i - 1]->completed_qty;
+        }
+
+        return $map;
+    }
+
+    /** Is there input left for this step to work on right now? */
+    private static function stepIsActionable($step, $cap): bool
+    {
+        $target = (float) ($step->target_qty ?? 0);
+        $done   = (float) ($step->completed_qty ?? 0);
+        if ($target <= 0) return true;   // no qty tracking → open means workable
+
+        $avail = $cap === null ? $target - $done : min($target, (float) $cap) - $done;
+
+        return $avail > 0.0001;
     }
 
     /**
@@ -1713,6 +1870,9 @@ class ProductionController extends Controller
             'ready_to_transfer' => false,
             'assignment_summary' => null,
             'op_sheet_id'   => null,
+            'bucket_steps'  => null,
+            'waiting_on'    => [],
+            'completed_at'  => $wos->completed_at?->diffForHumans(),
             // The work order PCD issued, through production's own door — the
             // queue should not be a dead end for the paperwork either.
             'work_order_pdf_url' => route('production.work-order.pdf', $wo->id),

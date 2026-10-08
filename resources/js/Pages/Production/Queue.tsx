@@ -24,6 +24,11 @@ interface QueueJob {
     ready_to_transfer?: boolean;
     /** Open operations on this row named on ME. */
     my_steps?: number;
+    /** How many of this row's steps the tab being shown is about. */
+    bucket_steps?: number | null;
+    /** On a bench's Upcoming row: the operations still waiting. */
+    waiting_on?: string[];
+    completed_at?: string | null;
     /** Where the open operations are and who has them — so the list answers it. */
     assignment_summary?: {
         open: number;
@@ -110,7 +115,7 @@ const PRIORITY_BADGE: Record<string, string> = {
     urgent: 'badge-red',
 };
 
-export default function ProductionQueue({ section, jobs, upcoming, available_sections, can_switch, shop_flow = null }: Props & { shop_flow?: any }) {
+export default function ProductionQueue({ section, jobs, upcoming, completed = [], available_sections, can_switch, shop_flow = null }: Props & { completed?: QueueJob[]; shop_flow?: any }) {
     if (!section) {
         return (
             <AppLayout header="Production">
@@ -135,6 +140,11 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
         { open: false, url: null, title: '' });
     const openPdf = (url: string, title: string, subtitle?: string) =>
         setPdfPopup({ open: true, url, title, subtitle });
+
+    // Three readings of the same section — what can be worked now, what is
+    // heading here, and what it has finished. Stacking them made a long page
+    // on which the thing you came for was never the thing on screen.
+    const [tab, setTab] = useState<'active' | 'upcoming' | 'completed'>('active');
 
     return (
         <AppLayout header={`Production — ${section.name}`}>
@@ -189,17 +199,43 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                     </div>
                 </div>
 
-                {/* Active jobs */}
+                {/* One section, three readings of it */}
                 <div className="card">
                     <div className="card-header">
-                        <h2 className="text-base font-bold text-surface-900">
-                            {shop_flow?.own_work_only ? 'Your Jobs' : 'Active Jobs'}
-                        </h2>
-                        <p className="text-xs text-surface-400 mt-0.5">
-                            {shop_flow?.own_work_only
+                        <div className="flex items-center gap-1 flex-wrap">
+                            {([
+                                ['active', shop_flow?.own_work_only ? 'Your Jobs' : 'Active Jobs', jobs.length],
+                                ['upcoming', 'Upcoming Jobs', upcoming.length],
+                                ['completed', 'Completed Jobs', completed.length],
+                            ] as const).map(([key, label, count]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setTab(key)}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                                        tab === key
+                                            ? 'bg-brand-500 text-white'
+                                            : 'text-surface-600 hover:bg-surface-100'
+                                    }`}
+                                >
+                                    {label}
+                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${
+                                        tab === key ? 'bg-white/20' : 'bg-surface-200 text-surface-600'
+                                    }`}>{count}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-xs text-surface-400 mt-2">
+                            {tab === 'active' && (shop_flow?.own_work_only
                                 ? `${jobs.length} job${jobs.length === 1 ? '' : 's'} forwarded to you at ${section.name}`
-                                : `${jobs.length} job${jobs.length === 1 ? '' : 's'} parked at ${section.name}`}
-                            {shop_flow?.can_forward && shop_flow?.unassigned > 0 && (
+                                : `${jobs.length} job${jobs.length === 1 ? '' : 's'} parked at ${section.name}`)}
+                            {tab === 'upcoming' && (section.is_sub
+                                ? `Named on ${section.name} but waiting on the operation before them.`
+                                : `Routed to ${section.name} — currently being worked upstream. Plan machines & material ahead.`)}
+                            {tab === 'completed' && (section.is_sub
+                                ? `Operations ${section.name} has finished, newest first.`
+                                : `Jobs ${section.name} has finished and forwarded on, newest first.`)}
+                            {tab === 'active' && shop_flow?.can_forward && shop_flow?.unassigned > 0 && (
                                 <span className="ml-2 text-indigo-600 font-semibold">
                                     · {shop_flow.unassigned} waiting with you to forward
                                 </span>
@@ -207,7 +243,7 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                         </p>
                     </div>
                     <div className="card-body p-0">
-                        {jobs.length === 0 ? (
+                        {tab === 'active' && (jobs.length === 0 ? (
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-check-circle" /></div>
                                 <div className="empty-state-title">All clear</div>
@@ -219,31 +255,51 @@ export default function ProductionQueue({ section, jobs, upcoming, available_sec
                                     <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
                                 ))}
                             </div>
-                        )}
-                    </div>
-                </div>
+                        ))}
 
-                {/* Upcoming jobs — routed here, still upstream */}
-                {upcoming.length > 0 && (
-                    <div className="card">
-                        <div className="card-header flex items-center justify-between">
-                            <div>
-                                <h2 className="text-base font-bold text-surface-900">Upcoming Jobs</h2>
-                                <p className="text-xs text-surface-400 mt-0.5">
-                                    Routed to {section.name} — currently being worked upstream. Plan machines &amp; material ahead.
-                                </p>
+                        {/* ⚠️ A shop's upcoming row is a WOS heading this way; a
+                            bench's is its own step waiting on the one before it.
+                            Two shapes, two cards — UpcomingCard on a bench row
+                            would read an id that is not there. */}
+                        {tab === 'upcoming' && (upcoming.length === 0 ? (
+                            <div className="empty-state">
+                                <div className="empty-state-icon"><i className="fi fi-rr-truck-side" /></div>
+                                <div className="empty-state-title">Nothing heading this way</div>
+                                <div className="empty-state-text">
+                                    {section.is_sub
+                                        ? 'Every operation named on this bench can be worked now.'
+                                        : 'No job is routed to this section from an earlier one right now.'}
+                                </div>
                             </div>
-                            <span className="badge badge-slate">{upcoming.length} coming</span>
-                        </div>
-                        <div className="card-body p-0">
+                        ) : (
                             <div className="divide-y divide-surface-100">
-                                {upcoming.map((u) => (
-                                    <UpcomingCard key={u.wos_id} u={u} />
+                                {section.is_sub
+                                    ? (upcoming as any[]).map((job) => (
+                                        <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
+                                    ))
+                                    : upcoming.map((u) => <UpcomingCard key={u.wos_id} u={u} />)}
+                            </div>
+                        ))}
+
+                        {tab === 'completed' && (completed.length === 0 ? (
+                            <div className="empty-state">
+                                <div className="empty-state-icon"><i className="fi fi-rr-time-past" /></div>
+                                <div className="empty-state-title">Nothing finished yet</div>
+                                <div className="empty-state-text">
+                                    {section.is_sub
+                                        ? 'No operation on this bench has been completed.'
+                                        : 'This section has not finished and forwarded a job yet.'}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-surface-100">
+                                {completed.map((job) => (
+                                    <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} done />
                                 ))}
                             </div>
-                        </div>
+                        ))}
                     </div>
-                )}
+                </div>
             </div>
 
             <PdfPopupModal
@@ -294,7 +350,7 @@ function UpcomingCard({ u }: { u: UpcomingJob }) {
     );
 }
 
-function JobCard({ job, onPdf }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean }; onPdf: (url: string, title: string, subtitle?: string) => void }) {
+function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean }; onPdf: (url: string, title: string, subtitle?: string) => void; done?: boolean }) {
     const isAwaiting = job.status === 'awaiting_rework';
     return (
         <div className={`px-5 py-4 ${job.status === 'rework' ? 'bg-rose-50/40' : ''}`}>
@@ -364,7 +420,21 @@ function JobCard({ job, onPdf }: { job: QueueJob & { assigned_to?: string | null
                         )}
                         {job.work_order.due_date && <span><i className="fi fi-rr-calendar text-[10px]" /> Due {job.work_order.due_date}</span>}
                         {job.started_at && <span className="text-surface-400">· started {job.started_at}</span>}
+                        {done && job.completed_at && (
+                            <span className="text-emerald-600"><i className="fi fi-rr-check text-[10px]" /> finished {job.completed_at}</span>
+                        )}
                     </div>
+
+                    {/* On a bench's Upcoming row, WHICH operations are waiting. */}
+                    {!!job.waiting_on?.length && (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            {job.waiting_on.map((name) => (
+                                <span key={name} className="inline-flex items-center gap-1 text-[11px] text-surface-600 bg-surface-100 border border-surface-200 rounded-md px-1.5 py-0.5">
+                                    <i className="fi fi-rr-time-twenty-four text-[9px]" /> {name} — waiting on the previous operation
+                                </span>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Where the open operations are and who holds them. The
                         in-charge had to open the job to learn any of this. */}

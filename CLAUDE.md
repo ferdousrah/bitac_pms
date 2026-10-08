@@ -704,6 +704,19 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **Machine running-state auto-wired:** `Machine.current_state` already existed; `ProductionController::syncMachineStates()` now reconciles it after log/delete/transfer — a machine is `running` while it has any in-progress operation step, else `idle`. **Manual states (maintenance/breakdown/offline/setup) are never overwritten.** Admin Machines list shows the live state badge + "Job# …" it's running (`running_jobs` from in-progress steps).
 - **Progress sync:** every surface (Dashboard, WO list, WO detail per-item, Customer portal, IED jobs, AI ToolRegistry) delegates to `WorkOrder::production_progress` (section-weighted) — single source. **No PDF shows a progress %**, but the **Work Order routing PDF now has a Weightage column** (`WorkOrderSectionController@pdf`) so the printed form matches PCD's assigned section weights.
 
+### The section queue is three tabs (2026-10-08)
+> BITAC's suggestion: *"Active Jobs / Upcoming Jobs / Completed Jobs … 3tai specific oi section centric hobe."* Right call — three lists of the same shape, only one wanted at a time, and stacking them made the thing you came for never the thing on screen.
+
+- **`completed` is a new prop**, and **`Completed` means something different for a shop and for a bench**, which is the point of "section centric":
+  - **Shop** — `work_order_sections.status = 'completed'`, i.e. it has forwarded everything it was given. Built by **`expandWosForCompleted()`**. ⚠️ Deliberately NOT `expandWosForQueue`, which only emits an item with an **open** step or something still to forward — exactly what a finished section has none of, so it would have returned nothing at all.
+  - **Bench** — its own steps that are `completed`/`skipped`.
+  - Both capped at 60, newest first: a record, not a worklist.
+- **`expandWosForSubSection($wos, $subId, $bucket)`** now serves all three readings of a bench. ⚠️ **Active narrowed**: it used to return every open step on the bench; it now returns only the ones with input available, and the rest become **Upcoming**. That finally matches the sidebar badge, which was already actionable-only.
+- **A bench's "Upcoming" is its own steps waiting on the operation before them** — the honest analogue of a shop's "routed here, still upstream". ⚠️ **Two different row shapes:** a shop's upcoming row is a WOS heading this way (`UpcomingCard`), a bench's is a queue row (`JobCard`). The page branches on `section.is_sub`; rendering one with the other's card reads an id that is not there.
+- **`inputCapsFor()` + `stepIsActionable()`** are now methods, not a closure inside `show()`. The job page gates "Log Output" with the same walk the queue splits Active from Upcoming with — two walks that disagree would put a job in a tab it cannot be worked from. (`HandleInertiaRequests`'s badge still has its own copy; it walks the shop's steps for a different purpose.)
+- The handover rule holds across all three: a bench step with **nobody named** appears in **no tab**.
+- An engineer narrowed to his own work gets a **Completed** narrowed the same way.
+
 ### Phase 3.5 — Upcoming Jobs (done)
 - `ProductionController@queue` now also returns **`upcoming`** — WOS at this section still `pending` while an EARLIER section is active (`in_progress`/`rework`/`ready`), i.e. jobs heading this way but not yet transferred here. Each row: current location (nearest active upstream section), `stops_away`, qty, due, overall `production_progress`. Sorted by `stops_away`.
 - **Production Queue page** renders an **"Upcoming Jobs"** card under Active Jobs (distance chip "N stops away", "Now at <section>", View → WO detail). Lets a supervisor plan machines/material ahead.
