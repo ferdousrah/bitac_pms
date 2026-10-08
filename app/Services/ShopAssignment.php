@@ -108,14 +108,18 @@ class ShopAssignment
      *
      * @return \Illuminate\Support\Collection<int, User>
      */
-    public static function workforce(int $shopId)
+    public static function workforce(int $shopId, ?int $excludeUserId = null)
     {
         $benchIds = \App\Models\Section::withoutGlobalScopes()
             ->where('parent_id', $shopId)->pluck('id');
 
         return User::withoutGlobalScopes()
+            ->with('section:id,name')
             ->whereIn('section_id', $benchIds->push($shopId)->all())
             ->where('is_active', true)
+            // ⚠️ You do not put your own name on an operation (BITAC) — you are
+            // the one handing it out. Pass the viewer to leave them off.
+            ->when($excludeUserId, fn ($q) => $q->whereKeyNot($excludeUserId))
             ->orderBy('name')
             ->get();
     }

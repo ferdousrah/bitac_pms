@@ -1214,11 +1214,18 @@ class ProductionController extends Controller
             // Whose name can go on an operation here: the shop's own people AND
             // the supervisors of its benches. Wider than the Forward dialog's
             // list, which is only the engineers the whole job can be handed to.
-            'step_assignees' => ShopAssignment::workforce((int) $workOrderSection->section_id)
+            'step_assignees' => ShopAssignment::workforce(
+                    (int) $workOrderSection->section_id,
+                    $request->user()?->id,     // you are handing it out, not taking it
+                )
                 ->map(fn ($u) => [
                     'id'          => $u->id,
                     'name'        => $u->name,
                     'designation' => $u->designation,
+                    // Which shop or bench they are posted to — so a name nobody
+                    // recognises can be placed at a glance instead of looking
+                    // like someone from another department leaked in.
+                    'section'     => $u->section?->name,
                 ])->values(),
             // Sub-sections of THIS shop — the in-charge assigns each step to one
             // after the job arrives (PCD only routes to the shop, not the sub-shop).

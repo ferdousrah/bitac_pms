@@ -195,7 +195,7 @@ interface Props {
     operators?: OptionLite[];
     sub_sections?: OptionLite[];
     /** Whose name can go on an operation here — shop staff + its bench supervisors. */
-    step_assignees?: { id: number; name: string; designation: string | null }[];
+    step_assignees?: { id: number; name: string; designation: string | null; section: string | null }[];
     scoped_sub_section?: { id: number; name: string | null } | null;
 }
 
@@ -685,7 +685,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
     );
 }
 
-function OpStepRow({ step, canAct, machines, operators, subSections, assignees = [] }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[]; assignees?: { id: number; name: string; designation: string | null }[] }) {
+function OpStepRow({ step, canAct, machines, operators, subSections, assignees = [] }: { step: OpStep; canAct: boolean; machines: OptionLite[]; operators: OptionLite[]; subSections: OptionLite[]; assignees?: { id: number; name: string; designation: string | null; section: string | null }[] }) {
     const [busy, setBusy] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const today = new Date().toISOString().slice(0, 10);
@@ -808,9 +808,18 @@ function OpStepRow({ step, canAct, machines, operators, subSections, assignees =
                                     title="Who is responsible for this operation"
                                 >
                                     <option value="">Assign person…</option>
+                                    {/* ⚠️ The viewer is left off the list, so someone
+                                        already named there would otherwise vanish from
+                                        the select while the step still carries them. */}
+                                    {step.assigned_to && !assignees.some((u) => u.id === step.assigned_to) && (
+                                        <option value={step.assigned_to}>
+                                            {step.assigned_to_name ?? 'Currently assigned'}
+                                        </option>
+                                    )}
                                     {assignees.map((u) => (
                                         <option key={u.id} value={u.id}>
                                             {u.name}{u.designation ? ` — ${u.designation}` : ''}
+                                            {u.section ? ` · ${u.section}` : ''}
                                         </option>
                                     ))}
                                 </select>
