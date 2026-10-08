@@ -154,7 +154,10 @@ class HandleInertiaRequests extends Middleware
                                     : ($prev === null ? $target - $done : min($target, (float) $prev) - $done);
                                 if ($avail > 0.0001) {
                                     $itemActionable = true;
-                                    if ($s->sub_section_id) $actionableSubs[$s->sub_section_id] = true;
+                                    // Same rule as the bench's queue: no person named,
+                                    // no work at the bench — or the badge counts rows
+                                    // the queue under it will not show.
+                                    if ($s->reachesSubSection()) $actionableSubs[$s->sub_section_id] = true;
                                 }
                             }
                             $prev = (float) ($s->completed_qty ?? 0); // feeds the next op

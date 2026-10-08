@@ -34,6 +34,22 @@ class OperationStep extends Model
     public function section()           { return $this->belongsTo(Section::class); }
     public function subSection()        { return $this->belongsTo(Section::class, 'sub_section_id'); }
     public function assignedTo()        { return $this->belongsTo(User::class, 'assigned_to'); }
+
+    /**
+     * Has this operation actually reached its bench?
+     *
+     * ⚠️ BITAC: *"person assign na hoa porjonto sub-section e jabena"* — picking
+     * the bench says WHERE the work goes; it does not hand it over. Work with
+     * nobody's name on it would sit in a bench's queue belonging to no one, so
+     * it stays with the shop until someone is named.
+     *
+     * The sub-section QUEUE and the sidebar BADGE both read this — two copies
+     * of the rule is how a bench shows a count with an empty queue under it.
+     */
+    public function reachesSubSection(): bool
+    {
+        return $this->sub_section_id !== null && $this->assigned_to !== null;
+    }
     public function assignedBy()        { return $this->belongsTo(User::class, 'assigned_by'); }
     public function machine()           { return $this->belongsTo(Machine::class); }
     public function operator()          { return $this->belongsTo(Operator::class); }

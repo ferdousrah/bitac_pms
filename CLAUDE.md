@@ -607,6 +607,14 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **This is how an AE/SAE finds the work.** Queue rows (shop and sub-section alike) carry **`my_steps`** — open operations here named on the viewer — badged "*N operations yours*". Assigning without that would have been a label nobody ever sees.
 - ⚠️ A queue row nests the job as **`work_order.wo_number`**, not `wo_number`; a flat lookup finds nothing and reads as "the job is not on his queue".
 
+##### ⚠️ A bench with nobody named on it has NOT been handed the work
+> BITAC: *"person assign na hoa porjonto sub-section e jabena."*
+
+- Picking the bench says **where** the work goes; it does not hand it over. **`OperationStep::reachesSubSection()`** (`sub_section_id` AND `assigned_to`) is the one rule, read by **both** `expandWosForSubSection()` (the bench's queue) and the **sidebar badge** in `HandleInertiaRequests` — two copies is exactly how a bench comes to show a count with an empty queue under it.
+- Clearing the person **takes the step back off the bench**, and the bench stays recorded — so it is a reversible handover, not a one-way door.
+- The step row says so in amber: *"Not with Milling Section yet — assign a person"*. Without it, picking a sub-section looks like it did nothing, which is the exact loop this came out of.
+- ⚠️ **This changes what the XEN's "send the whole job to a sub-section" does** (`forward` with `mode=sub_section`): it still stamps the bench on every open step, but those steps do not reach that bench until each has a person. The per-step amber note is what makes that visible.
+
 - ⚠️ **The per-operation "Assign sub-section…" select is NOT the Forward dialog** and never opens one — it posts on change and flashes "Sub-section updated." It needs no in-charge, so it keeps working on a shop with no chain of command, and the `fact` says so explicitly rather than leaving someone to wonder whether their pick saved.
 - **Nothing about the authorisation model changed.** Without a XEN everyone posted to the shop still works on the job directly; the hint only says why the chain of command is absent.
 - **The order it actually takes:** post people to the shop (`users.section_id`), give one of them **`shop-incharge`** → he becomes the XEN, and **`Assistant Engineer (Shop)`** / **`Sub-Assistant Engineer (Shop)`** for the engineers under him. The Forward dialog then lists everyone posted to the shop who is *not* a XEN — verified, including that a `section_supervisor` posted to the shop is offered and the XEN is not on his own list.

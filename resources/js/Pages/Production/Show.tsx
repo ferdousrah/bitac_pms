@@ -822,6 +822,16 @@ function OpStepRow({ step, canAct, machines, operators, subSections, assignees =
                                 </span>
                             )
                         )}
+
+                        {/* ⚠️ A bench with nobody named on it has NOT been handed
+                            over — the step stays off that bench's queue. Say so,
+                            or picking a sub-section looks like it did nothing. */}
+                        {step.sub_section_id && !step.assigned_to && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">
+                                <i className="fi fi-rr-hourglass-end text-[9px]" />
+                                Not with {step.sub_section ?? 'the sub-section'} yet — assign a person
+                            </span>
+                        )}
                         {step.machine && <span><i className="fi fi-rr-settings text-[10px]" /> {step.machine}</span>}
                         {step.operator && <span><i className="fi fi-rr-user text-[10px]" /> {step.operator}</span>}
                         {step.estimated_hours > 0 && <span><i className="fi fi-rr-clock text-[10px]" /> est {step.estimated_hours.toFixed(1)}h</span>}

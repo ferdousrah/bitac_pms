@@ -1563,7 +1563,13 @@ class ProductionController extends Controller
         foreach ($wo->items as $idx => $item) {
             $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
             if (!$sheet) continue;
-            $subSteps = $sheet->steps->where('section_id', $sectionId)->where('sub_section_id', $subId);
+            // ⚠️ A step only reaches the bench once someone is NAMED on it —
+            // picking the bench says where the work goes, not that it has been
+            // handed over. See OperationStep::reachesSubSection().
+            $subSteps = $sheet->steps
+                ->where('section_id', $sectionId)
+                ->where('sub_section_id', $subId)
+                ->filter(fn ($st) => $st->reachesSubSection());
             if ($subSteps->isEmpty()) continue;
             $openHere = $subSteps->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
             if (!$openHere) continue;
