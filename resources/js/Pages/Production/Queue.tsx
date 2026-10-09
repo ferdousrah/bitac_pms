@@ -202,7 +202,10 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                 {/* One section, three readings of it */}
                 <div className="card">
                     <div className="card-header">
-                        <div className="flex items-center gap-1 flex-wrap">
+                        {/* A segmented control rather than three loose buttons:
+                            one trough, one raised pill, so which list you are
+                            looking at is obvious without a saturated block. */}
+                        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface-100 flex-wrap">
                             {([
                                 ['active', shop_flow?.own_work_only ? 'Your Jobs' : 'Active Jobs', jobs.length],
                                 ['upcoming', 'Upcoming Jobs', upcoming.length],
@@ -212,15 +215,16 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                                     key={key}
                                     type="button"
                                     onClick={() => setTab(key)}
-                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                                    aria-pressed={tab === key}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                                         tab === key
-                                            ? 'bg-brand-500 text-white'
-                                            : 'text-surface-600 hover:bg-surface-100'
+                                            ? 'bg-white text-brand-700 shadow-sm'
+                                            : 'text-surface-500 hover:text-surface-700'
                                     }`}
                                 >
                                     {label}
-                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${
-                                        tab === key ? 'bg-white/20' : 'bg-surface-200 text-surface-600'
+                                    <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md tabular-nums ${
+                                        tab === key ? 'bg-brand-50 text-brand-700' : 'bg-surface-200/80 text-surface-500'
                                     }`}>{count}</span>
                                 </button>
                             ))}
@@ -353,7 +357,9 @@ function UpcomingCard({ u }: { u: UpcomingJob }) {
 function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean }; onPdf: (url: string, title: string, subtitle?: string) => void; done?: boolean }) {
     const isAwaiting = job.status === 'awaiting_rework';
     return (
-        <div className={`px-5 py-4 ${job.status === 'rework' ? 'bg-rose-50/40' : ''}`}>
+        <div className={`px-5 py-3.5 transition-colors hover:bg-surface-50/70 ${
+            job.status === 'rework' ? 'bg-rose-50/40' : done ? 'bg-surface-50/40' : ''
+        }`}>
             <div className="flex items-start gap-4">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -362,9 +368,15 @@ function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?:
                             <span className="badge badge-amber text-[10px]">Item {job.item.sequence}</span>
                         )}
                         <JobTypeBadge type={job.work_order.job_type} size="xs" />
-                        <span className={`badge ${STATUS_BADGE[job.status] ?? 'badge-slate'}`}>
-                            {STATUS_LABEL[job.status] ?? job.status}
-                        </span>
+                        {/* On the Completed tab the status and the priority are
+                            history — the tab already says it is done, and how
+                            urgent it WAS helps nobody. Seven chips on one line
+                            is what made the row hard to read. */}
+                        {!done && (
+                            <span className={`badge ${STATUS_BADGE[job.status] ?? 'badge-slate'}`}>
+                                {STATUS_LABEL[job.status] ?? job.status}
+                            </span>
+                        )}
                         {job.ready_to_transfer && (
                             <span className="badge badge-amber"><i className="fi fi-rr-paper-plane text-[9px]" /> Ready to transfer</span>
                         )}
@@ -385,16 +397,20 @@ function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?:
                             : job.shop_flow_active
                                 ? <span className="badge badge-blue"><i className="fi fi-rr-inbox text-[9px]" /> to forward</span>
                                 : null}
-                        <span className={`badge ${PRIORITY_BADGE[job.work_order.priority] ?? 'badge-slate'} capitalize`}>
-                            {job.work_order.priority}
-                        </span>
-                        <span className="text-[11px] text-surface-400">Step {job.sequence} of routing</span>
-                        {job.sheet_number && (
-                            <span className="text-[10px] font-mono text-surface-400">Sheet {job.sheet_number}</span>
+                        {!done && (
+                            <span className={`badge ${PRIORITY_BADGE[job.work_order.priority] ?? 'badge-slate'} capitalize`}>
+                                {job.work_order.priority}
+                            </span>
                         )}
+                        <span className="text-[11px] text-surface-400">
+                            Step {job.sequence}
+                            {job.sheet_number && <span className="font-mono"> · Sheet {job.sheet_number}</span>}
+                        </span>
                     </div>
 
-                    <h3 className="text-sm font-semibold text-surface-900 mt-1">{job.work_order.customer}</h3>
+                    <h3 className={`text-sm font-semibold mt-1 ${done ? 'text-surface-600' : 'text-surface-900'}`}>
+                        {job.work_order.customer}
+                    </h3>
                     {/* When this row represents a specific item, show the item
                         description + quantity rather than the WO-level product. */}
                     {job.item ? (
@@ -488,18 +504,11 @@ function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?:
                     )}
                 </div>
 
-                <div className="shrink-0 flex flex-col items-stretch gap-1.5">
-                    <Link
-                        href={job.item
-                            ? `/production/wos/${job.id}?item_id=${job.item.id}${job.sub_section_id ? `&sub_section=${job.sub_section_id}` : ''}`
-                            : `/production/wos/${job.id}`}
-                        className="btn-outline btn-sm"
-                    >
-                        <i className="fi fi-rr-arrow-right text-xs leading-none" />
-                        Open
-                    </Link>
-                    {/* The two papers the floor actually needs, without going
-                        into the job first. */}
+                {/* ⚠️ These were three full-width buttons stacked, which made
+                    every row about 110px tall and put the heaviest thing on the
+                    page in the least important column. One compact line: the
+                    papers as quiet icon buttons, Open as the only real button. */}
+                <div className="shrink-0 flex items-center gap-1.5 pt-0.5">
                     {job.work_order_pdf_url && (
                         <button
                             type="button"
@@ -508,9 +517,12 @@ function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?:
                                 'Work Order',
                                 job.work_order.job_number ? `Job #${job.work_order.job_number}` : job.work_order.wo_number,
                             )}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-indigo-900 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                            title="Work order issued by PCD"
+                            aria-label="Open the work order PDF"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 transition-colors"
                         >
-                            <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> Work Order
+                            <i className="fi fi-rr-file-pdf text-[11px] leading-none" />
+                            <span className="hidden xl:inline">Work Order</span>
                         </button>
                     )}
                     {job.op_sheet_id && (
@@ -521,11 +533,23 @@ function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?:
                                 'Operation Sheet',
                                 job.sheet_number ? `Sheet ${job.sheet_number}` : undefined,
                             )}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-amber-950 bg-amber-100 border border-amber-300 hover:bg-amber-200 transition-colors"
+                            title="Operation sheet for this item"
+                            aria-label="Open the operation sheet PDF"
+                            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors"
                         >
-                            <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> Op Sheet
+                            <i className="fi fi-rr-file-pdf text-[11px] leading-none" />
+                            <span className="hidden xl:inline">Op Sheet</span>
                         </button>
                     )}
+                    <Link
+                        href={job.item
+                            ? `/production/wos/${job.id}?item_id=${job.item.id}${job.sub_section_id ? `&sub_section=${job.sub_section_id}` : ''}`
+                            : `/production/wos/${job.id}`}
+                        className="btn-outline btn-sm whitespace-nowrap"
+                    >
+                        Open
+                        <i className="fi fi-rr-arrow-right text-xs leading-none" />
+                    </Link>
                 </div>
             </div>
         </div>
