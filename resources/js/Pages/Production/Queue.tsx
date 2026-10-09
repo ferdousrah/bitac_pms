@@ -146,6 +146,28 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
     // on which the thing you came for was never the thing on screen.
     const [tab, setTab] = useState<'active' | 'upcoming' | 'completed'>('active');
 
+    // One box, filtering whatever tab is open — and the tab counts follow it,
+    // so typing a job number says which tab the job is in without hunting.
+    const [q, setQ] = useState('');
+    const needle = q.trim().toLowerCase();
+
+    // ⚠️ Two row shapes live here: a queue row (job nested under `work_order`)
+    // and a shop's upcoming row (flat, plus `current`). Read both or searching
+    // the Upcoming tab silently matches nothing.
+    const haystack = (r: any) => [
+        r.work_order?.job_number, r.work_order?.wo_number, r.work_order?.customer, r.work_order?.product,
+        r.job_number, r.wo_number, r.customer, r.product,
+        r.item?.description, r.sheet_number, r.assigned_to, r.assigned_by, r.current?.name,
+        ...(r.assignment_summary?.sub_sections ?? []),
+        ...(r.assignment_summary?.people ?? []),
+        ...(r.waiting_on ?? []),
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const sift = <T,>(rows: T[]): T[] => needle ? rows.filter((r) => haystack(r).includes(needle)) : rows;
+    const fJobs = sift(jobs);
+    const fUpcoming = sift(upcoming);
+    const fCompleted = sift(completed);
+
     return (
         <AppLayout header={`Production — ${section.name}`}>
             <div className="space-y-6 animate-fade-in">
@@ -202,14 +224,15 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                 {/* One section, three readings of it */}
                 <div className="card">
                     <div className="card-header">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
                         {/* A segmented control rather than three loose buttons:
                             one trough, one raised pill, so which list you are
                             looking at is obvious without a saturated block. */}
                         <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface-100 flex-wrap">
                             {([
-                                ['active', shop_flow?.own_work_only ? 'Your Jobs' : 'Active Jobs', jobs.length],
-                                ['upcoming', 'Upcoming Jobs', upcoming.length],
-                                ['completed', 'Completed Jobs', completed.length],
+                                ['active', shop_flow?.own_work_only ? 'Your Jobs' : 'Active Jobs', fJobs.length],
+                                ['upcoming', 'Upcoming Jobs', fUpcoming.length],
+                                ['completed', 'Completed Jobs', fCompleted.length],
                             ] as const).map(([key, label, count]) => (
                                 <button
                                     key={key}
@@ -229,10 +252,37 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                                 </button>
                             ))}
                         </div>
+
+                        <div className="relative w-full sm:w-72">
+                            <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-[11px] leading-none text-surface-400" />
+                            <input
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                                placeholder="Job no, customer, item, person…"
+                                aria-label="Filter the jobs on this tab"
+                                className="form-input !py-1.5 !pl-8 !pr-8 text-sm"
+                            />
+                            {q && (
+                                <button
+                                    type="button"
+                                    onClick={() => setQ('')}
+                                    aria-label="Clear the filter"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-700"
+                                >
+                                    <i className="fi fi-rr-cross-small text-sm leading-none" />
+                                </button>
+                            )}
+                        </div>
+                      </div>
                         <p className="text-xs text-surface-400 mt-2">
+                            {needle && (
+                                <span className="text-surface-600 font-semibold">
+                                    Showing matches for “{q.trim()}” ·{' '}
+                                </span>
+                            )}
                             {tab === 'active' && (shop_flow?.own_work_only
-                                ? `${jobs.length} job${jobs.length === 1 ? '' : 's'} forwarded to you at ${section.name}`
-                                : `${jobs.length} job${jobs.length === 1 ? '' : 's'} parked at ${section.name}`)}
+                                ? `${fJobs.length} job${fJobs.length === 1 ? '' : 's'} forwarded to you at ${section.name}`
+                                : `${fJobs.length} job${fJobs.length === 1 ? '' : 's'} parked at ${section.name}`)}
                             {tab === 'upcoming' && (section.is_sub
                                 ? `Named on ${section.name} but waiting on the operation before them.`
                                 : `Routed to ${section.name} — currently being worked upstream. Plan machines & material ahead.`)}
@@ -247,15 +297,17 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                         </p>
                     </div>
                     <div className="card-body p-0">
-                        {tab === 'active' && (jobs.length === 0 ? (
+                        {tab === 'active' && (fJobs.length === 0 ? (
+                            needle ? <NoMatch q={q} onClear={() => setQ('')} /> : (
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-check-circle" /></div>
                                 <div className="empty-state-title">All clear</div>
                                 <div className="empty-state-text">No jobs currently in this section's queue.</div>
                             </div>
+                            )
                         ) : (
                             <div className="divide-y divide-surface-100">
-                                {jobs.map((job) => (
+                                {fJobs.map((job) => (
                                     <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
                                 ))}
                             </div>
@@ -265,7 +317,8 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                             bench's is its own step waiting on the one before it.
                             Two shapes, two cards — UpcomingCard on a bench row
                             would read an id that is not there. */}
-                        {tab === 'upcoming' && (upcoming.length === 0 ? (
+                        {tab === 'upcoming' && (fUpcoming.length === 0 ? (
+                            needle ? <NoMatch q={q} onClear={() => setQ('')} /> : (
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-truck-side" /></div>
                                 <div className="empty-state-title">Nothing heading this way</div>
@@ -275,17 +328,19 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                                         : 'No job is routed to this section from an earlier one right now.'}
                                 </div>
                             </div>
+                            )
                         ) : (
                             <div className="divide-y divide-surface-100">
                                 {section.is_sub
-                                    ? (upcoming as any[]).map((job) => (
+                                    ? (fUpcoming as any[]).map((job) => (
                                         <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
                                     ))
-                                    : upcoming.map((u) => <UpcomingCard key={u.wos_id} u={u} />)}
+                                    : fUpcoming.map((u) => <UpcomingCard key={u.wos_id} u={u} />)}
                             </div>
                         ))}
 
-                        {tab === 'completed' && (completed.length === 0 ? (
+                        {tab === 'completed' && (fCompleted.length === 0 ? (
+                            needle ? <NoMatch q={q} onClear={() => setQ('')} /> : (
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-time-past" /></div>
                                 <div className="empty-state-title">Nothing finished yet</div>
@@ -295,9 +350,10 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                                         : 'This section has not finished and forwarded a job yet.'}
                                 </div>
                             </div>
+                            )
                         ) : (
                             <div className="divide-y divide-surface-100">
-                                {completed.map((job) => (
+                                {fCompleted.map((job) => (
                                     <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} done />
                                 ))}
                             </div>
@@ -350,6 +406,26 @@ function UpcomingCard({ u }: { u: UpcomingJob }) {
                     <i className="fi fi-rr-eye text-xs leading-none" /> View
                 </Link>
             </div>
+        </div>
+    );
+}
+
+/**
+ * The empty state while filtering, which is a different fact from an empty
+ * tab — saying "All clear" over a search that found nothing reads as though
+ * the section has no work.
+ */
+function NoMatch({ q, onClear }: { q: string; onClear: () => void }) {
+    return (
+        <div className="empty-state">
+            <div className="empty-state-icon"><i className="fi fi-rr-search" /></div>
+            <div className="empty-state-title">Nothing matches “{q.trim()}”</div>
+            <div className="empty-state-text">
+                Try the job number, the customer, an item, a sub-section or a person's name.
+            </div>
+            <button type="button" onClick={onClear} className="btn-outline btn-sm mt-3">
+                Clear the filter
+            </button>
         </div>
     );
 }
