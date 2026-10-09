@@ -197,7 +197,7 @@ class ShopAssignment
      * else's, the job has not been handed to anyone, or it has been handed
      * over but not taken in hand.
      */
-    public static function workBlocker(WorkOrderSection $wos, ?User $user): ?string
+    public static function workBlocker(WorkOrderSection $wos, ?User $user, $step = null): ?string
     {
         if (! $user || self::seesEverything($user)) return null;
         if (! self::gateActive($wos->section_id)) return null;
@@ -207,6 +207,15 @@ class ShopAssignment
         if (self::isSubSectionStaff($user, $wos->section_id)) return null;
 
         if (self::isXen($user, $wos->section_id)) return null;
+
+        // ⚠️ Being named on an OPERATION is permission to do that operation.
+        // Without this, naming someone on a step was an empty gesture: they
+        // could open the job (canOpen lets them) and then not log a single
+        // piece, because the job itself was with somebody else. Job-level acts
+        // — transfer, send back, flag — still go through canOversee().
+        if ($step && (int) $step->assigned_to === (int) $user->id) {
+            return null;
+        }
 
         if ($wos->assigned_to === null) {
             return 'This job has not been handed to anyone yet — the নির্বাহী প্রকৌশলী forwards it first.';
@@ -271,6 +280,31 @@ class ShopAssignment
         if ($wos->assigned_to === null) return true;
 
         return self::isTheirs($wos, $user);
+    }
+
+    /**
+     * Who should hear what someone does on this job at this shop.
+     *
+     * BITAC: *"Xen tu job assign kore dilo, ekhon tar niche jake assign
+     * kortese she ki kortese tar jeno notification ashe."* Whoever handed the
+     * work on wants to know what became of it — so: the shop's XEN(s), the
+     * person who forwarded the job, and, for an act on one operation, whoever
+     * named them on that operation.
+     *
+     * ⚠️ The actor is never told about their own act, and the list is unique —
+     * a XEN who forwarded the job himself must not get two copies.
+     *
+     * @return array<int>
+     */
+    public static function watchersFor(WorkOrderSection $wos, ?int $actorId, $step = null): array
+    {
+        $ids = self::xenIds((int) $wos->section_id);
+        $ids[] = (int) $wos->assigned_by;
+        if ($step) {
+            $ids[] = (int) $step->assigned_by;
+        }
+
+        return array_values(array_diff(array_unique(array_filter($ids)), [(int) $actorId]));
     }
 
     public static function scopedToOwnWork(?User $user, ?int $shopId): bool

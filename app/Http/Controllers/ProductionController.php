@@ -162,6 +162,10 @@ class ProductionController extends Controller
         // A shop's own work is done when it has forwarded everything it was
         // given (`WorkOrderSection::completed`); a bench's is done step by
         // step. Capped, newest first: this is a record, not a worklist.
+        // ⚠️ Completed is capped, and the cap has to be VISIBLE. Silently
+        // showing the newest 60 of 200 is a list that lies about itself.
+        $cap = 60;
+        $completedCapped = false;
         $completed = collect();
         if ($section && $isSubSection) {
             $completed = WorkOrderSection::where('section_id', $queueSectionId)
@@ -180,7 +184,9 @@ class ProductionController extends Controller
                     'workOrder.operationSheets.steps.assignedTo:id,name',
                     'section',
                 ])
-                ->latest('id')->limit(60)->get()
+                ->latest('id')->limit($cap + 1)->get()
+                ->tap(function ($rows) use ($cap, &$completedCapped) { $completedCapped = $rows->count() > $cap; })
+                ->take($cap)
                 ->flatMap(fn ($wos) => $this->expandWosForSubSection($wos, (int) $section->id, 'completed'))
                 ->values();
         } elseif ($section) {
@@ -200,7 +206,9 @@ class ProductionController extends Controller
                     'workOrder.operationSheets.steps.assignedTo:id,name',
                     'section',
                 ])
-                ->orderByDesc('completed_at')->orderByDesc('id')->limit(60)->get()
+                ->orderByDesc('completed_at')->orderByDesc('id')->limit($cap + 1)->get()
+                ->tap(function ($rows) use ($cap, &$completedCapped) { $completedCapped = $rows->count() > $cap; })
+                ->take($cap)
                 ->flatMap(fn ($wos) => $this->expandWosForCompleted($wos))
                 ->values();
         }
@@ -228,6 +236,8 @@ class ProductionController extends Controller
             // operation before them; a shop's is a job at an earlier section.
             'upcoming'          => $isSubSection ? $benchUpcoming : $upcoming,
             'completed'         => $completed,
+            // True when older finished work exists beyond what was sent.
+            'completed_capped'  => $completedCapped,
             'available_sections'=> $availableSections,
             'can_switch'        => $canSwitch,
             // The XEN → AE flow, as this viewer sees it.
@@ -417,7 +427,7 @@ class ProductionController extends Controller
             return back()->with('error', 'No section assignment matches this operation step.');
         }
         $this->authorizeAccess($wos);
-        if ($blocker = ShopAssignment::workBlocker($wos, $request->user())) {
+        if ($blocker = ShopAssignment::workBlocker($wos, $request->user(), $step)) {
             return back()->with('error', $blocker);
         }
 
@@ -437,7 +447,56 @@ class ProductionController extends Controller
 
         $step->update(['sub_section_id' => ($validated['sub_section_id'] ?? null) ?: null]);
 
+        $step->refresh();
+        $this->tellWatchers(
+            $wos,
+            'shop_step_sub_section',
+            'Sub-section set — ' . $step->operation_name,
+            sprintf(
+                '%s put %s on %s (Job# %s).',
+                auth()->user()->name,
+                $step->operation_name,
+                $step->subSection?->name ?? 'no sub-section',
+                $wo->job_number ?? $wo->wo_number,
+            ),
+            'fi-rr-corner-down-right',
+            'purple',
+            step: $step,
+        );
+
         return back()->with('success', 'Sub-section updated.');
+    }
+
+    /**
+     * Tell whoever handed this work on what was just done with it.
+     *
+     * ⚠️ `/production/work-orders/{id}` is NOT a route — the job page is
+     * `/production/wos/{id}`. Every forward / receive / hand-back notification
+     * pointed at the first one, so clicking any of them landed on a 404.
+     */
+    private function tellWatchers(
+        WorkOrderSection $wos,
+        string $type,
+        string $title,
+        string $body,
+        string $icon = 'fi-rr-bell',
+        string $color = 'blue',
+        $step = null,
+    ): void {
+        $watchers = ShopAssignment::watchersFor($wos, auth()->id(), $step);
+        if (! $watchers) {
+            return;
+        }
+
+        NotifyService::send(
+            $watchers,
+            $type,
+            $title,
+            $body,
+            '/production/wos/' . $wos->id,
+            $icon,
+            $color,
+        );
     }
 
     /**
@@ -462,7 +521,7 @@ class ProductionController extends Controller
             return back()->with('error', 'No section assignment matches this operation step.');
         }
         $this->authorizeAccess($wos);
-        if ($blocker = ShopAssignment::workBlocker($wos, $request->user())) {
+        if ($blocker = ShopAssignment::workBlocker($wos, $request->user(), $step)) {
             return back()->with('error', $blocker);
         }
 
@@ -504,6 +563,24 @@ class ProductionController extends Controller
             );
         }
 
+        $this->tellWatchers(
+            $wos,
+            'shop_step_assigned',
+            'Operation assigned — ' . $step->operation_name,
+            sprintf(
+                '%s %s %s (Job# %s).',
+                auth()->user()->name,
+                $userId
+                    ? 'named ' . (\App\Models\User::find($userId)?->name ?? 'someone') . ' on'
+                    : 'cleared the person on',
+                $step->operation_name,
+                $wo->job_number ?? $wo->wo_number,
+            ),
+            'fi-rr-user-gear',
+            'blue',
+            step: $step->fresh(),
+        );
+
         return back()->with('success', $userId
             ? 'Operation assigned to ' . (\App\Models\User::find($userId)?->name ?? 'that person') . '.'
             : 'Operation assignment cleared.');
@@ -527,7 +604,7 @@ class ProductionController extends Controller
             return back()->with('error', 'No section assignment matches this operation step.');
         }
         $this->authorizeAccess($wos);
-        if ($blocker = ShopAssignment::workBlocker($wos, $request->user())) {
+        if ($blocker = ShopAssignment::workBlocker($wos, $request->user(), $step)) {
             return back()->with('error', $blocker);
         }
         if (in_array($wos->status, ['completed', 'skipped'])) {
@@ -601,6 +678,27 @@ class ProductionController extends Controller
         // supervisor explicitly transfers a quantity (see transfer()).
 
         $this->syncMachineStates($wo->fresh('operationSheets'));
+
+        // The update the নির্বাহী প্রকৌশলী asked for: what his engineer is
+        // actually getting done, without having to go and look.
+        $step->refresh();
+        $this->tellWatchers(
+            $wos,
+            'shop_output_logged',
+            'Output logged — ' . $step->operation_name,
+            sprintf(
+                '%s logged %s on %s (Job# %s). Now %s of %s.',
+                auth()->user()->name,
+                rtrim(rtrim(number_format((float) $validated['qty'], 2), '0'), '.') . ' pcs',
+                $step->operation_name,
+                $wo->job_number ?? $wo->wo_number,
+                rtrim(rtrim(number_format((float) $step->completed_qty, 2), '0'), '.'),
+                rtrim(rtrim(number_format((float) ($step->target_qty ?? 0), 2), '0'), '.'),
+            ),
+            $step->status === 'completed' ? 'fi-rr-check-circle' : 'fi-rr-chart-histogram',
+            $step->status === 'completed' ? 'green' : 'blue',
+            step: $step,
+        );
 
         return back()->with('success', 'Production logged.');
     }
@@ -1396,7 +1494,7 @@ class ProductionController extends Controller
                 trim(($workOrderSection->workOrder->wo_number ?? 'Work order')
                     . ' at ' . ($workOrderSection->section->name ?? 'your shop')
                     . ($data['note'] ? ' — ' . $data['note'] : '')),
-                '/production/work-orders/' . $workOrderSection->id,
+                '/production/wos/' . $workOrderSection->id,
                 'fi-rr-user-gear',
                 'indigo',
             );
@@ -1477,7 +1575,7 @@ class ProductionController extends Controller
                 'Job received',
                 ($workOrderSection->workOrder->wo_number ?? 'Work order')
                     . ' taken in hand by ' . $user->name . '.',
-                '/production/work-orders/' . $workOrderSection->id,
+                '/production/wos/' . $workOrderSection->id,
                 'fi-rr-check',
                 'emerald',
             );
@@ -1528,7 +1626,7 @@ class ProductionController extends Controller
                 'A job has come back to you',
                 ($workOrderSection->workOrder->wo_number ?? 'Work order')
                     . ' returned by ' . $user->name . ' — ' . $data['reason'],
-                '/production/work-orders/' . $workOrderSection->id,
+                '/production/wos/' . $workOrderSection->id,
                 'fi-rr-undo',
                 'amber',
             );

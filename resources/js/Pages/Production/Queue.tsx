@@ -1,6 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 
@@ -115,7 +115,7 @@ const PRIORITY_BADGE: Record<string, string> = {
     urgent: 'badge-red',
 };
 
-export default function ProductionQueue({ section, jobs, upcoming, completed = [], available_sections, can_switch, shop_flow = null }: Props & { completed?: QueueJob[]; shop_flow?: any }) {
+export default function ProductionQueue({ section, jobs, upcoming, completed = [], completed_capped = false, available_sections, can_switch, shop_flow = null }: Props & { completed?: QueueJob[]; completed_capped?: boolean; shop_flow?: any }) {
     if (!section) {
         return (
             <AppLayout header="Production">
@@ -167,6 +167,22 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
     const fJobs = sift(jobs);
     const fUpcoming = sift(upcoming);
     const fCompleted = sift(completed);
+
+    // A shop can have dozens of jobs and sixty finished ones; one unbroken
+    // scroll is where a row goes to be missed.
+    const PER_PAGE = 15;
+    const [page, setPage] = useState(1);
+    // Switching tab or typing must not leave you on a page that no longer exists.
+    useEffect(() => { setPage(1); }, [tab, needle]);
+
+    const rowsFor = { active: fJobs, upcoming: fUpcoming, completed: fCompleted }[tab] as any[];
+    const pageCount = Math.max(1, Math.ceil(rowsFor.length / PER_PAGE));
+    const current = Math.min(page, pageCount);
+    const from = (current - 1) * PER_PAGE;
+    const paged = rowsFor.slice(from, from + PER_PAGE);
+    // The Sl runs on across pages — restarting at 1 on page 2 makes the
+    // number useless for pointing at a row.
+    const sl = (i: number) => from + i + 1;
 
     return (
         <AppLayout header={`Production — ${section.name}`}>
@@ -307,8 +323,8 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                             )
                         ) : (
                             <div className="divide-y divide-surface-100">
-                                {fJobs.map((job) => (
-                                    <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
+                                {paged.map((job, i) => (
+                                    <JobCard key={job.row_key} sl={sl(i)} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
                                 ))}
                             </div>
                         ))}
@@ -332,10 +348,10 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                         ) : (
                             <div className="divide-y divide-surface-100">
                                 {section.is_sub
-                                    ? (fUpcoming as any[]).map((job) => (
-                                        <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
+                                    ? paged.map((job, i) => (
+                                        <JobCard key={job.row_key} sl={sl(i)} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} />
                                     ))
-                                    : fUpcoming.map((u) => <UpcomingCard key={u.wos_id} u={u} />)}
+                                    : paged.map((u, i) => <UpcomingCard key={u.wos_id} sl={sl(i)} u={u} />)}
                             </div>
                         ))}
 
@@ -353,12 +369,42 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
                             )
                         ) : (
                             <div className="divide-y divide-surface-100">
-                                {fCompleted.map((job) => (
-                                    <JobCard key={job.row_key} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} done />
+                                {paged.map((job, i) => (
+                                    <JobCard key={job.row_key} sl={sl(i)} job={{ ...job, shop_flow_active: shop_flow?.active }} onPdf={openPdf} done />
                                 ))}
                             </div>
                         ))}
                     </div>
+                    {(pageCount > 1 || (tab === 'completed' && completed_capped)) && (
+                        <div className="card-body border-t border-surface-100 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="text-xs text-surface-500">
+                                {rowsFor.length > 0 && (
+                                    <>Showing {from + 1}–{Math.min(from + PER_PAGE, rowsFor.length)} of {rowsFor.length}</>
+                                )}
+                                {tab === 'completed' && completed_capped && (
+                                    <span className="text-surface-400">
+                                        {rowsFor.length > 0 ? ' · ' : ''}
+                                        only the most recent are kept here — older finished work is in the job's own history
+                                    </span>
+                                )}
+                            </div>
+                            {pageCount > 1 && (
+                                <div className="flex items-center gap-1.5">
+                                    <button type="button" onClick={() => setPage(current - 1)} disabled={current === 1}
+                                        className="btn-outline btn-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                                        <i className="fi fi-rr-angle-small-left text-xs leading-none" />
+                                    </button>
+                                    <span className="text-xs font-semibold text-surface-600 tabular-nums px-1">
+                                        {current} / {pageCount}
+                                    </span>
+                                    <button type="button" onClick={() => setPage(current + 1)} disabled={current === pageCount}
+                                        className="btn-outline btn-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                                        <i className="fi fi-rr-angle-small-right text-xs leading-none" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -373,10 +419,15 @@ export default function ProductionQueue({ section, jobs, upcoming, completed = [
     );
 }
 
-function UpcomingCard({ u }: { u: UpcomingJob }) {
+function UpcomingCard({ u, sl }: { u: UpcomingJob; sl?: number }) {
     const nf = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
     return (
         <div className="px-5 py-4 flex items-center gap-4">
+            {sl !== undefined && (
+                <span className="shrink-0 w-6 text-right text-xs font-semibold text-surface-300 tabular-nums">
+                    {sl}
+                </span>
+            )}
             {/* Distance chip */}
             <div className="shrink-0 w-16 text-center">
                 <div className="text-lg font-bold text-surface-700 leading-none">{u.stops_away}</div>
@@ -430,13 +481,20 @@ function NoMatch({ q, onClear }: { q: string; onClear: () => void }) {
     );
 }
 
-function JobCard({ job, onPdf, done = false }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean }; onPdf: (url: string, title: string, subtitle?: string) => void; done?: boolean }) {
+function JobCard({ job, onPdf, done = false, sl }: { job: QueueJob & { assigned_to?: string | null; assigned_by?: string | null; awaiting_receipt?: boolean; shop_flow_active?: boolean }; onPdf: (url: string, title: string, subtitle?: string) => void; done?: boolean; sl?: number }) {
     const isAwaiting = job.status === 'awaiting_rework';
     return (
         <div className={`px-5 py-3.5 transition-colors hover:bg-surface-50/70 ${
             job.status === 'rework' ? 'bg-rose-50/40' : done ? 'bg-surface-50/40' : ''
         }`}>
             <div className="flex items-start gap-4">
+                {/* Sl — so a row can be pointed at out loud ("number four"),
+                    and it runs on across pages rather than restarting. */}
+                {sl !== undefined && (
+                    <span className="shrink-0 w-6 pt-0.5 text-right text-xs font-semibold text-surface-300 tabular-nums">
+                        {sl}
+                    </span>
+                )}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-semibold text-surface-700">Job# {job.work_order.job_number ?? '—'}</span>

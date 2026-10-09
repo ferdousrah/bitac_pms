@@ -723,6 +723,19 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   - A search that finds nothing gets its own empty state (`NoMatch`) with a Clear button — "All clear" over a failed search reads as though the section has no work.
   - ⚠️ **Two row shapes again:** a queue row nests the job under `work_order`, a shop's **upcoming** row is flat (plus `current`). `haystack()` reads both; reading only the queue shape makes the Upcoming tab match nothing, silently.
   - The filter is tested by **dumping the controller's real props to JSON and running the page's own `haystack`/`sift` over them in node** — shapes I invent would prove nothing about the ones the page receives.
+- **Sl + pagination (2026-10-09):** there was **no pagination of any kind**, and Completed was **silently truncated at 60** — a list that lies about itself. Each tab now pages client-side at 15, with a **Sl** that runs on across pages (restarting at 1 on page 2 makes the number useless for pointing at a row), and the Completed cap is **stated** via a new `completed_capped` prop rather than hidden. The page resets to 1 when the tab or the query changes, or you land on a page that no longer exists.
+
+#### The XEN hears what his engineers are doing (2026-10-09)
+> BITAC: *"Xen tu job assign kore dilo, ekhon tar niche jake assign kortese she ki kortese tar jeno notification ashe."*
+
+- **`ShopAssignment::watchersFor($wos, $actorId, $step = null)`** is the one answer to "who should hear this": the shop's **XEN(s)**, whoever **forwarded the job**, and — for an act on one operation — whoever **named them on that operation**. Unique, and **never the actor** (a XEN who forwarded the job himself must not get two copies, nor one about his own work).
+- Fired from **logging output** (the update he actually wants — who, how much, and where the operation now stands), **setting a sub-section** and **naming a person**. `ProductionController::tellWatchers()` is the one call site shape.
+- ⚠️ **It is one notification per act.** Logging output happens daily, so a busy shop will generate real volume; if that becomes noise the fix is a digest, not dropping the signal.
+- ⚠️ **Every existing forward / receive / hand-back notification linked to `/production/work-orders/{id}`, which is NOT a route** — the job page is **`/production/wos/{id}`**. Each one 404'd on click, since this module landed. Fixed, and the test asserts the link against the route table rather than a string I typed.
+
+##### ⚠️ Being named on an operation is permission to DO that operation
+- `workBlocker()` only knew about the job, so a person named on a step could **open** the job (`canOpen` lets them) and then **not log a single piece**, because the job itself was with somebody else. Naming someone was an empty gesture — the exact flow BITAC described (*"AE sub-section assign kore SAE ke forward kore dilo log output entry korar jonne"*) did not work.
+- `workBlocker($wos, $user, $step = null)` now returns null for the **step's own assignee**, and the three step-scoped call sites (log output, set sub-section, name a person) pass the step. Job-level acts — transfer, send back, flag bottleneck — still go through `canOversee()` and are unchanged.
 - ⚠️ Grepping the built CSS for these: a Tailwind class with `/`, `.` or `:` is written **escaped** in the stylesheet (`.bg-surface-50\/70`, `.py-3\.5`, `.hover\:bg-amber-100`). A shell `grep` for the unescaped name reports MISS on classes that are present — check with a plain substring search for the escaped form.
 
 ### Phase 3.5 — Upcoming Jobs (done)
