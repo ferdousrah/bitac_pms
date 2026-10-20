@@ -148,15 +148,12 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                         {/* Two different doors, and the difference matters to a
                             visitor: a client tracks their own order, staff run
                             the system. */}
-                        {/* The one action every page offers. It lived in the menu bar
-                            at first, but next to seven links it squeezed the BITAC
-                            name into "…" and wrapped "About Us" onto two lines. */}
-                        <Link href="/portfolio/request-quotation"
-                              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors">
-                            <i className="fi fi-rr-paper-plane text-[10px] leading-none" />Request a Quotation
-                        </Link>
-                        <a href="/customer/login" className="hover:text-brand-300 transition-colors font-semibold">
-                            <i className="fi fi-rr-briefcase text-[10px] mr-1" />Customer Login
+                        {/* BITAC calls its clients' door "Stakeholder Login"
+                            (2026-10-20) — it is the customer portal's login. The
+                            separate "Customer Login" link beside it was removed. */}
+                        <a href="/customer/login"
+                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors">
+                            <i className="fi fi-rr-handshake text-[10px] leading-none" />Stakeholder Login
                         </a>
                         <a href="/login" className="hover:text-brand-300 transition-colors">
                             <i className="fi fi-rr-user text-[10px] mr-1" />Staff
@@ -317,18 +314,14 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                             ))}
 
                             <div className="mt-3 pt-4 border-t border-surface-200 grid grid-cols-1 gap-2 pb-2">
-                                <Link href="/portfolio/request-quotation"
-                                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">
-                                    <i className="fi fi-rr-paper-plane text-xs leading-none" /> Request a Quotation
-                                </Link>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <a href="/customer/login" className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-surface-200 text-surface-800 text-sm font-semibold">
-                                        <i className="fi fi-rr-briefcase text-xs leading-none" /> Customer Login
-                                    </a>
-                                    <a href="/login" className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-surface-200 text-surface-800 text-sm font-semibold">
-                                        <i className="fi fi-rr-user text-xs leading-none" /> Staff
-                                    </a>
-                                </div>
+                                {/* Mirrors the top strip: Stakeholder Login, then Staff. */}
+                                <a href="/customer/login"
+                                   className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">
+                                    <i className="fi fi-rr-handshake text-xs leading-none" /> Stakeholder Login
+                                </a>
+                                <a href="/login" className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-surface-200 text-surface-800 text-sm font-semibold">
+                                    <i className="fi fi-rr-user text-xs leading-none" /> Staff
+                                </a>
                             </div>
                         </nav>
                     </div>

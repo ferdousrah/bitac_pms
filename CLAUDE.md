@@ -1261,12 +1261,18 @@ three new tables (migration `..._000064`):
   slides in on hover (`navLinkClass()` — no pale pill). Gallery opens a panel
   with an icon and a one-line note per entry (`children[].icon/.note`). On
   scroll the masthead tightens 80 → 64px and the caption line folds away.
-  The phone drawer: plain rows, Gallery as two tiles, then **Request a
-  Quotation** + Customer Login / Staff at the foot. On a phone the BITAC name
+  The phone drawer: plain rows, Gallery as two tiles, then **Stakeholder
+  Login** + Staff at the foot. On a phone the BITAC name
   wraps to two lines instead of being cut to "…".
-  - ⚠️ **Request a Quotation is in the dark utility strip, NOT the menu bar.**
-    Put beside the seven links it pushed the BITAC name into "…" and wrapped
-    "About Us" / "Contact Us" onto two lines even at 1440px. Links are
+  - ⚠️ **Nothing extra goes in the menu bar.** A button put beside the seven
+    links pushed the BITAC name into "…" and wrapped "About Us" / "Contact Us"
+    onto two lines even at 1440px.
+  - **The top strip's pill is "Stakeholder Login"** → `/customer/login`
+    (BITAC, 2026-10-20). It briefly said "Request a Quotation"; BITAC renamed
+    it and **removed the separate "Customer Login" link** — it is the same
+    door, BITAC just calls its clients stakeholders. The quotation form is
+    still reached from Contact, the home hero and Services. The footer's
+    "Customer login" button was not part of the request and still reads so. Links are
     `whitespace-nowrap`, and between 1024 and 1279px they and the name step
     down a size so the bar fits at 1024.
   - Checking it headless: `html` has `scroll-behavior: smooth`, so a probe's
