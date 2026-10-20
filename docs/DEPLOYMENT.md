@@ -58,14 +58,36 @@ In **Application → Environment Variables**, paste the contents of `.env.produc
 
 ## 5. Persistent storage (critical — uploads must survive redeploys)
 
-In **Application → Storages**, add **two persistent volume mounts**:
+In **Application → Storages**, add **three persistent volume mounts**:
 
 | Mount path inside the container | Purpose |
 |---|---|
-| `/var/www/html/storage/app/public` | All user uploads — drawings, sample photos, quotation files, chatbot images, RFQ attachments |
+| `/var/www/html/storage/app/public` | All user uploads — drawings, sample photos, quotation files, chatbot images, RFQ attachments, website hero/partner/news media |
+| `/var/www/html/storage/app/private` | Files that must NOT be public — attachments sent with the website's **Request a Quotation** form (served only to signed-in staff) |
 | `/var/www/html/storage/logs` | Laravel logs (optional but recommended for debugging) |
 
 Without these, every redeploy will wipe uploaded files. Coolify will create matching directories on the host and bind-mount them into the container.
+
+## 5a. Website content is NOT created by a deploy
+
+The entrypoint runs **migrations only — never seeders.** So on a fresh
+production database the public website (`/portfolio`) has no hero slides, no
+offices, no partners and no news: the home page falls back to the drawn gear
+hero, the Contact page has no offices and "Centres nationwide" reads 1.
+
+Either enter the real content in **Admin → Website**, or load the sample /
+copied content once from the Coolify terminal:
+
+```bash
+php artisan db:seed --class=SiteOfficeSeeder      # BITAC's five offices + contacts (from bitac.gov.bd)
+php artisan db:seed --class=HeroSampleSeeder      # 4 hero slides — downloads media from Wikimedia, needs internet
+php artisan db:seed --class=PartnerSampleSeeder   # placeholder partner logos
+php artisan db:seed --class=NewsSampleSeeder      # 3 stories + 2 events (the events are invented — edit or delete)
+```
+
+Each only fills what is missing and never overwrites an edit, so re-running is
+safe. The hero and partner media land in `storage/app/public`, which is why
+that volume (above) must exist first.
 
 > **Bootstrap cache and framework cache are NOT mounted** — they get rebuilt on every boot by the entrypoint script.
 
