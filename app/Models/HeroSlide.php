@@ -20,7 +20,7 @@ class HeroSlide extends Model
 
     protected $fillable = [
         'kind', 'image_path', 'video_path', 'video_url', 'poster_path', 'hold_seconds',
-        'title', 'subtitle', 'cta_label', 'cta_url', 'sort', 'is_active', 'created_by',
+        'title', 'subtitle', 'cta_label', 'cta_url', 'credit', 'credit_url', 'sort', 'is_active', 'created_by',
     ];
 
     protected function casts(): array

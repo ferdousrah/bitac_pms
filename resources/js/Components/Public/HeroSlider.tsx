@@ -13,6 +13,8 @@ export interface HeroSlide {
     subtitle: string | null;
     cta_label: string | null;
     cta_url: string | null;
+    credit?: string | null;
+    credit_url?: string | null;
 }
 
 interface Props {
@@ -25,6 +27,16 @@ interface Props {
 
 /** An uploaded video holds until it ends; everything else holds for its own `hold_ms`. */
 const FADE_MS = 1100;
+
+/**
+ * ⚠️ The longest an uploaded video may hold the slider, playing or not.
+ *
+ * A video slide advances on `ended` — and `ended` never fires if the browser
+ * refused to autoplay it, cannot play the format (WebM on an older Safari), or
+ * the file never loads. Without a cap the whole slider sat on slide one for
+ * ever, which is exactly what the first version did in a headless check.
+ */
+const VIDEO_CAP_MS = 60_000;
 
 /**
  * The home page's hero.
@@ -71,11 +83,19 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
     const isYouTube = current?.kind === 'youtube' && !!current.embed_url;
     const holdMs = current?.hold_ms || 8000;
 
+    // Set when the current video cannot play; it then holds like a still.
+    const [videoBlocked, setVideoBlocked] = useState(false);
+    useEffect(() => { setVideoBlocked(false); }, [index]);
+    const videoDrives = isFileVideo && !videoBlocked;
+
     useEffect(() => {
-        if (count < 2 || paused || reduced || isFileVideo) return;
-        const t = window.setTimeout(next, holdMs);
+        if (count < 2 || paused || reduced) return;
+        // A playing video advances itself on `ended`; this is only its safety
+        // net. A video that cannot play falls back to an ordinary hold.
+        const ms = videoDrives ? VIDEO_CAP_MS : holdMs;
+        const t = window.setTimeout(next, ms);
         return () => window.clearTimeout(t);
-    }, [count, paused, reduced, isFileVideo, holdMs, next, index]);
+    }, [count, paused, reduced, videoDrives, holdMs, next, index]);
 
     // A hero playing to an empty room is wasted bandwidth and a hot laptop.
     useEffect(() => {
@@ -96,10 +116,11 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
         const v = videoRef.current;
         if (!v) return;
         if (paused) { v.pause(); return; }
-        if (v.currentTime > 0.1) { v.play().catch(() => {}); return; }
+        if (v.currentTime > 0.1) { v.play().catch(() => setVideoBlocked(true)); return; }
         // Autoplay is refused on some devices however muted the video is; the
-        // poster then stands in, which is why every video slide should have one.
-        v.play().catch(() => {});
+        // poster then stands in — which is why every video slide should have
+        // one — and the slide holds like a still instead of stalling.
+        v.play().catch(() => setVideoBlocked(true));
     }, [index, paused]);
 
     const onKey = (e: React.KeyboardEvent) => {
@@ -170,6 +191,9 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
                                     // One video, one pass, then the next slide —
                                     // looping a slide show never moves on.
                                     onEnded={count > 1 ? next : undefined}
+                                    // A file that will not load or decode must not
+                                    // stall the slider waiting for an `ended`.
+                                    onError={on ? () => setVideoBlocked(true) : undefined}
                                     loop={count === 1}
                                     preload={on ? 'auto' : 'none'}
                                     className="w-full h-full object-cover"
@@ -196,6 +220,23 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
                 heaviest on the left, where the words are. */}
             <div className="absolute inset-0 bg-gradient-to-r from-ink-950/95 via-ink-950/70 to-ink-950/20" />
             <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-transparent to-ink-950/50" />
+
+            {/* ⚠️ The credit is a licence condition for most free photos, so it
+                is shown on the picture it belongs to — and changes with it. */}
+            {current.credit && (
+                <div className="absolute top-4 right-4 z-10 max-w-[60%] text-right">
+                    {current.credit_url ? (
+                        <a href={current.credit_url} target="_blank" rel="noopener noreferrer"
+                           className="inline-block px-2.5 py-1 rounded-md bg-black/35 backdrop-blur text-[10px] text-white/60 hover:text-white transition-colors">
+                            {current.credit}
+                        </a>
+                    ) : (
+                        <span className="inline-block px-2.5 py-1 rounded-md bg-black/35 backdrop-blur text-[10px] text-white/60">
+                            {current.credit}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* ── The words ───────────────────────────────────────────── */}
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32 lg:py-40">
@@ -250,14 +291,14 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
                                 className="group h-1.5 rounded-full bg-white/25 hover:bg-white/40 transition-all"
                                 style={{ width: i === index ? 48 : 20 }}
                             >
-                                {i === index && !reduced && !isFileVideo && !paused && (
+                                {i === index && !reduced && !videoDrives && !paused && (
                                     <span
                                         key={`${index}-fill`}
                                         className="block h-full rounded-full bg-white origin-left hero-progress"
                                         style={{ animationDuration: `${holdMs}ms` }}
                                     />
                                 )}
-                                {i === index && (reduced || isFileVideo || paused) && (
+                                {i === index && (reduced || videoDrives || paused) && (
                                     <span className="block h-full w-full rounded-full bg-white" />
                                 )}
                             </button>

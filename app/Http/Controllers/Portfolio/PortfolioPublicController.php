@@ -315,6 +315,8 @@ class PortfolioPublicController extends Controller
                 'subtitle'   => $s->subtitle,
                 'cta_label'  => $s->cta_label,
                 'cta_url'    => $s->cta_url,
+                'credit'     => $s->credit,
+                'credit_url' => $s->credit_url,
             ])->values();
     }
 

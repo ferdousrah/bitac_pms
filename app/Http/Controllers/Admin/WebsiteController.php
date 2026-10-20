@@ -56,6 +56,8 @@ class WebsiteController extends Controller
                     'subtitle'   => $s->subtitle,
                     'cta_label'  => $s->cta_label,
                     'cta_url'    => $s->cta_url,
+                    'credit'     => $s->credit,
+                    'credit_url' => $s->credit_url,
                     'sort'       => $s->sort,
                     'is_active'  => $s->is_active,
                     'has_media'  => $s->hasMedia(),
@@ -506,6 +508,10 @@ class WebsiteController extends Controller
             'subtitle'  => 'nullable|string|max:500',
             'cta_label' => 'nullable|string|max:80',
             'cta_url'   => 'nullable|string|max:500',
+            // ⚠️ The licence's own condition for most free photos — see the
+            // migration. Blank for BITAC's own pictures.
+            'credit'     => 'nullable|string|max:255',
+            'credit_url' => 'nullable|url|max:500',
             'sort'      => 'nullable|integer|min:0|max:9999',
             // How long the slide holds. A YouTube slide cannot tell us when it
             // has ended, so somebody has to say.
@@ -537,6 +543,8 @@ class WebsiteController extends Controller
             'subtitle'  => $data['subtitle'] ?? null,
             'cta_label' => $data['cta_label'] ?? null,
             'cta_url'   => $data['cta_url'] ?? null,
+            'credit'     => ($data['credit'] ?? null) ?: null,
+            'credit_url' => ($data['credit_url'] ?? null) ?: null,
             'sort'      => (int) ($data['sort'] ?? 0),
             'hold_seconds' => ($data['hold_seconds'] ?? null) ?: null,
             'is_active' => $slide ? $request->boolean('is_active') : $request->boolean('is_active', true),

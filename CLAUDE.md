@@ -1288,8 +1288,40 @@ blank falls back to the Site text headline.
 - ⚠️ **Not `gallery_items`.** A gallery photo records an event; a hero slide is
   the front page, chosen and ordered for that job. Hang the hero off the
   gallery and every photo someone uploads becomes a full-screen banner.
-- ⚠️ **No slides → the old gradient hero renders instead**, so the front page is
-  never a blank black band. Same deliberate shape as a shop with no XEN.
+- ⚠️ **No slides → the drawn hero renders instead** (`EngineeringHero`), so the
+  front page is never a blank black band. Same deliberate shape as a shop with
+  no XEN.
+- ⚠️ **BITAC expected to SEE a slider** (*"hero section e tu image/video slider
+  hobe bolsilam"*). With no slides it silently showed the drawn hero, which
+  read as "the slider was never built". **`HeroSampleSeeder`** now fills it:
+  a CNC-lathe video and three photos (lathe drilling, cutting sparks, a
+  training workshop), each with its own headline and button.
+  - ⚠️ **They are NOT BITAC's photographs** — none exist in the project
+    (`client resource/` holds only scanned forms). They are freely licensed
+    Wikimedia Commons media, to be replaced with BITAC's own.
+  - ⚠️ **Most free licences (CC BY, CC BY-SA) are granted on condition the
+    credit is shown where the work appears.** So `hero_slides` gained
+    **`credit` / `credit_url`** (migration `..._000070`), the slider shows the
+    current slide's credit top-right linked to the source, and the admin form
+    has the fields. Dropping the credit is using the photo without permission.
+  - ⚠️ **The credit is FETCHED from the Commons API at seed time, never typed**
+    — author and licence come back with the file. A hand-typed credit is the
+    one that ends up wrong.
+  - Media are **downloaded into storage at seed time, not committed** (≈4 MB).
+    The seeder needs the internet; without it each slide is skipped with a
+    warning, and a slide whose second file fails takes its first file back
+    with it, so nothing half-made is left.
+  - Chosen deliberately: no faces or foreign uniforms dominating (a US
+    military lathe photo was rejected for that), no watermarks, landscape and
+    ≥2000px wide. The video is 2 MB / 10 s — a 67 MB clip was rejected.
+  - Wikimedia serves only fixed thumbnail widths (500, 1280, 1920 …); an
+    arbitrary width answers **HTTP 400**. Ask for 1920 for the hero.
+- ⚠️ **A video slide can no longer stall the slider.** It advances on `ended`,
+  and `ended` never fires when autoplay is refused, the format will not play
+  (WebM on an older Safari) or the file never loads — the first version sat on
+  slide one for ever. Now a failed `play()` or an `error` makes the slide hold
+  like a still, and **`VIDEO_CAP_MS` (60 s)** caps even a playing video.
+  Verified headless, where video time does not advance: slide 3 by 75 s.
 - ⚠️ **A slide with no media is refused twice** — on save, and filtered again in
   `heroSlides()` on the way to the page. `HeroSlide::hasMedia()` is the one
   rule both use. One of these is a full-screen black rectangle at the top of

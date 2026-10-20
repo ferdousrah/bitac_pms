@@ -40,6 +40,7 @@ interface HeroRow {
     embed_url: string | null; video_url: string | null; hold_seconds: number | null;
     title: string | null; subtitle: string | null;
     cta_label: string | null; cta_url: string | null;
+    credit: string | null; credit_url: string | null;
     sort: number; is_active: boolean; has_media: boolean;
 }
 
@@ -255,6 +256,7 @@ function HeroTab({ slides }: { slides: HeroRow[] }) {
         kind: 'image', title: '', subtitle: '', cta_label: '', cta_url: '', sort: 0,
         image: null as File | null, video: null as File | null,
         poster: null as File | null, video_url: '', hold_seconds: '', is_active: true,
+        credit: '', credit_url: '',
     });
 
     const submit = (e: FormEvent) => {
@@ -262,7 +264,7 @@ function HeroTab({ slides }: { slides: HeroRow[] }) {
         add.post('/admin/website/hero', {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => add.reset('title', 'subtitle', 'cta_label', 'cta_url', 'image', 'video', 'poster', 'video_url', 'hold_seconds'),
+            onSuccess: () => add.reset('title', 'subtitle', 'cta_label', 'cta_url', 'image', 'video', 'poster', 'video_url', 'hold_seconds', 'credit', 'credit_url'),
         });
     };
 
@@ -337,6 +339,11 @@ function HeroTab({ slides }: { slides: HeroRow[] }) {
                                     {x.cta_label && (
                                         <div className="text-[11px] text-brand-700 mt-1.5">
                                             <i className="fi fi-rr-link text-[9px] mr-1" />{x.cta_label} → {x.cta_url}
+                                        </div>
+                                    )}
+                                    {x.credit && (
+                                        <div className="text-[11px] text-surface-400 mt-1 truncate">
+                                            <i className="fi fi-rr-copyright text-[9px] mr-1" />{x.credit}
                                         </div>
                                     )}
                                 </div>
@@ -450,6 +457,17 @@ function HeroTab({ slides }: { slides: HeroRow[] }) {
                                    onChange={(e) => add.setData('cta_url', e.target.value)} placeholder="/portfolio/services" />
                         </Field>
                     </div>
+                    <Field label="Credit"
+                           hint="Required by most free-licence photos and videos (CC BY / CC BY-SA). Leave blank for BITAC's own pictures."
+                           error={add.errors.credit}>
+                        <input className="form-input" value={add.data.credit}
+                               onChange={(e) => add.setData('credit', e.target.value)}
+                               placeholder="Photo: Name · CC BY-SA 4.0" />
+                    </Field>
+                    <Field label="Credit link" hint="The source page, e.g. the Wikimedia Commons file page." error={add.errors.credit_url}>
+                        <input className="form-input" value={add.data.credit_url}
+                               onChange={(e) => add.setData('credit_url', e.target.value)} placeholder="https://commons.wikimedia.org/wiki/File:…" />
+                    </Field>
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Order" error={add.errors.sort}>
                             <input type="number" min={0} className="form-input" value={add.data.sort}
@@ -491,6 +509,7 @@ function HeroEditModal({ slide, onClose }: { slide: HeroRow; onClose: () => void
         // whenever the key is present, so an empty box would wipe the link.
         video_url: slide.video_url ?? '',
         hold_seconds: slide.hold_seconds ?? '',
+        credit: slide.credit ?? '', credit_url: slide.credit_url ?? '',
         image: null as File | null, video: null as File | null, poster: null as File | null,
     });
 
@@ -574,6 +593,14 @@ function HeroEditModal({ slide, onClose }: { slide: HeroRow; onClose: () => void
                                    onChange={(e) => form.setData('cta_url', e.target.value)} />
                         </Field>
                     </div>
+                    <Field label="Credit" hint="Blank for BITAC's own pictures." error={form.errors.credit}>
+                        <input className="form-input" value={form.data.credit}
+                               onChange={(e) => form.setData('credit', e.target.value)} />
+                    </Field>
+                    <Field label="Credit link" error={form.errors.credit_url}>
+                        <input className="form-input" value={form.data.credit_url}
+                               onChange={(e) => form.setData('credit_url', e.target.value)} />
+                    </Field>
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Order" error={form.errors.sort}>
                             <input type="number" min={0} className="form-input" value={form.data.sort}

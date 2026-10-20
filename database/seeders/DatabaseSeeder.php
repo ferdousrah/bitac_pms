@@ -23,6 +23,9 @@ class DatabaseSeeder extends Seeder
             // Sample news for the home page. The two events carry invented
             // dates -- edit or delete them under Admin > Website.
             NewsSampleSeeder::class,
+            // Sample hero slides: freely licensed stock media from Wikimedia
+            // Commons, credited on the page. Needs the internet; skips if not.
+            HeroSampleSeeder::class,
         ]);
     }
 }
