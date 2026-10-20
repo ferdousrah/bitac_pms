@@ -292,7 +292,12 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                 )}
             </header>
 
-            <main className="flex-1">{children}</main>
+            {/* ⚠️ The footer's wave is drawn UP into the last section's bottom
+                padding (40px / 80px) and used nearly all of it, so content ran
+                right into the wave. The last section gets extra padding of its
+                own — on the section itself, so its own background (white or
+                tint) continues and no strip of another colour appears. */}
+            <main className="flex-1 [&>*:last-child]:pb-12 sm:[&>*:last-child]:pb-20">{children}</main>
 
             {/* ── Footer ────────────────────────────────────────────────── */}
             <SiteFooter bitac={bitac} important={important} ministry={ministry} />

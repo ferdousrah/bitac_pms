@@ -1448,6 +1448,11 @@ blank falls back to the Site text headline.
   a white strip under every tinted section. It is 40/80px tall because every
   section has at least that much bottom padding to sit in; the first version
   at 64px with a gentle curve read as a thin lavender smear, not a shape.
+- ⚠️ **The wave used nearly all of the last section's padding**, so content
+  ran into it (BITAC: *"footer er upore gap barbe"*). `<main>` now gives its
+  **last child** extra bottom padding (`[&>*:last-child]:pb-12
+  sm:pb-20`) — on the section itself, so its own background continues and no
+  strip of another colour appears. Don't fix this with a margin on the footer.
 - ⚠️ **`overflow-hidden` is on the INNER block, never the `<footer>`** — on the
   footer it would clip the wave, which deliberately sits outside it.
 - **The head office's address, phones and email sit in the brand column**,
