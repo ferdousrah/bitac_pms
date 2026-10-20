@@ -32,6 +32,18 @@ export const dashboardItem: NavItem = {
 /* ─── Main groups (single-level) ───────────────────────────────────── */
 export const mainGroups: NavGroup[] = [
     {
+        // ⚠️ The centre head belongs to no department, so every Notes link —
+        // each inside a department's menu — was invisible to them: they could
+        // sign notes and had no way to find them. This group is theirs
+        // (`head notes`, the Centre Head role). Listed first: it is their work.
+        label: 'Centre Head',
+        icon: 'fi-rr-stamp',
+        items: [
+            { label: 'Notes to sign', href: '/office-notes?tab=awaiting', icon: 'fi-rr-pen-clip', permission: 'head notes', badgeKey: 'notes_awaiting' },
+            { label: 'All notes',     href: '/office-notes',              icon: 'fi-rr-notebook', permission: 'head notes' },
+        ],
+    },
+    {
         label: 'IED',
         icon: 'fi-rr-pencil-ruler',
         items: [
@@ -52,7 +64,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Stakeholder Forms',       href: '/ied/stakeholder-forms',       icon: 'fi-rr-form',           permission: 'view stakeholder-forms' },
             { label: 'Emergency Requests', href: '/ied/emergency-requests', icon: 'fi-rr-siren-on', permission: 'manage rfqs', badgeKey: 'pending_emergency_requests' },
             // Last, by BITAC's instruction (2026-10-20).
-            { label: 'Notes',          href: '/office-notes',     icon: 'fi-rr-notebook', permission: 'view rfqs' },
+            { label: 'Notes',          href: '/office-notes',     icon: 'fi-rr-notebook', permission: 'view rfqs', badgeKey: 'notes_awaiting' },
             { label: 'Envelope',       href: '/envelopes',        icon: 'fi-rr-envelope-open', permission: 'view rfqs' },
         ],
     },
@@ -75,7 +87,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
             { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
             { label: 'Delivery Orders',      href: '/delivery',                  icon: 'fi-rr-truck-side',      permission: 'view delivery' },
-            { label: 'Notes',                href: '/office-notes',              icon: 'fi-rr-notebook',        permissionAny: ['view pcd-inbox', 'review pcd-inbox'] },
+            { label: 'Notes',                href: '/office-notes',              icon: 'fi-rr-notebook',        permissionAny: ['view pcd-inbox', 'review pcd-inbox'], badgeKey: 'notes_awaiting' },
         ],
     },
     {
@@ -97,7 +109,7 @@ export const mainGroups: NavGroup[] = [
             // A super admin holds both and so sees Jobs twice; that is the
             // whole cost, and nobody else is affected.
             { label: 'Jobs', href: '/work-orders', icon: 'fi-rr-briefcase', permission: 'view production' },
-            { label: 'Notes', href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view production' },
+            { label: 'Notes', href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view production', badgeKey: 'notes_awaiting' },
         ],
     },
     {
@@ -118,7 +130,7 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'QC Inspections', href: '/qc',   icon: 'fi-rr-shield-check',    permission: 'view qc' },
             { label: 'NCRs',           href: '/ncrs', icon: 'fi-rr-triangle-warning',permission: 'view qc' },
-            { label: 'Notes',          href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view qc' },
+            { label: 'Notes',          href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view qc', badgeKey: 'notes_awaiting' },
         ],
     },
     {

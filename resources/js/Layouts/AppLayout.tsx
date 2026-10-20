@@ -1237,6 +1237,10 @@ function SidebarGroup({ group, currentUrl, collapsed, isOpen, onToggle }: {
 function SidebarSubItem({ item, isActive, isBeforeActive }: {
     item: TypedNavItem; isActive: boolean; isBeforeActive?: boolean;
 }) {
+    // A count beside the link, when the item declares a badgeKey and the
+    // server shares a number for it (navBadges) — e.g. notes waiting for you.
+    const { navBadges } = usePage().props as any;
+    const count = item.badgeKey ? Number(navBadges?.[item.badgeKey] ?? 0) : 0;
     return (
         <Link href={item.href}
             className={`relative flex items-center pl-3 pr-3 py-2 my-0.5 rounded-lg text-[13px] font-medium transition-all duration-150
@@ -1251,8 +1255,13 @@ function SidebarSubItem({ item, isActive, isBeforeActive }: {
                 style={{ transitionDelay: isActive ? '600ms' : '0ms' }}
             />
             <span className="truncate">{item.label}</span>
+            {count > 0 && (
+                <span className="ml-auto mr-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-[18px] text-center tabular-nums">
+                    {count > 99 ? '99+' : count}
+                </span>
+            )}
             {isActive && (
-                <span className="ml-auto relative flex h-1.5 w-1.5">
+                <span className={`${count > 0 ? '' : 'ml-auto '}relative flex h-1.5 w-1.5`}>
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-500 opacity-75" />
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-500" />
                 </span>

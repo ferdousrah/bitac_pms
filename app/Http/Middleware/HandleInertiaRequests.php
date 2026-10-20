@@ -92,6 +92,12 @@ class HandleInertiaRequests extends Middleware
                 : 0,
             // Production sections to show as submenu items under "Production".
             // Super-admin sees every active shop section; a supervisor sees only their own.
+            // Counts shown beside sidebar links that declare a `badgeKey`.
+            // Lazy, so a page that never renders the sidebar never pays for it.
+            'navBadges' => function () use ($user, $hasSpatieRoles) {
+                if (! $user || ! $hasSpatieRoles || ! $user->can('use notes')) return [];
+                return ['notes_awaiting' => count(\App\Services\NoteWorkflow::awaitingIds($user))];
+            },
             'productionSections' => function () use ($user, $hasSpatieRoles, $isSuperAdmin) {
                 if (!$user || !$hasSpatieRoles) return [];
                 if (!$user->can('view production')) return [];

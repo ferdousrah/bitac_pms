@@ -604,6 +604,16 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   order); Notes is also the last item of **PCD**, **Production** and **Quality**, each gated on
   *belonging* to that department (never on `use notes`, which would put a one-item group in
   everyone's sidebar). A super admin sees it in each group.
+  - ⚠️ **The centre head belongs to no department**, so every one of those links was invisible
+    to them — reported straight back: they logged in and could not find the notes they had to
+    sign. A **Centre Head** group (first in the sidebar, gated `head notes`) carries **Notes to
+    sign** (`/office-notes?tab=awaiting`) and **All notes**.
+  - **Sidebar badges now work.** `badgeKey` had been declared on items for months and nothing
+    rendered it. `HandleInertiaRequests` shares a lazy **`navBadges`** prop
+    (`notes_awaiting` = `count(NoteWorkflow::awaitingIds($user))`) and `SidebarSubItem` shows an
+    amber count beside any item whose key has a number. Every Notes link carries
+    `notes_awaiting`. Other declared keys (`pending_ied_work_orders`, …) still have no number
+    shared, so they show nothing — add them to `navBadges` to light them up.
 - **A note belongs to a department** (`section_id`); `department_name` prints after
   "বিভাগঃ" — defaults to `NoteWorkflow::departmentLabel()` (IED → আই.ই.ডি, PCD → পি.সি.ডি,
   CNC → সিএনসি, CASTING → ফাউন্ড্রি, …), editable. A person may only write for **their own
