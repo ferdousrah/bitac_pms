@@ -1333,6 +1333,62 @@ blank falls back to the Site text headline.
   `video_url` whenever the key is present, and the form posts every field, so a
   box that opened blank would wipe the link on the first save.
 
+### The home page was redesigned after looking at it (2026-10-20)
+> BITAC: *"home page design ta khub beshi simple hye gese."* Judged from a real
+> screenshot, not from the code: the largest things on the page were six empty
+> grey product boxes, the hero was a flat gradient, every section was white
+> cards on white, the clients were grey pills, and the events column was an
+> empty box.
+
+- **Rhythm: dark, light, dark, light.** Hero (violet, drafting grid) → About
+  (white, with a dark mission card for contrast) → **Services as a dark band**
+  (glass cards, numbered, gradient icons) → **How we work** (a 5-step process
+  timeline) → Products (tint) → News → **Clients as a two-row marquee** →
+  Partners → Gallery → a dark CTA with the phone and email.
+- ⚠️ **Every section past the hero renders ONLY when it has content.** An
+  "Empty" box is honest in the admin; on the public front page it reads as a
+  site that was never finished. The events column is dropped when there are no
+  events, rather than shown empty.
+- **The no-slides hero is drawn, not photographed** (`EngineeringHero`): two
+  meshing SVG gears on a drafting grid, in the brand variables, built by
+  `gearPath()` so they cost nothing to download. ⚠️ A stock photograph of
+  somebody else's factory on a government site is worse than none.
+- ⚠️ **The hero's floating cards name the SERVICES, not the figures** — the
+  stats strip is directly under them, and the first version showed 64+ / 18+ / 1
+  twice on one screen. With fewer than three services the figures stand in.
+- ⚠️ **The gears rotate with `transform-box: fill-box; transform-origin:
+  center` in CSS, and must NOT carry an inline px `transformOrigin`** — under
+  fill-box a px origin is measured from the gear's own box and swings it
+  round a point off to one side.
+- **A product with no photo is a drafting sheet**, not a grey box: tinted,
+  gridded, the capability's own icon (`categoryIcon()`, matched loosely on the
+  hand-typed category, gear as fallback). The category is not repeated on it —
+  the badge below already says it.
+- **`SectionHead`** is larger, has an accent rule on the eyebrow, and takes
+  `dark` and `center`. Its two colour sets are written out in full — Tailwind
+  does not ship a class built from a variable.
+- Marquee, gears and floats all stop under `prefers-reduced-motion`; the
+  marquee pauses on hover. CSS lives in `app.css` under "Public website".
+- ⚠️ **The public client list is deduped on the case-folded name, BEFORE the
+  limit.** Customers are records, not organisations — "ACI Motors" was in the
+  table twice and read twice on the page. The home page takes 40 for the
+  marquee.
+- ⚠️ This local database's client wall shows **"RPT Govt Co / RPT Private Co /
+  RPT Unclassified Co"** — fixtures an earlier report test left behind
+  (`@rpt.local` emails), carrying 4 RFQs, 4 quotations and 6 work orders. They
+  were left alone: deleting them cascades well outside a design change. They
+  are local-only.
+
+#### ⚠️ Checking the site visually: headless Chrome will not go below 500px
+`chrome --headless=new --window-size=390,…` lays the page out at **500px** and
+then crops the screenshot to 390 — so a perfectly responsive page looks cut
+off on the right. Proven with a page that prints `innerWidth`: it said 500.
+For a true phone width, screenshot a **same-origin** wrapper with an
+`<iframe style="width:390px">` (a `file://` wrapper loads the HTML but not the
+app's scripts, and renders blank). The desktop check is a plain
+`--window-size=1440,6400 --screenshot`, cropped into sections with GD to read
+the detail.
+
 ### Collaborators & partners — the logo wall (2026-10-20)
 `partners` + `Partner` + **`PartnerWall`** in `parts.tsx`, managed on the
 **Partners** tab. It renders on the **home page** and on the **Clients page**,

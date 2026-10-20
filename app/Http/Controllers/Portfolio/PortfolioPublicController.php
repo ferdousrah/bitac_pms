@@ -67,7 +67,7 @@ class PortfolioPublicController extends Controller
             ),
             'services'   => $this->serviceRows(SiteService::active()->orderBy('sort')->orderBy('id')->take(4)->get()),
             'photos'     => $this->galleryRows(GalleryItem::active()->photos()->orderBy('sort')->latest('id')->take(8)->get()),
-            'clients'    => $this->clientNames(12),
+            'clients'    => $this->clientNames(40),
             'partners'   => $this->partnerRows(),
             'stats'      => $this->stats(),
         ]));
@@ -381,11 +381,16 @@ class PortfolioPublicController extends Controller
     {
         return Customer::where('is_active', true)
             ->orderBy('name')
-            ->when($limit, fn ($q) => $q->take($limit))
-            ->when(! $limit, fn ($q) => $q->take(self::CLIENT_WALL * 4))
             ->get(['id', 'name', 'customer_type'])
+            // ⚠️ One name once. Customers are records, not organisations —
+            // the same company can sit in the table twice (two contacts, two
+            // centres), and on the public page it read "ACI Motors, ACI
+            // Motors". Deduped on the trimmed, case-folded name, and BEFORE
+            // the limit, so the limit counts organisations rather than rows.
+            ->unique(fn ($c) => mb_strtolower(trim($c->name)))
+            ->take($limit ?: self::CLIENT_WALL * 4)
             ->map(fn ($c) => [
-                'name' => $c->name,
+                'name' => trim($c->name),
                 'type' => $c->customer_type === 'government' ? 'Government'
                     : ($c->customer_type === 'private' ? 'Private' : null),
             ])->values();

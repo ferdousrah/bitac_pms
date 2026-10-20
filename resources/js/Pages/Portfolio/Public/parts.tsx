@@ -81,24 +81,46 @@ export function PageHead({ eyebrow, title, lead }: { eyebrow?: string; title: st
     );
 }
 
-/** A heading inside a page, with an optional link off to the full list. */
-export function SectionHead({ eyebrow, title, lead, action }: {
+/**
+ * A heading inside a page, with an optional link off to the full list.
+ *
+ * `dark` is for the violet bands. ⚠️ The two colour sets are written out in
+ * full rather than built from a variable — Tailwind only ships classes it can
+ * see in the source, and `text-${tone}-600` silently produces no CSS at all.
+ */
+export function SectionHead({ eyebrow, title, lead, action, dark = false, center = false }: {
     eyebrow?: string; title: string; lead?: string; action?: { href: string; label: string };
+    dark?: boolean; center?: boolean;
 }) {
     return (
-        <div className="flex items-end justify-between gap-6 mb-8">
-            <div className="max-w-2xl">
+        <div className={`flex items-end gap-6 mb-10 ${center ? 'justify-center text-center' : 'justify-between'}`}>
+            <div className={center ? 'max-w-2xl mx-auto' : 'max-w-2xl'}>
                 {eyebrow && (
-                    <div className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600 mb-2">{eyebrow}</div>
+                    <div className={`inline-flex items-center gap-2.5 text-[11px] uppercase tracking-[0.2em] font-bold mb-3 ${
+                        dark ? 'text-brand-300' : 'text-brand-600'
+                    }`}>
+                        <span className={`h-px w-8 ${dark ? 'bg-brand-400' : 'bg-brand-500'}`} />
+                        {eyebrow}
+                    </div>
                 )}
-                <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 leading-tight">{title}</h2>
-                {lead && <p className="text-sm text-surface-600 mt-3 leading-relaxed">{lead}</p>}
+                <h2 className={`text-3xl sm:text-4xl font-bold leading-[1.15] tracking-tight ${dark ? 'text-white' : 'text-surface-900'}`}>
+                    {title}
+                </h2>
+                {lead && (
+                    <p className={`text-[15px] mt-4 leading-relaxed ${dark ? 'text-white/65' : 'text-surface-600'}`}>{lead}</p>
+                )}
             </div>
-            {action && (
+            {action && !center && (
                 <Link href={action.href}
-                      className="hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800 shrink-0 pb-1">
+                      className={`group hidden sm:inline-flex items-center gap-2 text-sm font-semibold shrink-0 pb-1.5 ${
+                          dark ? 'text-white/80 hover:text-white' : 'text-brand-700 hover:text-brand-800'
+                      }`}>
                     {action.label}
-                    <i className="fi fi-rr-arrow-small-right text-base leading-none" />
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform group-hover:translate-x-0.5 ${
+                        dark ? 'bg-white/10' : 'bg-brand-50'
+                    }`}>
+                        <i className="fi fi-rr-arrow-small-right text-sm leading-none" />
+                    </span>
                 </Link>
             )}
         </div>
@@ -125,18 +147,43 @@ export function Stat({ value, label }: { value: ReactNode; label: string }) {
     );
 }
 
+/**
+ * An icon for a capability, so a project with no photograph still says what
+ * kind of work it was. Matched loosely on the category name, which is typed
+ * by hand; anything unrecognised falls back to a gear rather than nothing.
+ */
+function categoryIcon(category: string | null): string {
+    const c = (category ?? '').toLowerCase();
+    if (c.includes('cast') || c.includes('foundry')) return 'fi-rr-flame';
+    if (c.includes('repair') || c.includes('overhaul')) return 'fi-rr-wrench-simple';
+    if (c.includes('tool') || c.includes('die') || c.includes('jig')) return 'fi-rr-ruler-combined';
+    if (c.includes('weld') || c.includes('fabric')) return 'fi-rr-bolt';
+    if (c.includes('heat') || c.includes('treat')) return 'fi-rr-temperature-high';
+    if (c.includes('train')) return 'fi-rr-graduation-cap';
+    return 'fi-rr-settings';
+}
+
 /** A piece of work BITAC has done. */
 export function ProjectCard({ p }: { p: Project }) {
     return (
         <Link href={`/portfolio/${p.slug}`}
               className="group block rounded-2xl overflow-hidden bg-white border border-surface-200 hover:border-brand-300 hover:shadow-lg transition-all">
-            <div className="aspect-[4/3] bg-surface-100 overflow-hidden">
+            <div className="aspect-[4/3] bg-surface-100 overflow-hidden relative">
                 {p.cover_image_url ? (
                     <img src={p.cover_image_url} alt={p.title} loading="lazy"
                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-surface-300">
-                        <i className="fi fi-rr-settings text-3xl" />
+                    /* ⚠️ A project with no photograph used to be a flat grey
+                       box with a small gear in it — and with six of them, the
+                       largest thing on the home page was six empty boxes. It is
+                       a drafting sheet now: tinted, gridded, the capability's
+                       own icon large. Still plainly "no photo", but designed.
+                       The category is NOT repeated here — the badge under the
+                       picture already says it. */
+                    <div className="w-full h-full bg-gradient-to-br from-brand-50 via-white to-brand-100 bg-blueprint-light flex items-center justify-center">
+                        <span className="w-20 h-20 rounded-2xl bg-white shadow-lg shadow-brand-500/10 border border-brand-100 flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+                            <i className={`fi ${categoryIcon(p.category)} text-3xl text-brand-500 leading-none`} />
+                        </span>
                     </div>
                 )}
             </div>
