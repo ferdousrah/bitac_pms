@@ -173,9 +173,8 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                                 <div className="text-[15px] sm:text-lg font-bold text-surface-900 leading-tight truncate group-hover:text-brand-600 transition-colors">
                                     {bitac?.name_bn || 'বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র (বিটাক)'}
                                 </div>
-                                <div className="text-[10px] text-surface-500 hidden sm:block truncate">
-                                    {bitac?.name_en || 'Bangladesh Industrial Technical Assistance Centre'}
-                                </div>
+                                {/* No centre-name line under it (BITAC, 2026-10-20): the
+                                    site speaks for BITAC as a whole, not "BITAC Dhaka". */}
                             </div>
                         </Link>
 
