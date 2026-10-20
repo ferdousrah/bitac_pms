@@ -49,6 +49,10 @@ class BitacDepartmentRolesSeeder extends Seeder
 
             // Sections / Operators master
             'manage sections', 'manage operators', 'manage machines',
+
+            // IED: completion certificates and factory visits
+            'view completion-certificates', 'manage completion-certificates',
+            'manage factory-visits',
         ];
 
         foreach ($newPermissions as $perm) {
@@ -70,6 +74,8 @@ class BitacDepartmentRolesSeeder extends Seeder
             'set targets',
             // IED uploads the client's signed completion certificate.
             'view completion-certificates', 'manage completion-certificates',
+            // Factory Visited / Factory to be Visited, under IED → Reports.
+            'manage factory-visits',
         ];
         $ied->syncPermissions($iedPermissions);
 

@@ -5,8 +5,8 @@ namespace App\Services\Reports;
 use App\Services\ReportSheetRenderer as R;
 
 /**
- * IED's five reports (Stakeholders, Sector Wise Job, Quotation Value, Jobs in
- * Pipeline, Target vs Achievement), described as printable sheets.
+ * IED's reports (Stakeholders, Sector Wise Job, Quotation Value, Jobs in Pipeline,
+ * Target vs Achievement, Factory Visited, Factory to be Visited), as printable sheets.
  *
  * ⚠️ These build a sheet from data the report has ALREADY worked out — they
  * compute nothing. A printed total that disagrees with the screen is the one
@@ -257,6 +257,113 @@ class IedReportSheets
                 . 're-quotation\'s price; while one is being prepared, at the earlier price. Once a work order is '
                 . 'received the job leaves this report.',
             'signatories' => ['Prepared By', 'Executive Engineer (IED)', 'Director (Centre Head)'],
+        ];
+    }
+
+    /** Factory Visited (পরিদর্শিত কারখানা). */
+    public static function factoryVisited(string $yearLabel, ?string $centre, array $data): array
+    {
+        $rows = []; $sl = 0;
+        foreach (self::rows($data['visits']) as $v) {
+            $rows[] = [
+                (string) ++$sl,
+                self::esc($v['factory_name']),
+                self::esc($v['visitors']),
+                nl2br(self::esc($v['visit_work'] ?? '')) ?: '—',
+                self::esc(date('d M Y', strtotime($v['date']))),
+                nl2br(self::esc($v['remarks'] ?? '')) ?: '—',
+            ];
+        }
+
+        return [
+            'title_bn' => 'পরিদর্শিত কারখানা',
+            'title_en' => 'FACTORY VISITED',
+            'landscape' => true,
+            'subtitle' => 'Financial year ' . $yearLabel . ' &nbsp;·&nbsp; ' . ($centre ?: 'all centres'),
+            'tiles' => [
+                ['label' => 'Visits', 'value' => R::money($data['total']['visits'], 0)],
+                ['label' => 'Factories', 'value' => R::money($data['total']['factories'], 0)],
+            ],
+            'sections' => [
+                self::monthSection('1. Month by month', $data, 'Visits'),
+                [
+                    'heading' => '2. The visits',
+                    'columns' => [
+                        ['label' => 'Sl', 'align' => 'right', 'width' => '5%'],
+                        ['label' => 'Name of Factory', 'width' => '20%'],
+                        ['label' => 'Visitors', 'width' => '19%'],
+                        ['label' => 'Visited Work', 'width' => '28%'],
+                        ['label' => 'Date', 'width' => '10%'],
+                        ['label' => 'Remarks', 'width' => '18%'],
+                    ],
+                    'rows'  => $rows,
+                    'empty' => 'No factory visit recorded in this year.',
+                ],
+            ],
+            'signatories' => ['Prepared By', 'Executive Engineer (IED)', 'Director (Centre Head)'],
+        ];
+    }
+
+    /** Factory to be Visited (পরিদর্শিতব্য কারখানা). */
+    public static function factoryToVisit(string $yearLabel, ?string $centre, array $data): array
+    {
+        $rows = []; $sl = 0;
+        foreach (self::rows($data['visits']) as $v) {
+            $rows[] = [
+                (string) ++$sl,
+                self::esc($v['factory_name']),
+                self::esc($v['visitors']),
+                self::esc(date('d M Y', strtotime($v['date']))) . (! empty($v['overdue']) ? '<br><i>date passed</i>' : ''),
+                nl2br(self::esc($v['remarks'] ?? '')) ?: '—',
+            ];
+        }
+
+        return [
+            'title_bn' => 'পরিদর্শিতব্য কারখানা',
+            'title_en' => 'FACTORY TO BE VISITED',
+            'subtitle' => 'Financial year ' . $yearLabel . ' &nbsp;·&nbsp; ' . ($centre ?: 'all centres'),
+            'tiles' => array_values(array_filter([
+                ['label' => 'Visits planned', 'value' => R::money($data['total']['visits'], 0)],
+                ['label' => 'Factories', 'value' => R::money($data['total']['factories'], 0)],
+                $data['total']['overdue'] > 0 ? ['label' => 'Date passed', 'value' => R::money($data['total']['overdue'], 0)] : null,
+            ])),
+            'sections' => [
+                self::monthSection('1. Month by month', $data, 'Planned'),
+                [
+                    'heading' => '2. The planned visits',
+                    'columns' => [
+                        ['label' => 'Sl', 'align' => 'right', 'width' => '6%'],
+                        ['label' => 'Name of Factory to be Visited', 'width' => '30%'],
+                        ['label' => 'Visitors', 'width' => '26%'],
+                        ['label' => 'Date', 'width' => '14%'],
+                        ['label' => 'Remarks', 'width' => '24%'],
+                    ],
+                    'rows'  => $rows,
+                    'empty' => 'No factory visit planned in this year.',
+                ],
+            ],
+            'notes' => 'Visits that have taken place are not listed here — they are in the Factory Visited report.',
+            'signatories' => ['Prepared By', 'Executive Engineer (IED)', 'Director (Centre Head)'],
+        ];
+    }
+
+    /** Every month of the financial year — empty ones too — with its count. */
+    private static function monthSection(string $heading, array $data, string $countLabel): array
+    {
+        return [
+            'heading' => $heading,
+            'caption' => 'A factory visited in more than one month is counted once in the year’s Factories total.',
+            'columns' => [
+                ['label' => 'Month', 'width' => '50%'],
+                ['label' => $countLabel, 'align' => 'right', 'width' => '25%'],
+                ['label' => 'Factories', 'align' => 'right', 'width' => '25%'],
+            ],
+            'rows' => array_map(fn ($m) => [
+                self::esc($m['label']),
+                $m['visits'] ? R::money($m['visits'], 0) : '—',
+                $m['factories'] ? R::money($m['factories'], 0) : '—',
+            ], self::rows($data['months'])),
+            'total' => ['Total', R::money($data['total']['visits'], 0), R::money($data['total']['factories'], 0)],
         ];
     }
 

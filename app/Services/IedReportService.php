@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\FactoryVisit;
 use App\Models\Quotation;
 use App\Support\FinancialYear;
 use Illuminate\Support\Facades\DB;
@@ -307,6 +308,82 @@ class IedReportService
             if ($b['max'] === null || ($days ?? 0) <= $b['max']) return $key;
         }
         return '90_up';
+    }
+
+    /**
+     * Factory Visited (পরিদর্শিত কারখানা) — visits that happened in the year,
+     * dated by the day of the visit.
+     */
+    public function factoryVisited(string $year, ?int $centerId = null): array
+    {
+        return $this->factoryReport($year, $centerId, 'visited', 'visited_on');
+    }
+
+    /**
+     * Factory to be Visited (পরিদর্শিতব্য কারখানা) — visits planned in the year
+     * that have not happened yet, by planned date. A planned visit that is
+     * marked visited leaves this list and appears under Factory Visited.
+     */
+    public function factoryToVisit(string $year, ?int $centerId = null): array
+    {
+        return $this->factoryReport($year, $centerId, 'planned', 'planned_date');
+    }
+
+    /**
+     * One shape for both: every month of the financial year (empty months
+     * included, so the report reads the same from month to month — and the
+     * 2027-28 nine-month year simply has nine), then the visits themselves.
+     */
+    private function factoryReport(string $year, ?int $centerId, string $status, string $dateCol): array
+    {
+        [$start, $end] = FinancialYear::range($year);
+        $today = now()->startOfDay();
+
+        $visits = FactoryVisit::query()
+            ->where('status', $status)
+            ->whereBetween($dateCol, [$start->toDateString(), $end->toDateString()])
+            ->when($centerId, fn ($q) => $q->where('center_id', $centerId))
+            ->orderBy($dateCol)->orderBy('id')
+            ->get()
+            ->map(fn (FactoryVisit $v) => [
+                'id'           => $v->id,
+                'customer_id'  => $v->customer_id,
+                'factory_name' => $v->factory_name,
+                'visitors'     => $v->visitors,
+                'visit_work'   => $v->visit_work,
+                'remarks'      => $v->remarks,
+                'planned_date' => $v->planned_date?->toDateString(),
+                'visited_on'   => $v->visited_on?->toDateString(),
+                'date'         => $v->{$dateCol}?->toDateString(),
+                'month'        => $v->{$dateCol}?->format('Y-m'),
+                // A planned visit whose day has passed without being marked visited.
+                'overdue'      => $status === 'planned' && $v->planned_date && $v->planned_date->lt($today),
+            ]);
+
+        $months = [];
+        // ⚠️ FinancialYear::range() hands back CarbonImmutable — addMonth() returns
+        // a new instance and changes nothing, so the step must be assigned or the
+        // loop never ends.
+        for ($m = $start->startOfMonth(); $m->lte($end); $m = $m->addMonth()) {
+            $key = $m->format('Y-m');
+            $in  = $visits->where('month', $key);
+            $months[] = [
+                'month'     => $key,
+                'label'     => $m->format('F Y'),
+                'visits'    => $in->count(),
+                'factories' => $in->pluck('factory_name')->map(fn ($n) => mb_strtolower(trim($n)))->unique()->count(),
+            ];
+        }
+
+        return [
+            'total' => [
+                'visits'    => $visits->count(),
+                'factories' => $visits->pluck('factory_name')->map(fn ($n) => mb_strtolower(trim($n)))->unique()->count(),
+                'overdue'   => $visits->where('overdue', true)->count(),
+            ],
+            'months' => $months,
+            'visits' => $visits->values()->all(),
+        ];
     }
 
     /** The same reference the quotation screens use, so it is recognisable. */

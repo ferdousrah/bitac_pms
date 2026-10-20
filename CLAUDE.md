@@ -958,7 +958,7 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 > `IED → Reports`. The four existing reports (Production, OEE, Rejection, Lead Time) look at
 > the shop floor; these look at **who the work is for and what it is worth**.
 
-One page, five views (Target vs Achievement is the fifth), sharing a financial-year and centre filter — `Ied\IedReportController`
+One page, seven views (Target vs Achievement and the two factory-visit registers among them), sharing a financial-year and centre filter — `Ied\IedReportController`
 + `App\Services\IedReportService`. Only the view being looked at is queried.
 
 > ⚠️ **BITAC renamed two tabs and redefined a third (2026-10-20).** The URL keys did NOT
@@ -989,6 +989,33 @@ One page, five views (Target vs Achievement is the fifth), sharing a financial-y
     line, "+N more"), quoted on, **days waiting**, status, quoted value. **Longest waiting
     first** — it is a follow-up list. Summaries **by status** and **by age** (0–30, 31–60, 61–90,
     over 90 days); both sum to the total, and the print's total equals the screen's.
+- **Factory Visited (পরিদর্শিত কারখানা)** and **Factory to be Visited (পরিদর্শিতব্য কারখানা)**
+  (keys `visited`, `tovisit`; BITAC, 2026-10-20) — two tabs that are **entered as well as
+  read** here. Columns as BITAC listed them: Sl · Name of Factory (dropdown) · Visitors Name ·
+  Visited Work · Date · Remarks, and Sl · Name of Factory to be Visited · Visitors Name · Date ·
+  Remarks. Each shows **every month of the financial year** (empty months too; 2027-28 has
+  nine) with visits and factories, then the list grouped by month; both print.
+  - ⚠️ **ONE table, `factory_visits`, not two.** A planned visit that happens is the same visit:
+    **Mark as visited** (`POST ied/factory-visits/{id}/visited`) fills `visited_on` +
+    `visit_work` (+ who actually went) on the planned row, so it leaves *to be visited* and lands
+    in *visited* without being typed again. A visit nobody planned is added as visited directly
+    (`planned_date` NULL). `status` = `planned` | `visited`; *to be visited* is dated by
+    `planned_date`, *visited* by `visited_on`. A plan whose date has passed is flagged.
+  - The factory dropdown is the **stakeholders** (`customers`), with **"Other factory"** to type
+    one that is not a client. `factory_name` is **always stored** — a snapshot, so renaming the
+    customer later does not rewrite a past visit.
+  - The year's **Factories** total counts each factory once (case-folded), so it can be less
+    than the sum of the months — the print says so.
+  - **`manage factory-visits`** (new; migration `..._000074` + `BitacDepartmentRolesSeeder`,
+    which now also creates the certificate + visit permissions before syncing) is held by
+    **ied-officer** and **Executive Engineer (IED)**. Anyone who opens IED Reports can read;
+    `canManageVisits` / `stakeholders` are only sent to someone who may enter.
+  - `Ied\FactoryVisitController` (store / update / markVisited / destroy) redirects back to the
+    tab and year it came from. UI: `Components/Reports/FactoryVisitsPanel.tsx`.
+  - ⚠️ **`FinancialYear::range()` returns `CarbonImmutable`.** A month loop written
+    `for (...; $m->addMonth())` never advances and runs out of memory — assign the step
+    (`$m = $m->addMonth()`).
+  - `factory_visits` is transactional → in `TABLES_TO_WIPE` + `Reset.tsx`.
 - Work-order money comes from the linked quotation and work-order dates use
   `COALESCE(customer_wo_date, DATE(created_at))` — the same expressions as
   `TargetAchievementService`, so the two reports can never disagree. Cancelled work orders are

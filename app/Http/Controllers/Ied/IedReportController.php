@@ -32,7 +32,7 @@ class IedReportController extends Controller
         private TargetAchievementService $targets,
     ) {}
 
-    public const VIEWS = ['clients', 'sector', 'quotations', 'pipeline', 'target'];
+    public const VIEWS = ['clients', 'sector', 'quotations', 'pipeline', 'target', 'visited', 'tovisit'];
 
     public function index(Request $request)
     {
@@ -57,6 +57,16 @@ class IedReportController extends Controller
             'quotations' => $view === 'quotations' ? $this->service->quotationValue($year, $centerId) : null,
             'pipeline'   => $view === 'pipeline'   ? $this->service->pipeline($centerId) : null,
             'target'     => $view === 'target'     ? $this->targetData($year, $centerId) : null,
+            'factoryVisited' => $view === 'visited' ? $this->service->factoryVisited($year, $centerId) : null,
+            'factoryToVisit' => $view === 'tovisit' ? $this->service->factoryToVisit($year, $centerId) : null,
+
+            // Entering visits is IED's; the factory dropdown is the stakeholders.
+            'canManageVisits' => in_array($view, ['visited', 'tovisit'], true)
+                && (auth()->user()?->can('manage factory-visits') ?? false),
+            'stakeholders'    => in_array($view, ['visited', 'tovisit'], true)
+                && (auth()->user()?->can('manage factory-visits') ?? false)
+                ? \App\Models\Customer::where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                : [],
         ]);
     }
 
@@ -80,6 +90,8 @@ class IedReportController extends Controller
             'quotations' => IedReportSheets::quotationValue($label, $centre, $this->service->quotationValue($year, $centerId)),
             'pipeline'   => IedReportSheets::pipeline($centre, $this->service->pipeline($centerId)),
             'target'     => IedReportSheets::target($label, $centre, $this->targetData($year, $centerId)),
+            'visited'    => IedReportSheets::factoryVisited($label, $centre, $this->service->factoryVisited($year, $centerId)),
+            'tovisit'    => IedReportSheets::factoryToVisit($label, $centre, $this->service->factoryToVisit($year, $centerId)),
             default      => IedReportSheets::clients($label, $centre,
                 $this->service->clients($year, $centerId, $request->input('search')),
                 $request->input('search')),

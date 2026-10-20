@@ -108,6 +108,7 @@ class SystemResetController extends Controller
         'consultancy_requests',
         'quotation_request_files',
         'quotation_requests',
+        'factory_visits',
         'service_demand_logs',
         'maintenance_requests',
 

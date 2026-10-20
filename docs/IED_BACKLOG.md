@@ -220,7 +220,10 @@ From the same meeting notes, not yet worked through:
 - ~~**IED Reports**~~ — **`DONE`**. `IED → Reports`: **Stakeholder** (was Client List), **Sector
   Wise Job** (was By Type & Sector), Quotation Value (with conversion and a monthly breakdown),
   **Jobs in Pipeline** — quotations given with no order received yet (redefined by BITAC,
-  2026-10-20; it no longer follows work orders). Target vs Achievement is
+  2026-10-20; it no longer follows work orders).
+- ~~**Factory Visited / Factory to be Visited**~~ — **`DONE`** (2026-10-20). Two IED Reports tabs
+  that are entered as well as read; one register, so a planned visit marked as visited moves
+  across. Month-wise counts, the list, print. Target vs Achievement is
   its own page (item 5). All share the financial-year filter; work-order money and dates use the
   same expressions as `TargetAchievementService` so the reports cannot disagree.
 - **Word-like drafting in IED.**

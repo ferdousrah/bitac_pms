@@ -373,6 +373,15 @@ Route::middleware(['auth'])->group(function () {
             ->name('ied.reports.pdf');
     });
 
+    // ─── IED factory visits — entered from the two IED Reports tabs ─────────
+    Route::prefix('ied/factory-visits')->middleware('permission:manage factory-visits')->name('ied.factory-visits.')->group(function () {
+        $c = \App\Http\Controllers\Ied\FactoryVisitController::class;
+        Route::post('/',                     [$c, 'store'])->name('store');
+        Route::put('/{factoryVisit}',        [$c, 'update'])->name('update');
+        Route::post('/{factoryVisit}/visited', [$c, 'markVisited'])->name('visited');
+        Route::delete('/{factoryVisit}',     [$c, 'destroy'])->name('destroy');
+    });
+
     // ─── IED Stakeholder Forms ──────────────────────────────
     Route::prefix('ied/stakeholder-forms')->middleware('permission:view stakeholder-forms')->name('ied.stakeholder-forms.')->group(function () {
         Route::get('/',                              [\App\Http\Controllers\StakeholderFormController::class, 'index'])->name('index');

@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import ReportPdfButton from '@/Components/Reports/ReportPdfButton';
 import TargetAchievementPanel from '@/Components/Reports/TargetAchievementPanel';
+import FactoryVisitsPanel from '@/Components/Reports/FactoryVisitsPanel';
 import { Head, Link, router } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
 
@@ -17,6 +18,9 @@ const VIEWS = [
     // Reports group: BITAC set the yearly figure from IED, so the report and
     // the form that sets it belong on the same desk.
     { key: 'target',     label: 'Target vs Achievement' },
+    // Entered here too — one register: a planned visit, once made, moves across.
+    { key: 'visited',    label: 'Factory Visited' },
+    { key: 'tovisit',    label: 'Factory to be Visited' },
 ] as const;
 
 /** Where a waiting quotation stands. Written out in full — Tailwind only
@@ -41,6 +45,7 @@ const typeBadge = (t: string | null) =>
 export default function IedReports({
     view, year, yearLabel, years, centerId, centers = [], search = '',
     clients, sectors, quotations, pipeline, target,
+    factoryVisited, factoryToVisit, canManageVisits = false, stakeholders = [],
 }: any) {
     const [q, setQ] = useState(search);
 
@@ -128,6 +133,16 @@ export default function IedReports({
                         canSetFor={target.canSetFor}
                         isSuperAdmin={target.isSuperAdmin}
                     />
+                )}
+
+                {/* ── Factory Visited / Factory to be Visited ─────────────── */}
+                {view === 'visited' && factoryVisited && (
+                    <FactoryVisitsPanel kind="visited" data={factoryVisited} canManage={canManageVisits}
+                        stakeholders={stakeholders} year={year} centerId={centerId ?? null} />
+                )}
+                {view === 'tovisit' && factoryToVisit && (
+                    <FactoryVisitsPanel kind="tovisit" data={factoryToVisit} canManage={canManageVisits}
+                        stakeholders={stakeholders} year={year} centerId={centerId ?? null} />
                 )}
 
                 {/* ── Stakeholders (was "Client List") ─────────────────── */}
