@@ -155,7 +155,7 @@ export function Stat({ value, label }: { value: ReactNode; label: string }) {
  * kind of work it was. Matched loosely on the category name, which is typed
  * by hand; anything unrecognised falls back to a gear rather than nothing.
  */
-function categoryIcon(category: string | null): string {
+export function categoryIcon(category: string | null): string {
     const c = (category ?? '').toLowerCase();
     if (c.includes('cast') || c.includes('foundry')) return 'fi-rr-flame';
     if (c.includes('repair') || c.includes('overhaul')) return 'fi-rr-wrench-simple';

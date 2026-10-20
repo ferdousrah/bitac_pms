@@ -236,14 +236,7 @@ class PortfolioPublicController extends Controller
                     'id' => $f->id, 'url' => $f->url, 'caption' => $f->caption,
                 ])->values(),
             ],
-            'related' => PortfolioProject::where('is_published', true)
-                ->where('id', '!=', $project->id)
-                ->when($project->category, fn ($q) => $q->where('category', $project->category))
-                ->latest('completed_at')->take(3)->get()
-                ->map(fn ($p) => [
-                    'slug' => $p->slug, 'title' => $p->title,
-                    'client_name' => $p->client_name, 'cover_image_url' => $p->cover_image_url,
-                ])->values(),
+            'related' => $this->relatedProjects($project),
         ]));
     }
 
@@ -302,16 +295,40 @@ class PortfolioPublicController extends Controller
     {
         return PortfolioProject::where('is_published', true)
             ->orderBy('display_order')->orderByDesc('completed_at')->get()
-            ->map(fn ($p) => [
-                'id'              => $p->id,
-                'slug'            => $p->slug,
-                'title'           => $p->title,
-                'client_name'     => $p->client_name,
-                'category'        => $p->category,
-                'summary'         => $p->summary,
-                'completed_at'    => $p->completed_at?->format('M Y'),
-                'cover_image_url' => $p->cover_image_url,
-            ])->values();
+            ->map(fn ($p) => $this->projectRow($p))->values();
+    }
+
+    /** One project as a card — the shape `ProjectCard` reads, everywhere. */
+    private function projectRow(PortfolioProject $p): array
+    {
+        return [
+            'id'              => $p->id,
+            'slug'            => $p->slug,
+            'title'           => $p->title,
+            'client_name'     => $p->client_name,
+            'category'        => $p->category,
+            'summary'         => $p->summary,
+            'completed_at'    => $p->completed_at?->format('M Y'),
+            'cover_image_url' => $p->cover_image_url,
+        ];
+    }
+
+    /**
+     * "More of our work" under a project: the same kind of work first, then
+     * anything else, three in all — so a category with one entry does not
+     * leave the section half empty.
+     */
+    private function relatedProjects(PortfolioProject $project)
+    {
+        $base = fn () => PortfolioProject::where('is_published', true)->where('id', '!=', $project->id);
+
+        $same = $project->category
+            ? $base()->where('category', $project->category)->latest('completed_at')->take(3)->get()
+            : collect();
+        $rest = $base()->whereNotIn('id', $same->pluck('id'))
+            ->orderBy('display_order')->latest('completed_at')->take(3 - $same->count())->get();
+
+        return $same->concat($rest)->map(fn ($p) => $this->projectRow($p))->values();
     }
 
     /**

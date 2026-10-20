@@ -1720,6 +1720,24 @@ stops listing somebody.
   because this is demo content somebody will delete; the service lines are
   seeded in their migration because those are BITAC's own wording.
 
+### A product's own page (`/portfolio/{slug}`, 2026-10-20)
+- `Portfolio/Public/Show.tsx` was the last page on the old design. It now
+  matches the site: an **ink head** with breadcrumb (Home › Products ›
+  category), the gold category eyebrow, title, summary and Client / Completed
+  chips, the **cover beside the title** (or, with no photo, a drafting sheet
+  with the capability's icon — `categoryIcon()` is exported from `parts.tsx`
+  for this); then **About this work** (`Prose`) and **Photographs** (first one
+  large, lightbox with Esc / ← / →), with a **sticky sidebar**: the technical
+  specs and a dark "Need something like this made?" card →
+  `/portfolio/request-quotation` + BITAC's phone. **More of our work** at the
+  foot uses `ProjectCard`, so it is identical to the Products page.
+- `PortfolioPublicController::projectRow()` is the one card shape (Products,
+  the home page and this page all use it). **`relatedProjects()`** takes the
+  same category first and **fills up to three from other work**, so a
+  category with one entry does not leave the section half empty.
+- The "Back to Portfolio" link to `/portfolio` is gone — `/portfolio` is the
+  home page now, and the breadcrumb goes to Products.
+
 ### Stored copy is set as paragraphs (2026-10-20)
 - **`Prose`** and **`splitParagraphs()`** in `Portfolio/Public/parts.tsx` are
   the one way the site renders a block of stored text. ⚠️ **The separator can
