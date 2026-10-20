@@ -1272,7 +1272,7 @@ three new tables (migration `..._000064`):
     it and **removed the separate "Customer Login" link** — it is the same
     door, BITAC just calls its clients stakeholders. The quotation form is
     still reached from Contact, the home hero and Services. The footer's
-    "Customer login" button was not part of the request and still reads so. Links are
+    button says **Stakeholder Login** too. Links are
     `whitespace-nowrap`, and between 1024 and 1279px they and the name step
     down a size so the bar fits at 1024.
   - Checking it headless: `html` has `scroll-behavior: smooth`, so a probe's

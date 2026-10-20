@@ -460,7 +460,7 @@ function SiteFooter({ bitac, important, ministry }: {
                             <div className="flex flex-wrap items-center gap-2.5 mt-6">
                                 <a href="/customer/login"
                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-xs font-bold shadow-lg shadow-black/20 transition-all">
-                                    <i className="fi fi-rr-briefcase text-[11px] leading-none" />Customer login
+                                    <i className="fi fi-rr-handshake text-[11px] leading-none" />Stakeholder Login
                                 </a>
                                 <a href="/login"
                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white text-xs font-bold transition-colors">
