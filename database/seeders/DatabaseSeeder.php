@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
             // drawn placeholders, not anybody's real emblem -- replaced under
             // Admin > Website > Partners.
             PartnerSampleSeeder::class,
+            // Sample news for the home page. The two events carry invented
+            // dates -- edit or delete them under Admin > Website.
+            NewsSampleSeeder::class,
         ]);
     }
 }

@@ -150,29 +150,6 @@ export default function Home({ slides, featured, services, news, events, photos,
                 </Section>
             )}
 
-            {/* ── News & events ────────────────────────────────────────── */}
-            {(news.length > 0 || events.length > 0) && (
-                <Section>
-                    <div className={`grid gap-10 ${events.length ? 'lg:grid-cols-3' : ''}`}>
-                        {news.length > 0 && (
-                            <div className={events.length ? 'lg:col-span-2' : ''}>
-                                <SectionHead eyebrow="Newsroom" title="News & notices"
-                                             action={{ href: '/portfolio/news', label: 'All news' }} />
-                                <NewsLayout news={news} />
-                            </div>
-                        )}
-                        {events.length > 0 && (
-                            <div>
-                                <SectionHead eyebrow="Diary" title="Upcoming events" />
-                                <div className="space-y-3">
-                                    {events.map(e => <EventRow key={e.slug} e={e} />)}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </Section>
-            )}
-
             {/* ── Clients — a moving wall ──────────────────────────────── */}
             {clients.length > 0 && (
                 <section className="bg-white py-20 sm:py-24 overflow-hidden">
@@ -216,8 +193,8 @@ export default function Home({ slides, featured, services, news, events, photos,
                 </Section>
             )}
 
-            {/* ── Call to action ───────────────────────────────────────── */}
-            <CallToAction bitac={bitac} />
+            {/* ── News & events — the page closes on what is happening ─── */}
+            <Newsroom news={news} events={events} />
         </PublicLayout>
     );
 }
@@ -466,68 +443,6 @@ function Process() {
     );
 }
 
-// ── News ─────────────────────────────────────────────────────────────────
-
-/** The newest post large, the rest as a list beside it. */
-function NewsLayout({ news }: { news: NewsRow[] }) {
-    const [lead, ...rest] = news;
-    return (
-        <div className="grid md:grid-cols-2 gap-5">
-            <Link href={`/portfolio/news/${lead.slug}`}
-                  className="group relative rounded-3xl overflow-hidden bg-brand-950 min-h-[18rem] flex flex-col justify-end p-7">
-                {lead.cover_url ? (
-                    <img src={lead.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" />
-                ) : (
-                    <span className="absolute inset-0 bg-blueprint" />
-                )}
-                <span className="absolute inset-0 bg-gradient-to-t from-brand-950 via-brand-950/60 to-transparent" />
-                <span className="relative">
-                    <KindBadge kind={lead.kind} />
-                    <span className="block text-xl font-bold text-white mt-3 leading-snug group-hover:text-brand-200 transition-colors">{lead.title}</span>
-                    {lead.excerpt && <span className="block text-sm text-white/65 mt-2 line-clamp-2">{lead.excerpt}</span>}
-                    <span className="block text-[11px] text-white/45 mt-3">{lead.event_date || lead.published}</span>
-                </span>
-            </Link>
-            {rest.length > 0 && (
-                <div className="divide-y divide-surface-200">
-                    {rest.map(n => (
-                        <Link key={n.slug} href={`/portfolio/news/${n.slug}`} className="group block py-4 first:pt-0">
-                            <span className="flex items-center gap-2">
-                                <KindBadge kind={n.kind} />
-                                <span className="text-[11px] text-surface-400">{n.event_date || n.published}</span>
-                            </span>
-                            <span className="block text-sm font-bold text-surface-900 mt-2 leading-snug group-hover:text-brand-700 transition-colors line-clamp-2">
-                                {n.title}
-                            </span>
-                        </Link>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
-function EventRow({ e }: { e: NewsRow }) {
-    const [day, month] = (e.event_date ?? '').split(' ');
-    return (
-        <Link href={`/portfolio/news/${e.slug}`}
-              className="group flex gap-4 p-4 rounded-2xl bg-surface-50 border border-surface-200 hover:border-brand-300 hover:bg-white hover:shadow-md transition-all">
-            <span className="w-14 h-14 shrink-0 rounded-xl bg-brand-600 text-white flex flex-col items-center justify-center">
-                <span className="text-lg font-extrabold leading-none">{day}</span>
-                <span className="text-[9px] uppercase font-bold tracking-wider mt-0.5 text-brand-100">{month}</span>
-            </span>
-            <span className="min-w-0">
-                <span className="block text-[13px] font-bold text-surface-900 leading-snug line-clamp-2 group-hover:text-brand-700">{e.title}</span>
-                {e.location && (
-                    <span className="block text-[11px] text-surface-500 mt-1">
-                        <i className="fi fi-rr-marker text-[9px] mr-1" />{e.location}
-                    </span>
-                )}
-            </span>
-        </Link>
-    );
-}
-
 // ── Clients ──────────────────────────────────────────────────────────────
 
 /**
@@ -568,52 +483,138 @@ function ClientMarquee({ clients }: { clients: { name: string; type: string | nu
     );
 }
 
-// ── Call to action ───────────────────────────────────────────────────────
+// ── Newsroom ─────────────────────────────────────────────────────────────
 
-function CallToAction({ bitac }: { bitac: any }) {
+/**
+ * News & Events, as the page's closing band — it took the place of the old
+ * "Have a job for us?" call to action (BITAC's call), so it is dark like that
+ * was and the page still ends on a strong block rather than trailing off.
+ *
+ * ⚠️ Unlike every other section it does NOT disappear when empty: it is the
+ * last thing before the footer, and with nothing to say it would leave the
+ * page ending abruptly. It says plainly that there is nothing yet and points
+ * at the newsroom and the contact page instead.
+ */
+function Newsroom({ news, events }: { news: NewsRow[]; events: NewsRow[] }) {
+    const has = news.length > 0 || events.length > 0;
+
     return (
         <section className="relative overflow-hidden bg-brand-950">
             <div className="absolute inset-0 bg-blueprint" />
-            <div className="absolute -bottom-40 left-1/2 -translate-x-1/2 w-[50rem] h-[30rem] rounded-full bg-brand-600/30 blur-3xl" />
-            <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 text-center">
-                <span className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white items-center justify-center shadow-xl shadow-brand-900/50">
-                    <i className="fi fi-rr-industry-windows text-xl leading-none" />
-                </span>
-                <h2 className="text-3xl sm:text-5xl font-extrabold text-white mt-7 leading-tight tracking-tight">
-                    Have a job for us?
-                </h2>
-                <p className="text-base sm:text-lg text-white/65 mt-5 max-w-2xl mx-auto leading-relaxed">
-                    Send us your drawing, sample or specification. Our engineers cost it part by part and
-                    come back with a formal quotation.
-                </p>
-                <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-                    <Link href="/portfolio/contact"
-                          className="inline-flex items-center gap-2.5 px-7 py-4 rounded-2xl bg-white text-brand-800 text-sm font-bold hover:bg-brand-50 shadow-xl shadow-black/20 transition-colors">
-                        <i className="fi fi-rr-paper-plane text-sm leading-none" />
-                        Request a quotation
-                    </Link>
-                    <a href="/customer/login"
-                       className="inline-flex items-center gap-2.5 px-7 py-4 rounded-2xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white text-sm font-bold backdrop-blur transition-colors">
-                        <i className="fi fi-rr-briefcase text-sm leading-none" />
-                        Customer login
-                    </a>
-                </div>
-                {(bitac?.phone || bitac?.email) && (
-                    <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm text-white/55">
-                        {(bitac?.phone_bn || bitac?.phone) && (
-                            <span className="inline-flex items-center gap-2">
-                                <i className="fi fi-rr-phone-call text-brand-300" />{bitac.phone_bn || bitac.phone}
-                            </span>
+            <div className="absolute -top-40 right-0 w-[40rem] h-[40rem] rounded-full bg-brand-600/20 blur-3xl" />
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
+                <SectionHead dark eyebrow="Newsroom" title="News & Events"
+                             lead="Announcements, notices and what is coming up at BITAC."
+                             action={{ href: '/portfolio/news', label: 'All news & events' }} />
+
+                {!has ? (
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-8 py-14 text-center">
+                        <i className="fi fi-rr-newspaper text-3xl text-brand-300" />
+                        <p className="text-white/70 mt-4">No announcements right now — check back soon.</p>
+                        <Link href="/portfolio/contact"
+                              className="inline-flex items-center gap-2 mt-6 px-5 py-3 rounded-2xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white text-sm font-bold transition-colors">
+                            <i className="fi fi-rr-envelope text-xs leading-none" />
+                            Get in touch
+                        </Link>
+                    </div>
+                ) : (
+                    <div className={`grid gap-8 ${news.length && events.length ? 'lg:grid-cols-12' : ''}`}>
+                        {news.length > 0 && (
+                            <div className={events.length ? 'lg:col-span-8' : ''}>
+                                <DarkNews news={news} />
+                            </div>
                         )}
-                        {bitac?.email && (
-                            <a href={`mailto:${bitac.email}`} className="inline-flex items-center gap-2 hover:text-white transition-colors">
-                                <i className="fi fi-rr-envelope text-brand-300" />{bitac.email}
-                            </a>
+                        {events.length > 0 && (
+                            <div className={news.length ? 'lg:col-span-4' : ''}>
+                                <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-300 mb-4 flex items-center gap-2">
+                                    <i className="fi fi-rr-calendar text-xs leading-none" />
+                                    Upcoming events
+                                </div>
+                                <div className="space-y-3">
+                                    {events.map(e => <DarkEvent key={e.slug} e={e} />)}
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}
+
+                <div className="mt-10 sm:hidden">
+                    <Link href="/portfolio/news" className="inline-flex items-center gap-2 text-sm font-bold text-white/80">
+                        All news & events <i className="fi fi-rr-arrow-small-right text-base leading-none" />
+                    </Link>
+                </div>
             </div>
         </section>
+    );
+}
+
+/** The newest story large, the rest as a list beside it. */
+function DarkNews({ news }: { news: NewsRow[] }) {
+    const [lead, ...rest] = news;
+    return (
+        <div className="grid md:grid-cols-2 gap-5">
+            <Link href={`/portfolio/news/${lead.slug}`}
+                  className="group relative rounded-3xl overflow-hidden border border-white/10 min-h-[20rem] flex flex-col justify-end p-7 bg-gradient-to-br from-brand-700/60 via-brand-900 to-brand-950">
+                {lead.cover_url ? (
+                    <img src={lead.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-700" />
+                ) : (
+                    <i className="fi fi-rr-megaphone absolute top-7 right-7 text-6xl text-white/10 leading-none" />
+                )}
+                <span className="absolute inset-0 bg-gradient-to-t from-brand-950 via-brand-950/50 to-transparent" />
+                <span className="relative">
+                    <KindBadge kind={lead.kind} />
+                    <span className="block text-xl font-bold text-white mt-4 leading-snug group-hover:text-brand-200 transition-colors">
+                        {lead.title}
+                    </span>
+                    {lead.excerpt && <span className="block text-sm text-white/60 mt-3 leading-relaxed line-clamp-3">{lead.excerpt}</span>}
+                    <span className="flex items-center gap-2 text-[11px] text-white/40 mt-5">
+                        <i className="fi fi-rr-clock text-[10px] leading-none" />{lead.published}
+                    </span>
+                </span>
+            </Link>
+
+            {rest.length > 0 && (
+                <div className="space-y-3">
+                    {rest.map(n => (
+                        <Link key={n.slug} href={`/portfolio/news/${n.slug}`}
+                              className="group block p-5 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-brand-400/40 transition-all">
+                            <span className="flex items-center gap-2">
+                                <KindBadge kind={n.kind} />
+                                <span className="text-[11px] text-white/40">{n.published}</span>
+                            </span>
+                            <span className="block text-[15px] font-bold text-white mt-2.5 leading-snug group-hover:text-brand-200 transition-colors line-clamp-2">
+                                {n.title}
+                            </span>
+                            {n.excerpt && <span className="block text-[13px] text-white/50 mt-1.5 line-clamp-1">{n.excerpt}</span>}
+                        </Link>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function DarkEvent({ e }: { e: NewsRow }) {
+    const [day, month, year] = (e.event_date ?? '').split(' ');
+    return (
+        <Link href={`/portfolio/news/${e.slug}`}
+              className="group flex gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-brand-400/40 transition-all">
+            <span className="w-16 shrink-0 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex flex-col items-center justify-center py-2 shadow-lg shadow-brand-900/50">
+                <span className="text-2xl font-extrabold leading-none tabular-nums">{day}</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider mt-1 text-white/80">{month}</span>
+                {year && <span className="text-[9px] text-white/55 tabular-nums">{year}</span>}
+            </span>
+            <span className="min-w-0 py-0.5">
+                <span className="block text-sm font-bold text-white leading-snug line-clamp-2 group-hover:text-brand-200 transition-colors">
+                    {e.title}
+                </span>
+                {e.location && (
+                    <span className="flex items-center gap-1.5 text-[11px] text-white/45 mt-2">
+                        <i className="fi fi-rr-marker text-[10px] leading-none" />{e.location}
+                    </span>
+                )}
+            </span>
+        </Link>
     );
 }
 

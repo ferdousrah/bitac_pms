@@ -1369,6 +1369,21 @@ blank falls back to the Site text headline.
   does not ship a class built from a variable.
 - Marquee, gears and floats all stop under `prefers-reduced-motion`; the
   marquee pauses on hover. CSS lives in `app.css` under "Public website".
+- **News & Events closes the page** (BITAC, 2026-10-20) — it replaced the
+  "Have a job for us?" call to action, and is a dark band like that was, so
+  the page still ends on a strong block. ⚠️ It is the ONE section that does
+  not vanish when empty: as the last thing before the footer, hiding it would
+  end the page abruptly, so it says "no announcements right now" and offers
+  the contact page instead.
+  - ⚠️ The home page's `news` query **excludes events**, which have their own
+    column beside it — left in, an upcoming event showed twice in one section.
+  - **`NewsSampleSeeder`**: three stories that are true about this system (the
+    website, the customer portal, end-to-end tracking) and two events. ⚠️ **The
+    events are the only invented content** (a CNC course and an open day, dated
+    a few weeks out) — the seeder warns to edit or delete them first.
+    ⚠️ **No sample tender notices**: a tender is a legal invitation, and a
+    made-up one left live could have real suppliers bidding for nothing.
+    Seeder, not migration; keyed on the title.
 - ⚠️ **The public client list is deduped on the case-folded name, BEFORE the
   limit.** Customers are records, not organisations — "ACI Motors" was in the
   table twice and read twice on the page. The home page takes 40 for the

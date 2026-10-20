@@ -59,7 +59,13 @@ class PortfolioPublicController extends Controller
         return Inertia::render('Portfolio/Public/Home', $this->chrome([
             'slides'     => $this->heroSlides(),
             'featured'   => $this->projects()->take(6),
-            'news'       => $this->newsRows(NewsPost::live()->latest('published_at')->take(3)->get()),
+            // ⚠️ Events are excluded here because they have a column of their
+            // own beside the news. Left in, an upcoming event showed twice in
+            // the one section — once as a story, once in the diary.
+            'news'       => $this->newsRows(
+                NewsPost::live()->where('kind', '!=', 'event')
+                    ->orderByDesc('published_at')->orderByDesc('id')->take(4)->get()
+            ),
             'events'     => $this->newsRows(
                 NewsPost::live()->where('kind', 'event')
                     ->whereNotNull('event_date')->where('event_date', '>=', today())
