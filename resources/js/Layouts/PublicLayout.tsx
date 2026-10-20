@@ -324,7 +324,7 @@ function SiteFooter({ bitac, important, ministry }: {
 }) {
     const { props } = usePage<any>();
     const services: { id: number; title: string }[] = props.footer_services ?? [];
-    const phone = bitac?.phone_bn || bitac?.phone;
+    const phones = (bitac?.phone_bn || bitac?.phone || '').split(/[,;]/).map(x => x.trim()).filter(Boolean);
     const address = bitac?.address_bn || bitac?.address || '১১৬ (খ), তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮';
     const outside = [...important, ...ministry].slice(0, 7);
 
@@ -355,17 +355,12 @@ function SiteFooter({ bitac, important, ministry }: {
                 </svg>
 
                 <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    {/* ── Reach us: the three ways in, before anything else ── */}
-                    <div className="grid sm:grid-cols-3 gap-4 pt-14 pb-12 border-b border-white/10">
-                        <ContactTile icon="fi-rr-phone-call" label="Call us" value={phone}
-                                     href={bitac?.phone ? `tel:${bitac.phone.split(',')[0].replace(/[^\d+]/g, '')}` : undefined} />
-                        <ContactTile icon="fi-rr-envelope" label="Email us" value={bitac?.email}
-                                     href={bitac?.email ? `mailto:${bitac.email}` : undefined} />
-                        <ContactTile icon="fi-rr-marker" label="Visit us" value={address} href="/portfolio/contact" internal />
-                    </div>
-
-                    {/* ── The columns ── */}
-                    <div className="grid grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-10 py-14">
+                    {/* ── The columns ──
+                        BITAC (2026-10-20): the head office's address, phone and
+                        email sit under the name, where the about line was — the
+                        three big "Call / Email / Visit" tiles above the columns
+                        were removed. */}
+                    <div className="grid grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-10 pt-16 pb-14">
                         <div className="col-span-2 lg:col-span-4">
                             <div className="flex items-center gap-3">
                                 {bitac?.logo_left && (
@@ -382,11 +377,31 @@ function SiteFooter({ bitac, important, ministry }: {
                                     </span>
                                 </span>
                             </div>
-                            <p className="text-[13px] leading-relaxed mt-5 max-w-sm">
-                                An autonomous body under the Ministry of Industries, serving the
-                                nation&rsquo;s industry with manufacturing, training, testing and
-                                research since 1962.
-                            </p>
+                            <ul className="mt-6 space-y-3 text-[13px] max-w-sm">
+                                <li className="flex items-start gap-3">
+                                    <FooterIcon icon="fi-rr-marker" />
+                                    <Link href="/portfolio/contact" className="text-white/80 hover:text-white leading-relaxed transition-colors">{address}</Link>
+                                </li>
+                                {phones.length > 0 && (
+                                    <li className="flex items-start gap-3">
+                                        <FooterIcon icon="fi-rr-phone-call" />
+                                        <span className="flex flex-wrap gap-x-1 leading-relaxed">
+                                            {phones.map((n, i) => (
+                                                <span key={n}>
+                                                    <a href={telHref(n)} className="text-white/80 hover:text-white transition-colors">{n}</a>
+                                                    {i < phones.length - 1 && <span className="text-white/40">,</span>}
+                                                </span>
+                                            ))}
+                                        </span>
+                                    </li>
+                                )}
+                                {bitac?.email && (
+                                    <li className="flex items-start gap-3">
+                                        <FooterIcon icon="fi-rr-envelope" />
+                                        <a href={`mailto:${bitac.email}`} className="text-white/80 hover:text-white leading-relaxed break-all transition-colors">{bitac.email}</a>
+                                    </li>
+                                )}
+                            </ul>
                             <div className="flex flex-wrap items-center gap-2.5 mt-6">
                                 <a href="/customer/login"
                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-xs font-bold shadow-lg shadow-black/20 transition-all">
@@ -448,27 +463,17 @@ function SiteFooter({ bitac, important, ministry }: {
     );
 }
 
-function ContactTile({ icon, label, value, href, internal = false }: {
-    icon: string; label: string; value?: string | null; href?: string; internal?: boolean;
-}) {
-    if (!value) return null;
-    const body = (
-        <>
-            <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-black/25 group-hover:scale-105 transition-transform">
-                <i className={`fi ${icon} text-lg leading-none`} />
-            </span>
-            <span className="min-w-0">
-                <span className="block text-[10px] uppercase tracking-[0.18em] font-bold text-amber-300">{label}</span>
-                <span className="block text-sm font-semibold text-white mt-1 leading-snug break-words">{value}</span>
-            </span>
-        </>
-    );
-    const className = 'group flex items-center gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-brand-400/40 transition-all';
+/** A Bangla-digit `tel:` dials nothing — the number keeps its face, the link goes ASCII. */
+function telHref(n: string): string {
+    return 'tel:' + n.replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[^\d+]/g, '');
+}
 
-    if (!href) return <div className={className}>{body}</div>;
-    return internal
-        ? <Link href={href} className={className}>{body}</Link>
-        : <a href={href} className={className}>{body}</a>;
+function FooterIcon({ icon }: { icon: string }) {
+    return (
+        <span className="w-7 h-7 rounded-lg bg-white/[0.06] border border-white/10 text-amber-300 flex items-center justify-center shrink-0">
+            <i className={`fi ${icon} text-[11px] leading-none`} />
+        </span>
+    );
 }
 
 function FooterColumn({ title, className = '', children }: { title: string; className?: string; children: ReactNode }) {

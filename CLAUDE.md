@@ -1450,9 +1450,12 @@ blank falls back to the Site text headline.
   at 64px with a gentle curve read as a thin lavender smear, not a shape.
 - ⚠️ **`overflow-hidden` is on the INNER block, never the `<footer>`** — on the
   footer it would clip the wave, which deliberately sits outside it.
-- **Contact first**: three tiles (call / email / visit) above the columns. The
-  home page lost its phone-and-email band when the CTA was replaced by News &
-  Events, and the footer is where every page can carry them.
+- **The head office's address, phones and email sit in the brand column**,
+  under the name, each with a small icon (BITAC, 2026-10-20) — replacing the
+  about line. The three big **Call us / Email us / Visit us tiles above the
+  columns were removed** at BITAC's request; don't bring them back. Phones are
+  split on `,`/`;` with an ASCII `tel:` each (`telHref`), and the address links
+  to the Contact page.
 - Columns: brand (logo, Customer login + Staff), **Explore**, **What we do**
   (fed from `footer_services`, which `chrome()` now ships on every public page
   — titles only), **Important links**. Bottom bar: copyright with the ministry
