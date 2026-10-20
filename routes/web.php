@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\CustomerManagementController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\PortfolioController as AdminPortfolioController;
+use App\Http\Controllers\Admin\WebsiteController as AdminWebsiteController;
 use App\Http\Controllers\Admin\SystemResetController;
 use App\Http\Controllers\Ied\GatePassController;
 use App\Http\Controllers\Portfolio\PortfolioPublicController;
@@ -110,8 +111,20 @@ Route::get('/dashboard/live', [LiveDashboardController::class, 'index'])
 // Designed to live cleanly under a future portfolio.bitac.gov.bd subdomain
 // by wrapping in Route::domain(...) when DNS is configured.
 // ======================================================================
-Route::get('/portfolio',         [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
-Route::get('/portfolio/{slug}',  [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
+Route::get('/portfolio', [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
+// ⚠️ Every LITERAL section is declared BEFORE `/portfolio/{slug}`. Laravel
+// matches in registration order, so the other way round `/portfolio/about`
+// binds "about" as a project slug and 404s — the same trap as the receivables
+// PDF, the PCD release routes and work-orders/create.
+Route::get('/portfolio/about',        [PortfolioPublicController::class, 'about'])->name('portfolio.public.about');
+Route::get('/portfolio/products',     [PortfolioPublicController::class, 'products'])->name('portfolio.public.products');
+Route::get('/portfolio/clients',      [PortfolioPublicController::class, 'clients'])->name('portfolio.public.clients');
+Route::get('/portfolio/news',         [PortfolioPublicController::class, 'news'])->name('portfolio.public.news');
+Route::get('/portfolio/news/{slug}',  [PortfolioPublicController::class, 'newsShow'])->name('portfolio.public.news.show');
+Route::get('/portfolio/gallery',      [PortfolioPublicController::class, 'gallery'])->name('portfolio.public.gallery');
+Route::get('/portfolio/videos',       [PortfolioPublicController::class, 'videos'])->name('portfolio.public.videos');
+Route::get('/portfolio/contact',      [PortfolioPublicController::class, 'contact'])->name('portfolio.public.contact');
+Route::get('/portfolio/{slug}',       [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
 
 // Public stakeholder form fill — no auth, identified by token.
 Route::get('/stakeholder-form/{token}',             [\App\Http\Controllers\Public\StakeholderFormFillController::class, 'show'])->name('public.stakeholder-form.show');
@@ -953,6 +966,30 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('portfolio-photos/{photo}', [AdminPortfolioController::class, 'deletePhoto'])
             ->middleware('permission:manage portfolio')
             ->name('admin.portfolio.delete-photo');
+
+        // ─── Website (the public corporate site: copy, news, galleries, links) ──
+        // Products come from `portfolio` above, clients from `customers` and the
+        // address from the centre's letterhead — this is only what's left over.
+        Route::prefix('website')->middleware('permission:manage portfolio')->group(function () {
+            Route::get('/',      [AdminWebsiteController::class, 'index'])->name('admin.website.index');
+            Route::put('text',   [AdminWebsiteController::class, 'updateText'])->name('admin.website.text');
+
+            // ⚠️ `news/create` BEFORE `news/{post}`, or "create" binds as the
+            // post and 404s. (Sixth time in this codebase.)
+            Route::get('news/create',        [AdminWebsiteController::class, 'newsCreate'])->name('admin.website.news.create');
+            Route::post('news',              [AdminWebsiteController::class, 'newsStore'])->name('admin.website.news.store');
+            Route::get('news/{post}/edit',   [AdminWebsiteController::class, 'newsEdit'])->name('admin.website.news.edit');
+            Route::put('news/{post}',        [AdminWebsiteController::class, 'newsUpdate'])->name('admin.website.news.update');
+            Route::delete('news/{post}',     [AdminWebsiteController::class, 'newsDestroy'])->name('admin.website.news.destroy');
+
+            Route::post('gallery',          [AdminWebsiteController::class, 'galleryStore'])->name('admin.website.gallery.store');
+            Route::put('gallery/{item}',    [AdminWebsiteController::class, 'galleryUpdate'])->name('admin.website.gallery.update');
+            Route::delete('gallery/{item}', [AdminWebsiteController::class, 'galleryDestroy'])->name('admin.website.gallery.destroy');
+
+            Route::post('links',          [AdminWebsiteController::class, 'linkStore'])->name('admin.website.links.store');
+            Route::put('links/{link}',    [AdminWebsiteController::class, 'linkUpdate'])->name('admin.website.links.update');
+            Route::delete('links/{link}', [AdminWebsiteController::class, 'linkDestroy'])->name('admin.website.links.destroy');
+        });
 
         // ─── System Reset (super-admin only — guarded inside controller) ───
         Route::get('system/reset',  [SystemResetController::class, 'index'])

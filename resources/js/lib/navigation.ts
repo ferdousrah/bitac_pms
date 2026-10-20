@@ -170,6 +170,7 @@ export const adminGroup: NavGroup = {
                 { label: 'Products',       href: '/admin/products',       icon: 'fi-rr-box',                  permission: 'manage materials-master' },
                 { label: 'Gate Pass Notes', href: '/admin/gate-pass-condition-notes', icon: 'fi-rr-shield', permission: 'manage gate-pass-notes' },
                 { label: 'Portfolio',      href: '/admin/portfolio',      icon: 'fi-rr-images',               permission: 'manage portfolio' },
+                { label: 'Website',        href: '/admin/website',        icon: 'fi-rr-globe',                permission: 'manage portfolio' },
             ],
         },
         {

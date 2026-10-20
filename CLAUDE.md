@@ -1092,14 +1092,106 @@ tail -f storage/logs/laravel.log
 | RFQ Letters module | `app/Http/Controllers/RfqLetterController.php` + `resources/js/Pages/RfqLetter/*` |
 | Email Mailables | `app/Mail/DocumentMail.php` (multi-attach), `app/Mail/RfqLetterMail.php` |
 | What a client owes (the one source) | `app/Services/PaymentLedger.php` + `PaymentController` / `ReceivablesController` |
+| Public website (pages) | `app/Http/Controllers/Portfolio/PortfolioPublicController.php` + `resources/js/Pages/Portfolio/Public/*` |
+| Public website (admin) | `app/Http/Controllers/Admin/WebsiteController.php` + `resources/js/Pages/Admin/Website/*` |
 | Transactional data wipe | `app/Http/Controllers/Admin/SystemResetController.php` |
 | Deployment guide | `docs/DEPLOYMENT.md` (Coolify + Dockerfile) |
 | Client's own workflow + the Excel costing model it replaced | `docs/DOMAIN_NOTES.md` (paper forms in `client resource/`) |
 | Task list, BITAC's decisions, what's outstanding | `docs/IED_BACKLOG.md` |
 
+## 🌐 The public corporate website (2026-10-20)
+
+> `/portfolio` was one page listing portfolio projects. It is now BITAC's
+> corporate site: about, manufactured products, clients, news & events, photo
+> and video galleries, important links, contact and the customer login.
+
+### ⚠️ One field per thing — there is NO Bangla/English pair
+BITAC's instruction: *"alada kore bangla english thakbena, banglai dile bangla,
+english e dile english."* So `news_posts.title`, `gallery_items.caption`,
+`site_links.label` and the `site_*` settings are each a **single** column
+holding whatever language it was typed in. **Don't add `*_bn` columns here** —
+that is the letterhead's convention (`centers.name_bn`), where the *same* text
+genuinely has to print in both, and it does not apply to editorial copy.
+- Nothing forces `font-bangla` either. The Tailwind `sans` stack is
+  `Inter, Figtree, SiyamRupali, …`, and the browser falls through **per glyph**
+  — so one field sets English in Inter and Bangla in SiyamRupali on its own.
+  Forcing `font-bangla` (which was the first attempt) set the English in a
+  Bangla face too.
+
+### Most of the site is read from records the office already keeps
+Products come from `portfolio_projects`, clients from `customers`, the address,
+phone and logos from the **centre's own letterhead** (`centers`), and the
+"years" figure from 1962. So the website cannot drift away from what the office
+actually does, and none of it is retyped. What was genuinely missing is the
+three new tables (migration `..._000064`):
+- **`news_posts`** — news | event | notice | tender, with `excerpt`, `body`,
+  cover image, `event_date`, `location`, `published_at`, `is_published`.
+- **`gallery_items`** — **one table for photos AND videos** (`kind`), because
+  they differ only in where the media lives (`image_path` vs `video_url`); two
+  tables would be the same admin screen written twice.
+- **`site_links`** — the footer's important / ministry / service links, seeded
+  with BITAC's real five.
+
+### Things that bite
+- ⚠️ **`Str::slug()` strips Bangla entirely**, so a Bangla-only title comes back
+  as an empty slug and the *second* one collides on the unique index.
+  `NewsPost::slugFor()` falls back to `post-<Ymd-His>` and then de-duplicates.
+- ⚠️ **A published post's slug is frozen.** `newsUpdate()` only re-slugs a
+  **draft** — once a post is live its URL is in emails and bookmarks, and
+  renaming the title must not break them. A draft's URL does still follow.
+- ⚠️ **A YouTube `watch?v=` or `youtu.be/` link renders NOTHING in an iframe** —
+  the page would show a black box for every video. `GalleryItem::embed_url`
+  normalises YouTube (watch / youtu.be / shorts / embed) and Vimeo to their
+  embed form, and `thumb_url` falls back to `img.youtube.com/vi/{id}/hqdefault.jpg`.
+  Whoever pastes a link should not have to know this.
+- ⚠️ **The video iframe is mounted only when someone clicks play.** A dozen
+  autoloaded players is a page that takes seconds to settle and phones home for
+  every visitor.
+- ⚠️ **A news body is rendered as TEXT, never `dangerouslySetInnerHTML`**, and
+  the map is used only as an **iframe `src`**. Nothing on this page is
+  sanitised on the way in and it is served to the public — this is BITAC's own
+  website, so a stored `<script>` would be the worst possible place for one.
+  (The letter bodies go through `LetterHtml::sanitize()` because they need
+  rich text; these do not.)
+- ⚠️ **The client wall is names and type ONLY** — no contact details, no job
+  figures. A client list that leaks what each one spent is a different document
+  entirely. The test asserts no customer email appears in the payload.
+- ⚠️ **Every LITERAL section is registered BEFORE `/portfolio/{slug}`**, or
+  `/portfolio/about` binds "about" as a project slug and 404s. (Fifth time in
+  this codebase; see the receivables PDF, the PCD release routes and
+  `work-orders/create`. `admin/website/news/create` before `news/{post}` is the
+  sixth.)
+
+### Admin → Website (`WebsiteController`, `Admin/Website/Index.tsx`)
+One screen, five tabs — **Site text · News & Events · Photos · Videos · Links**
+— behind the existing **`manage portfolio`** permission (no new permission; it
+is the same job). Five sidebar entries for five short lists would have buried
+the rest of the menu. Products, clients and the address are deliberately *not*
+here: they are maintained in Portfolio, Customers and Centres.
+- The editable copy (`site_hero_title`, `site_hero_subtitle`, `site_about_lead`,
+  `site_about_body`, `site_mission`, `site_map_embed`) lives in the existing
+  `settings` store via `SettingService` — strings, not a table.
+- A **photo needs a file and a video needs a link**; neither is optional for
+  its own kind, or the row renders as an empty tile. Refusal is redirect +
+  flash, never `abort()`.
+- Editing a photo **cannot write `video_url`** and vice versa, so an edit of
+  one kind can't leave the other kind's media field set.
+- Hiding (`is_active`) takes an item off the public page and keeps the record;
+  deleting removes the uploaded file from the `public` disk too.
+- ⚠️ `news_posts` / `gallery_items` / `site_links` are **content, not
+  transactional data** — they are NOT in `SystemResetController::TABLES_TO_WIPE`,
+  for the same reason `qc_checkpoints` isn't. A data wipe must not blank the
+  public website.
+
+### Not built, deliberately
+There is **no contact form** — the page gives the address, phone, a `mailto:`
+and the customer-portal login. A form needs a table, a notification path and
+spam handling, and BITAC has not asked for one.
+
 ## 📦 What's Been Built (Feature Inventory)
 
 - 13 core modules (IED, PCD, Shops, QC, Delivery, Invoicing, Reports, etc.)
+- Public corporate website at `/portfolio` (about, products, clients, news & events, photo + video galleries, links, contact) + Admin → Website
 - Full RFQ → Cost Estimate → Quotation → Work Order → Delivery → Invoice pipeline
 - Dynamic multi-level approval chains for quotations + cost estimates
 - Visual Gantt progress tracking on work orders

@@ -27,9 +27,10 @@ interface Props {
     project: Project;
     related: Related[];
     bitac: any;
+    links?: any;
 }
 
-export default function PortfolioPublicShow({ project, related, bitac }: Props) {
+export default function PortfolioPublicShow({ project, related, bitac, links }: Props) {
     const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
     const openLightbox = (idx: number) => setLightboxIdx(idx);
@@ -38,7 +39,7 @@ export default function PortfolioPublicShow({ project, related, bitac }: Props) 
     const prevPhoto = () => setLightboxIdx(i => (i === null ? null : (i - 1 + project.photos.length) % project.photos.length));
 
     return (
-        <PublicLayout title={`${project.title} — BITAC Portfolio`} bitac={bitac}>
+        <PublicLayout title={`${project.title} — BITAC Portfolio`} bitac={bitac} links={links}>
             {/* Breadcrumb */}
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
                 <Link href="/portfolio" className="inline-flex items-center gap-1 text-xs text-surface-500 hover:text-brand-600 font-medium transition-colors">
