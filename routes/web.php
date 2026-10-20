@@ -991,6 +991,13 @@ Route::middleware(['auth'])->group(function () {
             Route::put('hero/{slide}',    [AdminWebsiteController::class, 'heroUpdate'])->name('admin.website.hero.update');
             Route::delete('hero/{slide}', [AdminWebsiteController::class, 'heroDestroy'])->name('admin.website.hero.destroy');
 
+            Route::post('offices',            [AdminWebsiteController::class, 'officeStore'])->name('admin.website.offices.store');
+            Route::put('offices/{office}',      [AdminWebsiteController::class, 'officeUpdate'])->name('admin.website.offices.update');
+            Route::delete('offices/{office}',   [AdminWebsiteController::class, 'officeDestroy'])->name('admin.website.offices.destroy');
+            Route::post('offices/{office}/contacts', [AdminWebsiteController::class, 'contactStore'])->name('admin.website.contacts.store');
+            Route::put('office-contacts/{contact}',  [AdminWebsiteController::class, 'contactUpdate'])->name('admin.website.contacts.update');
+            Route::delete('office-contacts/{contact}', [AdminWebsiteController::class, 'contactDestroy'])->name('admin.website.contacts.destroy');
+
             Route::post('partners',           [AdminWebsiteController::class, 'partnerStore'])->name('admin.website.partners.store');
             Route::put('partners/{partner}',    [AdminWebsiteController::class, 'partnerUpdate'])->name('admin.website.partners.update');
             Route::delete('partners/{partner}', [AdminWebsiteController::class, 'partnerDestroy'])->name('admin.website.partners.destroy');

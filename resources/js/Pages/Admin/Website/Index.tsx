@@ -34,6 +34,18 @@ interface PartnerRow {
     url: string | null; note: string | null; sort: number; is_active: boolean; has_logo: boolean;
 }
 interface KindRow { key: string; label: string }
+interface OfficeContactRow {
+    id: number; name: string | null; designation: string; phone: string | null;
+    mobile: string | null; email: string | null; sort: number; is_active: boolean;
+}
+interface OfficeRow {
+    id: number; slug: string; name: string; center_id: number | null; center_name: string | null;
+    address: string | null; phone: string | null; fax: string | null; email: string | null;
+    shown_address: string | null; shown_phone: string | null; shown_email: string | null;
+    map_query: string | null; latitude: number | null; longitude: number | null; map_link: string;
+    is_head_office: boolean; sort: number; is_active: boolean; contacts: OfficeContactRow[];
+}
+interface CenterOpt { id: number; name: string }
 interface HeroRow {
     id: number; kind: 'image' | 'video' | 'youtube';
     image_url: string | null; video_src: string | null; poster_url: string | null;
@@ -50,6 +62,8 @@ interface Props {
     text: Record<string, string>;
     services: ServiceRow[];
     partners: PartnerRow[];
+    offices: OfficeRow[];
+    office_centers: CenterOpt[];
     news: NewsRow[];
     gallery: GalleryRow[];
     videos: GalleryRow[];
@@ -66,6 +80,7 @@ const TABS = [
     { key: 'text',     label: 'Site text',     icon: 'fi-rr-text' },
     { key: 'services', label: 'Services',      icon: 'fi-rr-tools' },
     { key: 'partners', label: 'Partners',      icon: 'fi-rr-handshake' },
+    { key: 'offices',  label: 'Offices',       icon: 'fi-rr-marker' },
     { key: 'news',     label: 'News & Events', icon: 'fi-rr-newspaper' },
     { key: 'gallery', label: 'Photos',       icon: 'fi-rr-picture' },
     { key: 'videos',  label: 'Videos',       icon: 'fi-rr-play' },
@@ -85,7 +100,7 @@ const GROUP_LABEL: Record<string, string> = {
     service:   'Services',
 };
 
-export default function WebsiteIndex({ tab, hero, text, services, partners, news, gallery, videos, links, albums, kinds, groups, icons, partner_kinds }: Props) {
+export default function WebsiteIndex({ tab, hero, text, services, partners, offices, office_centers, news, gallery, videos, links, albums, kinds, groups, icons, partner_kinds }: Props) {
     const [active, setActive] = useState(tab);
 
     const go = (key: string) => {
@@ -132,6 +147,7 @@ export default function WebsiteIndex({ tab, hero, text, services, partners, news
                             {t.key === 'hero' && hero.length > 0 && <Count n={hero.length} on={active === t.key} />}
                             {t.key === 'services' && services.length > 0 && <Count n={services.length} on={active === t.key} />}
                             {t.key === 'partners' && partners.length > 0 && <Count n={partners.length} on={active === t.key} />}
+                            {t.key === 'offices' && offices.length > 0 && <Count n={offices.length} on={active === t.key} />}
                             {t.key === 'news' && news.length > 0 && <Count n={news.length} on={active === t.key} />}
                             {t.key === 'gallery' && gallery.length > 0 && <Count n={gallery.length} on={active === t.key} />}
                             {t.key === 'videos' && videos.length > 0 && <Count n={videos.length} on={active === t.key} />}
@@ -143,6 +159,7 @@ export default function WebsiteIndex({ tab, hero, text, services, partners, news
                 {active === 'hero' && <HeroTab slides={hero} />}
                 {active === 'text' && <TextTab text={text} />}
                 {active === 'partners' && <PartnersTab partners={partners} kinds={partner_kinds} />}
+                {active === 'offices' && <OfficesTab offices={offices} centers={office_centers} />}
                 {active === 'services' && <ServicesTab services={services} icons={icons} />}
                 {active === 'news' && <NewsTab news={news} />}
                 {active === 'gallery' && <MediaTab kind="photo" rows={gallery} albums={albums} />}
@@ -210,19 +227,8 @@ function TextTab({ text }: { text: Record<string, string> }) {
                 </div>
             </div>
 
-            <div className="card">
-                <div className="card-header"><h2 className="font-semibold text-surface-800">Contact page</h2></div>
-                <div className="card-body">
-                    <Field
-                        label="Map embed URL"
-                        hint="From Google Maps → Share → Embed a map → copy the src=&quot;…&quot; address only. Leave blank for no map."
-                        error={form.errors.site_map_embed}
-                    >
-                        <input className="form-input" value={form.data.site_map_embed}
-                               onChange={(e) => form.setData('site_map_embed', e.target.value)}
-                               placeholder="https://www.google.com/maps/embed?pb=…" />
-                    </Field>
-                </div>
+            <div className="alert alert-info text-xs">
+                Maps and addresses for the Contact page are set per office, under the <strong>Offices</strong> tab.
             </div>
 
             <div className="flex justify-end">
@@ -1059,6 +1065,340 @@ function PartnerEditModal({ partner, kinds, onClose }: {
                     <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
                     <button type="submit" className="btn-primary" disabled={form.processing}>
                         {form.processing ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+// ── Offices & contact persons ────────────────────────────────────────────
+
+function OfficesTab({ offices, centers }: { offices: OfficeRow[]; centers: CenterOpt[] }) {
+    const [editing, setEditing] = useState<OfficeRow | 'new' | null>(null);
+    const [contactEdit, setContactEdit] = useState<{ office: OfficeRow; contact: OfficeContactRow | null } | null>(null);
+
+    const removeOffice = (o: OfficeRow) => {
+        if (confirm(`Remove "${o.name}" and its ${o.contacts.length} contact person(s)? This cannot be undone.`)) {
+            router.delete(`/admin/website/offices/${o.id}`, { preserveScroll: true });
+        }
+    };
+    const removeContact = (c: OfficeContactRow) => {
+        if (confirm(`Remove ${c.name || c.designation}?`)) {
+            router.delete(`/admin/website/office-contacts/${c.id}`, { preserveScroll: true });
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-surface-500 max-w-2xl">
+                    The offices on the public Contact page, each with its map pin and contact persons. An office
+                    linked to a PMS centre takes any field left blank from that centre&rsquo;s letterhead.
+                </p>
+                <button type="button" onClick={() => setEditing('new')} className="btn-primary">
+                    <i className="fi fi-rr-plus text-xs mr-1.5" />Add office
+                </button>
+            </div>
+
+            {offices.length === 0 && (
+                <div className="card"><div className="card-body text-center py-14 text-sm text-surface-500">
+                    No offices yet. The Contact page says so until there is one.
+                </div></div>
+            )}
+
+            {offices.map((o) => (
+                <div key={o.id} className={`card ${o.is_active ? '' : 'opacity-70'}`}>
+                    <div className="card-header flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h2 className="font-semibold text-surface-900">{o.name}</h2>
+                                {o.is_head_office && <span className="badge-amber">Head office</span>}
+                                {!o.is_active && <span className="badge-slate">Hidden</span>}
+                                <span className="text-[11px] text-surface-400 font-mono">#{o.slug}</span>
+                            </div>
+                            <div className="text-xs text-surface-500 mt-1 space-y-0.5">
+                                <div>
+                                    <i className="fi fi-rr-marker text-[10px] mr-1.5" />{o.shown_address || '—'}
+                                    {!o.address && o.shown_address && <span className="ml-1.5 text-surface-400">(from {o.center_name} letterhead)</span>}
+                                </div>
+                                <div>
+                                    <i className="fi fi-rr-phone-call text-[10px] mr-1.5" />{o.shown_phone || '—'}
+                                    {o.fax && <span className="ml-3"><i className="fi fi-rr-print text-[10px] mr-1" />{o.fax}</span>}
+                                    {o.shown_email && <span className="ml-3"><i className="fi fi-rr-envelope text-[10px] mr-1" />{o.shown_email}</span>}
+                                </div>
+                                <div className="text-surface-400">
+                                    <i className="fi fi-rr-map-marker text-[10px] mr-1.5" />
+                                    {o.latitude !== null ? `Pin ${o.latitude}, ${o.longitude}` : `Map search: ${o.map_query || '(name + address)'}`}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <a href={o.map_link} target="_blank" rel="noreferrer" title="Check the map"
+                               className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                <i className="fi fi-rr-map text-xs" />
+                            </a>
+                            <a href={`/portfolio/contact#${o.slug}`} target="_blank" rel="noreferrer" title="View on the site"
+                               className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                <i className="fi fi-rr-eye text-xs" />
+                            </a>
+                            <button type="button" onClick={() => setEditing(o)} title="Edit office"
+                                    className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                <i className="fi fi-rr-pencil text-xs" />
+                            </button>
+                            <button type="button" onClick={() => removeOffice(o)} title="Remove office"
+                                    className="w-8 h-8 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600 flex items-center justify-center">
+                                <i className="fi fi-rr-trash text-xs" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-surface-50 text-left text-[11px] uppercase tracking-wider text-surface-500">
+                                <tr>
+                                    <th className="px-4 py-2.5 w-12">Sl</th>
+                                    <th className="px-4 py-2.5">Contact person</th>
+                                    <th className="px-4 py-2.5">Mobile</th>
+                                    <th className="px-4 py-2.5">Phone</th>
+                                    <th className="px-4 py-2.5">Email</th>
+                                    <th className="px-4 py-2.5 w-24 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-surface-100">
+                                {o.contacts.map((c, i) => (
+                                    <tr key={c.id} className={`hover:bg-surface-50/70 ${c.is_active ? '' : 'opacity-60'}`}>
+                                        <td className="px-4 py-2.5 text-surface-400 tabular-nums">{i + 1}</td>
+                                        <td className="px-4 py-2.5">
+                                            {c.name && <div className="font-medium text-surface-900">{c.name}</div>}
+                                            <div className={c.name ? 'text-xs text-surface-500' : 'text-surface-800'}>{c.designation}</div>
+                                            {!c.is_active && <span className="badge-slate mt-1 inline-block">Hidden</span>}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-surface-700 whitespace-nowrap">{c.mobile || <span className="text-surface-300">—</span>}</td>
+                                        <td className="px-4 py-2.5 text-surface-600 whitespace-nowrap">{c.phone || <span className="text-surface-300">—</span>}</td>
+                                        <td className="px-4 py-2.5 text-surface-600 text-xs">{c.email || <span className="text-surface-300">—</span>}</td>
+                                        <td className="px-4 py-2.5">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button type="button" onClick={() => setContactEdit({ office: o, contact: c })} title="Edit"
+                                                        className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                                    <i className="fi fi-rr-pencil text-xs" />
+                                                </button>
+                                                <button type="button" onClick={() => removeContact(c)} title="Remove"
+                                                        className="w-8 h-8 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600 flex items-center justify-center">
+                                                    <i className="fi fi-rr-trash text-xs" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {o.contacts.length === 0 && (
+                                    <tr><td colSpan={6} className="px-4 py-6 text-center text-xs text-surface-400">No contact persons yet.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="px-4 py-3 border-t border-surface-100">
+                        <button type="button" onClick={() => setContactEdit({ office: o, contact: null })}
+                                className="text-xs font-semibold text-brand-700 hover:text-brand-800">
+                            <i className="fi fi-rr-user-add text-[11px] mr-1.5" />Add contact person
+                        </button>
+                    </div>
+                </div>
+            ))}
+
+            {editing && (
+                <OfficeModal office={editing === 'new' ? null : editing} centers={centers} onClose={() => setEditing(null)} />
+            )}
+            {contactEdit && (
+                <ContactModal office={contactEdit.office} contact={contactEdit.contact} onClose={() => setContactEdit(null)} />
+            )}
+        </div>
+    );
+}
+
+function OfficeModal({ office, centers, onClose }: { office: OfficeRow | null; centers: CenterOpt[]; onClose: () => void }) {
+    const form = useForm<any>({
+        name: office?.name ?? '', slug: office?.slug ?? '', center_id: office?.center_id ?? '',
+        address: office?.address ?? '', phone: office?.phone ?? '', fax: office?.fax ?? '', email: office?.email ?? '',
+        map_query: office?.map_query ?? '', latitude: office?.latitude ?? '', longitude: office?.longitude ?? '',
+        sort: office?.sort ?? 0, is_head_office: office?.is_head_office ?? false, is_active: office?.is_active ?? true,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        if (office) form.put(`/admin/website/offices/${office.id}`, { preserveScroll: true, onSuccess: onClose });
+        else form.post('/admin/website/offices', { preserveScroll: true, onSuccess: onClose });
+    };
+
+    const linked = form.data.center_id !== '' && form.data.center_id !== null;
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+            <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
+                  className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+                <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between sticky top-0 bg-white z-10">
+                    <h3 className="font-semibold text-surface-900">{office ? 'Edit office' : 'Add office'}</h3>
+                    <button type="button" onClick={onClose}
+                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-400 flex items-center justify-center">
+                        <i className="fi fi-rr-cross-small text-lg" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    <div className="grid sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-2">
+                            <Field label="Name *" error={form.errors.name}>
+                                <input className="form-input" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)}
+                                       placeholder="বিটাক, খুলনা" />
+                            </Field>
+                        </div>
+                        <Field label="Link name *" hint="For /contact#… — lower-case." error={form.errors.slug}>
+                            <input className="form-input font-mono" value={form.data.slug}
+                                   onChange={(e) => form.setData('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                                   placeholder="khulna" />
+                        </Field>
+                    </div>
+                    <Field label="Linked PMS centre"
+                           hint="Optional. Any field below left blank is then taken from that centre's letterhead."
+                           error={form.errors.center_id}>
+                        <select className="form-input" value={form.data.center_id ?? ''} onChange={(e) => form.setData('center_id', e.target.value)}>
+                            <option value="">— none —</option>
+                            {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </Field>
+                    <Field label="Address" hint={linked ? 'Blank = the centre letterhead\u2019s address.' : undefined} error={form.errors.address}>
+                        <textarea className="form-textarea" rows={2} value={form.data.address} onChange={(e) => form.setData('address', e.target.value)} />
+                    </Field>
+                    <div className="grid sm:grid-cols-3 gap-3">
+                        <Field label="Phone" hint="Several? Separate with commas." error={form.errors.phone}>
+                            <input className="form-input" value={form.data.phone} onChange={(e) => form.setData('phone', e.target.value)} />
+                        </Field>
+                        <Field label="Fax" error={form.errors.fax}>
+                            <input className="form-input" value={form.data.fax} onChange={(e) => form.setData('fax', e.target.value)} />
+                        </Field>
+                        <Field label="Email" error={form.errors.email}>
+                            <input className="form-input" value={form.data.email} onChange={(e) => form.setData('email', e.target.value)} />
+                        </Field>
+                    </div>
+
+                    <div className="rounded-xl border border-surface-200 p-4 space-y-3 bg-surface-50/60">
+                        <div className="text-xs font-bold text-surface-700 uppercase tracking-wider">Map location</div>
+                        <Field label="Map search"
+                               hint="What the map looks for — English finds places far more reliably than a Bangla address. Blank = name + address."
+                               error={form.errors.map_query}>
+                            <input className="form-input" value={form.data.map_query} onChange={(e) => form.setData('map_query', e.target.value)}
+                                   placeholder="BITAC Khulna, Shiromoni Industrial Area, Khulna 9204" />
+                        </Field>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Field label="Exact pin — latitude" error={form.errors.latitude}>
+                                <input className="form-input" value={form.data.latitude} onChange={(e) => form.setData('latitude', e.target.value)}
+                                       placeholder="23.7650" />
+                            </Field>
+                            <Field label="Longitude" error={form.errors.longitude}>
+                                <input className="form-input" value={form.data.longitude} onChange={(e) => form.setData('longitude', e.target.value)}
+                                       placeholder="90.3990" />
+                            </Field>
+                        </div>
+                        <p className="text-[11px] text-surface-500">
+                            An exact pin wins over the search. To get one: right-click the building in Google Maps
+                            and click the numbers at the top of the menu — they copy as &ldquo;latitude, longitude&rdquo;.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-6">
+                        <Field label="Order" error={form.errors.sort}>
+                            <input type="number" min={0} className="form-input w-28" value={form.data.sort}
+                                   onChange={(e) => form.setData('sort', Number(e.target.value))} />
+                        </Field>
+                        <label className="flex items-center gap-2 cursor-pointer pt-5">
+                            <input type="checkbox" checked={form.data.is_head_office}
+                                   onChange={(e) => form.setData('is_head_office', e.target.checked)}
+                                   className="rounded border-surface-300 text-brand-500 focus:ring-brand-400" />
+                            <span className="text-sm text-surface-700">Head office</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer pt-5">
+                            <input type="checkbox" checked={form.data.is_active}
+                                   onChange={(e) => form.setData('is_active', e.target.checked)}
+                                   className="rounded border-surface-300 text-brand-500 focus:ring-brand-400" />
+                            <span className="text-sm text-surface-700">Show on the website</span>
+                        </label>
+                    </div>
+                </div>
+                <div className="px-5 py-4 border-t border-surface-200 flex justify-end gap-3 sticky bottom-0 bg-white">
+                    <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={form.processing}>
+                        {form.processing ? 'Saving…' : office ? 'Save' : 'Add office'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+function ContactModal({ office, contact, onClose }: { office: OfficeRow; contact: OfficeContactRow | null; onClose: () => void }) {
+    const form = useForm<any>({
+        name: contact?.name ?? '', designation: contact?.designation ?? '', mobile: contact?.mobile ?? '',
+        phone: contact?.phone ?? '', email: contact?.email ?? '', sort: contact?.sort ?? (office.contacts.length + 1),
+        is_active: contact?.is_active ?? true,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        if (contact) form.put(`/admin/website/office-contacts/${contact.id}`, { preserveScroll: true, onSuccess: onClose });
+        else form.post(`/admin/website/offices/${office.id}/contacts`, { preserveScroll: true, onSuccess: onClose });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+            <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
+                  className="bg-white rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+                <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between">
+                    <div>
+                        <h3 className="font-semibold text-surface-900">{contact ? 'Edit contact person' : 'Add contact person'}</h3>
+                        <div className="text-xs text-surface-500">{office.name}</div>
+                    </div>
+                    <button type="button" onClick={onClose}
+                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-400 flex items-center justify-center">
+                        <i className="fi fi-rr-cross-small text-lg" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    <Field label="Designation *" hint="The post — e.g. নির্বাহী প্রকৌশলী (কেন্দ্র প্রধান)." error={form.errors.designation}>
+                        <input className="form-input" value={form.data.designation} onChange={(e) => form.setData('designation', e.target.value)} />
+                    </Field>
+                    <Field label="Name"
+                           hint="Optional. A post with its official email is a valid contact on its own — and survives the officer being transferred."
+                           error={form.errors.name}>
+                        <input className="form-input" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Mobile" error={form.errors.mobile}>
+                            <input className="form-input" value={form.data.mobile} onChange={(e) => form.setData('mobile', e.target.value)}
+                                   placeholder="+৮৮০১…" />
+                        </Field>
+                        <Field label="Office phone" error={form.errors.phone}>
+                            <input className="form-input" value={form.data.phone} onChange={(e) => form.setData('phone', e.target.value)} />
+                        </Field>
+                    </div>
+                    <Field label="Email" hint="Prefer the post's @bitac.gov.bd address to a personal one." error={form.errors.email}>
+                        <input className="form-input" value={form.data.email} onChange={(e) => form.setData('email', e.target.value)} />
+                    </Field>
+                    <div className="flex items-center gap-6">
+                        <Field label="Order" error={form.errors.sort}>
+                            <input type="number" min={0} className="form-input w-28" value={form.data.sort}
+                                   onChange={(e) => form.setData('sort', Number(e.target.value))} />
+                        </Field>
+                        <label className="flex items-center gap-2 cursor-pointer pt-5">
+                            <input type="checkbox" checked={form.data.is_active}
+                                   onChange={(e) => form.setData('is_active', e.target.checked)}
+                                   className="rounded border-surface-300 text-brand-500 focus:ring-brand-400" />
+                            <span className="text-sm text-surface-700">Show on the website</span>
+                        </label>
+                    </div>
+                </div>
+                <div className="px-5 py-4 border-t border-surface-200 flex justify-end gap-3">
+                    <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={form.processing}>
+                        {form.processing ? 'Saving…' : contact ? 'Save' : 'Add'}
                     </button>
                 </div>
             </form>

@@ -7,7 +7,10 @@ use App\Models\GalleryItem;
 use App\Models\HeroSlide;
 use App\Models\NewsPost;
 use App\Models\Partner;
+use App\Models\Center;
 use App\Models\SiteLink;
+use App\Models\SiteOffice;
+use App\Models\SiteOfficeContact;
 use App\Models\SiteService;
 use App\Services\SettingService;
 use Illuminate\Http\Request;
@@ -31,7 +34,7 @@ class WebsiteController extends Controller
     /** The editable copy on the public site. Keys are `site_*` in `settings`. */
     private const TEXT_KEYS = [
         'site_hero_title', 'site_hero_subtitle', 'site_about_lead',
-        'site_about_body', 'site_mission', 'site_map_embed',
+        'site_about_body', 'site_mission',
     ];
 
     public function index(Request $request)
@@ -39,7 +42,7 @@ class WebsiteController extends Controller
         $s = app(SettingService::class);
 
         return Inertia::render('Admin/Website/Index', [
-            'tab'  => in_array($request->input('tab'), ['hero', 'text', 'services', 'partners', 'news', 'gallery', 'videos', 'links'], true)
+            'tab'  => in_array($request->input('tab'), ['hero', 'text', 'services', 'partners', 'offices', 'news', 'gallery', 'videos', 'links'], true)
                 ? $request->input('tab') : 'text',
             'text' => collect(self::TEXT_KEYS)->mapWithKeys(fn ($k) => [$k => (string) $s->get($k, '')])->all(),
             'hero' => HeroSlide::orderBy('sort')->orderBy('id')->get()
@@ -85,6 +88,28 @@ class WebsiteController extends Controller
                     'is_active' => $p->is_active,
                     'has_logo'  => $p->hasLogo(),
                 ])->values(),
+            'offices' => SiteOffice::with(['center', 'contacts'])
+                ->orderByDesc('is_head_office')->orderBy('sort')->orderBy('id')->get()
+                ->map(fn ($o) => [
+                    'id' => $o->id, 'slug' => $o->slug, 'name' => $o->name, 'center_id' => $o->center_id,
+                    'center_name' => $o->center?->name,
+                    'address' => $o->address, 'phone' => $o->phone, 'fax' => $o->fax, 'email' => $o->email,
+                    // What the public page will actually show, letterhead
+                    // fallbacks included — so a blank field is not mistaken
+                    // for a missing one.
+                    'shown_address' => $o->shown_address, 'shown_phone' => $o->shown_phone, 'shown_email' => $o->shown_email,
+                    'map_query' => $o->map_query, 'latitude' => $o->latitude, 'longitude' => $o->longitude,
+                    'map_link' => $o->map_link,
+                    'is_head_office' => $o->is_head_office, 'sort' => $o->sort, 'is_active' => $o->is_active,
+                    'contacts' => $o->contacts->map(fn ($c) => [
+                        'id' => $c->id, 'name' => $c->name, 'designation' => $c->designation,
+                        'phone' => $c->phone, 'mobile' => $c->mobile, 'email' => $c->email,
+                        'sort' => $c->sort, 'is_active' => $c->is_active,
+                    ])->values(),
+                ])->values(),
+            // Centres an office may link to, for its letterhead fallbacks.
+            'office_centers' => Center::withoutGlobalScopes()->orderBy('id')->get(['id', 'name'])
+                ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values(),
             'news' => NewsPost::orderByDesc('published_at')->orderByDesc('id')->get()
                 ->map(fn ($p) => [
                     'id'           => $p->id,
@@ -127,7 +152,6 @@ class WebsiteController extends Controller
             'site_about_lead'    => 'nullable|string|max:1000',
             'site_about_body'    => 'nullable|string|max:20000',
             'site_mission'       => 'nullable|string|max:1000',
-            'site_map_embed'     => 'nullable|url|max:2000',
         ]);
 
         $s = app(SettingService::class);
@@ -378,6 +402,131 @@ class WebsiteController extends Controller
 
         return redirect()->route('admin.website.index', ['tab' => 'partners'])
             ->with('success', 'Partner removed.');
+    }
+
+    // ── Offices & contact persons ────────────────────────────────────────
+
+    public function officeStore(Request $request)
+    {
+        $data = $this->validateOffice($request);
+        $office = SiteOffice::create($this->officeAttributes($data, $request));
+        $this->onlyOneHeadOffice($office);
+
+        return redirect()->route('admin.website.index', ['tab' => 'offices'])->with('success', 'Office added.');
+    }
+
+    public function officeUpdate(Request $request, SiteOffice $office)
+    {
+        $office->update($this->officeAttributes($this->validateOffice($request, $office), $request, $office));
+        $this->onlyOneHeadOffice($office);
+
+        return back()->with('success', 'Office updated.');
+    }
+
+    public function officeDestroy(SiteOffice $office)
+    {
+        // Its contact persons go with it (cascade).
+        $office->delete();
+
+        return redirect()->route('admin.website.index', ['tab' => 'offices'])->with('success', 'Office removed.');
+    }
+
+    public function contactStore(Request $request, SiteOffice $office)
+    {
+        $office->contacts()->create($this->validateContact($request) + [
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        return back()->with('success', 'Contact person added.');
+    }
+
+    public function contactUpdate(Request $request, SiteOfficeContact $contact)
+    {
+        $contact->update($this->validateContact($request) + ['is_active' => $request->boolean('is_active')]);
+
+        return back()->with('success', 'Contact person updated.');
+    }
+
+    public function contactDestroy(SiteOfficeContact $contact)
+    {
+        $contact->delete();
+
+        return back()->with('success', 'Contact person removed.');
+    }
+
+    /**
+     * ⚠️ Exactly one head office. Marking a second one quietly un-marks the
+     * first, rather than refusing — the editor plainly meant to move it.
+     */
+    private function onlyOneHeadOffice(SiteOffice $office): void
+    {
+        if ($office->is_head_office) {
+            SiteOffice::where('id', '!=', $office->id)->where('is_head_office', true)->update(['is_head_office' => false]);
+        }
+    }
+
+    private function validateOffice(Request $request, ?SiteOffice $office = null): array
+    {
+        return $request->validate([
+            'name'      => 'required|string|max:200',
+            // The #anchor in /portfolio/contact#khulna — lower-case, no spaces.
+            'slug'      => ['required', 'string', 'max:60', 'regex:/^[a-z0-9-]+$/',
+                            \Illuminate\Validation\Rule::unique('site_offices', 'slug')->ignore($office?->id)],
+            'center_id' => 'nullable|exists:centers,id',
+            'address'   => 'nullable|string|max:1000',
+            'phone'     => 'nullable|string|max:255',
+            'fax'       => 'nullable|string|max:255',
+            'email'     => 'nullable|email|max:255',
+            'map_query' => 'nullable|string|max:255',
+            // Both or neither — half a pin puts the marker in the sea.
+            'latitude'  => 'nullable|numeric|between:-90,90|required_with:longitude',
+            'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
+            'sort'      => 'nullable|integer|min:0|max:9999',
+        ], [
+            'slug.regex' => 'Use lower-case letters, digits and hyphens only, e.g. "khulna".',
+        ]);
+    }
+
+    private function officeAttributes(array $data, Request $request, ?SiteOffice $office = null): array
+    {
+        $blank = fn ($k) => ($data[$k] ?? null) === '' ? null : ($data[$k] ?? null);
+
+        return [
+            'name'           => $data['name'],
+            'slug'           => $data['slug'],
+            'center_id'      => $blank('center_id'),
+            'address'        => $blank('address'),
+            'phone'          => $blank('phone'),
+            'fax'            => $blank('fax'),
+            'email'          => $blank('email'),
+            'map_query'      => $blank('map_query'),
+            'latitude'       => $blank('latitude'),
+            'longitude'      => $blank('longitude'),
+            'sort'           => (int) ($data['sort'] ?? 0),
+            'is_head_office' => $request->boolean('is_head_office'),
+            'is_active'      => $office ? $request->boolean('is_active') : $request->boolean('is_active', true),
+        ];
+    }
+
+    private function validateContact(Request $request): array
+    {
+        $data = $request->validate([
+            'name'        => 'nullable|string|max:200',
+            'designation' => 'required|string|max:255',
+            'phone'       => 'nullable|string|max:255',
+            'mobile'      => 'nullable|string|max:255',
+            'email'       => 'nullable|email|max:255',
+            'sort'        => 'nullable|integer|min:0|max:9999',
+        ]);
+
+        return [
+            'name'        => ($data['name'] ?? null) ?: null,
+            'designation' => $data['designation'],
+            'phone'       => ($data['phone'] ?? null) ?: null,
+            'mobile'      => ($data['mobile'] ?? null) ?: null,
+            'email'       => ($data['email'] ?? null) ?: null,
+            'sort'        => (int) ($data['sort'] ?? 0),
+        ];
     }
 
     // ── Services ─────────────────────────────────────────────────────────

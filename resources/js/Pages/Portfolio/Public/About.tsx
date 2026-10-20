@@ -3,7 +3,7 @@ import { PageHead, Prose, Section, SectionHead, Stat } from './parts';
 
 interface Props {
     stats: { years: number; projects: number; clients: number; centres: number };
-    centres: { name: string; sub: string | null; address: string | null; phone: string | null; email: string | null }[];
+    centres: { slug: string; name: string; sub: string | null; address: string | null; phone: string | null; email: string | null }[];
     bitac: any; site: any; links: any;
 }
 
@@ -68,6 +68,11 @@ export default function About({ stats, centres, bitac, site, links }: Props) {
                                     <i className="fi fi-rr-envelope text-[10px] mr-1.5" />{c.email}
                                 </div>
                             )}
+                            <a href={`/portfolio/contact#${c.slug}`}
+                               className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-800 mt-4">
+                                <i className="fi fi-rr-map-marker text-[10px] leading-none" />
+                                Map &amp; contacts
+                            </a>
                         </div>
                     ))}
                 </div>

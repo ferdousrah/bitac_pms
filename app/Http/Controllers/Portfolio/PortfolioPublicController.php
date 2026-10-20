@@ -11,6 +11,7 @@ use App\Models\NewsPost;
 use App\Models\Partner;
 use App\Models\PortfolioProject;
 use App\Models\SiteLink;
+use App\Models\SiteOffice;
 use App\Models\SiteService;
 use App\Services\SettingService;
 use Inertia\Inertia;
@@ -83,15 +84,17 @@ class PortfolioPublicController extends Controller
     {
         return Inertia::render('Portfolio/Public/About', $this->chrome([
             'stats'    => $this->stats(),
-            'centres'  => Center::where('is_active', true)->orderBy('id')
-                ->get(['id', 'name', 'name_bn', 'address', 'address_bn', 'phone', 'phone_bn', 'email'])
-                ->map(fn ($c) => [
-                    'name'    => $c->name_bn ?: $c->name,
-                    'sub'     => $c->name_bn ? $c->name : null,
-                    'address' => $c->address_bn ?: $c->address,
-                    'phone'   => $c->phone_bn ?: $c->phone,
-                    'email'   => $c->email,
-                ])->values(),
+            // ⚠️ From the offices, not `centers` — the PMS only knows the
+            // centres it runs, and Chattogram, Chandpur, Khulna and Bogura
+            // are not in it. The About page listed one centre because of that.
+            'centres'  => $this->officeRows()->map(fn ($o) => [
+                'slug'    => $o['slug'],
+                'name'    => $o['name'],
+                'sub'     => $o['is_head_office'] ? 'Head office' : null,
+                'address' => $o['address'],
+                'phone'   => $o['phone'],
+                'email'   => $o['email'],
+            ])->values(),
         ]));
     }
 
@@ -179,15 +182,7 @@ class PortfolioPublicController extends Controller
     public function contact()
     {
         return Inertia::render('Portfolio/Public/Contact', $this->chrome([
-            'centres' => Center::where('is_active', true)->orderBy('id')
-                ->get(['id', 'name', 'name_bn', 'address', 'address_bn', 'phone', 'phone_bn', 'email'])
-                ->map(fn ($c) => [
-                    'name'    => $c->name_bn ?: $c->name,
-                    'sub'     => $c->name_bn ? $c->name : null,
-                    'address' => $c->address_bn ?: $c->address,
-                    'phone'   => $c->phone_bn ?: $c->phone,
-                    'email'   => $c->email,
-                ])->values(),
+            'offices' => $this->officeRows(),
         ]));
     }
 
@@ -256,7 +251,6 @@ class PortfolioPublicController extends Controller
             'about_lead'    => self::text('site_about_lead', 'Bangladesh Industrial Technical Assistance Centre (BITAC) is an autonomous body under the Ministry of Industries, serving the country\'s industry since 1962.'),
             'about_body'    => self::text('site_about_body', self::ABOUT_BODY),
             'mission'       => self::text('site_mission', 'To support the nation\'s industrialisation through skilled manpower, import-substitute manufacturing and reliable technical services.'),
-            'map_embed'     => self::text('site_map_embed', ''),
         ];
     }
 
@@ -341,6 +335,40 @@ class PortfolioPublicController extends Controller
             ])->values();
     }
 
+    /**
+     * BITAC's offices with their contact persons, head office first.
+     *
+     * Each office's blank fields fall back to its linked centre's letterhead
+     * (`shown_*`), so Dhaka's address is kept in one place.
+     */
+    private function officeRows()
+    {
+        return SiteOffice::active()
+            ->with(['center', 'contacts' => fn ($q) => $q->where('is_active', true)])
+            ->orderByDesc('is_head_office')->orderBy('sort')->orderBy('id')
+            ->get()
+            ->map(fn ($o) => [
+                'id'             => $o->id,
+                'slug'           => $o->slug,
+                'name'           => $o->name,
+                'address'        => $o->shown_address,
+                'phone'          => $o->shown_phone,
+                'fax'            => $o->fax,
+                'email'          => $o->shown_email,
+                'is_head_office' => $o->is_head_office,
+                'map_embed_url'  => $o->map_embed_url,
+                'map_link'       => $o->map_link,
+                'contacts'       => $o->contacts->map(fn ($c) => [
+                    'id'          => $c->id,
+                    'name'        => $c->name,
+                    'designation' => $c->designation,
+                    'phone'       => $c->phone,
+                    'mobile'      => $c->mobile,
+                    'email'       => $c->email,
+                ])->values(),
+            ])->values();
+    }
+
     private function serviceRows($services)
     {
         return $services->map(fn ($x) => [
@@ -414,7 +442,10 @@ class PortfolioPublicController extends Controller
             'years'    => max(1, now()->year - 1962),
             'projects' => PortfolioProject::where('is_published', true)->count(),
             'clients'  => Customer::where('is_active', true)->count(),
-            'centres'  => Center::where('is_active', true)->count(),
+            // ⚠️ The offices, not the PMS centres: the PMS runs only Dhaka so
+            // far, and the public site said "1 centre nationwide" because of
+            // it. Falls back to the centre count before any office exists.
+            'centres'  => SiteOffice::active()->count() ?: Center::where('is_active', true)->count(),
         ];
     }
 

@@ -1496,6 +1496,68 @@ blank falls back to the Site text headline.
   two purple covers side by side put half the newsroom back in the brand
   colour.
 
+#### Contact: every office, its map and its people (2026-10-20)
+> BITAC: *"bitac er onno center er contact details o thakbe, address phone,
+> multiple contact person and his mobile, email, contact page e center e click
+> korle map e location dekhabe."*
+
+- **`site_offices` + `site_office_contacts`** (migration `..._000071`),
+  `SiteOffice` / `SiteOfficeContact`, admin tab **Offices**. The Contact page
+  lists the offices on the left; clicking one shows its **map**, its address /
+  phones / fax / email and its **contact persons** on the right. The view is
+  kept in the URL hash, so `/portfolio/contact#khulna` opens on Khulna — and
+  each About-page centre card links there.
+- ⚠️ **Deliberately NOT `centers`.** That is the PMS's operational tenancy —
+  jobs, users and approval chains are scoped to it — and only Dhaka exists in
+  it. Creating Chattogram there just to publish an address would add an empty
+  branch to the PMS, the centre switcher and every centre-scoped query. An
+  office MAY link to a centre (`center_id`) and then **takes any blank field
+  from that centre's letterhead** (`shown_address` / `shown_phone` /
+  `shown_email`), so Dhaka's address is kept in one place.
+- ⚠️ **"Centres nationwide" counts the offices now**, not the PMS centres —
+  the public site said "1". Falls back to the centre count before any office
+  exists. The About page's centre list reads the offices too.
+- ⚠️ **A contact's name is optional, its designation is not.** A government
+  office publishes many contacts by post alone with the post's own email —
+  the person changes, the address does not. The card shows an ID icon instead
+  of inventing a monogram.
+- ⚠️ **`tel:` links are ASCII.** Phones are stored as published, in Bangla
+  digits and often several to a field; `telHref()` converts each to an ASCII
+  `tel:` and `splitNumbers()` gives each its own link. A Bangla-digit `tel:`
+  dials nothing.
+
+**Maps**
+- The keyless `maps.google.com/maps?q=…&output=embed` form — no API key to
+  provision. **An exact pin (latitude/longitude, both or neither) wins over the
+  search text**; otherwise `map_query`, else "BITAC name, address". English
+  geocodes far more reliably than a Bangla address.
+- ⚠️ **Each pin is the point Google resolves for that office** (looked up
+  2026-10-20): Dhaka (Tejgaon I/A), Chattogram (Pahartali), Khulna (Shiromoni),
+  Chandpur. **Bogura does not resolve** — one search lands in the Bay of
+  Bengal, another on BITAC Dhaka — so it has no pin and maps the Nishindara
+  neighbourhood its address names. The admin form explains how to copy an
+  exact pin from Google Maps.
+- ⚠️ **Headless Chrome on this machine will not draw a Google Maps iframe**
+  (blank even on a bare page). What WAS verified: the URL is a valid embed
+  (Google refuses it only outside an iframe), and each pin resolves to the
+  right town. Check the tiles in a real browser.
+- The single site-wide "Map embed URL" setting is **retired** — removed from
+  Site text, ignored if posted. A field that changes nothing invites edits.
+
+**The data — `SiteOfficeSeeder`**
+- ⚠️ **Copied from BITAC's own site, bitac.gov.bd, on 2026-10-20** — each
+  centre's যোগাযোগ and কেন্দ্র প্রধান pages and the official e-mail list. Nothing
+  is invented. **It goes stale**: the centre-head pages were last updated
+  2020–2024 and officers are transferred, so verify names and mobiles before
+  going live. A seeder, not a migration, for exactly that reason.
+- Choices made while copying: the post's official **@bitac.gov.bd** address is
+  used where a head's page gives a personal yahoo.com one; the Chattogram
+  head's "office phone" carries **Chandpur's 0841 area code** on bitac.gov.bd
+  (a slip on that page) and is left out; the **Tool & Technology Institute** has
+  no published address, so no office.
+- bitac.gov.bd's certificate chain is broken; reading it needed
+  `curl -k` / an unverified SSL context.
+
 #### ⚠️ Checking the site visually: headless Chrome will not go below 500px
 `chrome --headless=new --window-size=390,…` lays the page out at **500px** and
 then crops the screenshot to 390 — so a perfectly responsive page looks cut
@@ -1564,7 +1626,7 @@ sub-headline at all**, which is what the live site was showing.
 settings-backed copy must go through it.
 
 ### Admin → Website (`WebsiteController`, `Admin/Website/Index.tsx`)
-One screen, eight tabs — **Hero slider · Site text · Services · Partners · News & Events · Photos · Videos · Links**
+One screen, nine tabs — **Hero slider · Site text · Services · Partners · Offices · News & Events · Photos · Videos · Links**
 — behind the existing **`manage portfolio`** permission (no new permission; it
 is the same job). Five sidebar entries for five short lists would have buried
 the rest of the menu. Products, clients and the address are deliberately *not*
@@ -1579,7 +1641,7 @@ here: they are maintained in Portfolio, Customers and Centres.
   one kind can't leave the other kind's media field set.
 - Hiding (`is_active`) takes an item off the public page and keeps the record;
   deleting removes the uploaded file from the `public` disk too.
-- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` / `hero_slides` / `partners` are **content, not
+- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` / `hero_slides` / `partners` / `site_offices` / `site_office_contacts` are **content, not
   transactional data** — they are NOT in `SystemResetController::TABLES_TO_WIPE`,
   for the same reason `qc_checkpoints` isn't. A data wipe must not blank the
   public website.

@@ -26,6 +26,9 @@ class DatabaseSeeder extends Seeder
             // Sample hero slides: freely licensed stock media from Wikimedia
             // Commons, credited on the page. Needs the internet; skips if not.
             HeroSampleSeeder::class,
+            // BITAC's offices and contact persons, copied from bitac.gov.bd.
+            // Real people's mobiles -- verify before going live.
+            SiteOfficeSeeder::class,
         ]);
     }
 }
