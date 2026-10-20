@@ -1,9 +1,11 @@
 import { Link } from '@inertiajs/react';
 import PublicLayout from '@/Layouts/PublicLayout';
 import { Empty, GalleryRow, NewsCard, NewsRow, Project, ProjectCard, Section, SectionHead } from './parts';
+import HeroSlider, { HeroSlide } from '@/Components/Public/HeroSlider';
 import { ServiceRow } from './Services';
 
 interface Props {
+    slides: HeroSlide[];
     featured: Project[];
     services: ServiceRow[];
     news: NewsRow[];
@@ -16,62 +18,86 @@ interface Props {
     links: any;
 }
 
-export default function Home({ featured, services, news, events, photos, clients, stats, bitac, site, links }: Props) {
+export default function Home({ slides, featured, services, news, events, photos, clients, stats, bitac, site, links }: Props) {
     return (
         <PublicLayout title="BITAC — Bangladesh Industrial Technical Assistance Centre" bitac={bitac} links={links}>
             {/* ── Hero ─────────────────────────────────────────────────── */}
-            <section className="relative overflow-hidden bg-brand-950">
-                {/* A quiet engineering texture rather than a stock photo we do
-                    not have — a broken <img> would be worse than none. */}
-                <div className="absolute inset-0 opacity-[0.07]"
-                     style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
-                <div className="absolute -top-24 -right-24 w-[32rem] h-[32rem] rounded-full bg-brand-500/20 blur-3xl" />
-
-                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
-                    <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-brand-300 text-[11px] font-bold uppercase tracking-[0.15em] mb-6 backdrop-blur">
-                            <i className="fi fi-rr-industry-windows text-[11px] leading-none" />
-                            Since 1962 · Government of Bangladesh
-                        </div>
-                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.1]">
-                            {site?.hero_title}
-                        </h1>
-                        <p className="text-base sm:text-lg text-surface-300 mt-6 leading-relaxed max-w-2xl">
-                            {site?.hero_subtitle}
-                        </p>
-                        <div className="mt-9 flex flex-wrap items-center gap-3">
-                            <Link href="/portfolio/services"
-                                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold transition-colors shadow-lg shadow-brand-500/25">
-                                Our Services
-                                <i className="fi fi-rr-arrow-small-right text-base leading-none" />
-                            </Link>
-                            <Link href="/portfolio/contact"
-                                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold backdrop-blur transition-colors">
-                                <i className="fi fi-rr-envelope text-sm leading-none" />
-                                Contact Us
-                            </Link>
+            {slides.length > 0 ? (
+                <HeroSlider slides={slides} fallbackTitle={site?.hero_title} fallbackSubtitle={site?.hero_subtitle}>
+                    {/* Figures sit on the hero's edge so the first screen already
+                        says how big the institution is. */}
+                    <div className="relative border-t border-white/10 bg-black/20 backdrop-blur">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-2 lg:grid-cols-4 gap-8 text-white">
+                            {[
+                                [`${stats.years}+`, 'Years of service'],
+                                [stats.projects, 'Projects on display'],
+                                [`${stats.clients}+`, 'Clients served'],
+                                [stats.centres, 'Centres nationwide'],
+                            ].map(([v, l]) => (
+                                <div key={String(l)}>
+                                    <div className="text-3xl sm:text-4xl font-extrabold tabular-nums">{v}</div>
+                                    <div className="text-[11px] text-surface-400 mt-1 uppercase tracking-wider font-semibold">{l}</div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                </div>
+                </HeroSlider>
+            ) : (
+                /* No slides uploaded yet — the gradient hero stands in, so the
+                   front page is never a blank black band. */
+                <section className="relative overflow-hidden bg-brand-950">
+                    {/* A quiet engineering texture rather than a stock photo we do
+                        not have — a broken <img> would be worse than none. */}
+                    <div className="absolute inset-0 opacity-[0.07]"
+                         style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
+                    <div className="absolute -top-24 -right-24 w-[32rem] h-[32rem] rounded-full bg-brand-500/20 blur-3xl" />
 
-                {/* Figures sit on the hero's edge so the first screen already
-                    says how big the institution is. */}
-                <div className="relative border-t border-white/10 bg-black/20 backdrop-blur">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-2 lg:grid-cols-4 gap-8 text-white">
-                        {[
-                            [`${stats.years}+`, 'Years of service'],
-                            [stats.projects, 'Projects on display'],
-                            [`${stats.clients}+`, 'Clients served'],
-                            [stats.centres, 'Centres nationwide'],
-                        ].map(([v, l]) => (
-                            <div key={String(l)}>
-                                <div className="text-3xl sm:text-4xl font-extrabold tabular-nums">{v}</div>
-                                <div className="text-[11px] text-surface-400 mt-1 uppercase tracking-wider font-semibold">{l}</div>
+                    <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
+                        <div className="max-w-3xl">
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-brand-300 text-[11px] font-bold uppercase tracking-[0.15em] mb-6 backdrop-blur">
+                                <i className="fi fi-rr-industry-windows text-[11px] leading-none" />
+                                Since 1962 · Government of Bangladesh
                             </div>
-                        ))}
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.1]">
+                                {site?.hero_title}
+                            </h1>
+                            <p className="text-base sm:text-lg text-surface-300 mt-6 leading-relaxed max-w-2xl">
+                                {site?.hero_subtitle}
+                            </p>
+                            <div className="mt-9 flex flex-wrap items-center gap-3">
+                                <Link href="/portfolio/services"
+                                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold transition-colors shadow-lg shadow-brand-500/25">
+                                    Our Services
+                                    <i className="fi fi-rr-arrow-small-right text-base leading-none" />
+                                </Link>
+                                <Link href="/portfolio/contact"
+                                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold backdrop-blur transition-colors">
+                                    <i className="fi fi-rr-envelope text-sm leading-none" />
+                                    Contact Us
+                                </Link>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </section>
+
+                    {/* Figures sit on the hero's edge so the first screen already
+                        says how big the institution is. */}
+                    <div className="relative border-t border-white/10 bg-black/20 backdrop-blur">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-2 lg:grid-cols-4 gap-8 text-white">
+                            {[
+                                [`${stats.years}+`, 'Years of service'],
+                                [stats.projects, 'Projects on display'],
+                                [`${stats.clients}+`, 'Clients served'],
+                                [stats.centres, 'Centres nationwide'],
+                            ].map(([v, l]) => (
+                                <div key={String(l)}>
+                                    <div className="text-3xl sm:text-4xl font-extrabold tabular-nums">{v}</div>
+                                    <div className="text-[11px] text-surface-400 mt-1 uppercase tracking-wider font-semibold">{l}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
 
             {/* ── About ────────────────────────────────────────────────── */}
             <Section>

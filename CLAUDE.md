@@ -1279,8 +1279,70 @@ three new tables (migration `..._000064`):
   renaming a service in Admin → Website changed the Services page and left the
   home page saying the old thing. Both now read the same `services` prop.
 
+### The home page hero is a slide show (2026-10-20)
+`hero_slides` + `HeroSlide` + **`Components/Public/HeroSlider.tsx`**, managed
+on the **Hero slider** tab. A slide is an **image**, an uploaded **video file**
+or a **YouTube** video, and carries its own headline, sub-headline and button —
+blank falls back to the Site text headline.
+
+- ⚠️ **Not `gallery_items`.** A gallery photo records an event; a hero slide is
+  the front page, chosen and ordered for that job. Hang the hero off the
+  gallery and every photo someone uploads becomes a full-screen banner.
+- ⚠️ **No slides → the old gradient hero renders instead**, so the front page is
+  never a blank black band. Same deliberate shape as a shop with no XEN.
+- ⚠️ **A slide with no media is refused twice** — on save, and filtered again in
+  `heroSlides()` on the way to the page. `HeroSlide::hasMedia()` is the one
+  rule both use. One of these is a full-screen black rectangle at the top of
+  BITAC's website, so it is worth catching twice.
+- Cinematic means three specific things: **crossfade, not slide** (a photo of a
+  workshop has no reading direction, and sliding draws the eye to the motion);
+  a slow **1.0 → 1.12 Ken Burns push on the image only** (never on type —
+  moving text is unreadable); and an uploaded **video holds until it ends**
+  rather than being cut off at a fixed interval.
+- It respects **`prefers-reduced-motion`**: no push, no auto-advance. Also
+  pauses on hover and when the tab is hidden, and preloads the next picture so
+  the crossfade never reveals a half-loaded photograph.
+
+#### YouTube slides, and the truth about the logo
+- ⚠️ **No parameter removes YouTube's branding.** `modestbranding` has been
+  ignored since 2023; the watermark and the title bar are theirs. What works is
+  **over-sizing the iframe and cropping it** (`177.78vh × 56.25vw`, `min 132%`,
+  inside `overflow-hidden`) so the chrome falls outside the frame, with
+  `pointer-events-none` over the whole layer so nothing of theirs can be
+  hovered or clicked. The admin form says this in as many words — **an uploaded
+  .mp4 is the only way to be certain**.
+- `HeroSlide::youtube_embed` builds the address and every parameter earns its
+  place: `mute=1` (a browser will not autoplay sound), **`loop=1` needs
+  `playlist=<the same id>`** or it plays exactly once, `controls=0` /
+  `disablekb` / `fs=0` because this is scenery, `iv_load_policy=3` for the
+  annotation cards. The host is **`youtube-nocookie.com`** so YouTube sets
+  nothing on a government site before anyone has asked to watch.
+- `youtube_id` accepts every shape anyone will paste — `watch?v=`, `youtu.be`,
+  `/embed/`, `/shorts/`, `m.youtube.com`, a bare id — because a `watch?v=`
+  address **renders nothing at all** in an iframe. (Same normalising as
+  `GalleryItem`.)
+- ⚠️ **A YouTube slide cannot say when it has ended** without the IFrame Player
+  API — a script and a state machine for one number. So the slide carries
+  **`hold_seconds`** (blank = 30s for YouTube, 8s otherwise), which an image
+  slide uses too.
+- ⚠️ `video_url` holds **a direct .mp4 for a `video` slide and the page address
+  for a `youtube` one**, so it cannot be a plain `url` rule any more (a bare id
+  is valid). A `video` slide is checked on its own terms by a closure — what
+  goes into a `<video src>` has to be a real address.
+- ⚠️ **The edit modal seeds the link box with what is stored.** The save writes
+  `video_url` whenever the key is present, and the form posts every field, so a
+  box that opened blank would wipe the link on the first save.
+
+### ⚠️ A blank setting is not a missing setting
+`SettingService::get($key, $default)` returns the **empty string** when the row
+exists and holds `''` — the default only fires on a missing key. Clearing a
+field in Admin → Website therefore left the home page with **no headline and no
+sub-headline at all**, which is what the live site was showing.
+`PortfolioPublicController::text()` now treats blank as absent. Any new
+settings-backed copy must go through it.
+
 ### Admin → Website (`WebsiteController`, `Admin/Website/Index.tsx`)
-One screen, six tabs — **Site text · Services · News & Events · Photos · Videos · Links**
+One screen, seven tabs — **Hero slider · Site text · Services · News & Events · Photos · Videos · Links**
 — behind the existing **`manage portfolio`** permission (no new permission; it
 is the same job). Five sidebar entries for five short lists would have buried
 the rest of the menu. Products, clients and the address are deliberately *not*
@@ -1295,7 +1357,7 @@ here: they are maintained in Portfolio, Customers and Centres.
   one kind can't leave the other kind's media field set.
 - Hiding (`is_active`) takes an item off the public page and keeps the record;
   deleting removes the uploaded file from the `public` disk too.
-- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` are **content, not
+- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` / `hero_slides` are **content, not
   transactional data** — they are NOT in `SystemResetController::TABLES_TO_WIPE`,
   for the same reason `qc_checkpoints` isn't. A data wipe must not blank the
   public website.

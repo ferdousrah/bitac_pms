@@ -29,9 +29,18 @@ interface ServiceRow {
     icon: string | null; image_url: string | null; sort: number; is_active: boolean;
 }
 interface IconRow { key: string; class: string }
+interface HeroRow {
+    id: number; kind: 'image' | 'video' | 'youtube';
+    image_url: string | null; video_src: string | null; poster_url: string | null;
+    embed_url: string | null; video_url: string | null; hold_seconds: number | null;
+    title: string | null; subtitle: string | null;
+    cta_label: string | null; cta_url: string | null;
+    sort: number; is_active: boolean; has_media: boolean;
+}
 
 interface Props {
     tab: string;
+    hero: HeroRow[];
     text: Record<string, string>;
     services: ServiceRow[];
     news: NewsRow[];
@@ -45,6 +54,7 @@ interface Props {
 }
 
 const TABS = [
+    { key: 'hero',     label: 'Hero slider',   icon: 'fi-rr-play-alt' },
     { key: 'text',     label: 'Site text',     icon: 'fi-rr-text' },
     { key: 'services', label: 'Services',      icon: 'fi-rr-tools' },
     { key: 'news',     label: 'News & Events', icon: 'fi-rr-newspaper' },
@@ -66,7 +76,7 @@ const GROUP_LABEL: Record<string, string> = {
     service:   'Services',
 };
 
-export default function WebsiteIndex({ tab, text, services, news, gallery, videos, links, albums, kinds, groups, icons }: Props) {
+export default function WebsiteIndex({ tab, hero, text, services, news, gallery, videos, links, albums, kinds, groups, icons }: Props) {
     const [active, setActive] = useState(tab);
 
     const go = (key: string) => {
@@ -110,6 +120,7 @@ export default function WebsiteIndex({ tab, text, services, news, gallery, video
                         >
                             <i className={`fi ${t.icon} text-xs leading-none`} />
                             {t.label}
+                            {t.key === 'hero' && hero.length > 0 && <Count n={hero.length} on={active === t.key} />}
                             {t.key === 'services' && services.length > 0 && <Count n={services.length} on={active === t.key} />}
                             {t.key === 'news' && news.length > 0 && <Count n={news.length} on={active === t.key} />}
                             {t.key === 'gallery' && gallery.length > 0 && <Count n={gallery.length} on={active === t.key} />}
@@ -119,6 +130,7 @@ export default function WebsiteIndex({ tab, text, services, news, gallery, video
                     ))}
                 </div>
 
+                {active === 'hero' && <HeroTab slides={hero} />}
                 {active === 'text' && <TextTab text={text} />}
                 {active === 'services' && <ServicesTab services={services} icons={icons} />}
                 {active === 'news' && <NewsTab news={news} />}
@@ -220,6 +232,364 @@ function Field({ label, hint, error, children }: {
             {children}
             {hint && <div className="text-[11px] text-surface-400 mt-1">{hint}</div>}
             {error && <div className="form-error">{error}</div>}
+        </div>
+    );
+}
+
+// ── Hero slider ──────────────────────────────────────────────────────────
+
+function HeroTab({ slides }: { slides: HeroRow[] }) {
+    const [editing, setEditing] = useState<HeroRow | null>(null);
+
+    const add = useForm<any>({
+        kind: 'image', title: '', subtitle: '', cta_label: '', cta_url: '', sort: 0,
+        image: null as File | null, video: null as File | null,
+        poster: null as File | null, video_url: '', hold_seconds: '', is_active: true,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        add.post('/admin/website/hero', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => add.reset('title', 'subtitle', 'cta_label', 'cta_url', 'image', 'video', 'poster', 'video_url', 'hold_seconds'),
+        });
+    };
+
+    const remove = (x: HeroRow) => {
+        if (confirm('Remove this slide? This cannot be undone.')) {
+            router.delete(`/admin/website/hero/${x.id}`, { preserveScroll: true });
+        }
+    };
+
+    const isVideo = add.data.kind === 'video';
+    const isYouTube = add.data.kind === 'youtube';
+
+    return (
+        <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 card">
+                <div className="card-header">
+                    <h2 className="font-semibold text-surface-800">Home page slides</h2>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                        {slides.length} slide{slides.length === 1 ? '' : 's'} · they play in this order, lowest first
+                    </p>
+                </div>
+                {slides.length === 0 ? (
+                    <div className="card-body text-center py-14">
+                        <i className="fi fi-rr-play-alt text-3xl text-surface-300" />
+                        <div className="text-sm font-bold text-surface-700 mt-3">No slides yet</div>
+                        <div className="text-xs text-surface-500 mt-1 max-w-md mx-auto">
+                            Until there is one, the home page shows its plain gradient banner — nothing
+                            looks broken. Add a photograph or a short clip and it becomes the slider.
+                        </div>
+                    </div>
+                ) : (
+                    <div className="card-body space-y-3">
+                        {slides.map((x, i) => (
+                            <div key={x.id}
+                                 className={`flex gap-4 p-3 rounded-xl border ${x.is_active ? 'border-surface-200' : 'border-surface-200 bg-surface-50/70'}`}>
+                                <span className="text-xs text-surface-400 tabular-nums w-5 pt-6">{i + 1}</span>
+                                <div className="w-32 h-20 rounded-lg overflow-hidden bg-surface-900 shrink-0 relative">
+                                    {x.kind === 'youtube' ? (
+                                        x.poster_url ? (
+                                            <img src={x.poster_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <i className="fi fi-brands-youtube text-xl text-red-500" />
+                                            </div>
+                                        )
+                                    ) : x.kind === 'video' && x.video_src ? (
+                                        <video src={x.video_src} poster={x.poster_url ?? undefined}
+                                               muted playsInline className="w-full h-full object-cover" />
+                                    ) : x.image_url ? (
+                                        <img src={x.image_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <i className="fi fi-rr-picture text-surface-500" />
+                                        </div>
+                                    )}
+                                    <span className="absolute bottom-1 left-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/60 text-white">
+                                        {x.kind}
+                                    </span>
+                                </div>
+                                <div className="min-w-0 grow">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-bold text-surface-900">
+                                            {x.title || <span className="text-surface-400 font-normal">(uses the site headline)</span>}
+                                        </span>
+                                        {!x.is_active && <span className="badge-slate">Hidden</span>}
+                                        {!x.has_media && <span className="badge-amber">No media</span>}
+                                        <span className="text-[11px] text-surface-400 tabular-nums">#{x.sort}</span>
+                                    </div>
+                                    {x.subtitle && (
+                                        <p className="text-xs text-surface-600 mt-1 leading-relaxed line-clamp-2">{x.subtitle}</p>
+                                    )}
+                                    {x.cta_label && (
+                                        <div className="text-[11px] text-brand-700 mt-1.5">
+                                            <i className="fi fi-rr-link text-[9px] mr-1" />{x.cta_label} → {x.cta_url}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-1 shrink-0">
+                                    <button type="button" onClick={() => setEditing(x)} title="Edit"
+                                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                        <i className="fi fi-rr-pencil text-xs" />
+                                    </button>
+                                    <button type="button" onClick={() => remove(x)} title="Remove"
+                                            className="w-8 h-8 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600 flex items-center justify-center">
+                                        <i className="fi fi-rr-trash text-xs" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <form onSubmit={submit} className="card self-start">
+                <div className="card-header"><h2 className="font-semibold text-surface-800">Add a slide</h2></div>
+                <div className="card-body space-y-4">
+                    <div className="grid grid-cols-3 gap-2">
+                        {([['image', 'fi-rr-picture', 'Image'],
+                           ['video', 'fi-rr-play', 'Video file'],
+                           ['youtube', 'fi-rr-play-alt', 'YouTube']] as const).map(([k, ic, label]) => (
+                            <button
+                                key={k}
+                                type="button"
+                                onClick={() => add.setData('kind', k)}
+                                className={`py-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                    add.data.kind === k
+                                        ? 'border-brand-400 bg-brand-50 text-brand-700'
+                                        : 'border-surface-200 text-surface-500 hover:bg-surface-50'
+                                }`}
+                            >
+                                <i className={`fi ${ic} text-xs mr-1`} />
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {isYouTube ? (
+                        <>
+                            <Field label="YouTube link *"
+                                   hint="The address of the video page. It plays muted, on a loop, with no controls."
+                                   error={add.errors.video_url}>
+                                <input className="form-input" value={add.data.video_url}
+                                       onChange={(e) => add.setData('video_url', e.target.value)}
+                                       placeholder="https://www.youtube.com/watch?v=…" />
+                            </Field>
+                            <div className="alert alert-info text-[11px] leading-relaxed">
+                                YouTube always draws its own watermark and title over the picture, and no
+                                setting turns that off. The slide is zoomed slightly and cropped so they
+                                fall outside the frame, which works — but a video file uploaded here is the
+                                only way to be certain nothing of theirs ever shows.
+                            </div>
+                            <Field label="Poster image"
+                                   hint="Shown for the moment before YouTube starts playing."
+                                   error={add.errors.poster}>
+                                <input type="file" accept="image/*" className="text-sm"
+                                       onChange={(e) => add.setData('poster', e.target.files?.[0] ?? null)} />
+                            </Field>
+                        </>
+                    ) : isVideo ? (
+                        <>
+                            <Field label="Video file"
+                                   hint="An .mp4 or .webm, up to 64 MB. Keep it short and compressed — every visitor downloads it."
+                                   error={add.errors.video}>
+                                <input type="file" accept="video/mp4,video/webm" className="text-sm"
+                                       onChange={(e) => add.setData('video', e.target.files?.[0] ?? null)} />
+                            </Field>
+                            <Field label="…or a direct video link"
+                                   hint="A direct .mp4 address. Not a YouTube page — a background video has to play muted with no controls, which a YouTube player will not do."
+                                   error={add.errors.video_url}>
+                                <input className="form-input" value={add.data.video_url}
+                                       onChange={(e) => add.setData('video_url', e.target.value)}
+                                       placeholder="https://…/clip.mp4" />
+                            </Field>
+                            <Field label="Poster image"
+                                   hint="Shown while the video loads, and on phones that refuse to autoplay."
+                                   error={add.errors.poster}>
+                                <input type="file" accept="image/*" className="text-sm"
+                                       onChange={(e) => add.setData('poster', e.target.files?.[0] ?? null)} />
+                            </Field>
+                        </>
+                    ) : (
+                        <Field label="Image *" hint="Landscape, at least 1600px wide. Up to 8 MB."
+                               error={add.errors.image}>
+                            <input type="file" accept="image/*" className="text-sm"
+                                   onChange={(e) => add.setData('image', e.target.files?.[0] ?? null)} />
+                        </Field>
+                    )}
+
+                    <Field label="Headline" hint="Leave blank to use the site headline from Site text."
+                           error={add.errors.title}>
+                        <input className="form-input" value={add.data.title}
+                               onChange={(e) => add.setData('title', e.target.value)} />
+                    </Field>
+                    <Field label="Sub-headline" error={add.errors.subtitle}>
+                        <textarea className="form-textarea" rows={3} value={add.data.subtitle}
+                                  onChange={(e) => add.setData('subtitle', e.target.value)} />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Button text" error={add.errors.cta_label}>
+                            <input className="form-input" value={add.data.cta_label}
+                                   onChange={(e) => add.setData('cta_label', e.target.value)} placeholder="Our Services" />
+                        </Field>
+                        <Field label="Button link" error={add.errors.cta_url}>
+                            <input className="form-input" value={add.data.cta_url}
+                                   onChange={(e) => add.setData('cta_url', e.target.value)} placeholder="/portfolio/services" />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Order" error={add.errors.sort}>
+                            <input type="number" min={0} className="form-input" value={add.data.sort}
+                                   onChange={(e) => add.setData('sort', Number(e.target.value))} />
+                        </Field>
+                        {!isVideo && (
+                            <Field label="Hold (seconds)"
+                                   hint={isYouTube ? 'Blank = 30s. A YouTube slide cannot tell the page it has ended.' : 'Blank = 8s.'}
+                                   error={add.errors.hold_seconds}>
+                                <input type="number" min={2} max={600} className="form-input" value={add.data.hold_seconds}
+                                       onChange={(e) => add.setData('hold_seconds', e.target.value)} />
+                            </Field>
+                        )}
+                    </div>
+                    <button type="submit" className="btn-primary w-full" disabled={add.processing}>
+                        {add.processing ? 'Uploading…' : 'Add slide'}
+                    </button>
+                    {add.progress && (
+                        <div className="h-1.5 rounded-full bg-surface-200 overflow-hidden">
+                            <div className="h-full bg-brand-500 transition-all"
+                                 style={{ width: `${add.progress.percentage ?? 0}%` }} />
+                        </div>
+                    )}
+                </div>
+            </form>
+
+            {editing && <HeroEditModal slide={editing} onClose={() => setEditing(null)} />}
+        </div>
+    );
+}
+
+function HeroEditModal({ slide, onClose }: { slide: HeroRow; onClose: () => void }) {
+    const form = useForm<any>({
+        kind: slide.kind,
+        title: slide.title ?? '', subtitle: slide.subtitle ?? '',
+        cta_label: slide.cta_label ?? '', cta_url: slide.cta_url ?? '',
+        sort: slide.sort, is_active: slide.is_active,
+        // ⚠️ Seeded with what is stored, not blank: the save writes `video_url`
+        // whenever the key is present, so an empty box would wipe the link.
+        video_url: slide.video_url ?? '',
+        hold_seconds: slide.hold_seconds ?? '',
+        image: null as File | null, video: null as File | null, poster: null as File | null,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        // A file upload with PUT needs Laravel's method spoofing.
+        form.transform((d: any) => ({ ...d, _method: 'put' }));
+        form.post(`/admin/website/hero/${slide.id}`, {
+            forceFormData: true, preserveScroll: true, onSuccess: onClose,
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+            <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
+                  className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-surface-900">Edit slide</h3>
+                    <button type="button" onClick={onClose}
+                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-400 flex items-center justify-center">
+                        <i className="fi fi-rr-cross-small text-lg" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    <div className="rounded-xl overflow-hidden bg-surface-900 aspect-video">
+                        {slide.kind === 'youtube' && slide.embed_url ? (
+                            <iframe src={slide.embed_url} title="" className="w-full h-full border-0"
+                                    allow="autoplay; encrypted-media" />
+                        ) : slide.kind === 'video' && slide.video_src ? (
+                            <video src={slide.video_src} poster={slide.poster_url ?? undefined}
+                                   controls muted playsInline className="w-full h-full object-cover" />
+                        ) : slide.image_url ? (
+                            <img src={slide.image_url} alt="" className="w-full h-full object-cover" />
+                        ) : null}
+                    </div>
+                    {slide.kind === 'youtube' ? (
+                        <>
+                            <Field label="YouTube link" error={form.errors.video_url}>
+                                <input className="form-input" value={form.data.video_url}
+                                       onChange={(e) => form.setData('video_url', e.target.value)} />
+                            </Field>
+                            <Field label="Replace the poster" error={form.errors.poster}>
+                                <input type="file" accept="image/*" className="text-sm"
+                                       onChange={(e) => form.setData('poster', e.target.files?.[0] ?? null)} />
+                            </Field>
+                        </>
+                    ) : slide.kind === 'video' ? (
+                        <>
+                            <Field label="Replace the video" hint="Leave empty to keep the current one."
+                                   error={form.errors.video}>
+                                <input type="file" accept="video/mp4,video/webm" className="text-sm"
+                                       onChange={(e) => form.setData('video', e.target.files?.[0] ?? null)} />
+                            </Field>
+                            <Field label="Replace the poster" error={form.errors.poster}>
+                                <input type="file" accept="image/*" className="text-sm"
+                                       onChange={(e) => form.setData('poster', e.target.files?.[0] ?? null)} />
+                            </Field>
+                        </>
+                    ) : (
+                        <Field label="Replace the image" hint="Leave empty to keep the current one."
+                               error={form.errors.image}>
+                            <input type="file" accept="image/*" className="text-sm"
+                                   onChange={(e) => form.setData('image', e.target.files?.[0] ?? null)} />
+                        </Field>
+                    )}
+                    <Field label="Headline" error={form.errors.title}>
+                        <input className="form-input" value={form.data.title}
+                               onChange={(e) => form.setData('title', e.target.value)} />
+                    </Field>
+                    <Field label="Sub-headline" error={form.errors.subtitle}>
+                        <textarea className="form-textarea" rows={3} value={form.data.subtitle}
+                                  onChange={(e) => form.setData('subtitle', e.target.value)} />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Button text" error={form.errors.cta_label}>
+                            <input className="form-input" value={form.data.cta_label}
+                                   onChange={(e) => form.setData('cta_label', e.target.value)} />
+                        </Field>
+                        <Field label="Button link" error={form.errors.cta_url}>
+                            <input className="form-input" value={form.data.cta_url}
+                                   onChange={(e) => form.setData('cta_url', e.target.value)} />
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Field label="Order" error={form.errors.sort}>
+                            <input type="number" min={0} className="form-input" value={form.data.sort}
+                                   onChange={(e) => form.setData('sort', Number(e.target.value))} />
+                        </Field>
+                        {slide.kind !== 'video' && (
+                            <Field label="Hold (seconds)" error={form.errors.hold_seconds}>
+                                <input type="number" min={2} max={600} className="form-input" value={form.data.hold_seconds}
+                                       onChange={(e) => form.setData('hold_seconds', e.target.value)} />
+                            </Field>
+                        )}
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={form.data.is_active}
+                               onChange={(e) => form.setData('is_active', e.target.checked)}
+                               className="rounded border-surface-300 text-brand-500 focus:ring-brand-400" />
+                        <span className="text-sm text-surface-700">Show in the slider</span>
+                    </label>
+                </div>
+                <div className="px-5 py-4 border-t border-surface-200 flex justify-end gap-3">
+                    <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={form.processing}>
+                        {form.processing ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </form>
         </div>
     );
 }

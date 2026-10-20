@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\GalleryItem;
+use App\Models\HeroSlide;
 use App\Models\NewsPost;
 use App\Models\SiteLink;
 use App\Models\SiteService;
@@ -37,9 +38,27 @@ class WebsiteController extends Controller
         $s = app(SettingService::class);
 
         return Inertia::render('Admin/Website/Index', [
-            'tab'  => in_array($request->input('tab'), ['text', 'services', 'news', 'gallery', 'videos', 'links'], true)
+            'tab'  => in_array($request->input('tab'), ['hero', 'text', 'services', 'news', 'gallery', 'videos', 'links'], true)
                 ? $request->input('tab') : 'text',
             'text' => collect(self::TEXT_KEYS)->mapWithKeys(fn ($k) => [$k => (string) $s->get($k, '')])->all(),
+            'hero' => HeroSlide::orderBy('sort')->orderBy('id')->get()
+                ->map(fn ($s) => [
+                    'id'         => $s->id,
+                    'kind'       => $s->kind,
+                    'image_url'  => $s->image_url,
+                    'video_src'  => $s->video_src,
+                    'embed_url'  => $s->youtube_embed,
+                    'video_url'  => $s->video_url,
+                    'poster_url' => $s->poster_url,
+                    'hold_seconds' => $s->hold_seconds,
+                    'title'      => $s->title,
+                    'subtitle'   => $s->subtitle,
+                    'cta_label'  => $s->cta_label,
+                    'cta_url'    => $s->cta_url,
+                    'sort'       => $s->sort,
+                    'is_active'  => $s->is_active,
+                    'has_media'  => $s->hasMedia(),
+                ])->values(),
             'services' => SiteService::orderBy('sort')->orderBy('id')->get()
                 ->map(fn ($x) => [
                     'id'        => $x->id,
@@ -256,6 +275,61 @@ class WebsiteController extends Controller
             ->with('success', $kind === 'video' ? 'Video removed.' : 'Photo removed.');
     }
 
+    // ── Hero slides ──────────────────────────────────────────────────────
+
+    public function heroStore(Request $request)
+    {
+        $data = $this->validateHero($request);
+
+        $slide = new HeroSlide($this->heroAttributes($data, $request) + ['created_by' => auth()->id()]);
+
+        // ⚠️ A slide with no media is a full-screen black rectangle at the top
+        // of the front page. Refused, with a redirect and a flash, never an
+        // abort().
+        if (! $slide->hasMedia()) {
+            return back()->with('error', match ($data['kind']) {
+                'video'   => 'A video slide needs a video file or a direct video link.',
+                // ⚠️ Says WHY, because a perfectly good YouTube link that this
+                // cannot read looks like the form silently losing it.
+                'youtube' => 'That does not look like a YouTube link — paste the address of the video page, e.g. https://www.youtube.com/watch?v=…',
+                default   => 'An image slide needs an image.',
+            });
+        }
+
+        $slide->save();
+
+        return redirect()->route('admin.website.index', ['tab' => 'hero'])
+            ->with('success', 'Slide added.');
+    }
+
+    public function heroUpdate(Request $request, HeroSlide $slide)
+    {
+        $data = $this->validateHero($request);
+        $attrs = $this->heroAttributes($data, $request, $slide);
+
+        $probe = (clone $slide)->fill($attrs);
+        if (! $probe->hasMedia()) {
+            return back()->with('error', 'That would leave the slide with nothing to show.');
+        }
+
+        $slide->update($attrs);
+
+        return back()->with('success', 'Slide updated.');
+    }
+
+    public function heroDestroy(HeroSlide $slide)
+    {
+        foreach ([$slide->image_path, $slide->video_path, $slide->poster_path] as $path) {
+            if ($path) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+        $slide->delete();
+
+        return redirect()->route('admin.website.index', ['tab' => 'hero'])
+            ->with('success', 'Slide removed.');
+    }
+
     // ── Services ─────────────────────────────────────────────────────────
 
     public function serviceStore(Request $request)
@@ -371,6 +445,70 @@ class WebsiteController extends Controller
                 Storage::disk('public')->delete($post->cover_image_path);
             }
             $attrs['cover_image_path'] = $request->file('cover_image')->store('website/news', 'public');
+        }
+
+        return $attrs;
+    }
+
+    private function validateHero(Request $request): array
+    {
+        return $request->validate([
+            'kind'      => 'required|in:image,video,youtube',
+            'title'     => 'nullable|string|max:255',
+            'subtitle'  => 'nullable|string|max:500',
+            'cta_label' => 'nullable|string|max:80',
+            'cta_url'   => 'nullable|string|max:500',
+            'sort'      => 'nullable|integer|min:0|max:9999',
+            // How long the slide holds. A YouTube slide cannot tell us when it
+            // has ended, so somebody has to say.
+            'hold_seconds' => 'nullable|integer|min:2|max:600',
+            'image'     => 'nullable|image|max:8192',
+            'poster'    => 'nullable|image|max:8192',
+            // ⚠️ A FILE, and only the two formats every browser plays. A
+            // background video autoplays muted with no controls, which a
+            // YouTube iframe will not do.
+            'video'     => 'nullable|file|mimetypes:video/mp4,video/webm|max:65536',
+            // Holds a direct .mp4 for a `video` slide and the page address for
+            // a `youtube` one — one field, because they are alternatives. It
+            // cannot be a plain `url` rule any more, since a YouTube id on its
+            // own is accepted, so a `video` slide is checked on its own terms:
+            // what goes into a <video src> has to be a real address.
+            'video_url' => ['nullable', 'string', 'max:500', function ($attribute, $value, $fail) use ($request) {
+                if ($request->input('kind') === 'video' && $value && ! filter_var($value, FILTER_VALIDATE_URL)) {
+                    $fail('That needs to be a full address, e.g. https://example.org/clip.mp4');
+                }
+            }],
+        ]);
+    }
+
+    private function heroAttributes(array $data, Request $request, ?HeroSlide $slide = null): array
+    {
+        $attrs = [
+            'kind'      => $data['kind'],
+            'title'     => $data['title'] ?? null,
+            'subtitle'  => $data['subtitle'] ?? null,
+            'cta_label' => $data['cta_label'] ?? null,
+            'cta_url'   => $data['cta_url'] ?? null,
+            'sort'      => (int) ($data['sort'] ?? 0),
+            'hold_seconds' => ($data['hold_seconds'] ?? null) ?: null,
+            'is_active' => $slide ? $request->boolean('is_active') : $request->boolean('is_active', true),
+        ];
+
+        foreach ([['image', 'image_path', 'website/hero'],
+                  ['poster', 'poster_path', 'website/hero'],
+                  ['video', 'video_path', 'website/hero']] as [$field, $column, $dir]) {
+            if ($request->hasFile($field)) {
+                if ($slide?->{$column}) {
+                    Storage::disk('public')->delete($slide->{$column});
+                }
+                $attrs[$column] = $request->file($field)->store($dir, 'public');
+            }
+        }
+
+        // An uploaded file and a pasted link are alternatives, not a pair —
+        // keep whichever was given and do not strand the other.
+        if (array_key_exists('video_url', $data)) {
+            $attrs['video_url'] = $data['video_url'] ?: null;
         }
 
         return $attrs;

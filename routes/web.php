@@ -987,6 +987,10 @@ Route::middleware(['auth'])->group(function () {
             Route::put('gallery/{item}',    [AdminWebsiteController::class, 'galleryUpdate'])->name('admin.website.gallery.update');
             Route::delete('gallery/{item}', [AdminWebsiteController::class, 'galleryDestroy'])->name('admin.website.gallery.destroy');
 
+            Route::post('hero',           [AdminWebsiteController::class, 'heroStore'])->name('admin.website.hero.store');
+            Route::put('hero/{slide}',    [AdminWebsiteController::class, 'heroUpdate'])->name('admin.website.hero.update');
+            Route::delete('hero/{slide}', [AdminWebsiteController::class, 'heroDestroy'])->name('admin.website.hero.destroy');
+
             Route::post('services',          [AdminWebsiteController::class, 'serviceStore'])->name('admin.website.services.store');
             Route::put('services/{service}',    [AdminWebsiteController::class, 'serviceUpdate'])->name('admin.website.services.update');
             Route::delete('services/{service}', [AdminWebsiteController::class, 'serviceDestroy'])->name('admin.website.services.destroy');

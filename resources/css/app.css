@@ -408,6 +408,19 @@
 }
 
 /* ─── Nav icon draw animation ─────────────────────────────────────────── */
+/* The hero slider's progress bar. A transform, not an animated width —
+   animating a layout property here stutters on every frame. */
+@keyframes hero-progress {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+}
+.hero-progress {
+    width: 100%;
+    animation-name: hero-progress;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+}
+
 @keyframes icon-draw {
     0%   { transform: scale(1)    rotate(0deg);  opacity: 1; }
     15%  { transform: scale(0.7)  rotate(0deg);  opacity: 0.6; }

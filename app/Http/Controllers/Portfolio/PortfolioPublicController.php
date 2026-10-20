@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Center;
 use App\Models\Customer;
 use App\Models\GalleryItem;
+use App\Models\HeroSlide;
 use App\Models\NewsPost;
 use App\Models\PortfolioProject;
 use App\Models\SiteLink;
@@ -38,6 +39,7 @@ class PortfolioPublicController extends Controller
     public function index()
     {
         return Inertia::render('Portfolio/Public/Home', $this->chrome([
+            'slides'     => $this->heroSlides(),
             'featured'   => $this->projects()->take(6),
             'news'       => $this->newsRows(NewsPost::live()->latest('published_at')->take(3)->get()),
             'events'     => $this->newsRows(
@@ -218,16 +220,29 @@ class PortfolioPublicController extends Controller
     /** Editable copy, from the existing settings store — strings, not rows. */
     private function siteText(): array
     {
-        $s = app(SettingService::class);
-
         return [
-            'hero_title'    => $s->get('site_hero_title', 'Engineering precision for Bangladesh\'s industry.'),
-            'hero_subtitle' => $s->get('site_hero_subtitle', 'BITAC has delivered import-substitute manufacturing, training, testing and R&D to Railway, BPDB, Petrobangla, sugar mills and private industry for over six decades.'),
-            'about_lead'    => $s->get('site_about_lead', 'Bangladesh Industrial Technical Assistance Centre (BITAC) is an autonomous body under the Ministry of Industries, serving the country\'s industry since 1962.'),
-            'about_body'    => $s->get('site_about_body', ''),
-            'mission'       => $s->get('site_mission', 'To support the nation\'s industrialisation through skilled manpower, import-substitute manufacturing and reliable technical services.'),
-            'map_embed'     => $s->get('site_map_embed', ''),
+            'hero_title'    => self::text('site_hero_title', 'Engineering precision for Bangladesh\'s industry.'),
+            'hero_subtitle' => self::text('site_hero_subtitle', 'BITAC has delivered import-substitute manufacturing, training, testing and R&D to Railway, BPDB, Petrobangla, sugar mills and private industry for over six decades.'),
+            'about_lead'    => self::text('site_about_lead', 'Bangladesh Industrial Technical Assistance Centre (BITAC) is an autonomous body under the Ministry of Industries, serving the country\'s industry since 1962.'),
+            'about_body'    => self::text('site_about_body', ''),
+            'mission'       => self::text('site_mission', 'To support the nation\'s industrialisation through skilled manpower, import-substitute manufacturing and reliable technical services.'),
+            'map_embed'     => self::text('site_map_embed', ''),
         ];
+    }
+
+    /**
+     * ⚠️ A BLANK setting falls back to the default, not to blank.
+     *
+     * `SettingService::get()`'s default only applies when the key is missing,
+     * and clearing a field in Admin → Website stores an empty string — so the
+     * key exists and the fallback never fired. The home page's headline and
+     * sub-headline simply vanished, leaving a hero with nothing in it.
+     */
+    private static function text(string $key, string $default): string
+    {
+        $value = trim((string) app(SettingService::class)->get($key, ''));
+
+        return $value !== '' ? $value : $default;
     }
 
     /** @return \Illuminate\Support\Collection<int,array> */
@@ -244,6 +259,32 @@ class PortfolioPublicController extends Controller
                 'summary'         => $p->summary,
                 'completed_at'    => $p->completed_at?->format('M Y'),
                 'cover_image_url' => $p->cover_image_url,
+            ])->values();
+    }
+
+    /**
+     * The hero slide show.
+     *
+     * ⚠️ A slide with no media is filtered out here as well as refused on
+     * save. One is a full-screen black rectangle at the top of BITAC's front
+     * page, so it is worth catching twice.
+     */
+    private function heroSlides()
+    {
+        return HeroSlide::active()->orderBy('sort')->orderBy('id')->get()
+            ->filter(fn ($s) => $s->hasMedia())
+            ->map(fn ($s) => [
+                'id'         => $s->id,
+                'kind'       => $s->kind,
+                'image_url'  => $s->image_url,
+                'video_src'  => $s->video_src,
+                'embed_url'  => $s->youtube_embed,
+                'poster_url' => $s->poster_url,
+                'hold_ms'    => $s->hold_ms,
+                'title'      => $s->title,
+                'subtitle'   => $s->subtitle,
+                'cta_label'  => $s->cta_label,
+                'cta_url'    => $s->cta_url,
             ])->values();
     }
 
