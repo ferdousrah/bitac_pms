@@ -335,16 +335,20 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{gatePass}/out',      [GatePassController::class, 'storeOut'])->name('out.store');
     });
 
-    // ─── IED Notes — internal notes, plain legal paper, no letterhead ────
-    Route::middleware('permission:view rfqs')->group(function () {
-        Route::resource('office-notes', \App\Http\Controllers\OfficeNoteController::class)
-            ->parameters(['office-notes' => 'officeNote'])
-            ->except(['show']);
-        Route::get('office-notes/{officeNote}/pdf', [\App\Http\Controllers\OfficeNoteController::class, 'pdf'])
-            ->name('office-notes.pdf');
-        Route::post('office-notes/{officeNote}/duplicate', [\App\Http\Controllers\OfficeNoteController::class, 'duplicate'])
-            ->name('office-notes.duplicate');
+    // ─── Notes — every department, plain legal paper, signed in order ────
+    // (BITAC, 2026-10-20). `use notes` is held by every department's roles;
+    // who may see / sign a particular note is NoteWorkflow's business.
+    Route::middleware('permission:use notes')->group(function () {
+        $n = \App\Http\Controllers\OfficeNoteController::class;
+        Route::resource('office-notes', $n)->parameters(['office-notes' => 'officeNote']);
+        Route::get('office-notes/{officeNote}/pdf', [$n, 'pdf'])->name('office-notes.pdf');
+        Route::post('office-notes/{officeNote}/duplicate', [$n, 'duplicate'])->name('office-notes.duplicate');
+        Route::post('office-notes/{officeNote}/submit', [$n, 'submit'])->name('office-notes.submit');
+        Route::post('office-notes/{officeNote}/approve', [$n, 'approve'])->name('office-notes.approve');
+        Route::post('office-notes/{officeNote}/send-back', [$n, 'sendBack'])->name('office-notes.send-back');
+    });
 
+    Route::middleware('permission:view rfqs')->group(function () {
         // Envelope printing — nothing is stored, it just asks for the PDF.
         Route::get('envelopes', [\App\Http\Controllers\EnvelopeController::class, 'index'])
             ->name('envelopes.index');

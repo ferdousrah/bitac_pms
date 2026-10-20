@@ -189,5 +189,24 @@ class BitacDepartmentRolesSeeder extends Seeder
 
         // super-admin already gets everything via Gate::before
         Role::firstOrCreate(['name' => 'super-admin']);
+
+        // ── Notes (2026-10-20) ─────────────────────────────────────────
+        // ⚠️ Given AFTER the syncPermissions() calls above, which replace a
+        // role's whole list — granted earlier, they would be wiped.
+        // `use notes` = every department writes notes; `head notes` = the
+        // centre head signs last (App\Services\NoteWorkflow).
+        \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'use notes']);
+        \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'head notes']);
+        Role::firstOrCreate(['name' => 'Centre Head'])->givePermissionTo(['view dashboard', 'use notes', 'head notes']);
+        foreach ([
+            'ied-officer', 'Executive Engineer (IED)', 'Estimator', 'sales-officer',
+            'pcd-officer', 'Executive Engineer (PCD)', 'Assistant Engineer (PCD)',
+            'shop-incharge', 'Assistant Engineer (Shop)', 'Sub-Assistant Engineer (Shop)',
+            'section_supervisor', 'production-supervisor',
+            'qc-officer', 'qc-inspector', 'stores-officer', 'procurement-officer', 'finance-officer',
+            'management',
+        ] as $roleName) {
+            Role::where('name', $roleName)->first()?->givePermissionTo('use notes');
+        }
     }
 }

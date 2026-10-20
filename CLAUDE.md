@@ -593,16 +593,61 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - Table `rfq_letters`, `RfqLetterController`, `Pages/RfqLetter/{Index,Create}.tsx`. Issue an official letter against an RFQ (RFQ optional — selecting it auto-fills customer ref + recipient). **Direct issue, no approval. Signatory is selectable.** PDF in BN & EN. Entry: "Issue Letter" button on RFQ show + Letters index.
 - **Duplicate** (`POST rfq-letters/{rfqLetter}/duplicate`, copy icon on the Letters list) copies a letter into a fresh draft and opens it — the same letter goes out repeatedly with a different recipient or a line changed. It carries the subject, body, recipient block, customer ref, signatory and customer. ⚠️ It deliberately does **not** carry the letter's identity: `letter_no` is left blank (every letter takes its own number from the register — reusing one would put two letters on the same reference), the date is today, status is `draft`, `issued_at`/`emailed_at` are null, and **`signature_path` is null** — carrying the snapshot across would put the signatory's signature on a letter they have not seen. The source is never touched.
 
-### IED Notes — a letter with no pad (2026-09)
-> An **internal** note. Same drafting conventions as a letter; it just never leaves BITAC.
+### Notes — every department, signed in order (2026-09, reworked 2026-10-20)
+> An **internal** note on plain legal paper. BITAC (2026-10-20): every department writes them,
+> each is signed by its chain, the centre head passes it, and it comes back to print.
 
-- Table `office_notes`, `OfficeNote`, `OfficeNoteController`, `Pages/OfficeNote/{Index,Create}.tsx`, menu **IED → Notes**. **Direct issue, no approval, selectable signatory** — the RFQ Letter conventions. Draft → Issue from one form, **duplicate** into a fresh draft, BN + EN PDF, edit, delete.
-- ⚠️ **It prints on plain LEGAL paper (8.5″ × 14″) with NO letterhead** — no emblem, no gear, no centre block, no rule, no footer. `BitacLetterhead` always sets a header/footer and was hard-wired to A4, so notes go through **`BitacLetterhead::renderPlain($bodyHtml, $title, $format, $marginMm)`**: the same mPDF instance, the same Tinos + Nikosh registration and `stylesheetCss()` (so Bangla shaping, `.lang_bn` and the Bangla digits all behave identically), but no header/footer callback and a caller-supplied page size. `buildMpdf($title, $overrides = [])` now takes overrides instead of hard-coding the format and the stretched top margin — **don't** re-hard-code them.
-- Because there is no pad, **the sheet names the office itself**: centre name (Bangla or English by `?lang=`), then **অফিস নোট**, then নং / তারিখ, প্রতি, বিষয়, body, signature bottom-right. A plain sheet with no header would otherwise say nothing about where it came from.
-- The **`SignaturePicker` shows the chosen SIGNATORY's blocks, not the drafter's** (`formProps` ships each user's signatures) — a note is routinely written by one person and signed by another. Same rule as RFQ letters; `SignatureResolver` still refuses an id that isn't the signatory's.
-- **Duplicate** carries subject, body, recipient and signatory; it deliberately drops `note_no` (own number from the register), `signature_path` and `issued_at`.
-- ⚠️ When counting pictures in a rendered note to prove there's no letterhead: an **alpha PNG brings its own `/SMask` object, which is itself an `/Subtype /Image`**. Count only images that nothing references as a mask, or a single signature reads as two.
-- `office_notes` is transactional → in `SystemResetController::TABLES_TO_WIPE` + `Reset.tsx`.
+- Table `office_notes` (+ `office_note_approvals`), `OfficeNote`, `OfficeNoteController`,
+  **`App\Services\NoteWorkflow`** (all the rules), `Pages/OfficeNote/{Index,Create,Show}.tsx`.
+  Routes gated **`permission:use notes`** (migration `..._000076` + both role seeders) — held by
+  every department's roles. **Menu:** Notes + Envelope are the **last two IED items** (BITAC's
+  order); Notes is also the last item of **PCD**, **Production** and **Quality**, each gated on
+  *belonging* to that department (never on `use notes`, which would put a one-item group in
+  everyone's sidebar). A super admin sees it in each group.
+- **A note belongs to a department** (`section_id`); `department_name` prints after
+  "বিভাগঃ" — defaults to `NoteWorkflow::departmentLabel()` (IED → আই.ই.ডি, PCD → পি.সি.ডি,
+  CNC → সিএনসি, CASTING → ফাউন্ড্রি, …), editable. A person may only write for **their own
+  department** (`departmentsOf()`: where they are posted — a bench counts as its shop — plus
+  IED by `view rfqs` and PCD by `view pcd-inbox` / `review pcd-inbox`, since most staff have no
+  `section_id`); the server refuses another. Whoever sees every note may pick any.
+- **The chain** (`stepsFor()`):
+  - **IED / PCD:** প্রস্তুতকারী → নির্বাহী প্রকৌশলী → কেন্দ্র প্রধান
+  - **everyone else** (shops, Stores, QC): প্রস্তুতকারী → নির্বাহী প্রকৌশলী → নির্বাহী প্রকৌশলী (পি.সি.ডি) → কেন্দ্র প্রধান —
+    i.e. every note except IED's and PCD's own reaches the centre head **through PCD**.
+- **Who signs a step is a POOL worked out when it is that step's turn, not stored** (`pool()`),
+  so giving someone a role takes effect on notes already waiting: IED / PCD XEN = the
+  `Executive Engineer (IED|PCD)` role; a shop's XEN = `ShopAssignment::xenIds()` (`assign
+  shop-jobs`); PCD step = `Executive Engineer (PCD)`; centre head = **`head notes`**, held by the
+  new **`Centre Head`** role. ⚠️ **Nobody held a centre-head role before this** — until somebody
+  is given `Centre Head`, **`management` signs for the centre head** (`headIsStandIn()`, and the
+  note page says so). Pools are limited to the note's centre (or no centre).
+- ⚠️ **A step with nobody to sign is SKIPPED, with the reason shown** (e.g. Stores has no XEN; no
+  Executive Engineer (PCD) assigned yet) — the PCD-release rule: a gate with nobody behind it must
+  not hold the work up. A step whose signer **is** the preparer is skipped too (they signed as
+  preparer). Skipped steps print nothing. ⚠️ Set a skipped row's status by **assignment** —
+  `$row += [...]` kept the existing `'status' => 'pending'` and the note waited for ever on a step
+  nobody could sign (caught by the test).
+- **Flow:** draft → **submit** (the preparer's **default signature goes on automatically**,
+  `preparer_signature_path`) → each step **signs** (SignaturePicker, their own blocks; remarks
+  optional) or **sends back** (reason required) → `returned` → the preparer edits and submits again,
+  and **everyone signs afresh** (the chain is rebuilt). When the centre head passes it →
+  `approved`, the preparer is notified that it is back and can be printed. Each turn notifies that
+  step's pool. Only the preparer edits, and only a draft or a returned note; only a draft deletes —
+  a submitted note stays on the register.
+- **Who sees a note** (`scopeVisible()` / `canSee()`): the centre head, management and super admin
+  see all; others see their department's, their own, any they signed, and any waiting on them. The
+  list has an **All notes / Waiting for my signature** switch with a count, plus status and
+  department filters.
+- **The PDF** (`renderPlain`, legal paper, **no letterhead**): top, centred — the centre's
+  `name_bn` (or `name_en`), its `address_bn` (or `address_en`), **বিভাগঃ {department}**; then
+  নং / তারিখ, প্রতি, বিষয়, body; then the **signatures left to right in chain order** (image,
+  rule, label, name, date) and the **centre head's comment** under them. The old "অফিস নোট"
+  title is gone. ⚠️ The rule under each signature is a **table-cell border in its own row**, with
+  narrow empty gap columns — a border on a `<div>` in a cell is drawn the width of its text, and
+  mPDF ignored `cellspacing`, joining the rules into one line.
+- The body is **sanitised on save** now (`LetterHtml::sanitize`) — the note page renders it.
+- **Duplicate** copies department, subject, body and recipient into a fresh draft; no number, no
+  signatures. `office_notes` / `office_note_approvals` are transactional (Reset).
 
 ### Envelope printing (IED → Envelope, 2026-09)
 - **Nothing is stored — there is no envelopes table.** An envelope is not a document; it is the same two addresses on a different piece of paper, and the letter or note it travels with is already on record. `EnvelopeController@index` renders the form, `@pdf` renders the envelope straight from the query string. Don't "improve" this by persisting envelopes.

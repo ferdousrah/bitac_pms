@@ -1,35 +1,44 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEvent, useRef } from 'react';
+import { FormEvent, useEffect, useRef } from 'react';
 import RichTextEditor from '@/Components/RichTextEditor';
-import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 
-export default function OfficeNoteCreate({
-    signatories = [],
-    defaultSignatoryId = null,
-    existing = null,
-}: any) {
+interface Dept { id: number; name: string; label: string; chain: 'short' | 'long' }
+
+/** The order of signatures this department's notes go through. */
+const CHAIN: Record<'short' | 'long', string[]> = {
+    short: ['প্রস্তুতকারী', 'নির্বাহী প্রকৌশলী', 'কেন্দ্র প্রধান'],
+    long:  ['প্রস্তুতকারী', 'নির্বাহী প্রকৌশলী', 'নির্বাহী প্রকৌশলী (পি.সি.ডি)', 'কেন্দ্র প্রধান'],
+};
+
+export default function OfficeNoteCreate({ existing = null, departments = [], defaultSectionId = null }: {
+    existing: any; departments: Dept[]; defaultSectionId: number | null;
+}) {
     const isEdit = !!existing;
+    const initialSection = existing?.section_id ?? defaultSectionId ?? (departments.length === 1 ? departments[0].id : '');
+    const initialDept = departments.find(d => d.id === Number(initialSection));
 
     const { data, setData, post, put, transform, processing, errors } = useForm<any>({
-        note_no:           existing?.note_no ?? '',
-        note_date:         existing?.note_date ?? new Date().toISOString().slice(0, 10),
-        subject:           existing?.subject ?? '',
-        body:              existing?.body ?? '',
-        recipient_block:   existing?.recipient_block ?? '',
-        signatory_user_id: existing?.signatory_user_id ?? defaultSignatoryId ?? '',
-        issue:             false,
+        section_id:      initialSection ?? '',
+        department_name: existing?.department_name ?? initialDept?.label ?? '',
+        note_no:         existing?.note_no ?? '',
+        note_date:       existing?.note_date ?? new Date().toISOString().slice(0, 10),
+        subject:         existing?.subject ?? '',
+        body:            existing?.body ?? '',
+        recipient_block: existing?.recipient_block ?? '',
     });
 
-    const pickerRef = useRef<SignaturePickerHandle | null>(null);
-    // The picker shows the chosen SIGNATORY's blocks — a note is often drafted
-    // by one person and signed by another.
-    const signatory = signatories.find((u: any) => String(u.id) === String(data.signatory_user_id)) ?? null;
+    // The printed department name follows the department until someone types their own.
+    const typedName = useRef(!!existing?.department_name && existing.department_name !== initialDept?.label);
+    const dept = departments.find(d => d.id === Number(data.section_id));
+    useEffect(() => {
+        if (!typedName.current && dept) setData('department_name', dept.label);
+    }, [data.section_id]);
 
-    const submit = (e: FormEvent, issue: boolean) => {
+    const save = (e: FormEvent, submit: boolean) => {
         e.preventDefault();
-        const picked = pickerRef.current?.value().userSignatureId ?? null;
-        transform((d: any) => ({ ...d, issue, user_signature_id: picked }));
+        if (submit && !confirm('Submit this note for signatures?\n\nYour own default signature goes on as the preparer, and it can no longer be changed unless it is sent back.')) return;
+        transform((d: any) => ({ ...d, submit }));
         if (isEdit) put(`/office-notes/${existing.id}`);
         else post('/office-notes');
     };
@@ -39,13 +48,47 @@ export default function OfficeNoteCreate({
             <Head title={isEdit ? 'Edit Note' : 'New Note'} />
 
             <div className="max-w-4xl mx-auto p-4 sm:p-6 animate-fade-in">
-                <form onSubmit={(e) => submit(e, false)} className="space-y-5">
+                <form onSubmit={(e) => save(e, false)} className="space-y-5">
 
-                    <div className="rounded-2xl border border-surface-200 bg-surface-50/60 p-4">
-                        <p className="text-sm text-surface-600">
-                            An <strong>internal</strong> note. It prints on plain legal paper (8.5″ × 14″) with
-                            <strong> no letterhead</strong> — no emblem, no centre block, no rule.
-                        </p>
+                    {existing?.status === 'returned' && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                            This note was <strong>sent back</strong>. Make the changes asked for, then submit it again — everyone signs afresh.
+                        </div>
+                    )}
+
+                    <div className="card">
+                        <div className="card-header"><h3 className="text-sm font-bold text-surface-900">Department</h3></div>
+                        <div className="card-body space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Department <span className="text-red-500">*</span></label>
+                                    <select className="form-input" value={data.section_id} onChange={(e) => setData('section_id', e.target.value)}>
+                                        <option value="">— Choose —</option>
+                                        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                    </select>
+                                    {errors.section_id && <p className="form-error">{errors.section_id as any}</p>}
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Department name as printed (বিভাগঃ)</label>
+                                    <input className="form-input" style={{ fontFamily: 'Nikosh, sans-serif', fontSize: 15 }} value={data.department_name}
+                                        onChange={(e) => { typedName.current = true; setData('department_name', e.target.value); }}
+                                        placeholder="আই.ই.ডি" maxLength={120} />
+                                </div>
+                            </div>
+                            {dept && (
+                                <div className="rounded-xl bg-surface-50 border border-surface-200 px-4 py-3">
+                                    <div className="text-[10px] uppercase tracking-wider font-bold text-surface-500 mb-2">Signed in this order</div>
+                                    <div className="flex flex-wrap items-center gap-1.5" style={{ fontFamily: 'Nikosh, sans-serif' }}>
+                                        {CHAIN[dept.chain].map((s, i) => (
+                                            <span key={s} className="inline-flex items-center gap-1.5">
+                                                <span className="px-2.5 py-1 rounded-lg bg-white border border-surface-200 text-sm text-surface-800">{s}</span>
+                                                {i < CHAIN[dept.chain].length - 1 && <i className="fi fi-rr-angle-small-right text-surface-400" />}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="card">
@@ -53,30 +96,25 @@ export default function OfficeNoteCreate({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
                                     <label className="form-label">Note No. (নং)</label>
-                                    <input className="form-input" value={data.note_no}
-                                        onChange={(e) => setData('note_no', e.target.value)}
+                                    <input className="form-input" value={data.note_no} onChange={(e) => setData('note_no', e.target.value)}
                                         placeholder="From your own register" />
                                     {errors.note_no && <p className="form-error">{errors.note_no as any}</p>}
                                 </div>
                                 <div className="form-group !mb-0">
                                     <label className="form-label">Date</label>
-                                    <input type="date" className="form-input" value={data.note_date}
-                                        onChange={(e) => setData('note_date', e.target.value)} />
+                                    <input type="date" className="form-input" value={data.note_date} onChange={(e) => setData('note_date', e.target.value)} />
                                 </div>
                             </div>
 
                             <div className="form-group !mb-0">
-                                <label className="form-label">To <span className="form-label-optional">Optional</span></label>
+                                <label className="form-label">To (প্রতি) <span className="form-label-optional">Optional</span></label>
                                 <textarea className="form-textarea" rows={3} value={data.recipient_block}
-                                    onChange={(e) => setData('recipient_block', e.target.value)}
-                                    placeholder={'Executive Engineer\nProduction Planning Department'} />
-                                <p className="form-hint">One line per line, as it should print.</p>
+                                    onChange={(e) => setData('recipient_block', e.target.value)} placeholder={'নির্বাহী প্রকৌশলী\nউৎপাদন নিয়ন্ত্রণ বিভাগ'} />
                             </div>
 
                             <div className="form-group !mb-0">
-                                <label className="form-label">Subject <span className="text-red-500">*</span></label>
-                                <input className="form-input" value={data.subject}
-                                    onChange={(e) => setData('subject', e.target.value)} />
+                                <label className="form-label">Subject (বিষয়) <span className="text-red-500">*</span></label>
+                                <input className="form-input" value={data.subject} onChange={(e) => setData('subject', e.target.value)} />
                                 {errors.subject && <p className="form-error">{errors.subject as any}</p>}
                             </div>
 
@@ -88,44 +126,17 @@ export default function OfficeNoteCreate({
                         </div>
                     </div>
 
-                    <div className="card">
-                        <div className="card-header"><h3 className="text-sm font-bold text-surface-900">Signatory</h3></div>
-                        <div className="card-body">
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Signed by</label>
-                                <select className="form-input" value={data.signatory_user_id}
-                                    onChange={(e) => setData('signatory_user_id', e.target.value)}>
-                                    <option value="">— Select signatory —</option>
-                                    {signatories.map((u: any) => (
-                                        <option key={u.id} value={u.id}>
-                                            {u.name}{u.designation ? ` — ${u.designation}` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.signatory_user_id && <p className="form-error">{errors.signatory_user_id as any}</p>}
-                            </div>
-
-                            {signatory && (
-                                <div className="mt-4 pt-4 border-t border-surface-100">
-                                    <SignaturePicker
-                                        key={signatory.id}
-                                        ref={pickerRef}
-                                        signatures={signatory.signatures ?? []}
-                                        ownerName={signatory.name}
-                                        allowDraw={false}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <p className="text-xs text-surface-500">
+                        Prints on plain legal paper — no letterhead. The top names the centre, its address and the department.
+                    </p>
 
                     <div className="flex items-center justify-end gap-2.5">
-                        <Link href="/office-notes" className="btn-ghost">Cancel</Link>
+                        <Link href={isEdit ? `/office-notes/${existing.id}` : '/office-notes'} className="btn-ghost">Cancel</Link>
                         <button type="submit" disabled={processing} className="btn-outline">
-                            {isEdit ? 'Save changes' : 'Save as draft'}
+                            {isEdit ? 'Save' : 'Save as draft'}
                         </button>
-                        <button type="button" disabled={processing} onClick={(e) => submit(e, true)} className="btn-primary">
-                            <i className="fi fi-rr-paper-plane text-xs leading-none" /> Issue note
+                        <button type="button" disabled={processing} onClick={(e) => save(e, true)} className="btn-primary">
+                            <i className="fi fi-rr-paper-plane text-xs leading-none" /> Submit for signatures
                         </button>
                     </div>
                 </form>

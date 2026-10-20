@@ -44,8 +44,6 @@ export const mainGroups: NavGroup[] = [
             { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
             { label: 'Work Order Inbox', href: '/ied/work-orders', icon: 'fi-rr-paper-plane',  permission: 'view rfqs', badgeKey: 'pending_ied_work_orders' },
             { label: 'Jobs',             href: '/ied/jobs',         icon: 'fi-rr-briefcase',    permission: 'view rfqs' },
-            { label: 'Notes',          href: '/office-notes',     icon: 'fi-rr-notebook', permission: 'view rfqs' },
-            { label: 'Envelope',       href: '/envelopes',        icon: 'fi-rr-envelope-open', permission: 'view rfqs' },
             { label: 'Reports',        href: '/ied/reports',      icon: 'fi-rr-stats',  permission: 'view rfqs' },
             { label: 'Feedback', href: '/ied/complaints', icon: 'fi-rr-comment-alt', permission: 'manage complaints', badgeKey: 'open_complaints' },
             { label: 'Completion Certificates', href: '/ied/completion-certificates', icon: 'fi-rr-diploma', permission: 'view completion-certificates' },
@@ -53,6 +51,9 @@ export const mainGroups: NavGroup[] = [
             { label: 'Service Demand Log',      href: '/ied/service-demand',          icon: 'fi-rr-chart-line-up',  permission: 'view service-demand' },
             { label: 'Stakeholder Forms',       href: '/ied/stakeholder-forms',       icon: 'fi-rr-form',           permission: 'view stakeholder-forms' },
             { label: 'Emergency Requests', href: '/ied/emergency-requests', icon: 'fi-rr-siren-on', permission: 'manage rfqs', badgeKey: 'pending_emergency_requests' },
+            // Last, by BITAC's instruction (2026-10-20).
+            { label: 'Notes',          href: '/office-notes',     icon: 'fi-rr-notebook', permission: 'view rfqs' },
+            { label: 'Envelope',       href: '/envelopes',        icon: 'fi-rr-envelope-open', permission: 'view rfqs' },
         ],
     },
     {
@@ -74,6 +75,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
             { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
             { label: 'Delivery Orders',      href: '/delivery',                  icon: 'fi-rr-truck-side',      permission: 'view delivery' },
+            { label: 'Notes',                href: '/office-notes',              icon: 'fi-rr-notebook',        permissionAny: ['view pcd-inbox', 'review pcd-inbox'] },
         ],
     },
     {
@@ -95,6 +97,7 @@ export const mainGroups: NavGroup[] = [
             // A super admin holds both and so sees Jobs twice; that is the
             // whole cost, and nobody else is affected.
             { label: 'Jobs', href: '/work-orders', icon: 'fi-rr-briefcase', permission: 'view production' },
+            { label: 'Notes', href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view production' },
         ],
     },
     {
@@ -115,6 +118,7 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'QC Inspections', href: '/qc',   icon: 'fi-rr-shield-check',    permission: 'view qc' },
             { label: 'NCRs',           href: '/ncrs', icon: 'fi-rr-triangle-warning',permission: 'view qc' },
+            { label: 'Notes',          href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view qc' },
         ],
     },
     {

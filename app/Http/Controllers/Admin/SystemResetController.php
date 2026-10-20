@@ -90,6 +90,7 @@ class SystemResetController extends Controller
         'musak_challans',
 
         // RFQ chain
+        'office_note_approvals',
         'office_notes',
         'rfq_letters',
         'rfq_automation_logs',
