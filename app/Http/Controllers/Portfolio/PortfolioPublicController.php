@@ -240,6 +240,10 @@ class PortfolioPublicController extends Controller
             'links' => SiteLink::active()->orderBy('group')->orderBy('sort')->get()
                 ->groupBy('group')
                 ->map(fn ($g) => $g->map(fn ($l) => ['label' => $l->label, 'url' => $l->url])->values()),
+            // The footer's "What we do" column. Titles only — four rows, on
+            // every page, so it stays a list of names rather than a payload.
+            'footer_services' => SiteService::active()->orderBy('sort')->orderBy('id')
+                ->get(['id', 'title'])->map(fn ($x) => ['id' => $x->id, 'title' => $x->title])->values(),
         ]);
     }
 

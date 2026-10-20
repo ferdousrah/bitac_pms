@@ -1,4 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
+import { gearPath } from '@/Components/Public/Gear';
 import { ReactNode, useEffect, useState } from 'react';
 
 export interface BitacInfo {
@@ -294,90 +295,209 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             <main className="flex-1">{children}</main>
 
             {/* ── Footer ────────────────────────────────────────────────── */}
-            <footer className="bg-brand-950 text-brand-200/70 border-t border-white/5">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                    <div className="lg:col-span-1">
-                        <div className="flex items-center gap-2.5 mb-3">
-                            {bitac?.logo_left && <img src={bitac.logo_left} alt="" className="h-10 w-10 object-contain" />}
-                            <div className="text-sm font-bold text-white leading-tight">
-                                {bitac?.name_bn || 'বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র'}
+            <SiteFooter bitac={bitac} important={important} ministry={ministry} />
+        </div>
+    );
+}
+
+/** A stored website may or may not carry its scheme; never prefix it twice. */
+function siteHref(website?: string | null): string | undefined {
+    if (!website) return undefined;
+    return /^https?:\/\//i.test(website) ? website : `https://${website}`;
+}
+
+/**
+ * The public footer.
+ *
+ * ⚠️ The wave is drawn ABOVE the footer (`bottom-full`), overlapping the last
+ * section's bottom padding, so its transparent part shows that section's own
+ * background — white on one page, tinted on another. Put in normal flow
+ * instead, the transparent part would show the layout's white and leave a
+ * white strip under every tinted section. It is kept short (40/64px) because
+ * every section has at least 56px of bottom padding for it to sit in.
+ *
+ * ⚠️ `overflow-hidden` is on the INNER block, not the <footer>: on the footer
+ * it would clip the wave, which deliberately sits outside it.
+ */
+function SiteFooter({ bitac, important, ministry }: {
+    bitac?: BitacInfo; important: SiteLinkRow[]; ministry: SiteLinkRow[];
+}) {
+    const { props } = usePage<any>();
+    const services: { id: number; title: string }[] = props.footer_services ?? [];
+    const phone = bitac?.phone_bn || bitac?.phone;
+    const address = bitac?.address_bn || bitac?.address || '১১৬ (খ), তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮';
+    const outside = [...important, ...ministry].slice(0, 7);
+
+    return (
+        <footer className="relative text-white/65">
+            {/* The shape: two waves, the back one a brighter violet, for depth.
+                Tall enough to read as a shape at 1440px — at 64px and a gentle
+                curve it read as a thin lavender smear across the page. */}
+            <svg className="absolute bottom-full left-0 w-full h-10 sm:h-20 pointer-events-none" viewBox="0 0 1440 120"
+                 preserveAspectRatio="none" aria-hidden="true">
+                <path d="M0,46 C170,96 360,4 610,34 C860,64 1010,112 1250,62 C1350,42 1410,48 1440,54 L1440,120 L0,120 Z"
+                      fill="rgb(var(--brand-600, 98 49 155))" opacity="0.9" />
+                <path d="M0,84 C230,40 430,114 720,82 C1010,50 1210,110 1440,72 L1440,120 L0,120 Z"
+                      fill="rgb(var(--brand-950, 29 13 48))" />
+            </svg>
+
+            <div className="relative bg-brand-950 overflow-hidden">
+                <div className="absolute inset-0 bg-blueprint opacity-70" />
+                <div className="absolute -top-32 -left-24 w-[32rem] h-[32rem] rounded-full bg-brand-600/20 blur-3xl" />
+                <div className="absolute bottom-0 right-1/4 w-[28rem] h-[20rem] rounded-full bg-fuchsia-600/10 blur-3xl" />
+                {/* A large gear turning slowly behind the columns — the site's
+                    one motif, carried down from the hero. */}
+                <svg viewBox="0 0 400 400" aria-hidden="true"
+                     className="absolute -right-32 -bottom-40 w-[34rem] h-[34rem] opacity-[0.045] pointer-events-none">
+                    <g className="gear-turn">
+                        <path d={gearPath(200, 200, 190, 160, 18)} fill="white" fillRule="evenodd" />
+                    </g>
+                </svg>
+
+                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* ── Reach us: the three ways in, before anything else ── */}
+                    <div className="grid sm:grid-cols-3 gap-4 pt-14 pb-12 border-b border-white/10">
+                        <ContactTile icon="fi-rr-phone-call" label="Call us" value={phone}
+                                     href={bitac?.phone ? `tel:${bitac.phone.split(',')[0].replace(/[^\d+]/g, '')}` : undefined} />
+                        <ContactTile icon="fi-rr-envelope" label="Email us" value={bitac?.email}
+                                     href={bitac?.email ? `mailto:${bitac.email}` : undefined} />
+                        <ContactTile icon="fi-rr-marker" label="Visit us" value={address} href="/portfolio/contact" internal />
+                    </div>
+
+                    {/* ── The columns ── */}
+                    <div className="grid grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-10 py-14">
+                        <div className="col-span-2 lg:col-span-4">
+                            <div className="flex items-center gap-3">
+                                {bitac?.logo_left && (
+                                    <span className="w-14 h-14 rounded-2xl bg-white p-1.5 shrink-0 shadow-lg shadow-black/20">
+                                        <img src={bitac.logo_left} alt="" className="w-full h-full object-contain" />
+                                    </span>
+                                )}
+                                <span className="min-w-0">
+                                    <span className="block text-[15px] font-bold text-white leading-snug">
+                                        {bitac?.name_bn || 'বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র'}
+                                    </span>
+                                    <span className="block text-[11px] text-white/45 mt-0.5">
+                                        {bitac?.name_en || 'Bangladesh Industrial Technical Assistance Centre'}
+                                    </span>
+                                </span>
+                            </div>
+                            <p className="text-[13px] leading-relaxed mt-5 max-w-sm">
+                                An autonomous body under the Ministry of Industries, serving the
+                                nation&rsquo;s industry with manufacturing, training, testing and
+                                research since 1962.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2.5 mt-6">
+                                <a href="/customer/login"
+                                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-xs font-bold shadow-lg shadow-black/20 transition-all">
+                                    <i className="fi fi-rr-briefcase text-[11px] leading-none" />Customer login
+                                </a>
+                                <a href="/login"
+                                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white text-xs font-bold transition-colors">
+                                    <i className="fi fi-rr-user text-[11px] leading-none" />Staff
+                                </a>
                             </div>
                         </div>
-                        <p className="text-xs leading-relaxed">
-                            {bitac?.name_en || 'Bangladesh Industrial Technical Assistance Centre'} — an autonomous
-                            body under the Ministry of Industries, serving the nation&rsquo;s industry since 1962.
-                        </p>
-                    </div>
 
-                    <div>
-                        <div className="text-[11px] font-bold text-white uppercase tracking-wider mb-3">Explore</div>
-                        <ul className="space-y-1.5 text-xs">
+                        <FooterColumn title="Explore" className="lg:col-span-2">
                             {FOOTER_NAV.map(n => (
-                                <li key={n.href}>
-                                    <Link href={n.href} className="hover:text-white transition-colors">{n.label}</Link>
-                                </li>
+                                <FooterLink key={n.href} href={n.href} internal>{n.label}</FooterLink>
                             ))}
-                        </ul>
+                        </FooterColumn>
+
+                        <FooterColumn title="What we do" className="lg:col-span-3">
+                            {services.length ? services.map(x => (
+                                <FooterLink key={x.id} href="/portfolio/services" internal>{x.title}</FooterLink>
+                            )) : (
+                                <FooterLink href="/portfolio/services" internal>Our services</FooterLink>
+                            )}
+                        </FooterColumn>
+
+                        <FooterColumn title="Important links" className="col-span-2 sm:col-span-1 lg:col-span-3">
+                            {outside.length ? outside.map(l => (
+                                <FooterLink key={l.url + l.label} href={l.url}>{l.label}</FooterLink>
+                            )) : (
+                                <li className="text-white/30">—</li>
+                            )}
+                        </FooterColumn>
                     </div>
 
-                    <div>
-                        <div className="text-[11px] font-bold text-white uppercase tracking-wider mb-3">Important Links</div>
-                        <ul className="space-y-1.5 text-xs">
-                            {[...important, ...ministry].slice(0, 8).map(l => (
-                                <li key={l.url + l.label}>
-                                    <a href={l.url} target="_blank" rel="noopener noreferrer"
-                                       className="hover:text-white transition-colors">
-                                        {l.label}
-                                        <i className="fi fi-rr-arrow-up-right-from-square text-[8px] ml-1 opacity-60" />
-                                    </a>
-                                </li>
-                            ))}
-                            {important.length === 0 && ministry.length === 0 && (
-                                <li className="text-surface-600">—</li>
-                            )}
-                        </ul>
-                    </div>
-
-                    <div>
-                        <div className="text-[11px] font-bold text-white uppercase tracking-wider mb-3">Contact</div>
-                        <address className="not-italic text-xs space-y-2 leading-relaxed">
-                            <div>
-                                <i className="fi fi-rr-marker text-[10px] mr-1.5 opacity-70" />
-                                {bitac?.address_bn || bitac?.address || '১১৬ (খ), তেজগাঁও শিল্প এলাকা, ঢাকা-১২০৮'}
-                            </div>
-                            {(bitac?.phone_bn || bitac?.phone) && (
-                                <div>
-                                    <i className="fi fi-rr-phone-call text-[10px] mr-1.5 opacity-70" />
-                                    {bitac?.phone_bn || bitac?.phone}
-                                </div>
-                            )}
-                            {bitac?.email && (
-                                <div>
-                                    <i className="fi fi-rr-envelope text-[10px] mr-1.5 opacity-70" />
-                                    <a href={`mailto:${bitac.email}`} className="hover:text-white">{bitac.email}</a>
-                                </div>
-                            )}
-                            {bitac?.website && (
-                                <div>
-                                    <i className="fi fi-rr-globe text-[10px] mr-1.5 opacity-70" />
-                                    <a href={`https://${bitac.website}`} target="_blank" rel="noopener noreferrer"
-                                       className="hover:text-white">{bitac.website}</a>
-                                </div>
-                            )}
-                        </address>
-                    </div>
-                </div>
-
-                <div className="border-t border-white/10">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-brand-200/50">
-                        <span>© {new Date().getFullYear()} BITAC — Bangladesh Industrial Technical Assistance Centre</span>
-                        <span className="flex items-center gap-4">
-                            <a href="/customer/login" className="hover:text-white">Customer Login</a>
-                            <a href="/login" className="hover:text-white">Staff Login</a>
+                    {/* ── Bottom bar ── */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6 border-t border-white/10 text-[12px] text-white/40">
+                        <span className="text-center sm:text-left">
+                            © {new Date().getFullYear()} BITAC · {bitac?.ministry_bn || 'শিল্প মন্ত্রণালয়'}, {bitac?.government_bn || 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার'}
                         </span>
+                        <div className="flex items-center gap-5">
+                            {bitac?.website && (
+                                <a href={siteHref(bitac.website)} target="_blank" rel="noopener noreferrer"
+                                   className="inline-flex items-center gap-1.5 hover:text-white transition-colors">
+                                    <i className="fi fi-rr-globe text-[11px] leading-none" />
+                                    {bitac.website.replace(/^https?:\/\//i, '')}
+                                </a>
+                            )}
+                            <button type="button" aria-label="Back to top"
+                                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                    className="group w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-brand-500 border border-white/10 hover:border-brand-400 text-white flex items-center justify-center transition-all">
+                                <i className="fi fi-rr-arrow-small-up text-base leading-none group-hover:-translate-y-0.5 transition-transform" />
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </footer>
+            </div>
+        </footer>
+    );
+}
+
+function ContactTile({ icon, label, value, href, internal = false }: {
+    icon: string; label: string; value?: string | null; href?: string; internal?: boolean;
+}) {
+    if (!value) return null;
+    const body = (
+        <>
+            <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-black/25 group-hover:scale-105 transition-transform">
+                <i className={`fi ${icon} text-lg leading-none`} />
+            </span>
+            <span className="min-w-0">
+                <span className="block text-[10px] uppercase tracking-[0.18em] font-bold text-brand-300">{label}</span>
+                <span className="block text-sm font-semibold text-white mt-1 leading-snug break-words">{value}</span>
+            </span>
+        </>
+    );
+    const className = 'group flex items-center gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-brand-400/40 transition-all';
+
+    if (!href) return <div className={className}>{body}</div>;
+    return internal
+        ? <Link href={href} className={className}>{body}</Link>
+        : <a href={href} className={className}>{body}</a>;
+}
+
+function FooterColumn({ title, className = '', children }: { title: string; className?: string; children: ReactNode }) {
+    return (
+        <div className={className}>
+            <div className="flex items-center gap-2.5 mb-5">
+                <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-brand-300 to-brand-500" />
+                <span className="text-[12px] font-bold text-white uppercase tracking-[0.14em]">{title}</span>
+            </div>
+            <ul className="space-y-2.5 text-[13px]">{children}</ul>
         </div>
+    );
+}
+
+/** A footer link whose arrow slides in on hover. */
+function FooterLink({ href, internal = false, children }: { href: string; internal?: boolean; children: ReactNode }) {
+    const inner = (
+        <>
+            <i className="fi fi-rr-angle-small-right text-xs leading-none text-brand-400 w-0 overflow-hidden opacity-0 group-hover:w-3 group-hover:opacity-100 transition-all" />
+            <span>{children}</span>
+            {!internal && <i className="fi fi-rr-arrow-up-right text-[8px] leading-none opacity-40 ml-0.5" />}
+        </>
+    );
+    const className = 'group inline-flex items-center gap-1 hover:text-white transition-colors';
+    return (
+        <li>
+            {internal
+                ? <Link href={href} className={className}>{inner}</Link>
+                : <a href={href} target="_blank" rel="noopener noreferrer" className={className}>{inner}</a>}
+        </li>
     );
 }

@@ -1405,6 +1405,36 @@ blank falls back to the Site text headline.
   were left alone: deleting them cascades well outside a design change. They
   are local-only.
 
+#### The footer (`SiteFooter` in `PublicLayout.tsx`, 2026-10-20)
+> BITAC: *"footer ta sundor kora dorkar, ata redesign koro, shape dao."*
+
+- **The shape is two SVG waves** (a violet back layer over the dark front),
+  drawn **above** the footer with `bottom-full` so it overlaps the last
+  section's bottom padding. ⚠️ That placement is what lets the wave's
+  transparent part show *that section's own* background — white on one page,
+  tinted on another. In normal flow it would show the layout's white and leave
+  a white strip under every tinted section. It is 40/80px tall because every
+  section has at least that much bottom padding to sit in; the first version
+  at 64px with a gentle curve read as a thin lavender smear, not a shape.
+- ⚠️ **`overflow-hidden` is on the INNER block, never the `<footer>`** — on the
+  footer it would clip the wave, which deliberately sits outside it.
+- **Contact first**: three tiles (call / email / visit) above the columns. The
+  home page lost its phone-and-email band when the CTA was replaced by News &
+  Events, and the footer is where every page can carry them.
+- Columns: brand (logo, Customer login + Staff), **Explore**, **What we do**
+  (fed from `footer_services`, which `chrome()` now ships on every public page
+  — titles only), **Important links**. Bottom bar: copyright with the ministry
+  line, the website, and a **back to top** button.
+- A large faded gear turns behind the columns — the hero's motif carried down.
+  ⚠️ **`gearPath()` lives in `Components/Public/Gear.tsx`**, shared by the hero
+  and the footer; it used to be private to `Home.tsx`.
+- Link arrows are `w-0` until hover, not merely transparent: an invisible arrow
+  that keeps its width indents every link under its heading, and a phone has
+  no hover to ever reveal it.
+- ⚠️ **Fixed: the website link was `https://${bitac.website}`**, so a stored
+  `https://www.bitac.gov.bd` became `https://https://…`. `siteHref()` adds a
+  scheme only when there is none.
+
 #### ⚠️ Checking the site visually: headless Chrome will not go below 500px
 `chrome --headless=new --window-size=390,…` lays the page out at **500px** and
 then crops the screenshot to 390 — so a perfectly responsive page looks cut
