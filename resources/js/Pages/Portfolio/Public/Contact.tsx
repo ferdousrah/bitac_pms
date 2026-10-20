@@ -321,92 +321,65 @@ function Numbers({ value }: { value: string }) {
 }
 
 /**
- * Who to contact.
+ * Who to contact — one directory list, every row the same shape.
  *
- * ⚠️ Two kinds of contact, shown two ways. A NAMED person — the centre head,
- * with a mobile — is who most visitors want, so they get a featured card. A
- * POST with only its official email is a line in a list: as a card it was a
- * big box with a grey placeholder icon and one line of text, and a row of
- * those next to the head's tall card is what made the section look ragged.
+ * ⚠️ It used to be two shapes: a featured card per named person, with each
+ * number as a button, and plain rows for posts. Once the officers directory
+ * gave every person a mobile, Dhaka had seven featured cards whose buttons
+ * wrapped onto two and three lines — uneven and heavy. A list with the name
+ * on the left and the numbers as plain lines on the right reads the same for
+ * seven people as for one, and stays flat (BITAC: no shadow, no effects).
+ *
+ * Named people first (they are who a visitor wants to ring), then posts that
+ * are only a mailbox.
  */
 function People({ contacts }: { contacts: OfficeContact[] }) {
     if (!contacts.length) return null;
-    const named = contacts.filter((c) => c.name);
-    const posts = contacts.filter((c) => !c.name);
+    const ordered = [...contacts.filter((c) => c.name), ...contacts.filter((c) => !c.name)];
 
     return (
         <div className="rounded-3xl border border-surface-200 bg-white overflow-hidden">
-            <div className="px-6 py-4 border-b border-surface-100 flex items-center gap-2.5">
+            <div className="px-6 py-4 border-b border-surface-200 flex items-center gap-2.5">
                 <span className="w-1.5 h-4 rounded-full bg-brand-600" />
                 <h3 className="text-base font-bold text-surface-900">Who to contact</h3>
+                <span className="ml-auto text-xs font-semibold text-surface-500 tabular-nums">{contacts.length}</span>
             </div>
-
-            {named.length > 0 && (
-                <div className="p-4 sm:p-5 grid gap-3">
-                    {named.map((c) => <PersonCard key={c.id} c={c} />)}
-                </div>
-            )}
-
-            {posts.length > 0 && (
-                <ul className={`divide-y divide-surface-100 ${named.length ? 'border-t border-surface-100' : ''}`}>
-                    {posts.map((c) => (
-                        <li key={c.id} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6 px-6 py-3.5 hover:bg-surface-50/70 transition-colors">
-                            <span className="sm:w-1/2 text-[15px] font-semibold text-surface-900 leading-snug">{c.designation}</span>
-                            <span className="sm:flex-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                                {c.email && (
-                                    <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 text-sm text-brand-700 hover:text-brand-800 hover:underline break-all">
-                                        <i className="fi fi-rr-envelope text-[11px] leading-none" />{c.email}
-                                    </a>
-                                )}
-                                {splitNumbers(c.mobile).map((n) => (
-                                    <a key={'m' + n} href={telHref(n)} className="inline-flex items-center gap-1.5 text-sm text-surface-900 hover:text-brand-700 whitespace-nowrap">
-                                        <i className="fi fi-rr-mobile-notch text-[11px] leading-none text-surface-400" />{n}
-                                    </a>
-                                ))}
-                                {splitNumbers(c.phone).map((n) => (
-                                    <a key={'p' + n} href={telHref(n)} className="inline-flex items-center gap-1.5 text-sm text-surface-800 hover:text-brand-700 whitespace-nowrap">
-                                        <i className="fi fi-rr-phone-call text-[11px] leading-none text-surface-400" />{n}
-                                    </a>
-                                ))}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
-}
-
-function PersonCard({ c }: { c: OfficeContact }) {
-    // ⚠️ Flat on purpose (BITAC): no initial badge, no gradient wash, no
-    // shadow. The name and the numbers are the content; anything drawn round
-    // them only made the Bangla type softer to read.
-    return (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-2xl bg-white border border-surface-200">
-            <div className="sm:w-1/2 min-w-0">
-                <div className="text-base font-bold text-surface-900 leading-snug">{c.name}</div>
-                <div className="text-sm text-surface-700 mt-0.5 leading-snug">{c.designation}</div>
-            </div>
-            <div className="flex flex-wrap gap-2 sm:flex-1 sm:justify-end">
-                {splitNumbers(c.mobile).map((n) => (
-                    <a key={'m' + n} href={telHref(n)}
-                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors whitespace-nowrap">
-                        <i className="fi fi-rr-mobile-notch text-xs leading-none" />{n}
-                    </a>
+            <ul className="divide-y divide-surface-200">
+                {ordered.map((c) => (
+                    <li key={c.id} className="grid grid-cols-1 sm:grid-cols-12 gap-x-6 gap-y-2 px-6 py-4">
+                        <div className="sm:col-span-6 min-w-0">
+                            {c.name ? (
+                                <>
+                                    <div className="text-[15px] font-bold text-surface-900 leading-snug">{c.name}</div>
+                                    <div className="text-sm text-surface-700 mt-0.5 leading-snug">{c.designation}</div>
+                                </>
+                            ) : (
+                                <div className="text-[15px] font-semibold text-surface-900 leading-snug">{c.designation}</div>
+                            )}
+                        </div>
+                        <div className="sm:col-span-6 min-w-0 space-y-1">
+                            {splitNumbers(c.mobile).map((n) => (
+                                <a key={'m' + n} href={telHref(n)}
+                                   className="flex items-center gap-2 text-[15px] font-bold text-brand-700 hover:text-brand-800 hover:underline whitespace-nowrap">
+                                    <i className="fi fi-rr-mobile-notch text-xs leading-none" />{n}
+                                </a>
+                            ))}
+                            {splitNumbers(c.phone).map((n) => (
+                                <a key={'p' + n} href={telHref(n)}
+                                   className="flex items-center gap-2 text-sm text-surface-900 hover:text-brand-700 hover:underline whitespace-nowrap">
+                                    <i className="fi fi-rr-phone-call text-xs leading-none text-surface-500" />{n}
+                                </a>
+                            ))}
+                            {c.email && (
+                                <a href={`mailto:${c.email}`}
+                                   className="flex items-center gap-2 text-sm text-surface-900 hover:text-brand-700 hover:underline break-all">
+                                    <i className="fi fi-rr-envelope text-xs leading-none text-surface-500" />{c.email}
+                                </a>
+                            )}
+                        </div>
+                    </li>
                 ))}
-                {splitNumbers(c.phone).map((n) => (
-                    <a key={'p' + n} href={telHref(n)}
-                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-surface-300 hover:border-brand-400 text-surface-900 text-sm font-semibold transition-colors whitespace-nowrap">
-                        <i className="fi fi-rr-phone-call text-xs leading-none text-surface-600" />{n}
-                    </a>
-                ))}
-                {c.email && (
-                    <a href={`mailto:${c.email}`}
-                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-surface-300 hover:border-brand-400 text-surface-900 text-sm font-semibold transition-colors break-all">
-                        <i className="fi fi-rr-envelope text-xs leading-none text-surface-600" />{c.email}
-                    </a>
-                )}
-            </div>
+            </ul>
         </div>
     );
 }

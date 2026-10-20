@@ -1540,10 +1540,18 @@ blank falls back to the Site text headline.
   grey placeholder icon and one line, which made the section look ragged.
 - ⚠️ **The Contact page is FLAT — no shadows, no gradients, no glows, no
   initial badges** (BITAC: *"kono shadow effect or text effect jate na
-  thake"*). The featured person card is plain white with a border; buttons are
-  solid `brand-600`; text is `surface-900`/`-700`, not the paler 400–600
-  greys. The effects only made the Bangla type softer to read. Keep it that
-  way on this page even though the rest of the site uses shadows.
+  thake"*). Text is `surface-900`/`-700`, not the paler 400–600 greys. The
+  effects only made the Bangla type softer to read. Keep it that way on this
+  page even though the rest of the site uses shadows.
+- **Who to contact is ONE directory list, every row the same shape** — name +
+  designation left, then **mobile(s)** (bold, `brand-700`), phone(s) and e-mail
+  as plain lines right. Named people first, then posts that are only a
+  mailbox. ⚠️ It used to feature each named person as a card with every
+  number as a button; once every person had a mobile, Dhaka's seven cards
+  wrapped their buttons onto two and three lines. Don't bring the cards back.
+  A `mobile` field may hold several numbers separated by `,` or `;`
+  (`splitNumbers`), and `telHref` turns Bangla digits into ASCII — a `tel:`
+  link with ০-৯ in it does not dial.
 - ⚠️ **`grid grid-cols-1 lg:grid-cols-…`, never a bare `grid lg:grid-cols-…`.**
   With no template, the single mobile column sizes itself to its widest
   unbreakable child — a `truncate`d office name — and pushed the Contact page
@@ -1581,6 +1589,22 @@ blank falls back to the Site text headline.
   head's "office phone" carries **Chandpur's 0841 area code** on bitac.gov.bd
   (a slip on that page) and is left out; the **Tool & Technology Institute** has
   no published address, so no office.
+- **Names and mobiles come from bitac.gov.bd's officers directory**
+  (`/pages/officers`, 86 officers). Only the people a client would ring are
+  listed — the DG, the directors, each centre's head and its নির্বাহী
+  প্রকৌশলী — not every assistant. Left out on purpose: an officer marked
+  শিক্ষা ছুটি, personal gmail/yahoo mailboxes, and numbers that are plainly
+  wrong on the source (a Chandpur 0841 code on a Dhaka or Chattogram line, a
+  Khulna number one digit short).
+- ⚠️ **`addhaka@` is shared by two officers** in the directory, so matching
+  on e-mail is not enough — the seeder matches a contact by **name**
+  (`bareName()` drops জনাব/জনাবা), then by **designation**.
+- ⚠️ **The seeder fills BLANKS and never overwrites.** A mobile corrected in
+  admin survives a re-run; a re-run adds no duplicate rows. Verified both.
+- **Chandpur's head is অতিরিক্ত পরিচালক (কেন্দ্র প্রধান)** — মোঃ ওমর ফারুক,
+  `ch_chandpur@`. The directory corrected the older centre page that called the
+  post নির্বাহী প্রকৌশলী, and the separate "অতিরিক্ত পরিচালক / adchandpur@" row
+  was the same post twice; it was removed from the live data.
 - bitac.gov.bd's certificate chain is broken; reading it needed
   `curl -k` / an unverified SSL context.
 
