@@ -1519,8 +1519,8 @@ blank falls back to the Site text headline.
   exists. The About page's centre list reads the offices too.
 - ⚠️ **A contact's name is optional, its designation is not.** A government
   office publishes many contacts by post alone with the post's own email —
-  the person changes, the address does not. The card shows an ID icon instead
-  of inventing a monogram.
+  the person changes, the address does not. A post is listed as a row, not a
+  card (below).
 - ⚠️ **`tel:` links are ASCII.** Phones are stored as published, in Bangla
   digits and often several to a field; `telHref()` converts each to an ASCII
   `tel:` and `splitNumbers()` gives each its own link. A Bangla-digit `tel:`
@@ -1538,6 +1538,12 @@ blank falls back to the Site text headline.
   mobile) gets a featured card with tap-to-call buttons; a POST with only its
   official email is a row in a list. As cards, the posts were big boxes with a
   grey placeholder icon and one line, which made the section look ragged.
+- ⚠️ **The Contact page is FLAT — no shadows, no gradients, no glows, no
+  initial badges** (BITAC: *"kono shadow effect or text effect jate na
+  thake"*). The featured person card is plain white with a border; buttons are
+  solid `brand-600`; text is `surface-900`/`-700`, not the paler 400–600
+  greys. The effects only made the Bangla type softer to read. Keep it that
+  way on this page even though the rest of the site uses shadows.
 - ⚠️ **`grid grid-cols-1 lg:grid-cols-…`, never a bare `grid lg:grid-cols-…`.**
   With no template, the single mobile column sizes itself to its widest
   unbreakable child — a `truncate`d office name — and pushed the Contact page

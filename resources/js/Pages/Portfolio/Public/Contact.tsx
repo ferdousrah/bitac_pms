@@ -93,7 +93,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                         <aside className="lg:col-span-4 lg:sticky lg:top-24">
                             <div className="rounded-3xl border border-surface-200 bg-surface-50/70 p-2">
                                 <div className="px-3 pt-3 pb-2 flex items-center justify-between">
-                                    <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-surface-500">Our offices</span>
+                                    <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-surface-600">Our offices</span>
                                     <span className="text-[11px] font-bold text-surface-400 tabular-nums">{offices.length}</span>
                                 </div>
                                 <div className="space-y-1">
@@ -106,7 +106,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                                                 onClick={() => choose(o.slug)}
                                                 aria-pressed={on}
                                                 className={`group relative w-full text-left flex items-center gap-3.5 px-3 py-3 rounded-2xl transition-all ${
-                                                    on ? 'bg-white shadow-md shadow-surface-900/5 ring-1 ring-surface-200' : 'hover:bg-white/70'
+                                                    on ? 'bg-white ring-1 ring-surface-300' : 'hover:bg-white/70'
                                                 }`}
                                             >
                                                 {/* The selected office is marked by a bar on its
@@ -114,7 +114,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                                                     whole card, which competed with the map. */}
                                                 <span className={`absolute left-0 top-3 bottom-3 w-1 rounded-full transition-colors ${on ? 'bg-brand-500' : 'bg-transparent'}`} />
                                                 <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                                                    on ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md shadow-brand-500/25'
+                                                    on ? 'bg-brand-600 text-white'
                                                        : 'bg-white border border-surface-200 text-surface-400 group-hover:text-brand-600'
                                                 }`}>
                                                     <i className={`fi ${o.is_head_office ? 'fi-rr-building' : 'fi-rr-marker'} text-sm leading-none`} />
@@ -131,7 +131,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                                                         )}
                                                     </span>
                                                     {o.address && (
-                                                        <span className="block text-[12px] text-surface-500 mt-0.5 truncate">{o.address}</span>
+                                                        <span className="block text-[13px] text-surface-600 mt-0.5 truncate">{o.address}</span>
                                                     )}
                                                 </span>
                                                 <i className={`fi fi-rr-angle-small-right text-base leading-none shrink-0 transition-all ${
@@ -147,10 +147,9 @@ export default function Contact({ offices, bitac, links }: Props) {
                                 beside the list rather than left as empty page. */}
                             {headOffice && (
                                 <div className="mt-4 rounded-3xl bg-ink-900 bg-blueprint text-white p-6 relative overflow-hidden">
-                                    <div className="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-brand-600/25 blur-3xl" />
                                     <div className="relative">
                                         <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-300">Not sure which centre?</div>
-                                        <p className="text-sm text-white/75 mt-2 leading-relaxed">
+                                        <p className="text-sm text-white/90 mt-2 leading-relaxed">
                                             Write to the head office — your enquiry will reach the centre that can take the job.
                                         </p>
                                         <div className="mt-4 space-y-2">
@@ -179,7 +178,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                                     the office. Address, phone, email and fax used to be
                                     four separate boxes — and fax, the fourth, sat alone
                                     in half a row. */}
-                                <div className="rounded-3xl overflow-hidden border border-surface-200 bg-white shadow-xl shadow-surface-900/5">
+                                <div className="rounded-3xl overflow-hidden border border-surface-200 bg-white">
                                     <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2">
@@ -192,7 +191,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                                             </div>
                                         </div>
                                         <a href={office.map_link} target="_blank" rel="noopener noreferrer"
-                                           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-xs font-bold shadow-lg shadow-brand-500/20 transition-all">
+                                           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
                                             <i className="fi fi-rr-route text-xs leading-none" />
                                             Get directions
                                         </a>
@@ -235,7 +234,7 @@ export default function Contact({ offices, bitac, links }: Props) {
                         </p>
                         {office?.email && (
                             <a href={`mailto:${office.email}?subject=Request%20for%20Quotation`}
-                               className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-sm font-bold transition-all">
+                               className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
                                 <i className="fi fi-rr-envelope text-xs leading-none" />
                                 Email {office.name}
                             </a>
@@ -303,8 +302,8 @@ function InfoRow({ icon, label, className = '', children }: {
                 <i className={`fi ${icon} text-sm leading-none`} />
             </span>
             <div className="min-w-0">
-                <dt className="text-[10px] uppercase tracking-[0.16em] font-bold text-surface-400">{label}</dt>
-                <dd className="text-sm text-surface-800 mt-0.5 leading-relaxed">{children}</dd>
+                <dt className="text-[11px] uppercase tracking-[0.14em] font-bold text-surface-500">{label}</dt>
+                <dd className="text-[15px] text-surface-900 mt-0.5 leading-relaxed">{children}</dd>
             </div>
         </div>
     );
@@ -338,7 +337,7 @@ function People({ contacts }: { contacts: OfficeContact[] }) {
     return (
         <div className="rounded-3xl border border-surface-200 bg-white overflow-hidden">
             <div className="px-6 py-4 border-b border-surface-100 flex items-center gap-2.5">
-                <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-brand-400 to-brand-600" />
+                <span className="w-1.5 h-4 rounded-full bg-brand-600" />
                 <h3 className="text-base font-bold text-surface-900">Who to contact</h3>
             </div>
 
@@ -352,20 +351,20 @@ function People({ contacts }: { contacts: OfficeContact[] }) {
                 <ul className={`divide-y divide-surface-100 ${named.length ? 'border-t border-surface-100' : ''}`}>
                     {posts.map((c) => (
                         <li key={c.id} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6 px-6 py-3.5 hover:bg-surface-50/70 transition-colors">
-                            <span className="sm:w-1/2 text-sm font-semibold text-surface-800 leading-snug">{c.designation}</span>
+                            <span className="sm:w-1/2 text-[15px] font-semibold text-surface-900 leading-snug">{c.designation}</span>
                             <span className="sm:flex-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                                 {c.email && (
-                                    <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 text-[13px] text-brand-700 hover:text-brand-800 break-all">
+                                    <a href={`mailto:${c.email}`} className="inline-flex items-center gap-1.5 text-sm text-brand-700 hover:text-brand-800 hover:underline break-all">
                                         <i className="fi fi-rr-envelope text-[11px] leading-none" />{c.email}
                                     </a>
                                 )}
                                 {splitNumbers(c.mobile).map((n) => (
-                                    <a key={'m' + n} href={telHref(n)} className="inline-flex items-center gap-1.5 text-[13px] text-surface-700 hover:text-brand-700 whitespace-nowrap">
+                                    <a key={'m' + n} href={telHref(n)} className="inline-flex items-center gap-1.5 text-sm text-surface-900 hover:text-brand-700 whitespace-nowrap">
                                         <i className="fi fi-rr-mobile-notch text-[11px] leading-none text-surface-400" />{n}
                                     </a>
                                 ))}
                                 {splitNumbers(c.phone).map((n) => (
-                                    <a key={'p' + n} href={telHref(n)} className="inline-flex items-center gap-1.5 text-[13px] text-surface-600 hover:text-brand-700 whitespace-nowrap">
+                                    <a key={'p' + n} href={telHref(n)} className="inline-flex items-center gap-1.5 text-sm text-surface-800 hover:text-brand-700 whitespace-nowrap">
                                         <i className="fi fi-rr-phone-call text-[11px] leading-none text-surface-400" />{n}
                                     </a>
                                 ))}
@@ -379,39 +378,32 @@ function People({ contacts }: { contacts: OfficeContact[] }) {
 }
 
 function PersonCard({ c }: { c: OfficeContact }) {
-    const initial = (c.name ?? '')
-        .replace(/^(জনাব|জনাবা|ড\.|Dr\.?|Mr\.?|Ms\.?|Engr\.?)\s*/u, '')
-        .replace(/^মোঃ\s*/u, '').trim().slice(0, 1);
-
+    // ⚠️ Flat on purpose (BITAC): no initial badge, no gradient wash, no
+    // shadow. The name and the numbers are the content; anything drawn round
+    // them only made the Bangla type softer to read.
     return (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-brand-50/70 to-white border border-brand-100">
-            <div className="flex items-center gap-4 sm:w-1/2 min-w-0">
-                <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white text-xl font-bold flex items-center justify-center shrink-0 shadow-md shadow-brand-500/25">
-                    {initial || <i className="fi fi-rr-user text-lg leading-none" />}
-                </span>
-                <div className="min-w-0">
-                    <div className="text-base font-bold text-surface-900 leading-snug">{c.name}</div>
-                    <div className="text-[13px] text-surface-600 mt-0.5 leading-snug">{c.designation}</div>
-                </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-2xl bg-white border border-surface-200">
+            <div className="sm:w-1/2 min-w-0">
+                <div className="text-base font-bold text-surface-900 leading-snug">{c.name}</div>
+                <div className="text-sm text-surface-700 mt-0.5 leading-snug">{c.designation}</div>
             </div>
-            {/* The ways to reach them, as buttons: on a phone each one is a tap. */}
             <div className="flex flex-wrap gap-2 sm:flex-1 sm:justify-end">
                 {splitNumbers(c.mobile).map((n) => (
                     <a key={'m' + n} href={telHref(n)}
-                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-semibold transition-colors whitespace-nowrap">
+                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors whitespace-nowrap">
                         <i className="fi fi-rr-mobile-notch text-xs leading-none" />{n}
                     </a>
                 ))}
                 {splitNumbers(c.phone).map((n) => (
                     <a key={'p' + n} href={telHref(n)}
-                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-surface-200 hover:border-brand-300 text-surface-700 text-[13px] font-semibold transition-colors whitespace-nowrap">
-                        <i className="fi fi-rr-phone-call text-xs leading-none text-surface-400" />{n}
+                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-surface-300 hover:border-brand-400 text-surface-900 text-sm font-semibold transition-colors whitespace-nowrap">
+                        <i className="fi fi-rr-phone-call text-xs leading-none text-surface-600" />{n}
                     </a>
                 ))}
                 {c.email && (
                     <a href={`mailto:${c.email}`}
-                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-surface-200 hover:border-brand-300 text-surface-700 text-[13px] font-semibold transition-colors">
-                        <i className="fi fi-rr-envelope text-xs leading-none text-surface-400" />{c.email}
+                       className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-surface-300 hover:border-brand-400 text-surface-900 text-sm font-semibold transition-colors break-all">
+                        <i className="fi fi-rr-envelope text-xs leading-none text-surface-600" />{c.email}
                     </a>
                 )}
             </div>
