@@ -29,6 +29,11 @@ interface ServiceRow {
     icon: string | null; image_url: string | null; sort: number; is_active: boolean;
 }
 interface IconRow { key: string; class: string }
+interface PartnerRow {
+    id: number; name: string; kind: string; logo_url: string | null;
+    url: string | null; note: string | null; sort: number; is_active: boolean; has_logo: boolean;
+}
+interface KindRow { key: string; label: string }
 interface HeroRow {
     id: number; kind: 'image' | 'video' | 'youtube';
     image_url: string | null; video_src: string | null; poster_url: string | null;
@@ -43,6 +48,7 @@ interface Props {
     hero: HeroRow[];
     text: Record<string, string>;
     services: ServiceRow[];
+    partners: PartnerRow[];
     news: NewsRow[];
     gallery: GalleryRow[];
     videos: GalleryRow[];
@@ -51,12 +57,14 @@ interface Props {
     kinds: string[];
     groups: string[];
     icons: IconRow[];
+    partner_kinds: KindRow[];
 }
 
 const TABS = [
     { key: 'hero',     label: 'Hero slider',   icon: 'fi-rr-play-alt' },
     { key: 'text',     label: 'Site text',     icon: 'fi-rr-text' },
     { key: 'services', label: 'Services',      icon: 'fi-rr-tools' },
+    { key: 'partners', label: 'Partners',      icon: 'fi-rr-handshake' },
     { key: 'news',     label: 'News & Events', icon: 'fi-rr-newspaper' },
     { key: 'gallery', label: 'Photos',       icon: 'fi-rr-picture' },
     { key: 'videos',  label: 'Videos',       icon: 'fi-rr-play' },
@@ -76,7 +84,7 @@ const GROUP_LABEL: Record<string, string> = {
     service:   'Services',
 };
 
-export default function WebsiteIndex({ tab, hero, text, services, news, gallery, videos, links, albums, kinds, groups, icons }: Props) {
+export default function WebsiteIndex({ tab, hero, text, services, partners, news, gallery, videos, links, albums, kinds, groups, icons, partner_kinds }: Props) {
     const [active, setActive] = useState(tab);
 
     const go = (key: string) => {
@@ -122,6 +130,7 @@ export default function WebsiteIndex({ tab, hero, text, services, news, gallery,
                             {t.label}
                             {t.key === 'hero' && hero.length > 0 && <Count n={hero.length} on={active === t.key} />}
                             {t.key === 'services' && services.length > 0 && <Count n={services.length} on={active === t.key} />}
+                            {t.key === 'partners' && partners.length > 0 && <Count n={partners.length} on={active === t.key} />}
                             {t.key === 'news' && news.length > 0 && <Count n={news.length} on={active === t.key} />}
                             {t.key === 'gallery' && gallery.length > 0 && <Count n={gallery.length} on={active === t.key} />}
                             {t.key === 'videos' && videos.length > 0 && <Count n={videos.length} on={active === t.key} />}
@@ -132,6 +141,7 @@ export default function WebsiteIndex({ tab, hero, text, services, news, gallery,
 
                 {active === 'hero' && <HeroTab slides={hero} />}
                 {active === 'text' && <TextTab text={text} />}
+                {active === 'partners' && <PartnersTab partners={partners} kinds={partner_kinds} />}
                 {active === 'services' && <ServicesTab services={services} icons={icons} />}
                 {active === 'news' && <NewsTab news={news} />}
                 {active === 'gallery' && <MediaTab kind="photo" rows={gallery} albums={albums} />}
@@ -799,6 +809,213 @@ function ServiceEditModal({ service, icons, onClose }: {
                             <input type="file" accept="image/*" className="text-sm"
                                    onChange={(e) => form.setData('image', e.target.files?.[0] ?? null)} />
                         </div>
+                    </Field>
+                    <Field label="Order" error={form.errors.sort}>
+                        <input type="number" min={0} className="form-input" value={form.data.sort}
+                               onChange={(e) => form.setData('sort', Number(e.target.value))} />
+                    </Field>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={form.data.is_active}
+                               onChange={(e) => form.setData('is_active', e.target.checked)}
+                               className="rounded border-surface-300 text-brand-500 focus:ring-brand-400" />
+                        <span className="text-sm text-surface-700">Show on the website</span>
+                    </label>
+                </div>
+                <div className="px-5 py-4 border-t border-surface-200 flex justify-end gap-3">
+                    <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={form.processing}>
+                        {form.processing ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
+// ── Partners & collaborators ─────────────────────────────────────────────
+
+function PartnersTab({ partners, kinds }: { partners: PartnerRow[]; kinds: KindRow[] }) {
+    const [editing, setEditing] = useState<PartnerRow | null>(null);
+
+    const add = useForm<any>({
+        name: '', kind: kinds[0]?.key ?? 'partner', url: '', note: '', sort: 0,
+        logo: null as File | null, is_active: true,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        add.post('/admin/website/partners', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => add.reset('name', 'url', 'note', 'logo'),
+        });
+    };
+
+    const remove = (x: PartnerRow) => {
+        if (confirm(`Remove "${x.name}"? This cannot be undone.`)) {
+            router.delete(`/admin/website/partners/${x.id}`, { preserveScroll: true });
+        }
+    };
+
+    return (
+        <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 card">
+                <div className="card-header">
+                    <h2 className="font-semibold text-surface-800">Collaborators &amp; partners</h2>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                        {partners.length} logo{partners.length === 1 ? '' : 's'} · shown on the home page and the Clients page
+                    </p>
+                </div>
+                {partners.length === 0 ? (
+                    <div className="card-body text-center py-14">
+                        <i className="fi fi-rr-handshake text-3xl text-surface-300" />
+                        <div className="text-sm font-bold text-surface-700 mt-3">No partners yet</div>
+                        <div className="text-xs text-surface-500 mt-1 max-w-md mx-auto">
+                            The section only appears once there is at least one logo, so the public
+                            pages never show an empty band.
+                        </div>
+                    </div>
+                ) : (
+                    <div className="card-body grid sm:grid-cols-2 gap-3">
+                        {partners.map(x => (
+                            <div key={x.id}
+                                 className={`flex gap-3 p-3 rounded-xl border ${x.is_active ? 'border-surface-200' : 'border-surface-200 bg-surface-50/70'}`}>
+                                <div className="w-20 h-14 rounded-lg bg-surface-50 border border-surface-200 shrink-0 flex items-center justify-center overflow-hidden">
+                                    {x.logo_url
+                                        ? <img src={x.logo_url} alt="" className="max-h-12 max-w-[4.5rem] object-contain" />
+                                        : <i className="fi fi-rr-picture text-surface-300" />}
+                                </div>
+                                <div className="min-w-0 grow">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-bold text-surface-900 truncate">{x.name}</span>
+                                        {!x.is_active && <span className="badge-slate">Hidden</span>}
+                                        {!x.has_logo && <span className="badge-amber">No logo</span>}
+                                    </div>
+                                    <div className="text-[11px] text-surface-500 mt-0.5 capitalize">
+                                        {x.kind} · #{x.sort}
+                                    </div>
+                                    {x.note && <div className="text-[11px] text-surface-400 mt-0.5 truncate">{x.note}</div>}
+                                    {x.url && (
+                                        <a href={x.url} target="_blank" rel="noreferrer"
+                                           className="text-[11px] text-brand-600 hover:text-brand-700 truncate block mt-0.5">
+                                            {x.url}
+                                        </a>
+                                    )}
+                                </div>
+                                <div className="flex items-start gap-1 shrink-0">
+                                    <button type="button" onClick={() => setEditing(x)} title="Edit"
+                                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                        <i className="fi fi-rr-pencil text-xs" />
+                                    </button>
+                                    <button type="button" onClick={() => remove(x)} title="Remove"
+                                            className="w-8 h-8 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600 flex items-center justify-center">
+                                        <i className="fi fi-rr-trash text-xs" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <form onSubmit={submit} className="card self-start">
+                <div className="card-header"><h2 className="font-semibold text-surface-800">Add a partner</h2></div>
+                <div className="card-body space-y-4">
+                    <Field label="Name *" error={add.errors.name}>
+                        <input className="form-input" value={add.data.name}
+                               onChange={(e) => add.setData('name', e.target.value)}
+                               placeholder="Ministry of Industries" />
+                    </Field>
+                    <Field label="Logo *"
+                           hint="A transparent PNG or an SVG reads best — the wall sets every logo in grey and lifts it to colour on hover. Up to 4 MB."
+                           error={add.errors.logo}>
+                        <input type="file" accept="image/*" className="text-sm"
+                               onChange={(e) => add.setData('logo', e.target.files?.[0] ?? null)} />
+                    </Field>
+                    <Field label="Type" error={add.errors.kind}>
+                        <select className="form-input" value={add.data.kind}
+                                onChange={(e) => add.setData('kind', e.target.value)}>
+                            {kinds.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                        </select>
+                    </Field>
+                    <Field label="Website" hint="Optional. The logo becomes a link." error={add.errors.url}>
+                        <input className="form-input" value={add.data.url}
+                               onChange={(e) => add.setData('url', e.target.value)} placeholder="https://moind.gov.bd" />
+                    </Field>
+                    <Field label="Note" hint="Optional one-liner under the name." error={add.errors.note}>
+                        <input className="form-input" value={add.data.note}
+                               onChange={(e) => add.setData('note', e.target.value)} placeholder="Technical collaboration, 2024—" />
+                    </Field>
+                    <Field label="Order" error={add.errors.sort}>
+                        <input type="number" min={0} className="form-input" value={add.data.sort}
+                               onChange={(e) => add.setData('sort', Number(e.target.value))} />
+                    </Field>
+                    <button type="submit" className="btn-primary w-full" disabled={add.processing}>
+                        {add.processing ? 'Uploading…' : 'Add partner'}
+                    </button>
+                </div>
+            </form>
+
+            {editing && <PartnerEditModal partner={editing} kinds={kinds} onClose={() => setEditing(null)} />}
+        </div>
+    );
+}
+
+function PartnerEditModal({ partner, kinds, onClose }: {
+    partner: PartnerRow; kinds: KindRow[]; onClose: () => void;
+}) {
+    const form = useForm<any>({
+        name: partner.name, kind: partner.kind, url: partner.url ?? '', note: partner.note ?? '',
+        sort: partner.sort, is_active: partner.is_active, logo: null as File | null,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        // A file upload with PUT needs Laravel's method spoofing.
+        form.transform((d: any) => ({ ...d, _method: 'put' }));
+        form.post(`/admin/website/partners/${partner.id}`, {
+            forceFormData: true, preserveScroll: true, onSuccess: onClose,
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+            <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
+                  className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-surface-900">Edit partner</h3>
+                    <button type="button" onClick={onClose}
+                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-400 flex items-center justify-center">
+                        <i className="fi fi-rr-cross-small text-lg" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    {partner.logo_url && (
+                        <div className="h-24 rounded-xl bg-surface-50 border border-surface-200 flex items-center justify-center">
+                            <img src={partner.logo_url} alt="" className="max-h-16 max-w-[70%] object-contain" />
+                        </div>
+                    )}
+                    <Field label="Name *" error={form.errors.name}>
+                        <input className="form-input" value={form.data.name}
+                               onChange={(e) => form.setData('name', e.target.value)} />
+                    </Field>
+                    <Field label="Replace the logo" hint="Leave empty to keep the current one." error={form.errors.logo}>
+                        <input type="file" accept="image/*" className="text-sm"
+                               onChange={(e) => form.setData('logo', e.target.files?.[0] ?? null)} />
+                    </Field>
+                    <Field label="Type" error={form.errors.kind}>
+                        <select className="form-input" value={form.data.kind}
+                                onChange={(e) => form.setData('kind', e.target.value)}>
+                            {kinds.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
+                        </select>
+                    </Field>
+                    <Field label="Website" error={form.errors.url}>
+                        <input className="form-input" value={form.data.url}
+                               onChange={(e) => form.setData('url', e.target.value)} />
+                    </Field>
+                    <Field label="Note" error={form.errors.note}>
+                        <input className="form-input" value={form.data.note}
+                               onChange={(e) => form.setData('note', e.target.value)} />
                     </Field>
                     <Field label="Order" error={form.errors.sort}>
                         <input type="number" min={0} className="form-input" value={form.data.sort}

@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import PublicLayout from '@/Layouts/PublicLayout';
-import { Empty, GalleryRow, NewsCard, NewsRow, Project, ProjectCard, Prose, Section, SectionHead } from './parts';
+import { Empty, GalleryRow, NewsCard, NewsRow, PartnerRow, PartnerWall, Project, ProjectCard, Prose, Section, SectionHead } from './parts';
 import HeroSlider, { HeroSlide } from '@/Components/Public/HeroSlider';
 import { ServiceRow } from './Services';
 
@@ -12,13 +12,14 @@ interface Props {
     events: NewsRow[];
     photos: GalleryRow[];
     clients: { name: string; type: string | null }[];
+    partners: PartnerRow[];
     stats: { years: number; projects: number; clients: number; centres: number };
     bitac: any;
     site: any;
     links: any;
 }
 
-export default function Home({ slides, featured, services, news, events, photos, clients, stats, bitac, site, links }: Props) {
+export default function Home({ slides, featured, services, news, events, photos, clients, partners, stats, bitac, site, links }: Props) {
     return (
         <PublicLayout title="BITAC — Bangladesh Industrial Technical Assistance Centre" bitac={bitac} links={links}>
             {/* ── Hero ─────────────────────────────────────────────────── */}
@@ -252,9 +253,18 @@ export default function Home({ slides, featured, services, news, events, photos,
                 )}
             </Section>
 
+            {/* ── Collaborators & partners ─────────────────────────────── */}
+            {partners.length > 0 && (
+                <Section tint>
+                    <SectionHead eyebrow="Who we work with" title="Collaborators & partners"
+                                 lead="Ministries, institutions and technical partners BITAC works alongside." />
+                    <PartnerWall partners={partners} />
+                </Section>
+            )}
+
             {/* ── Gallery ──────────────────────────────────────────────── */}
             {photos.length > 0 && (
-                <Section tint>
+                <Section>
                     <SectionHead eyebrow="Gallery" title="Inside BITAC"
                                  action={{ href: '/portfolio/gallery', label: 'Photo gallery' }} />
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

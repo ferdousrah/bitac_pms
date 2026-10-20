@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import PublicLayout from '@/Layouts/PublicLayout';
-import { Empty, PageHead, Section, Stat } from './parts';
+import { Empty, PageHead, PartnerRow, PartnerWall, Section, SectionHead, Stat } from './parts';
 
 interface Props {
     clients: { name: string; type: string | null }[];
+    partners: PartnerRow[];
     stats: { years: number; projects: number; clients: number; centres: number };
     bitac: any; site: any; links: any;
 }
 
-export default function Clients({ clients, bitac, links }: Props) {
+export default function Clients({ clients, partners, bitac, links }: Props) {
     const [type, setType] = useState<string | null>(null);
     const [q, setQ] = useState('');
 
@@ -81,6 +82,14 @@ export default function Clients({ clients, bitac, links }: Props) {
                     <Empty icon="fi-rr-building" title="No clients match" />
                 )}
             </Section>
+
+            {partners.length > 0 && (
+                <Section tint>
+                    <SectionHead eyebrow="Who we work with" title="Collaborators & partners"
+                                 lead="Beyond the clients who place orders, these are the institutions BITAC works alongside." />
+                    <PartnerWall partners={partners} columns="lg:grid-cols-5" />
+                </Section>
+            )}
         </PublicLayout>
     );
 }

@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\GalleryItem;
 use App\Models\HeroSlide;
 use App\Models\NewsPost;
+use App\Models\Partner;
 use App\Models\PortfolioProject;
 use App\Models\SiteLink;
 use App\Models\SiteService;
@@ -67,6 +68,7 @@ class PortfolioPublicController extends Controller
             'services'   => $this->serviceRows(SiteService::active()->orderBy('sort')->orderBy('id')->take(4)->get()),
             'photos'     => $this->galleryRows(GalleryItem::active()->photos()->orderBy('sort')->latest('id')->take(8)->get()),
             'clients'    => $this->clientNames(12),
+            'partners'   => $this->partnerRows(),
             'stats'      => $this->stats(),
         ]));
     }
@@ -112,8 +114,9 @@ class PortfolioPublicController extends Controller
     public function clients()
     {
         return Inertia::render('Portfolio/Public/Clients', $this->chrome([
-            'clients' => $this->clientNames(null),
-            'stats'   => $this->stats(),
+            'clients'  => $this->clientNames(null),
+            'partners' => $this->partnerRows(),
+            'stats'    => $this->stats(),
         ]));
     }
 
@@ -302,6 +305,27 @@ class PortfolioPublicController extends Controller
                 'subtitle'   => $s->subtitle,
                 'cta_label'  => $s->cta_label,
                 'cta_url'    => $s->cta_url,
+            ])->values();
+    }
+
+    /**
+     * The logo wall.
+     *
+     * ⚠️ A row with no logo is filtered out here as well as refused on save —
+     * on a wall of logos it would be a name floating in an empty box.
+     */
+    private function partnerRows()
+    {
+        return Partner::active()->orderBy('sort')->orderBy('name')->get()
+            ->filter(fn ($p) => $p->hasLogo())
+            ->map(fn ($p) => [
+                'id'       => $p->id,
+                'name'     => $p->name,
+                'kind'     => $p->kind,
+                'kind_label' => $p->kind_label,
+                'logo_url' => $p->logo_url,
+                'url'      => $p->url,
+                'note'     => $p->note,
             ])->values();
     }
 

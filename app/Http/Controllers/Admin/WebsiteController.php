@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\GalleryItem;
 use App\Models\HeroSlide;
 use App\Models\NewsPost;
+use App\Models\Partner;
 use App\Models\SiteLink;
 use App\Models\SiteService;
 use App\Services\SettingService;
@@ -38,7 +39,7 @@ class WebsiteController extends Controller
         $s = app(SettingService::class);
 
         return Inertia::render('Admin/Website/Index', [
-            'tab'  => in_array($request->input('tab'), ['hero', 'text', 'services', 'news', 'gallery', 'videos', 'links'], true)
+            'tab'  => in_array($request->input('tab'), ['hero', 'text', 'services', 'partners', 'news', 'gallery', 'videos', 'links'], true)
                 ? $request->input('tab') : 'text',
             'text' => collect(self::TEXT_KEYS)->mapWithKeys(fn ($k) => [$k => (string) $s->get($k, '')])->all(),
             'hero' => HeroSlide::orderBy('sort')->orderBy('id')->get()
@@ -70,6 +71,18 @@ class WebsiteController extends Controller
                     'sort'      => $x->sort,
                     'is_active' => $x->is_active,
                 ])->values(),
+            'partners' => Partner::orderBy('sort')->orderBy('name')->get()
+                ->map(fn ($p) => [
+                    'id'        => $p->id,
+                    'name'      => $p->name,
+                    'kind'      => $p->kind,
+                    'logo_url'  => $p->logo_url,
+                    'url'       => $p->url,
+                    'note'      => $p->note,
+                    'sort'      => $p->sort,
+                    'is_active' => $p->is_active,
+                    'has_logo'  => $p->hasLogo(),
+                ])->values(),
             'news' => NewsPost::orderByDesc('published_at')->orderByDesc('id')->get()
                 ->map(fn ($p) => [
                     'id'           => $p->id,
@@ -97,6 +110,7 @@ class WebsiteController extends Controller
             'albums' => GalleryItem::whereNotNull('album')->distinct()->orderBy('album')->pluck('album'),
             'kinds'  => NewsPost::KINDS,
             'groups' => SiteLink::GROUPS,
+            'partner_kinds' => collect(Partner::KINDS)->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values(),
             'icons'  => collect(SiteService::ICONS)->map(fn ($cls, $key) => ['key' => $key, 'class' => $cls])->values(),
         ]);
     }
@@ -330,6 +344,40 @@ class WebsiteController extends Controller
             ->with('success', 'Slide removed.');
     }
 
+    // ── Partners & collaborators ─────────────────────────────────────────
+
+    public function partnerStore(Request $request)
+    {
+        $data = $this->validatePartner($request);
+
+        if (! $request->hasFile('logo')) {
+            return back()->with('error', 'A partner needs a logo — that is the whole of this section.');
+        }
+
+        Partner::create($this->partnerAttributes($data, $request) + ['created_by' => auth()->id()]);
+
+        return redirect()->route('admin.website.index', ['tab' => 'partners'])
+            ->with('success', 'Partner added.');
+    }
+
+    public function partnerUpdate(Request $request, Partner $partner)
+    {
+        $partner->update($this->partnerAttributes($this->validatePartner($request), $request, $partner));
+
+        return back()->with('success', 'Partner updated.');
+    }
+
+    public function partnerDestroy(Partner $partner)
+    {
+        if ($partner->logo_path) {
+            Storage::disk('public')->delete($partner->logo_path);
+        }
+        $partner->delete();
+
+        return redirect()->route('admin.website.index', ['tab' => 'partners'])
+            ->with('success', 'Partner removed.');
+    }
+
     // ── Services ─────────────────────────────────────────────────────────
 
     public function serviceStore(Request $request)
@@ -509,6 +557,42 @@ class WebsiteController extends Controller
         // keep whichever was given and do not strand the other.
         if (array_key_exists('video_url', $data)) {
             $attrs['video_url'] = $data['video_url'] ?: null;
+        }
+
+        return $attrs;
+    }
+
+    private function validatePartner(Request $request): array
+    {
+        return $request->validate([
+            'name' => 'required|string|max:200',
+            'kind' => 'required|in:' . implode(',', array_keys(Partner::KINDS)),
+            'url'  => 'nullable|url|max:500',
+            'note' => 'nullable|string|max:255',
+            'sort' => 'nullable|integer|min:0|max:9999',
+            // A logo wall wants a transparent PNG or an SVG; anything the
+            // browser can draw is accepted, kept small because a dozen of
+            // these load at once.
+            'logo' => 'nullable|image|max:4096',
+        ]);
+    }
+
+    private function partnerAttributes(array $data, Request $request, ?Partner $partner = null): array
+    {
+        $attrs = [
+            'name' => $data['name'],
+            'kind' => $data['kind'],
+            'url'  => ($data['url'] ?? null) ?: null,
+            'note' => ($data['note'] ?? null) ?: null,
+            'sort' => (int) ($data['sort'] ?? 0),
+            'is_active' => $partner ? $request->boolean('is_active') : $request->boolean('is_active', true),
+        ];
+
+        if ($request->hasFile('logo')) {
+            if ($partner?->logo_path) {
+                Storage::disk('public')->delete($partner->logo_path);
+            }
+            $attrs['logo_path'] = $request->file('logo')->store('website/partners', 'public');
         }
 
         return $attrs;

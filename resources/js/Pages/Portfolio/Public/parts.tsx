@@ -205,6 +205,67 @@ export function NewsCard({ n }: { n: NewsRow }) {
     );
 }
 
+export interface PartnerRow {
+    id: number;
+    name: string;
+    kind: string;
+    kind_label: string;
+    logo_url: string | null;
+    url: string | null;
+    note: string | null;
+}
+
+/**
+ * The collaborators & partners wall.
+ *
+ * ⚠️ Logos arrive in every shape, colour and aspect ratio there is — a tall
+ * crest next to a wide wordmark. They are therefore given a fixed box with
+ * `object-contain` and set in grey, lifting to full colour on hover: it is the
+ * only treatment under which a dozen unrelated marks read as one row rather
+ * than a jumble. Never `object-cover` here — it crops somebody's emblem.
+ */
+export function PartnerWall({ partners, columns = 'lg:grid-cols-6' }: {
+    partners: PartnerRow[]; columns?: string;
+}) {
+    return (
+        <div className={`grid grid-cols-2 sm:grid-cols-3 ${columns} gap-3`}>
+            {partners.map(p => {
+                const inner = (
+                    <>
+                        <span className="h-14 flex items-center justify-center">
+                            {p.logo_url && (
+                                <img
+                                    src={p.logo_url}
+                                    alt={p.name}
+                                    loading="lazy"
+                                    className="max-h-14 max-w-full object-contain grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
+                                />
+                            )}
+                        </span>
+                        <span className="block text-[11px] font-semibold text-surface-500 group-hover:text-surface-800 text-center mt-3 leading-snug transition-colors">
+                            {p.name}
+                        </span>
+                        {p.note && (
+                            <span className="block text-[10px] text-surface-400 text-center mt-0.5 leading-snug">{p.note}</span>
+                        )}
+                    </>
+                );
+
+                const className = 'group flex flex-col justify-center p-5 rounded-2xl bg-white border border-surface-200 hover:border-brand-300 hover:shadow-md transition-all';
+
+                return p.url ? (
+                    <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+                       title={p.name} className={className}>
+                        {inner}
+                    </a>
+                ) : (
+                    <div key={p.id} className={className}>{inner}</div>
+                );
+            })}
+        </div>
+    );
+}
+
 /** Nothing here yet — said plainly, rather than an empty strip of page. */
 export function Empty({ icon = 'fi-rr-inbox', title, text }: { icon?: string; title: string; text?: string }) {
     return (

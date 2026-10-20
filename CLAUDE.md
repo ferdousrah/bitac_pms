@@ -1333,6 +1333,30 @@ blank falls back to the Site text headline.
   `video_url` whenever the key is present, and the form posts every field, so a
   box that opened blank would wipe the link on the first save.
 
+### Collaborators & partners — the logo wall (2026-10-20)
+`partners` + `Partner` + **`PartnerWall`** in `parts.tsx`, managed on the
+**Partners** tab. It renders on the **home page** and on the **Clients page**,
+from the one component — two walls that drift apart is how one page quietly
+stops listing somebody.
+
+- ⚠️ **Not `customers`.** A client placed an order and is already on the site's
+  client list by name; a partner is an institution BITAC works *with* — a
+  ministry, a university, a donor programme — and most have no customer record
+  at all, nor should they. `kind` is `partner` | `collaborator`; both share one
+  wall, since a visitor reads them as the same thing.
+- ⚠️ **A row with no logo is refused on save AND filtered on the way to the
+  page.** On a wall of logos it would be a name floating in an empty box.
+  `Partner::hasLogo()` is the one rule both use.
+- ⚠️ **The section does not render at all when there are none**, so neither
+  public page ever shows an empty band. Same shape as the hero with no slides.
+- ⚠️ **`object-contain`, never `object-cover`** — logos arrive in every shape
+  and aspect ratio there is, and cover crops somebody's emblem. Each gets a
+  fixed box, set in **grey at 70% and lifting to full colour on hover**: the
+  only treatment under which a dozen unrelated marks read as one row rather
+  than a jumble.
+- A `url` makes the logo a link (`target="_blank"`, `rel="noopener"`); without
+  one it is a plain tile, not a dead anchor.
+
 ### Stored copy is set as paragraphs (2026-10-20)
 - **`Prose`** and **`splitParagraphs()`** in `Portfolio/Public/parts.tsx` are
   the one way the site renders a block of stored text. ⚠️ **The separator can
@@ -1358,7 +1382,7 @@ sub-headline at all**, which is what the live site was showing.
 settings-backed copy must go through it.
 
 ### Admin → Website (`WebsiteController`, `Admin/Website/Index.tsx`)
-One screen, seven tabs — **Hero slider · Site text · Services · News & Events · Photos · Videos · Links**
+One screen, eight tabs — **Hero slider · Site text · Services · Partners · News & Events · Photos · Videos · Links**
 — behind the existing **`manage portfolio`** permission (no new permission; it
 is the same job). Five sidebar entries for five short lists would have buried
 the rest of the menu. Products, clients and the address are deliberately *not*
@@ -1373,7 +1397,7 @@ here: they are maintained in Portfolio, Customers and Centres.
   one kind can't leave the other kind's media field set.
 - Hiding (`is_active`) takes an item off the public page and keeps the record;
   deleting removes the uploaded file from the `public` disk too.
-- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` / `hero_slides` are **content, not
+- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` / `hero_slides` / `partners` are **content, not
   transactional data** — they are NOT in `SystemResetController::TABLES_TO_WIPE`,
   for the same reason `qc_checkpoints` isn't. A data wipe must not blank the
   public website.
