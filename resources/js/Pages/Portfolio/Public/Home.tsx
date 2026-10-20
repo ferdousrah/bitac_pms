@@ -1,9 +1,11 @@
 import { Link } from '@inertiajs/react';
 import PublicLayout from '@/Layouts/PublicLayout';
-import { Empty, GalleryRow, NewsCard, NewsRow, Project, ProjectCard, Section, SectionHead, Stat } from './parts';
+import { Empty, GalleryRow, NewsCard, NewsRow, Project, ProjectCard, Section, SectionHead } from './parts';
+import { ServiceRow } from './Services';
 
 interface Props {
     featured: Project[];
+    services: ServiceRow[];
     news: NewsRow[];
     events: NewsRow[];
     photos: GalleryRow[];
@@ -14,7 +16,7 @@ interface Props {
     links: any;
 }
 
-export default function Home({ featured, news, events, photos, clients, stats, bitac, site, links }: Props) {
+export default function Home({ featured, services, news, events, photos, clients, stats, bitac, site, links }: Props) {
     return (
         <PublicLayout title="BITAC — Bangladesh Industrial Technical Assistance Centre" bitac={bitac} links={links}>
             {/* ── Hero ─────────────────────────────────────────────────── */}
@@ -38,9 +40,9 @@ export default function Home({ featured, news, events, photos, clients, stats, b
                             {site?.hero_subtitle}
                         </p>
                         <div className="mt-9 flex flex-wrap items-center gap-3">
-                            <Link href="/portfolio/products"
+                            <Link href="/portfolio/services"
                                   className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold transition-colors shadow-lg shadow-brand-500/25">
-                                Products &amp; Services
+                                Our Services
                                 <i className="fi fi-rr-arrow-small-right text-base leading-none" />
                             </Link>
                             <Link href="/portfolio/contact"
@@ -89,27 +91,50 @@ export default function Home({ featured, news, events, photos, clients, stats, b
                     <div className="lg:col-span-2 rounded-2xl bg-surface-50 border border-surface-200 p-6">
                         <div className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600 mb-3">Our mission</div>
                         <p className="text-sm text-surface-700 leading-relaxed">{site?.mission}</p>
-                        <div className="mt-6 space-y-3">
-                            {[
-                                ['fi-rr-settings', 'Import-substitute manufacturing'],
-                                ['fi-rr-graduation-cap', 'Industrial training'],
-                                ['fi-rr-shield-check', 'Testing & quality assurance'],
-                                ['fi-rr-bulb', 'Research & development'],
-                            ].map(([icon, label]) => (
-                                <div key={label} className="flex items-center gap-3 text-sm text-surface-700">
-                                    <span className="w-8 h-8 rounded-lg bg-white border border-surface-200 flex items-center justify-center shrink-0">
-                                        <i className={`fi ${icon} text-brand-600 text-sm leading-none`} />
-                                    </span>
-                                    {label}
-                                </div>
-                            ))}
-                        </div>
+                        {services.length > 0 && (
+                            <div className="mt-6 space-y-3">
+                                {services.map(x => (
+                                    <Link key={x.id} href="/portfolio/services"
+                                          className="flex items-center gap-3 text-sm text-surface-700 hover:text-brand-700 transition-colors group">
+                                        <span className="w-8 h-8 rounded-lg bg-white border border-surface-200 flex items-center justify-center shrink-0 group-hover:border-brand-300">
+                                            <i className={`fi ${x.icon_class} text-brand-600 text-sm leading-none`} />
+                                        </span>
+                                        {x.title}
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </Section>
 
+            {/* ── Services ─────────────────────────────────────────────── */}
+            {services.length > 0 && (
+                <Section tint>
+                    <SectionHead eyebrow="What we do" title="Services"
+                                 lead="Four things BITAC does for industry, under one roof."
+                                 action={{ href: '/portfolio/services', label: 'All services' }} />
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                        {services.map(x => (
+                            <Link key={x.id} href="/portfolio/services"
+                                  className="group p-6 rounded-2xl bg-white border border-surface-200 hover:border-brand-300 hover:shadow-lg transition-all">
+                                <span className="w-11 h-11 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-4">
+                                    <i className={`fi ${x.icon_class} text-base leading-none`} />
+                                </span>
+                                <h3 className="text-sm font-bold text-surface-900 leading-snug group-hover:text-brand-700 transition-colors">
+                                    {x.title}
+                                </h3>
+                                {x.summary && (
+                                    <p className="text-xs text-surface-600 mt-2 leading-relaxed line-clamp-4">{x.summary}</p>
+                                )}
+                            </Link>
+                        ))}
+                    </div>
+                </Section>
+            )}
+
             {/* ── Products ─────────────────────────────────────────────── */}
-            <Section tint>
+            <Section>
                 <SectionHead eyebrow="What we make" title="Manufactured products & recent work"
                              lead="Precision components and overhaul work delivered for Railway, power, sugar and private industry."
                              action={{ href: '/portfolio/products', label: 'All products' }} />
@@ -124,7 +149,7 @@ export default function Home({ featured, news, events, photos, clients, stats, b
             </Section>
 
             {/* ── News & events ────────────────────────────────────────── */}
-            <Section>
+            <Section tint>
                 <div className="grid lg:grid-cols-3 gap-10">
                     <div className="lg:col-span-2">
                         <SectionHead eyebrow="Newsroom" title="News & notices"
@@ -172,7 +197,7 @@ export default function Home({ featured, news, events, photos, clients, stats, b
             </Section>
 
             {/* ── Clients ──────────────────────────────────────────────── */}
-            <Section tint>
+            <Section>
                 <SectionHead eyebrow="Who we serve" title="Our clients"
                              lead="Government bodies and private industry across Bangladesh."
                              action={{ href: '/portfolio/clients', label: 'All clients' }} />
@@ -192,7 +217,7 @@ export default function Home({ featured, news, events, photos, clients, stats, b
 
             {/* ── Gallery ──────────────────────────────────────────────── */}
             {photos.length > 0 && (
-                <Section>
+                <Section tint>
                     <SectionHead eyebrow="Gallery" title="Inside BITAC"
                                  action={{ href: '/portfolio/gallery', label: 'Photo gallery' }} />
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

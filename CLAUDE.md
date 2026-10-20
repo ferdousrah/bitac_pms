@@ -1162,8 +1162,56 @@ three new tables (migration `..._000064`):
   `work-orders/create`. `admin/website/news/create` before `news/{post}` is the
   sixth.)
 
+### The top menu is BITAC's, exactly (2026-10-20)
+> **Home · About Us · Services · Products · Clients · Gallery (Photo Gallery, Video Gallery) · Contact Us**
+
+- **`NAV` in `PublicLayout.tsx` is the one list** and it is now a tree:
+  `Gallery` carries `children`, so it renders as a dropdown on desktop and as a
+  labelled pair in the mobile drawer (a nested accordion on a drawer is one
+  more thing to get wrong when there is room to just list both).
+- ⚠️ **`FOOTER_NAV` exists on purpose, flattened and with News & Events added
+  back.** BITAC's menu does not list News & Events, but the pages are alive and
+  linked from the home page — flattening `NAV` alone would have left
+  `/portfolio/news` reachable from nowhere but the home page.
+- A group is lit when **any child** is the current page (`groupActive`), not
+  only when its own `href` matches.
+- ⚠️ The dropdown panel is positioned with **`top-full pt-1`, no gap** — a few
+  pixels of nothing between the button and the panel is enough for the pointer
+  to leave and the menu to shut while someone is reaching for it. It also
+  closes on an outside `mousedown` and on Escape, because hover alone leaves it
+  hanging open on a touch screen.
+- The menu is **tested against the route table**, not against a string: a node
+  script lifts the real `NAV`/`FOOTER_NAV` out of the layout and checks every
+  `href` against `route:list`, so a menu entry pointing at a URL that does not
+  exist fails in the test rather than 404ing for a visitor. (The nav is
+  client-side React and is **not** in the server's HTML, so asserting on the
+  rendered page would prove nothing.)
+- Renamings that came with it: **Products & Services → Products** (services are
+  their own page now) and **About BITAC → About Us**, **Contact → Contact Us**.
+
+### Services — `site_services` (2026-10-20)
+- **`/portfolio/services`**, `SiteService`, admin tab **Services**. Seeded by
+  migration `..._000065` with BITAC's four real lines (import-substitute
+  manufacturing, industrial training, testing & calibration, R&D &
+  consultancy), so the page is not empty the day it goes up. Idempotent.
+- ⚠️ **These are NOT `job_categories` or `operations`.** Those are the internal
+  vocabulary the costing and routing are built on; this is the public wording,
+  and the two must be free to differ.
+- ⚠️ **The icon is PICKED, never typed.** `SiteService::ICONS` is a fixed
+  `key => flaticon-class` map; the admin shows it as a 12-swatch grid and the
+  server validates `in:` the same keys. A mistyped Flaticon class renders
+  **nothing at all** — no icon, no error, no clue — and an unknown stored value
+  falls back to `fi-rr-settings` rather than leaving a blank square.
+- ⚠️ **`is_active` means different things on create and on edit**: absent on
+  create is "nothing has been said yet" → live; absent on edit is "the editor
+  unticked it" → hidden. Treating them the same makes every new service arrive
+  hidden. `serviceAttributes()` keys off whether a `$service` was passed.
+- ⚠️ **The home page's four service bullets used to be hardcoded JSX**, so
+  renaming a service in Admin → Website changed the Services page and left the
+  home page saying the old thing. Both now read the same `services` prop.
+
 ### Admin → Website (`WebsiteController`, `Admin/Website/Index.tsx`)
-One screen, five tabs — **Site text · News & Events · Photos · Videos · Links**
+One screen, six tabs — **Site text · Services · News & Events · Photos · Videos · Links**
 — behind the existing **`manage portfolio`** permission (no new permission; it
 is the same job). Five sidebar entries for five short lists would have buried
 the rest of the menu. Products, clients and the address are deliberately *not*
@@ -1178,7 +1226,7 @@ here: they are maintained in Portfolio, Customers and Centres.
   one kind can't leave the other kind's media field set.
 - Hiding (`is_active`) takes an item off the public page and keeps the record;
   deleting removes the uploaded file from the `public` disk too.
-- ⚠️ `news_posts` / `gallery_items` / `site_links` are **content, not
+- ⚠️ `news_posts` / `gallery_items` / `site_links` / `site_services` are **content, not
   transactional data** — they are NOT in `SystemResetController::TABLES_TO_WIPE`,
   for the same reason `qc_checkpoints` isn't. A data wipe must not blank the
   public website.

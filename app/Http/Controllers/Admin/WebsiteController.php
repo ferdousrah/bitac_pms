@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\GalleryItem;
 use App\Models\NewsPost;
 use App\Models\SiteLink;
+use App\Models\SiteService;
 use App\Services\SettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -36,9 +37,20 @@ class WebsiteController extends Controller
         $s = app(SettingService::class);
 
         return Inertia::render('Admin/Website/Index', [
-            'tab'  => in_array($request->input('tab'), ['text', 'news', 'gallery', 'videos', 'links'], true)
+            'tab'  => in_array($request->input('tab'), ['text', 'services', 'news', 'gallery', 'videos', 'links'], true)
                 ? $request->input('tab') : 'text',
             'text' => collect(self::TEXT_KEYS)->mapWithKeys(fn ($k) => [$k => (string) $s->get($k, '')])->all(),
+            'services' => SiteService::orderBy('sort')->orderBy('id')->get()
+                ->map(fn ($x) => [
+                    'id'        => $x->id,
+                    'title'     => $x->title,
+                    'summary'   => $x->summary,
+                    'body'      => $x->body,
+                    'icon'      => $x->icon,
+                    'image_url' => $x->image_url,
+                    'sort'      => $x->sort,
+                    'is_active' => $x->is_active,
+                ])->values(),
             'news' => NewsPost::orderByDesc('published_at')->orderByDesc('id')->get()
                 ->map(fn ($p) => [
                     'id'           => $p->id,
@@ -66,6 +78,7 @@ class WebsiteController extends Controller
             'albums' => GalleryItem::whereNotNull('album')->distinct()->orderBy('album')->pluck('album'),
             'kinds'  => NewsPost::KINDS,
             'groups' => SiteLink::GROUPS,
+            'icons'  => collect(SiteService::ICONS)->map(fn ($cls, $key) => ['key' => $key, 'class' => $cls])->values(),
         ]);
     }
 
@@ -243,6 +256,36 @@ class WebsiteController extends Controller
             ->with('success', $kind === 'video' ? 'Video removed.' : 'Photo removed.');
     }
 
+    // ── Services ─────────────────────────────────────────────────────────
+
+    public function serviceStore(Request $request)
+    {
+        $data = $this->validateService($request);
+
+        SiteService::create($this->serviceAttributes($data, $request) + ['created_by' => auth()->id()]);
+
+        return redirect()->route('admin.website.index', ['tab' => 'services'])
+            ->with('success', 'Service added.');
+    }
+
+    public function serviceUpdate(Request $request, SiteService $service)
+    {
+        $service->update($this->serviceAttributes($this->validateService($request), $request, $service));
+
+        return back()->with('success', 'Service updated.');
+    }
+
+    public function serviceDestroy(SiteService $service)
+    {
+        if ($service->image_path) {
+            Storage::disk('public')->delete($service->image_path);
+        }
+        $service->delete();
+
+        return redirect()->route('admin.website.index', ['tab' => 'services'])
+            ->with('success', 'Service removed.');
+    }
+
     // ── Important links ──────────────────────────────────────────────────
 
     public function linkStore(Request $request)
@@ -328,6 +371,43 @@ class WebsiteController extends Controller
                 Storage::disk('public')->delete($post->cover_image_path);
             }
             $attrs['cover_image_path'] = $request->file('cover_image')->store('website/news', 'public');
+        }
+
+        return $attrs;
+    }
+
+    private function validateService(Request $request): array
+    {
+        return $request->validate([
+            'title'   => 'required|string|max:255',
+            'summary' => 'nullable|string|max:500',
+            'body'    => 'nullable|string|max:20000',
+            // ⚠️ The icon is checked against the fixed list, so a value typed
+            // by hand into the request cannot put an unknown class on the page.
+            'icon'    => 'nullable|in:' . implode(',', array_keys(SiteService::ICONS)),
+            'image'   => 'nullable|image|max:8192',
+            'sort'    => 'nullable|integer|min:0|max:9999',
+        ]);
+    }
+
+    private function serviceAttributes(array $data, Request $request, ?SiteService $service = null): array
+    {
+        $attrs = [
+            'title'     => $data['title'],
+            'summary'   => $data['summary'] ?? null,
+            'body'      => $data['body'] ?? null,
+            'icon'      => $data['icon'] ?? null,
+            'sort'      => (int) ($data['sort'] ?? 0),
+            // On create nothing has been said yet, so a new service is live;
+            // on edit an unticked box genuinely means hide it.
+            'is_active' => $service ? $request->boolean('is_active') : $request->boolean('is_active', true),
+        ];
+
+        if ($request->hasFile('image')) {
+            if ($service?->image_path) {
+                Storage::disk('public')->delete($service->image_path);
+            }
+            $attrs['image_path'] = $request->file('image')->store('website/services', 'public');
         }
 
         return $attrs;

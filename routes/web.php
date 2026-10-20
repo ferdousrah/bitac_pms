@@ -117,6 +117,7 @@ Route::get('/portfolio', [PortfolioPublicController::class, 'index'])->name('por
 // binds "about" as a project slug and 404s — the same trap as the receivables
 // PDF, the PCD release routes and work-orders/create.
 Route::get('/portfolio/about',        [PortfolioPublicController::class, 'about'])->name('portfolio.public.about');
+Route::get('/portfolio/services',     [PortfolioPublicController::class, 'services'])->name('portfolio.public.services');
 Route::get('/portfolio/products',     [PortfolioPublicController::class, 'products'])->name('portfolio.public.products');
 Route::get('/portfolio/clients',      [PortfolioPublicController::class, 'clients'])->name('portfolio.public.clients');
 Route::get('/portfolio/news',         [PortfolioPublicController::class, 'news'])->name('portfolio.public.news');
@@ -985,6 +986,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('gallery',          [AdminWebsiteController::class, 'galleryStore'])->name('admin.website.gallery.store');
             Route::put('gallery/{item}',    [AdminWebsiteController::class, 'galleryUpdate'])->name('admin.website.gallery.update');
             Route::delete('gallery/{item}', [AdminWebsiteController::class, 'galleryDestroy'])->name('admin.website.gallery.destroy');
+
+            Route::post('services',          [AdminWebsiteController::class, 'serviceStore'])->name('admin.website.services.store');
+            Route::put('services/{service}',    [AdminWebsiteController::class, 'serviceUpdate'])->name('admin.website.services.update');
+            Route::delete('services/{service}', [AdminWebsiteController::class, 'serviceDestroy'])->name('admin.website.services.destroy');
 
             Route::post('links',          [AdminWebsiteController::class, 'linkStore'])->name('admin.website.links.store');
             Route::put('links/{link}',    [AdminWebsiteController::class, 'linkUpdate'])->name('admin.website.links.update');

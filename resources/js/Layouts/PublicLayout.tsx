@@ -28,16 +28,44 @@ interface Props {
     children: ReactNode;
 }
 
-/** The site's own navigation. One list, so the header and footer cannot drift. */
-export const NAV = [
+export interface NavItem {
+    href: string;
+    label: string;
+    /** A group: the parent is a dropdown, and `href` is where its first child goes. */
+    children?: { href: string; label: string }[];
+}
+
+/**
+ * The site's own navigation — BITAC's wording and order.
+ *
+ * One list, so the header, the mobile drawer and the footer cannot drift
+ * apart.
+ *
+ * ⚠️ **News & Events is deliberately NOT in the top menu** (BITAC's menu does
+ * not list it) but the pages are very much alive — they are reached from the
+ * home page and from the footer's Explore column, which is why `FOOTER_NAV`
+ * exists separately rather than just flattening this.
+ */
+export const NAV: NavItem[] = [
     { href: '/portfolio',          label: 'Home' },
-    { href: '/portfolio/about',    label: 'About BITAC' },
-    { href: '/portfolio/products', label: 'Products & Services' },
+    { href: '/portfolio/about',    label: 'About Us' },
+    { href: '/portfolio/services', label: 'Services' },
+    { href: '/portfolio/products', label: 'Products' },
     { href: '/portfolio/clients',  label: 'Clients' },
-    { href: '/portfolio/news',     label: 'News & Events' },
-    { href: '/portfolio/gallery',  label: 'Photo Gallery' },
-    { href: '/portfolio/videos',   label: 'Video Gallery' },
-    { href: '/portfolio/contact',  label: 'Contact' },
+    {
+        href: '/portfolio/gallery', label: 'Gallery',
+        children: [
+            { href: '/portfolio/gallery', label: 'Photo Gallery' },
+            { href: '/portfolio/videos',  label: 'Video Gallery' },
+        ],
+    },
+    { href: '/portfolio/contact',  label: 'Contact Us' },
+];
+
+/** Every page, flattened, plus the ones the top menu leaves out. */
+export const FOOTER_NAV: { href: string; label: string }[] = [
+    ...NAV.slice(1).flatMap(n => n.children ?? [n]),
+    { href: '/portfolio/news', label: 'News & Events' },
 ];
 
 /**
@@ -55,6 +83,7 @@ export const NAV = [
 export default function PublicLayout({ title, bitac, links, transparentHeader = false, children }: Props) {
     const { url } = usePage();
     const [open, setOpen] = useState(false);
+    const [menu, setMenu] = useState<string | null>(null);
     const [solid, setSolid] = useState(!transparentHeader);
 
     // A transparent header over a hero has to become solid once it is scrolled
@@ -68,11 +97,31 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
     }, [transparentHeader]);
 
     // Close the mobile menu on navigation — otherwise it stays open over the
-    // page you just asked for.
-    useEffect(() => { setOpen(false); }, [url]);
+    // page you just asked for. The desktop dropdown goes with it.
+    useEffect(() => { setOpen(false); setMenu(null); }, [url]);
+
+    // A dropdown opened by hover still has to close on a click elsewhere, or
+    // it hangs over the page on a touch screen where there is no mouse-out.
+    useEffect(() => {
+        if (!menu) return;
+        const away = (e: MouseEvent) => {
+            if (!(e.target as HTMLElement)?.closest('[data-navgroup]')) setMenu(null);
+        };
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+        document.addEventListener('mousedown', away);
+        document.addEventListener('keydown', esc);
+        return () => {
+            document.removeEventListener('mousedown', away);
+            document.removeEventListener('keydown', esc);
+        };
+    }, [menu]);
 
     const isActive = (href: string) =>
         href === '/portfolio' ? url === '/portfolio' : url.startsWith(href);
+
+    /** A group is lit when any page under it is open, not just its own href. */
+    const groupActive = (n: NavItem) =>
+        n.children ? n.children.some(c => isActive(c.href)) : isActive(n.href);
 
     const important = links?.important ?? [];
     const ministry = links?.ministry ?? [];
@@ -140,7 +189,55 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                         </button>
 
                         <nav className="hidden lg:flex items-center gap-1">
-                            {NAV.map(n => (
+                            {NAV.map(n => n.children ? (
+                                <div
+                                    key={n.label}
+                                    data-navgroup
+                                    className="relative"
+                                    onMouseEnter={() => setMenu(n.label)}
+                                    onMouseLeave={() => setMenu(m => (m === n.label ? null : m))}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => setMenu(m => (m === n.label ? null : n.label))}
+                                        aria-expanded={menu === n.label}
+                                        aria-haspopup="true"
+                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
+                                            groupActive(n) || menu === n.label
+                                                ? 'text-brand-700 bg-brand-50'
+                                                : 'text-surface-600 hover:text-brand-700 hover:bg-surface-50'
+                                        }`}
+                                    >
+                                        {n.label}
+                                        <i className={`fi fi-rr-angle-small-down text-[11px] leading-none transition-transform ${
+                                            menu === n.label ? 'rotate-180' : ''
+                                        }`} />
+                                    </button>
+                                    {menu === n.label && (
+                                        /* No gap between the button and the panel —
+                                           a few pixels of nothing is enough for the
+                                           pointer to leave and the menu to shut
+                                           while someone is reaching for it. */
+                                        <div className="absolute left-0 top-full pt-1 w-52">
+                                            <div className="rounded-xl bg-white border border-surface-200 shadow-xl py-1.5 overflow-hidden">
+                                                {n.children.map(c => (
+                                                    <Link
+                                                        key={c.href}
+                                                        href={c.href}
+                                                        className={`block px-4 py-2.5 text-[13px] font-semibold transition-colors ${
+                                                            isActive(c.href)
+                                                                ? 'text-brand-700 bg-brand-50'
+                                                                : 'text-surface-600 hover:text-brand-700 hover:bg-surface-50'
+                                                        }`}
+                                                    >
+                                                        {c.label}
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
                                 <Link
                                     key={n.href}
                                     href={n.href}
@@ -161,7 +258,24 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                 {open && (
                     <div className="lg:hidden border-t border-surface-200 bg-white">
                         <nav className="max-w-7xl mx-auto px-4 py-2 grid grid-cols-1">
-                            {NAV.map(n => (
+                            {NAV.map(n => n.children ? (
+                                <div key={n.label} className="py-1">
+                                    <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-surface-400">
+                                        {n.label}
+                                    </div>
+                                    {n.children.map(c => (
+                                        <Link
+                                            key={c.href}
+                                            href={c.href}
+                                            className={`block pl-6 pr-3 py-2.5 rounded-lg text-sm font-semibold ${
+                                                isActive(c.href) ? 'text-brand-700 bg-brand-50' : 'text-surface-700'
+                                            }`}
+                                        >
+                                            {c.label}
+                                        </Link>
+                                    ))}
+                                </div>
+                            ) : (
                                 <Link
                                     key={n.href}
                                     href={n.href}
@@ -198,7 +312,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                     <div>
                         <div className="text-[11px] font-bold text-white uppercase tracking-wider mb-3">Explore</div>
                         <ul className="space-y-1.5 text-xs">
-                            {NAV.slice(1).map(n => (
+                            {FOOTER_NAV.map(n => (
                                 <li key={n.href}>
                                     <Link href={n.href} className="hover:text-white transition-colors">{n.label}</Link>
                                 </li>

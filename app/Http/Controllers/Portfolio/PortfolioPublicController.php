@@ -9,6 +9,7 @@ use App\Models\GalleryItem;
 use App\Models\NewsPost;
 use App\Models\PortfolioProject;
 use App\Models\SiteLink;
+use App\Models\SiteService;
 use App\Services\SettingService;
 use Inertia\Inertia;
 
@@ -44,6 +45,7 @@ class PortfolioPublicController extends Controller
                     ->whereNotNull('event_date')->where('event_date', '>=', today())
                     ->orderBy('event_date')->take(3)->get()
             ),
+            'services'   => $this->serviceRows(SiteService::active()->orderBy('sort')->orderBy('id')->take(4)->get()),
             'photos'     => $this->galleryRows(GalleryItem::active()->photos()->orderBy('sort')->latest('id')->take(8)->get()),
             'clients'    => $this->clientNames(12),
             'stats'      => $this->stats(),
@@ -63,6 +65,17 @@ class PortfolioPublicController extends Controller
                     'phone'   => $c->phone_bn ?: $c->phone,
                     'email'   => $c->email,
                 ])->values(),
+        ]));
+    }
+
+    /** What BITAC does — the service lines, as opposed to individual products. */
+    public function services()
+    {
+        return Inertia::render('Portfolio/Public/Services', $this->chrome([
+            'services' => $this->serviceRows(
+                SiteService::active()->orderBy('sort')->orderBy('id')->get()
+            ),
+            'stats' => $this->stats(),
         ]));
     }
 
@@ -232,6 +245,18 @@ class PortfolioPublicController extends Controller
                 'completed_at'    => $p->completed_at?->format('M Y'),
                 'cover_image_url' => $p->cover_image_url,
             ])->values();
+    }
+
+    private function serviceRows($services)
+    {
+        return $services->map(fn ($x) => [
+            'id'         => $x->id,
+            'title'      => $x->title,
+            'summary'    => $x->summary,
+            'body'       => $x->body,
+            'icon_class' => $x->icon_class,
+            'image_url'  => $x->image_url,
+        ])->values();
     }
 
     private function newsRows($posts)

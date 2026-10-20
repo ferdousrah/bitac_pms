@@ -18,10 +18,10 @@ export default function Products({ projects, categories, bitac, links }: Props) 
     }, [projects, cat, q]);
 
     return (
-        <PublicLayout title="Products & Services — BITAC" bitac={bitac} links={links}>
+        <PublicLayout title="Products — BITAC" bitac={bitac} links={links}>
             <PageHead
                 eyebrow="What we make"
-                title="Products & Services"
+                title="Manufactured products"
                 lead="Precision components, overhaul and fabrication delivered for government and private industry."
             />
 

@@ -24,10 +24,16 @@ interface GalleryRow {
 interface LinkRow {
     id: number; label: string; url: string; group: string; sort: number; is_active: boolean;
 }
+interface ServiceRow {
+    id: number; title: string; summary: string | null; body: string | null;
+    icon: string | null; image_url: string | null; sort: number; is_active: boolean;
+}
+interface IconRow { key: string; class: string }
 
 interface Props {
     tab: string;
     text: Record<string, string>;
+    services: ServiceRow[];
     news: NewsRow[];
     gallery: GalleryRow[];
     videos: GalleryRow[];
@@ -35,11 +41,13 @@ interface Props {
     albums: string[];
     kinds: string[];
     groups: string[];
+    icons: IconRow[];
 }
 
 const TABS = [
-    { key: 'text',    label: 'Site text',    icon: 'fi-rr-text' },
-    { key: 'news',    label: 'News & Events', icon: 'fi-rr-newspaper' },
+    { key: 'text',     label: 'Site text',     icon: 'fi-rr-text' },
+    { key: 'services', label: 'Services',      icon: 'fi-rr-tools' },
+    { key: 'news',     label: 'News & Events', icon: 'fi-rr-newspaper' },
     { key: 'gallery', label: 'Photos',       icon: 'fi-rr-picture' },
     { key: 'videos',  label: 'Videos',       icon: 'fi-rr-play' },
     { key: 'links',   label: 'Links',        icon: 'fi-rr-link' },
@@ -58,7 +66,7 @@ const GROUP_LABEL: Record<string, string> = {
     service:   'Services',
 };
 
-export default function WebsiteIndex({ tab, text, news, gallery, videos, links, albums, kinds, groups }: Props) {
+export default function WebsiteIndex({ tab, text, services, news, gallery, videos, links, albums, kinds, groups, icons }: Props) {
     const [active, setActive] = useState(tab);
 
     const go = (key: string) => {
@@ -102,6 +110,7 @@ export default function WebsiteIndex({ tab, text, news, gallery, videos, links, 
                         >
                             <i className={`fi ${t.icon} text-xs leading-none`} />
                             {t.label}
+                            {t.key === 'services' && services.length > 0 && <Count n={services.length} on={active === t.key} />}
                             {t.key === 'news' && news.length > 0 && <Count n={news.length} on={active === t.key} />}
                             {t.key === 'gallery' && gallery.length > 0 && <Count n={gallery.length} on={active === t.key} />}
                             {t.key === 'videos' && videos.length > 0 && <Count n={videos.length} on={active === t.key} />}
@@ -111,6 +120,7 @@ export default function WebsiteIndex({ tab, text, news, gallery, videos, links, 
                 </div>
 
                 {active === 'text' && <TextTab text={text} />}
+                {active === 'services' && <ServicesTab services={services} icons={icons} />}
                 {active === 'news' && <NewsTab news={news} />}
                 {active === 'gallery' && <MediaTab kind="photo" rows={gallery} albums={albums} />}
                 {active === 'videos' && <MediaTab kind="video" rows={videos} albums={albums} />}
@@ -210,6 +220,234 @@ function Field({ label, hint, error, children }: {
             {children}
             {hint && <div className="text-[11px] text-surface-400 mt-1">{hint}</div>}
             {error && <div className="form-error">{error}</div>}
+        </div>
+    );
+}
+
+// ── Services ─────────────────────────────────────────────────────────────
+
+function ServicesTab({ services, icons }: { services: ServiceRow[]; icons: IconRow[] }) {
+    const [editing, setEditing] = useState<ServiceRow | null>(null);
+
+    const add = useForm<any>({
+        title: '', summary: '', body: '', icon: icons[0]?.key ?? '', sort: 0,
+        image: null as File | null, is_active: true,
+    });
+
+    const submitAdd = (e: FormEvent) => {
+        e.preventDefault();
+        add.post('/admin/website/services', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => add.reset('title', 'summary', 'body', 'image'),
+        });
+    };
+
+    const remove = (x: ServiceRow) => {
+        if (confirm(`Remove "${x.title}"? This cannot be undone.`)) {
+            router.delete(`/admin/website/services/${x.id}`, { preserveScroll: true });
+        }
+    };
+
+    const iconClass = (key: string | null) =>
+        icons.find((i) => i.key === key)?.class ?? 'fi-rr-settings';
+
+    return (
+        <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 card">
+                <div className="card-header">
+                    <h2 className="font-semibold text-surface-800">Service lines</h2>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                        {services.length} service{services.length === 1 ? '' : 's'} ·
+                        shown on the Services page and the home page, lowest order first
+                    </p>
+                </div>
+                {services.length === 0 ? (
+                    <div className="card-body text-center py-14 text-sm text-surface-500">
+                        No services yet. The Services page shows an empty state until there is one.
+                    </div>
+                ) : (
+                    <div className="card-body space-y-3">
+                        {services.map((x, i) => (
+                            <div key={x.id}
+                                 className={`flex gap-4 p-4 rounded-xl border ${x.is_active ? 'border-surface-200' : 'border-surface-200 bg-surface-50/70'}`}>
+                                <span className="text-xs text-surface-400 tabular-nums w-5 pt-1">{i + 1}</span>
+                                <span className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                                    <i className={`fi ${iconClass(x.icon)} text-sm leading-none`} />
+                                </span>
+                                <div className="min-w-0 grow">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-surface-900">{x.title}</span>
+                                        {!x.is_active && <span className="badge-slate">Hidden</span>}
+                                        <span className="text-[11px] text-surface-400 tabular-nums">#{x.sort}</span>
+                                    </div>
+                                    {x.summary && (
+                                        <p className="text-xs text-surface-600 mt-1 leading-relaxed line-clamp-2">{x.summary}</p>
+                                    )}
+                                </div>
+                                {x.image_url && (
+                                    <img src={x.image_url} alt="" className="w-16 h-12 rounded-lg object-cover shrink-0" />
+                                )}
+                                <div className="flex items-start gap-1 shrink-0">
+                                    <button type="button" onClick={() => setEditing(x)} title="Edit"
+                                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-500 flex items-center justify-center">
+                                        <i className="fi fi-rr-pencil text-xs" />
+                                    </button>
+                                    <button type="button" onClick={() => remove(x)} title="Remove"
+                                            className="w-8 h-8 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600 flex items-center justify-center">
+                                        <i className="fi fi-rr-trash text-xs" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <form onSubmit={submitAdd} className="card self-start">
+                <div className="card-header"><h2 className="font-semibold text-surface-800">Add a service</h2></div>
+                <div className="card-body space-y-4">
+                    <Field label="Title *" error={add.errors.title}>
+                        <input className="form-input" value={add.data.title}
+                               onChange={(e) => add.setData('title', e.target.value)} />
+                    </Field>
+                    <Field label="Short summary" hint="The paragraph under the title." error={add.errors.summary}>
+                        <textarea className="form-textarea" rows={3} value={add.data.summary}
+                                  onChange={(e) => add.setData('summary', e.target.value)} />
+                    </Field>
+                    <Field label="Full text" hint="Optional. Plain text — line breaks are kept." error={add.errors.body}>
+                        <textarea className="form-textarea" rows={4} value={add.data.body}
+                                  onChange={(e) => add.setData('body', e.target.value)} />
+                    </Field>
+                    <IconPicker icons={icons} value={add.data.icon} onChange={(k) => add.setData('icon', k)}
+                                error={add.errors.icon} />
+                    <Field label="Image" hint="Optional. Up to 8 MB." error={add.errors.image}>
+                        <input type="file" accept="image/*" className="text-sm"
+                               onChange={(e) => add.setData('image', e.target.files?.[0] ?? null)} />
+                    </Field>
+                    <Field label="Order" error={add.errors.sort}>
+                        <input type="number" min={0} className="form-input" value={add.data.sort}
+                               onChange={(e) => add.setData('sort', Number(e.target.value))} />
+                    </Field>
+                    <button type="submit" className="btn-primary w-full" disabled={add.processing}>
+                        {add.processing ? 'Saving…' : 'Add service'}
+                    </button>
+                </div>
+            </form>
+
+            {editing && <ServiceEditModal service={editing} icons={icons} onClose={() => setEditing(null)} />}
+        </div>
+    );
+}
+
+/**
+ * The icon is picked, never typed.
+ *
+ * ⚠️ A mistyped Flaticon class renders nothing at all — no icon, no error — so
+ * the list is fixed and the server validates against the same one.
+ */
+function IconPicker({ icons, value, onChange, error }: {
+    icons: IconRow[]; value: string; onChange: (key: string) => void; error?: string;
+}) {
+    return (
+        <div className="form-group">
+            <label className="form-label">Icon</label>
+            <div className="grid grid-cols-6 gap-2">
+                {icons.map((ic) => (
+                    <button
+                        key={ic.key}
+                        type="button"
+                        onClick={() => onChange(ic.key)}
+                        title={ic.key}
+                        aria-label={ic.key}
+                        className={`h-10 rounded-lg border flex items-center justify-center transition-colors ${
+                            value === ic.key
+                                ? 'border-brand-400 bg-brand-50 text-brand-700'
+                                : 'border-surface-200 text-surface-500 hover:bg-surface-50'
+                        }`}
+                    >
+                        <i className={`fi ${ic.class} text-sm leading-none`} />
+                    </button>
+                ))}
+            </div>
+            {error && <div className="form-error">{error}</div>}
+        </div>
+    );
+}
+
+function ServiceEditModal({ service, icons, onClose }: {
+    service: ServiceRow; icons: IconRow[]; onClose: () => void;
+}) {
+    const form = useForm<any>({
+        title: service.title, summary: service.summary ?? '', body: service.body ?? '',
+        icon: service.icon ?? (icons[0]?.key ?? ''), sort: service.sort,
+        is_active: service.is_active, image: null as File | null,
+    });
+
+    const submit = (e: FormEvent) => {
+        e.preventDefault();
+        // A file upload with PUT needs Laravel's method spoofing.
+        form.transform((d: any) => ({ ...d, _method: 'put' }));
+        form.post(`/admin/website/services/${service.id}`, {
+            forceFormData: true, preserveScroll: true, onSuccess: onClose,
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+            <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
+                  className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-surface-900">Edit service</h3>
+                    <button type="button" onClick={onClose}
+                            className="w-8 h-8 rounded-lg hover:bg-surface-100 text-surface-400 flex items-center justify-center">
+                        <i className="fi fi-rr-cross-small text-lg" />
+                    </button>
+                </div>
+                <div className="p-5 space-y-4">
+                    <Field label="Title *" error={form.errors.title}>
+                        <input className="form-input" value={form.data.title}
+                               onChange={(e) => form.setData('title', e.target.value)} />
+                    </Field>
+                    <Field label="Short summary" error={form.errors.summary}>
+                        <textarea className="form-textarea" rows={3} value={form.data.summary}
+                                  onChange={(e) => form.setData('summary', e.target.value)} />
+                    </Field>
+                    <Field label="Full text" error={form.errors.body}>
+                        <textarea className="form-textarea" rows={4} value={form.data.body}
+                                  onChange={(e) => form.setData('body', e.target.value)} />
+                    </Field>
+                    <IconPicker icons={icons} value={form.data.icon} onChange={(k) => form.setData('icon', k)}
+                                error={form.errors.icon} />
+                    <Field label="Image"
+                           hint={service.image_url ? 'Choosing a file replaces the current image.' : 'Optional.'}
+                           error={form.errors.image}>
+                        <div className="flex items-center gap-3">
+                            {service.image_url && (
+                                <img src={service.image_url} alt="" className="w-20 h-14 rounded-lg object-cover" />
+                            )}
+                            <input type="file" accept="image/*" className="text-sm"
+                                   onChange={(e) => form.setData('image', e.target.files?.[0] ?? null)} />
+                        </div>
+                    </Field>
+                    <Field label="Order" error={form.errors.sort}>
+                        <input type="number" min={0} className="form-input" value={form.data.sort}
+                               onChange={(e) => form.setData('sort', Number(e.target.value))} />
+                    </Field>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={form.data.is_active}
+                               onChange={(e) => form.setData('is_active', e.target.checked)}
+                               className="rounded border-surface-300 text-brand-500 focus:ring-brand-400" />
+                        <span className="text-sm text-surface-700">Show on the website</span>
+                    </label>
+                </div>
+                <div className="px-5 py-4 border-t border-surface-200 flex justify-end gap-3">
+                    <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={form.processing}>
+                        {form.processing ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </form>
         </div>
     );
 }
