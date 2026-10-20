@@ -240,7 +240,7 @@ function EngineeringHero({ site, stats, bitac, services }: { site: any; stats: S
                                 <i className="fi fi-rr-arrow-small-right text-base leading-none" />
                             </span>
                         </Link>
-                        <Link href="/portfolio/contact"
+                        <Link href="/portfolio/request-quotation"
                               className="inline-flex items-center gap-2.5 px-6 py-4 rounded-2xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white text-sm font-bold backdrop-blur transition-colors">
                             <i className="fi fi-rr-paper-plane text-sm leading-none" />
                             Request a quotation

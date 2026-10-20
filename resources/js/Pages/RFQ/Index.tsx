@@ -166,6 +166,13 @@ export default function RFQIndex({ rfqs, filters, customers }: any) {
                                                                     Direct
                                                                 </span>
                                                             )}
+                                                            {/* Converted from a quotation request sent on the public website. */}
+                                                            {rfq.source === 'website' && (
+                                                                <span title="Converted from a quotation request on the website"
+                                                                    className="inline-flex items-center px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 text-[9px] font-bold uppercase tracking-wider">
+                                                                    Website
+                                                                </span>
+                                                            )}
                                                             {rfq.job_type === 'rnd' && (
                                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[9px] font-bold uppercase tracking-wider">
                                                                     R&amp;D

@@ -1696,10 +1696,60 @@ here: they are maintained in Portfolio, Customers and Centres.
   for the same reason `qc_checkpoints` isn't. A data wipe must not blank the
   public website.
 
-### Not built, deliberately
-There is **no contact form** — the page gives the address, phone, a `mailto:`
-and the customer-portal login. A form needs a table, a notification path and
-spam handling, and BITAC has not asked for one.
+### Request a quotation — the one public form that writes (2026-10-20)
+> BITAC: *"Want a quotation? atar ekta form submission er bebostha koro."*
+
+- **`/portfolio/request-quotation`** (`PortfolioPublicController@requestQuote`,
+  page `Portfolio/Public/RequestQuote.tsx`) → **`POST`** to
+  `Portfolio\QuotationRequestController@store`. Reached from Contact → *Want a
+  quotation?* (which passes the office in view as `#slug`, so the form opens on
+  that centre), the home hero's **Request a quotation**, Services' **Send an
+  enquiry** and the sample hero slide.
+- Four steps: **which centre** · **about you** (name, organisation, designation,
+  phone, email, address) · **the job** (what, description, quantity + unit,
+  needed by) · **files** (≤5, 10 MB each: PDF, images, DWG/DXF, Word, Excel).
+  On success the same page shows the **reference** (`QR-2026-0001`, per year).
+  Flat, like Contact.
+- ⚠️ **It is NOT an RFQ.** An RFQ belongs to a customer record and fires the
+  pipeline; a stranger has neither. It lands in **`quotation_requests`**
+  (+ `quotation_request_files`, migration `..._000072`) and IED converts it.
+- ⚠️ **Spam is handled without a captcha, three ways**: a hidden **honeypot**
+  (`website`), a **time trap** (an encrypted "drawn at" stamp; back in under
+  3 s = a script) and **5 per hour per IP** (`RateLimiter`, counted only once
+  validation passes, plus `throttle:20,1` on the route). A tripped honeypot or
+  time trap gets a normal-looking thank-you and stores nothing.
+- ⚠️ **Uploads go on the PRIVATE `local` disk** (`storage/app/private/
+  quotation-requests/{id}`), never `public` — they are from anyone, and are
+  served only through the signed-in `ied.quotation-requests.file` route with
+  `nosniff`; only images/PDFs open inline, the rest download.
+- IED is told (`toPermission('view rfqs', …, centerId)`), and the visitor gets
+  a confirmation e-mail (`QuotationRequestReceived`) — **needs SMTP**; a failed
+  send is logged, never loses the request.
+- The centre is the office's own `center_id`, else `Center::defaultId()`.
+
+**IED → Quote Requests** (`/ied/quotation-requests`, `QuotationRequestController`)
+- List with status / centre / search; **opening a `new` one moves it to
+  `in_review`** (only for someone with `edit rfqs` — a read-only viewer does
+  not claim it). Show: the job, the files, the sender (tap-to-call), a note
+  and status, delete.
+- **Convert → a DRAFT RFQ** for an existing customer (`create rfqs`): job =
+  subject + description, quantity, unit, needed-by → `required_by`, and every
+  file **copied** onto the item as a drawing (the request keeps its own).
+  `rfqs.source = 'website'` → a sky **Website** badge on the RFQ list. A draft
+  fires nothing, so it goes nowhere until someone submits it. It opens the
+  RFQ's edit page.
+  - The customer is **suggested** by email, then phone digits (Bangla digits
+    folded), then organisation name. There is **no "create customer" here** —
+    a portal account is not something to mint from an anonymous form; the
+    page links to Admin → Customers.
+  - Refused (redirect + flash): converting twice, converting spam, deleting a
+    converted request (it is the RFQ's record of where it came from), and
+    setting `converted` by hand. A converted request's note can still change.
+- Statuses: `new` · `in_review` · `converted` · `closed` · `spam`.
+- ⚠️ `quotation_requests` / `quotation_request_files` are **transactional** —
+  in `TABLES_TO_WIPE` + `Reset.tsx`, and `SystemResetController` gained
+  **`PRIVATE_STORAGE_DIRS_TO_WIPE`** for the private-disk folder.
+- Still no general "contact us" message form — only this one, which BITAC asked for.
 
 ## 📦 What's Been Built (Feature Inventory)
 

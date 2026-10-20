@@ -186,6 +186,34 @@ class PortfolioPublicController extends Controller
         ]));
     }
 
+    /**
+     * The "Request a quotation" form. Stored by
+     * `Portfolio\QuotationRequestController@store`, which redirects back here
+     * with the reference number flashed — so the page shows the thank-you in
+     * place of the form.
+     */
+    public function requestQuote()
+    {
+        return Inertia::render('Portfolio/Public/RequestQuote', $this->chrome([
+            'offices'    => $this->officeRows()->map(fn ($o) => [
+                'id'             => $o['id'],
+                'slug'           => $o['slug'],
+                'name'           => $o['name'],
+                'phone'          => $o['phone'],
+                'email'          => $o['email'],
+                'is_head_office' => $o['is_head_office'],
+            ])->values(),
+            // When the form was drawn. A human cannot fill it in under a few
+            // seconds; a script posting straight back can — see the store.
+            'form_token' => encrypt(now()->timestamp),
+            'file_ext'   => \App\Models\QuotationRequest::FILE_EXT,
+            'max_files'  => \App\Models\QuotationRequest::MAX_FILES,
+            'max_mb'     => (int) (\App\Models\QuotationRequest::MAX_KB / 1024),
+            'submitted'  => session('quote_ref'),
+            'submitted_email' => session('quote_email'),
+        ]));
+    }
+
     /** A single project. ⚠️ Registered LAST — it swallows any path under /portfolio. */
     public function show(string $slug)
     {

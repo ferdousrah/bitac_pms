@@ -109,7 +109,7 @@ export default function Services({ services, stats, bitac, links }: Props) {
                             ))}
                         </ol>
                         <div className="mt-6 flex flex-wrap items-center gap-3">
-                            <Link href="/portfolio/contact" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold transition-colors">
+                            <Link href="/portfolio/request-quotation" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold transition-colors">
                                 <i className="fi fi-rr-paper-plane text-xs leading-none" />
                                 Send an enquiry
                             </Link>

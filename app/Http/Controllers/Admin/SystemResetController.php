@@ -106,6 +106,8 @@ class SystemResetController extends Controller
         // Standalone transactional requests / logs
         'emergency_requests',
         'consultancy_requests',
+        'quotation_request_files',
+        'quotation_requests',
         'service_demand_logs',
         'maintenance_requests',
 
@@ -127,6 +129,14 @@ class SystemResetController extends Controller
         'consultancy-requests', 'maintenance-requests',
         'signatures/approvals',
         'payments',
+    ];
+
+    /**
+     * Same, on the PRIVATE (local) disk — uploads from the public website,
+     * which are never served without a sign-in.
+     */
+    private const PRIVATE_STORAGE_DIRS_TO_WIPE = [
+        'quotation-requests',
     ];
 
     public function index(Request $request)
@@ -182,6 +192,11 @@ class SystemResetController extends Controller
         foreach (self::STORAGE_DIRS_TO_WIPE as $dir) {
             if (Storage::disk('public')->exists($dir)) {
                 Storage::disk('public')->deleteDirectory($dir);
+            }
+        }
+        foreach (self::PRIVATE_STORAGE_DIRS_TO_WIPE as $dir) {
+            if (Storage::disk('local')->exists($dir)) {
+                Storage::disk('local')->deleteDirectory($dir);
             }
         }
 

@@ -48,7 +48,7 @@ class HeroSampleSeeder extends Seeder
             'title'     => 'Precision machining for national industry',
             'subtitle'  => 'From a single spare part to a production run, our shops machine to the tolerance your drawing asks for.',
             'cta_label' => 'Request a quotation',
-            'cta_url'   => '/portfolio/contact',
+            'cta_url'   => '/portfolio/request-quotation',
         ],
         [
             'file'      => 'File:Lathe Center Drilling.jpg',

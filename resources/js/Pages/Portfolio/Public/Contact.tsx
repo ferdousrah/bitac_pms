@@ -229,16 +229,25 @@ export default function Contact({ offices, bitac, links }: Props) {
                         </span>
                         <h3 className="text-lg font-bold text-surface-900 mt-5">Want a quotation?</h3>
                         <p className="text-sm text-surface-600 mt-2 leading-relaxed">
-                            Send your drawing, sample or specification with the quantity you need, to the centre
+                            Describe the job, attach your drawing or a photo of the sample, and choose the centre
                             nearest you. BITAC prepares a costing and a formal quotation against it.
                         </p>
-                        {office?.email && (
-                            <a href={`mailto:${office.email}?subject=Request%20for%20Quotation`}
-                               className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
-                                <i className="fi fi-rr-envelope text-xs leading-none" />
-                                Email {office.name}
+                        <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+                            {/* The office in view travels with the link, so the
+                                form opens with that centre already chosen. */}
+                            <a href={`/portfolio/request-quotation${office ? `#${office.slug}` : ''}`}
+                               className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
+                                <i className="fi fi-rr-paper-plane text-xs leading-none" />
+                                Request a quotation
                             </a>
-                        )}
+                            {office?.email && (
+                                <a href={`mailto:${office.email}?subject=Request%20for%20Quotation`}
+                                   className="inline-flex items-center gap-2 text-sm font-semibold text-surface-800 hover:text-brand-700 hover:underline">
+                                    <i className="fi fi-rr-envelope text-xs leading-none" />
+                                    or email {office.name}
+                                </a>
+                            )}
+                        </div>
                     </div>
                     <div className="rounded-3xl bg-white border border-surface-200 p-7">
                         <span className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">

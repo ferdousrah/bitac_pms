@@ -36,6 +36,7 @@ export const mainGroups: NavGroup[] = [
         icon: 'fi-rr-pencil-ruler',
         items: [
             { label: 'RFQs',           href: '/rfqs',              icon: 'fi-rr-file-invoice', permission: 'view rfqs' },
+            { label: 'Quote Requests', href: '/ied/quotation-requests', icon: 'fi-rr-inbox-in', permission: 'view rfqs' },
             { label: 'Gate Passes',    href: '/ied/gate-passes',   icon: 'fi-rr-shield-check', permission: 'manage gate-passes' },
             { label: 'Cost Estimates', href: '/cost-estimates',    icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
             { label: 'Quotations',     href: '/quotations',        icon: 'fi-rr-coins',        permission: 'view quotations' },

@@ -125,6 +125,12 @@ Route::get('/portfolio/news/{slug}',  [PortfolioPublicController::class, 'newsSh
 Route::get('/portfolio/gallery',      [PortfolioPublicController::class, 'gallery'])->name('portfolio.public.gallery');
 Route::get('/portfolio/videos',       [PortfolioPublicController::class, 'videos'])->name('portfolio.public.videos');
 Route::get('/portfolio/contact',      [PortfolioPublicController::class, 'contact'])->name('portfolio.public.contact');
+// "Request a quotation" — the one public form that writes. Guarded inside
+// the controller (honeypot, time trap, 5/hour); the throttle here only caps
+// raw volume.
+Route::get('/portfolio/request-quotation',  [PortfolioPublicController::class, 'requestQuote'])->name('portfolio.public.quote');
+Route::post('/portfolio/request-quotation', [\App\Http\Controllers\Portfolio\QuotationRequestController::class, 'store'])
+    ->middleware('throttle:20,1')->name('portfolio.public.quote.store');
 Route::get('/portfolio/{slug}',       [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
 
 // Public stakeholder form fill — no auth, identified by token.
@@ -399,6 +405,17 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{serviceDemand}/edit',      [\App\Http\Controllers\ServiceDemandController::class, 'edit'])->name('edit');
         Route::put('/{serviceDemand}',           [\App\Http\Controllers\ServiceDemandController::class, 'update'])->name('update');
         Route::delete('/{serviceDemand}',        [\App\Http\Controllers\ServiceDemandController::class, 'destroy'])->name('destroy');
+    });
+
+    // ─── IED Quote Requests — sent in from the public website ───
+    Route::prefix('ied/quotation-requests')->name('ied.quotation-requests.')->group(function () {
+        $c = \App\Http\Controllers\QuotationRequestController::class;
+        Route::get('/',                         [$c, 'index'])->middleware('permission:view rfqs')->name('index');
+        Route::get('/{quotationRequest}',       [$c, 'show'])->middleware('permission:view rfqs')->name('show');
+        Route::get('/{quotationRequest}/files/{file}', [$c, 'file'])->middleware('permission:view rfqs')->name('file');
+        Route::put('/{quotationRequest}',       [$c, 'update'])->middleware('permission:edit rfqs')->name('update');
+        Route::delete('/{quotationRequest}',    [$c, 'destroy'])->middleware('permission:edit rfqs')->name('destroy');
+        Route::post('/{quotationRequest}/convert', [$c, 'convert'])->middleware('permission:create rfqs')->name('convert');
     });
 
     // ─── IED Consultancy Requests inbox + report ───
