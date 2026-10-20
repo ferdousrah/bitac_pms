@@ -235,6 +235,19 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
 - Links: **Back to website** (`/portfolio`) and **BITAC staff? Sign in here**
   (`/login`). The forgot / reset password pages were not restyled.
 
+### The staff sign-in (2026-10-20)
+- `/login` (`Auth/Login.tsx`) is **deliberately not** the stakeholder page's
+  split layout: one white card floating on the dark BITAC backdrop (blueprint
+  grid, violet glow, two slowly turning gears), the emblem + Bangla name +
+  ministry above it, "Staff sign in · BITAC PMS — Production Management
+  System" on it, and the department flow (IED → PCD → Shops → QC → Delivery →
+  Billing) as chips beneath. Someone who opened the wrong door sees at once
+  that this is the office's own system; the header links to the website and
+  to the stakeholder sign-in.
+- `AuthenticatedSessionController@create` passes **`bitac`** (`name_bn`,
+  `ministry_bn`, `logo_left`) alongside `canResetPassword` / `status`. The
+  form still posts `email` / `password` / `remember` to `route('login')`.
+
 ### ⚠️ Important: Customer model does NOT use Spatie
 Customer extends Authenticatable but does NOT have `hasRole()`. In middleware, use:
 ```php
