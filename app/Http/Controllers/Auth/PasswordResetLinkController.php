@@ -19,6 +19,8 @@ class PasswordResetLinkController extends Controller
     {
         return Inertia::render('Auth/ForgotPassword', [
             'status' => session('status'),
+            'bitac'  => \App\Support\AuthBranding::bitac(),
+            'expireMinutes' => (int) config('auth.passwords.users.expire', 60),
         ]);
     }
 

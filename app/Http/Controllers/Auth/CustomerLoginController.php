@@ -11,20 +11,8 @@ class CustomerLoginController extends Controller
 {
     public function showLoginForm()
     {
-        // The BITAC letterhead (emblem, Bangla name, ministry, contacts) — the
-        // same identity the public website wears, since its "Stakeholder
-        // Login" button is how people reach this page.
-        $center = \App\Models\Center::find(\App\Models\Center::defaultId());
-
         return Inertia::render('Auth/CustomerLogin', [
-            'bitac' => $center ? [
-                'name_bn'       => $center->name_bn,
-                'ministry_bn'   => $center->ministry_bn,
-                'government_bn' => $center->government_bn,
-                'phone_bn'      => $center->phone_bn,
-                'email'         => $center->email,
-                'logo_left'     => $center->logo_left_url,
-            ] : null,
+            'bitac' => \App\Support\AuthBranding::bitac(),
         ]);
     }
 

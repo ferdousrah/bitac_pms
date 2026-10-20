@@ -233,7 +233,7 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
   `email`, `logo_left`). The form still posts `email` / `password` /
   `remember` to `/customer/login`; nothing about authentication changed.
 - Links: **Back to website** (`/portfolio`) and **BITAC staff? Sign in here**
-  (`/login`). The forgot / reset password pages were not restyled.
+  (`/login`).
 
 ### The staff sign-in (2026-10-20)
 - `/login` (`Auth/Login.tsx`) is **deliberately not** the stakeholder page's
@@ -247,6 +247,23 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
 - `AuthenticatedSessionController@create` passes **`bitac`** (`name_bn`,
   `ministry_bn`, `logo_left`) alongside `canResetPassword` / `status`. The
   form still posts `email` / `password` / `remember` to `route('login')`.
+
+### Sign-in pages share two shells (2026-10-20)
+- **`Components/Auth/StaffAuthShell`** (dark backdrop + one white card) wraps
+  `Auth/Login` and `Auth/ForgotPassword`; **`Components/Auth/StakeholderAuthShell`**
+  (ink brand panel + form) wraps `Auth/CustomerLogin` and
+  `Auth/CustomerForgotPassword`. `Components/Auth/AuthField` holds the field,
+  `authInputClass(invalid, filled)`, the green `AuthStatus` and `telHref`.
+  A sign-in page is its form only — don't re-inline a backdrop.
+- **`App\Support\AuthBranding::bitac()`** is the one place the BITAC identity
+  for these pages is read (default centre's letterhead); all four controllers
+  pass it as `bitac`.
+- The forgot-password pages state how long the link lasts from
+  **`config('auth.passwords.{users|customers}.expire')`** (`expireMinutes`),
+  not a typed number. After a send the button reads "Send the link again".
+- ⚠️ **Not restyled yet:** `ResetPassword` / `CustomerResetPassword` (the page
+  the emailed link opens), `CustomerForcePassword`, `ConfirmPassword`,
+  `VerifyEmail`, `Register`.
 
 ### ⚠️ Important: Customer model does NOT use Spatie
 Customer extends Authenticatable but does NOT have `hasRole()`. In middleware, use:

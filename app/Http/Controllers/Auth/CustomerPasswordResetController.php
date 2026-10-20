@@ -15,6 +15,8 @@ class CustomerPasswordResetController extends Controller
     {
         return Inertia::render('Auth/CustomerForgotPassword', [
             'status' => session('status'),
+            'bitac'  => \App\Support\AuthBranding::bitac(),
+            'expireMinutes' => (int) config('auth.passwords.customers.expire', 60),
         ]);
     }
 

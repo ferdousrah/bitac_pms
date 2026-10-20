@@ -18,18 +18,10 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): Response
     {
-        // The emblem and Bangla name from the default centre's letterhead —
-        // the same identity the website and the stakeholder sign-in wear.
-        $center = \App\Models\Center::find(\App\Models\Center::defaultId());
-
         return Inertia::render('Auth/Login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
-            'bitac' => $center ? [
-                'name_bn'     => $center->name_bn,
-                'ministry_bn' => $center->ministry_bn,
-                'logo_left'   => $center->logo_left_url,
-            ] : null,
+            'bitac' => \App\Support\AuthBranding::bitac(),
         ]);
     }
 
