@@ -5,7 +5,8 @@ namespace App\Services\Reports;
 use App\Services\ReportSheetRenderer as R;
 
 /**
- * IED's five commercial reports, described as printable sheets.
+ * IED's five reports (Stakeholders, Sector Wise Job, Quotation Value, Jobs in
+ * Pipeline, Target vs Achievement), described as printable sheets.
  *
  * ⚠️ These build a sheet from data the report has ALREADY worked out — they
  * compute nothing. A printed total that disagrees with the screen is the one
@@ -50,19 +51,19 @@ class IedReportSheets
     public static function clients(string $yearLabel, ?string $centre, array $rows, ?string $search = null): array
     {
         return [
-            'title_bn' => 'গ্রাহক তালিকা',
-            'title_en' => 'CLIENT LIST',
+            'title_bn' => 'স্টেকহোল্ডার তালিকা',
+            'title_en' => 'STAKEHOLDERS',
             'subtitle' => self::scope($yearLabel, $centre,
                 $search ? 'matching “' . self::esc($search) . '”' : ''),
             'tiles' => [
-                ['label' => 'Clients', 'value' => (string) count(self::rows($rows))],
+                ['label' => 'Stakeholders', 'value' => (string) count(self::rows($rows))],
                 ['label' => 'Jobs', 'value' => R::money(array_sum(array_column(self::rows($rows), 'jobs')), 0)],
                 ['label' => 'Value', 'value' => R::money(array_sum(array_column(self::rows($rows), 'value')))],
             ],
             'sections' => [[
-                'heading' => 'Clients, biggest first',
+                'heading' => 'Stakeholders, biggest first',
                 'columns' => [
-                    ['label' => 'Client', 'width' => '30%'],
+                    ['label' => 'Stakeholder', 'width' => '30%'],
                     ['label' => 'Type', 'width' => '14%'],
                     ['label' => 'Sector', 'width' => '16%'],
                     ['label' => 'Contact', 'width' => '18%'],
@@ -82,7 +83,7 @@ class IedReportSheets
                 'total' => ['Total', '', '', '',
                     R::money(array_sum(array_column(self::rows($rows), 'jobs')), 0),
                     R::money(array_sum(array_column(self::rows($rows), 'value')))],
-                'empty' => 'No client has a job in this year.',
+                'empty' => 'No stakeholder has a job in this year.',
             ]],
             'signatories' => ['Prepared By', 'Executive Engineer (IED)', 'Director (Centre Head)'],
         ];
@@ -108,8 +109,8 @@ class IedReportSheets
         }
 
         return [
-            'title_bn' => 'ধরন ও খাতভিত্তিক কাজ',
-            'title_en' => 'JOBS BY CLIENT TYPE & SECTOR',
+            'title_bn' => 'খাতভিত্তিক কাজ',
+            'title_en' => 'SECTOR WISE JOB',
             'subtitle' => self::scope($yearLabel, $centre),
             'tiles' => [
                 ['label' => 'Jobs', 'value' => R::money(array_sum(array_column(self::rows($groups), 'jobs')), 0)],
@@ -171,37 +172,44 @@ class IedReportSheets
         ];
     }
 
+    /**
+     * Jobs in Pipeline — quotations given to a client with no order yet
+     * (BITAC, 2026-10-20). Not year-scoped: "as on" today.
+     */
     public static function pipeline(?string $centre, array $data): array
     {
-        $stageRows = array_map(fn ($s) => [
-            self::esc($s['label']),
-            R::money($s['jobs'], 0),
-            R::money($s['value']),
-        ], self::rows($data['stages']));
+        $summary = fn (array $groups) => array_map(fn ($g) => [
+            self::esc($g['label']),
+            R::money($g['jobs'], 0),
+            R::money($g['value']),
+        ], self::rows($groups));
 
         $jobRows = array_map(function ($j) {
-            $reference = $j['kind'] === 'quotation'
-                ? ($j['quotation']['ref'] ?? '—') . ($j['rfq_id'] ? ' · RFQ #' . $j['rfq_id'] : '')
-                : $j['wo_number'] . ($j['job_number'] ? ' · Job ' . $j['job_number'] : '');
-
-            $quotation = $j['quotation']
-                ? $j['quotation']['ref'] . ($j['quotation']['version'] > 1 ? ' v' . $j['quotation']['version'] : '')
-                    . (! empty($j['revising']) ? '<br><i>re-quotation in preparation</i>' : '')
-                : '<i>not quoted</i>';
+            $q = $j['quotation'];
+            $ref = $q['ref'] . ($q['version'] > 1 ? ' v' . $q['version'] : '')
+                . ($q['memo_no'] ? '<br><span style="font-size: 7.5pt;">' . self::esc($q['memo_no']) . '</span>' : '');
+            $job = self::esc($j['job'] ?: '—') . ($j['more_items'] > 0 ? ' <i>+' . $j['more_items'] . ' more</i>' : '');
 
             return [
-                self::esc($reference),
+                $ref,
                 self::esc($j['customer'] ?: '—'),
-                self::esc($j['stage_label']),
-                $quotation,
-                $j['due_date'] ? self::esc($j['due_date']) . ($j['overdue'] ? ' <b>overdue</b>' : '') : '—',
-                // ⚠️ A job with no quotation has an UNKNOWN value, not a zero one.
-                $j['quotation'] ? R::money($j['value']) : '—',
+                $job,
+                $j['quoted_on'] ? self::esc(date('d M Y', strtotime($j['quoted_on']))) : '—',
+                $j['days'] !== null ? R::money($j['days'], 0) : '—',
+                self::esc($j['state_label']),
+                R::money($j['value']),
             ];
-        }, $data['jobs']);
+        }, self::rows($data['jobs']));
+
+        $totalRow = fn () => ['Total', R::money($data['total']['jobs'], 0), R::money($data['total']['value'])];
+        $col3 = [
+            ['label' => '', 'width' => '60%'],
+            ['label' => 'Jobs', 'align' => 'right', 'width' => '15%'],
+            ['label' => 'Quoted value', 'align' => 'right', 'width' => '25%'],
+        ];
 
         return [
-            'title_bn' => 'চলমান কাজের বিবরণী',
+            'title_bn' => 'পাইপলাইনে থাকা কাজ',
             'title_en' => 'JOBS IN PIPELINE',
             'landscape' => true,
             'subtitle' => implode(' &nbsp;·&nbsp; ', array_filter([
@@ -210,43 +218,44 @@ class IedReportSheets
                 'amounts in BDT (<span class="bn">৳</span>)',
             ])),
             'tiles' => [
-                ['label' => 'In the pipeline', 'value' => R::money($data['total']['jobs'], 0)],
-                ['label' => 'Quoted', 'value' => R::money($data['total']['quoted'], 0)],
-                ['label' => 'Work orders', 'value' => R::money($data['total']['work_orders'], 0)],
+                ['label' => 'Quoted, no order yet', 'value' => R::money($data['total']['jobs'], 0)],
                 ['label' => 'Quoted value', 'value' => R::money($data['total']['value'])],
+                ['label' => 'Longest waiting', 'value' => $data['total']['oldest_days'] !== null
+                    ? R::money($data['total']['oldest_days'], 0) . ' days' : '—'],
             ],
             'sections' => [
                 [
-                    'heading' => '1. By stage',
-                    'columns' => [
-                        ['label' => 'Stage', 'width' => '60%'],
-                        ['label' => 'Items', 'align' => 'right', 'width' => '15%'],
-                        ['label' => 'Quoted value', 'align' => 'right', 'width' => '25%'],
-                    ],
-                    'rows'  => $stageRows,
-                    'total' => ['Total', R::money($data['total']['jobs'], 0), R::money($data['total']['value'])],
+                    'heading' => '1. Where they stand',
+                    'columns' => array_replace($col3, [0 => ['label' => 'Status', 'width' => '60%']]),
+                    'rows'    => $summary($data['by_state']),
+                    'total'   => $totalRow(),
                 ],
                 [
-                    'heading' => '2. What is in it',
+                    'heading' => '2. How long they have been waiting',
+                    'columns' => array_replace($col3, [0 => ['label' => 'Since quoted', 'width' => '60%']]),
+                    'rows'    => $summary($data['ageing']),
+                    'total'   => $totalRow(),
+                ],
+                [
+                    'heading' => '3. The quotations, longest waiting first',
                     'columns' => [
-                        ['label' => 'Reference', 'width' => '18%'],
-                        ['label' => 'Client', 'width' => '28%'],
-                        ['label' => 'Stage', 'width' => '16%'],
                         ['label' => 'Quotation', 'width' => '13%'],
-                        ['label' => 'Due', 'width' => '12%'],
-                        ['label' => 'Quoted value', 'align' => 'right', 'width' => '13%'],
+                        ['label' => 'Stakeholder', 'width' => '20%'],
+                        ['label' => 'Job', 'width' => '25%'],
+                        ['label' => 'Quoted on', 'width' => '10%'],
+                        ['label' => 'Days', 'align' => 'right', 'width' => '6%'],
+                        ['label' => 'Status', 'width' => '14%'],
+                        ['label' => 'Quoted value', 'align' => 'right', 'width' => '12%'],
                     ],
                     'rows'  => $jobRows,
-                    'empty' => 'Nothing open.',
+                    'total' => ['Total', '', '', '', '', '', R::money($data['total']['value'])],
+                    'empty' => 'No quotation is waiting for an order.',
                 ],
             ],
-            'notes' => 'Everything neither delivered nor cancelled, from the quotation to the gate. '
-                . '<b>Quoted</b> is work quoted to a customer against which no work order has come in yet. '
-                . 'A work order carries no money of its own — the figure is the quotation it was issued against, '
-                . 'so a job with no quotation shows a dash and is left out of the total'
-                . (($data['total']['unquoted'] ?? 0) > 0
-                    ? ' (' . $data['total']['unquoted'] . ' such job(s) here).'
-                    : '.'),
+            'notes' => 'A job is here when a quotation has been <b>given to the client and no order has come in</b>. '
+                . 'Each job appears once, at the price the client is holding: after a re-quotation is sent, at the '
+                . 're-quotation\'s price; while one is being prepared, at the earlier price. Once a work order is '
+                . 'received the job leaves this report.',
             'signatories' => ['Prepared By', 'Executive Engineer (IED)', 'Director (Centre Head)'],
         ];
     }

@@ -368,21 +368,20 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - What that gives, verified stage by stage (v1 ৳100,000 → re-quotation v2 ৳85,000):
   v1 sent → **v1** · re-quotation started (draft / awaiting approval) → **still v1**,
   never v1 + v2 · v2 approved/sent → **v2 only** · work order on v2 → Target vs
-  Achievement, Client List, By Sector and the pipeline all read **v2**. A version
+  Achievement, Stakeholder and Sector Wise Job read **v2**, and the job leaves Jobs in Pipeline. A version
   superseded by "request changes" during approval was never sent and never counts.
 - ⚠️ **The window that used to be wrong:** starting a revision marks the parent
   `superseded` at once, so the old "exclude superseded" filter dropped the job from
   Quotation Value and from the pipeline's Quoted stage until the re-quotation went
   out — while the customer was still holding v1's price.
 - **Where it is applied:** IED Reports → Quotation Value (screen + print), Jobs in
-  Pipeline → Quoted (`approvedCounts: false` — an approved re-quotation not yet sent
-  has not replaced what the customer holds; such a row is `revising` and reads
-  "re-quotation in preparation"), the **live dashboard's "Quoted this month"** and
+  Pipeline (`approvedCounts: false` — an approved re-quotation not yet sent has not
+  replaced what the customer holds; such a row's state is `superseded` and reads
+  "Re-quotation in preparation"), the **live dashboard's "Quoted this month"** and
   **Oli's `finance_analyst`** (both used to sum EVERY row created in the period —
   v1 + v2 + drafts), and the **Quotations list PDF's Total Value** (the list still
   shows every version; the total adds each job once).
-- Work-order figures (Target vs Achievement, Client List, By Sector, pipeline work
-  orders) need no rule: `work_orders.quotation_id` is the version the order was
+- Work-order figures (Target vs Achievement, Stakeholder, Sector Wise Job) need no rule: `work_orders.quotation_id` is the version the order was
   issued against, and a `converted` quotation cannot be revised.
 - ⚠️ `LiveDashboardService::getData()` caches for **8 s** (`live_dashboard`) — a test
   that changes data and re-reads it must `Cache::forget('live_dashboard')`.
@@ -959,19 +958,37 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 > `IED → Reports`. The four existing reports (Production, OEE, Rejection, Lead Time) look at
 > the shop floor; these look at **who the work is for and what it is worth**.
 
-One page, four views, sharing a financial-year and centre filter — `Ied\IedReportController`
+One page, five views (Target vs Achievement is the fifth), sharing a financial-year and centre filter — `Ied\IedReportController`
 + `App\Services\IedReportService`. Only the view being looked at is queried.
 
-- **Client List** — every client with their type, sector, job count and value for the year, biggest first.
-- **By Type & Sector** — jobs folded into Government / Private, then sector. **Unclassified customers are shown, not hidden**, so a gap in the data is never mistaken for a gap in the work.
-- **Quotation Value** — what was quoted in the year, how much turned into work, and a month-by-month bar. ⚠️ Counts quotations that actually **reached the customer** (drafts and `pending_approval` excluded — a draft was not "given"), dated by `sent_to_customer_at` → `memo_date` → `created_at`. **`superseded` is excluded**, or a revised quotation would be counted twice for the same job.
-- **Jobs in Pipeline** — everything neither delivered nor cancelled, **in BITAC's six stages**, plus the list of what is in each. Deliberately **not** year-scoped: what is open is open, whenever it started.
-  - **Quoted → Work Order Received → Production Planning → In Production → QC → Ready to Deliver** (`IedReportService::PIPELINE_STAGES`, whose order IS the printed order). The old breakdown showed raw statuses ("Released to Shops", "QC Hold", "Approved"), which are states the software keeps, not steps a manager reads. An empty stage is still listed, so the report does not change shape week to week.
-  - ⚠️ **`quoted` has no work-order status and never will.** A quotation that reached the customer but produced no work order is not in `work_orders` at all, so it is counted from `quotations` (`quotedRows()`), which is where IED's own work actually starts. **`QUOTED_STATUSES` = `sent_to_customer`, `revision_requested`, `customer_accepted`** — `approved` is excluded because a quotation is approved internally *before* it is sent, and `superseded` / `customer_rejected` / `converted` are dead or already ordered.
-  - ⚠️ **The no-double-count guard is on the RFQ, not the quotation.** A work order is issued against one version, so checking `work_orders.quotation_id` alone would leave the other versions of the same job sitting in Quoted for ever. Any non-cancelled work order on the RFQ takes the job out of Quoted — and cancelling it puts the quotation back, which is right.
-  - The money column is the **Quoted value**, and each row names **which quotation** it came from (`Q-00142 v2`, linked, memo no beneath) — a work order carries no money of its own, so a figure nobody can trace to a quotation is a figure nobody trusts. Same traceability rule as Target vs Achievement.
-  - ⚠️ **A work order with no quotation reads "not quoted" and prints a dash, never ৳0.00.** Its value is unknown, not zero; the headline says how many there are and leaves them out of the total, so the stage figures and the row figures still sum to it exactly.
-  - ⚠️ **The pipeline is selected by what it EXCLUDES** (`CLOSED_STATUSES` = delivered, cancelled), not by a list of open statuses. It *was* such a list, and when **`pcd_review`** and **`pcd_release_pending`** were added (migrations 000051 / 000055) nobody extended it — so a work order sitting with the নির্বাহী প্রকৌশলী was **invisible here**, and the report's own headline count was wrong. Selecting by exclusion means a status added tomorrow still shows up; an unmapped one lands in the first stage rather than vanishing, which is the right way for a report to fail. The test suite asserts that every status the `WorkOrder` model declares belongs to exactly one stage.
+> ⚠️ **BITAC renamed two tabs and redefined a third (2026-10-20).** The URL keys did NOT
+> change (`view=clients|sector|pipeline`), so old links still open the right tab.
+
+- **Stakeholder** (was *Client List*, key `clients`) — every stakeholder (= client; BITAC has no
+  separate stakeholder directory) with their type, sector, job count and value for the year,
+  biggest first. Print title **STAKEHOLDERS / স্টেকহোল্ডার তালিকা**.
+- **Sector Wise Job** (was *By Type & Sector*, key `sector`) — jobs folded into Government /
+  Private, then sector. **Unclassified customers are shown, not hidden**, so a gap in the data
+  is never mistaken for a gap in the work. Print title **SECTOR WISE JOB / খাতভিত্তিক কাজ**.
+- **Quotation Value** — what was quoted in the year, how much turned into work, and a
+  month-by-month bar. One figure per job at the price that stands — see "Reports count a
+  re-quotation's price, once" above.
+- **Jobs in Pipeline** — ⚠️ **means "a quotation has been given and no order has come in"**
+  (BITAC, 2026-10-20). **Nothing past the order** — it used to run six stages from Quoted to
+  Ready to Deliver over the work orders; that was not what BITAC means by the pipeline, and
+  `PIPELINE_STAGES` / `stageFor()` / `CLOSED_STATUSES` / `workOrderRows()` are gone with it.
+  Deliberately **not** year-scoped — what is waiting is waiting; ageing is the time dimension.
+  - In: the standing version per RFQ (`applyStanding(..., approvedCounts: false)`) whose status
+    is `sent_to_customer` (*Awaiting the client's reply*), `revision_requested` (*Client asked
+    for a revision*), `customer_accepted` (*Accepted — order not received*) or `superseded`
+    (*Re-quotation in preparation* — the client still holds that price). Out: drafts,
+    `approved` (approved internally, never sent), `customer_rejected`, `converted`.
+  - ⚠️ **"No order" is checked on the RFQ**, not the quotation: any non-cancelled work order on
+    the RFQ means the order came in; cancelling it puts the job back.
+  - Each row: quotation (`Q-00142 v2`, memo no), stakeholder, the job (first RFQ item's first
+    line, "+N more"), quoted on, **days waiting**, status, quoted value. **Longest waiting
+    first** — it is a follow-up list. Summaries **by status** and **by age** (0–30, 31–60, 61–90,
+    over 90 days); both sum to the total, and the print's total equals the screen's.
 - Work-order money comes from the linked quotation and work-order dates use
   `COALESCE(customer_wo_date, DATE(created_at))` — the same expressions as
   `TargetAchievementService`, so the two reports can never disagree. Cancelled work orders are
@@ -979,7 +996,7 @@ One page, four views, sharing a financial-year and centre filter — `Ied\IedRep
 
 ## 🖨 Every report prints (2026-10-04)
 
-> All nine — IED's five (Client List, By Type & Sector, Quotation Value, Jobs in Pipeline, Target vs Achievement) and the four shop-floor ones (Production, OEE, Lead Time, Rejection Rate) — plus Receivables, which already did.
+> All nine — IED's five (Stakeholder, Sector Wise Job, Quotation Value, Jobs in Pipeline, Target vs Achievement) and the four shop-floor ones (Production, OEE, Lead Time, Rejection Rate) — plus Receivables, which already did.
 
 - **`App\Services\ReportSheetRenderer` is the one renderer.** A report is a title, a line saying what was asked for, some headline figures, one or more tables and a note; nine of them differ only in those contents. Each describes a **sheet** (`title_bn`, `title_en`, `subtitle`, `landscape`, `tiles[]`, `sections[]`, `notes`, `signatories[]`) and this lays it out. Nine bespoke renderers would be nine copies of the same table CSS drifting apart.
 - The sheets live in **`App\Services\Reports\IedReportSheets`** and **`ProductionReportSheets`**. ⚠️ **They compute nothing** — they format figures the report already worked out. A second copy of the arithmetic is how a printed total comes to disagree with the screen.
@@ -1009,7 +1026,7 @@ One page, four views, sharing a financial-year and centre filter — `Ied\IedRep
 - Every figure is traceable: clicking a centre lists the work orders behind it with their quotation and version. A total nobody can trace is a total nobody trusts.
 
 ### It lives in IED → Reports now (2026-10-04)
-- BITAC set the yearly figure from IED, so the report **and the form that sets it** moved onto the same desk: **IED → Reports → Target vs Achievement** (`?view=target`, a fifth tab beside Client List / By Type & Sector / Quotation Value / Jobs in Pipeline). The standalone entry under the production Reports group is gone and **`/reports/target-achievement` redirects** there carrying the year, because notifications and bookmarks written before the move point at it.
+- BITAC set the yearly figure from IED, so the report **and the form that sets it** moved onto the same desk: **IED → Reports → Target vs Achievement** (`?view=target`, a fifth tab beside Stakeholder / Sector Wise Job / Quotation Value / Jobs in Pipeline). The standalone entry under the production Reports group is gone and **`/reports/target-achievement` redirects** there carrying the year, because notifications and bookmarks written before the move point at it.
 - Setting it needs the new permission **`set targets`** (migration `..._000059`, plus both seeders), held by **Executive Engineer (IED)**, **ied-officer** and **management**. ⚠️ `super-admin` is deliberately not granted — `Gate::before` already lets them past, so the grant would add nothing.
 - ⚠️ **The target routes had to move OUT of `permission:view reports`.** An IED officer does not hold it, so left in that group the save and the breakdown would 403 for exactly the people whose job this now is. Store is `permission:set targets`; the breakdown is `permission:view rfqs|view reports` (Spatie's `|` is OR) so both desks can trace a figure.
 - `canSetFor` arrives **empty** for a viewer without `set targets`, so the form is simply not rendered — and `TargetController@store` refuses the write as well. The screen only stays honest about what the person can do.

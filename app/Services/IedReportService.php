@@ -18,67 +18,33 @@ use Illuminate\Support\Facades\DB;
 class IedReportService
 {
     /**
-     * The pipeline in the words BITAC uses, not in internal status names.
+     * "Jobs in Pipeline" — BITAC (2026-10-20): **a quotation has been given and
+     * no order has come in yet.** Nothing past the order: work orders are not
+     * part of this report.
      *
-     * "Released to Shops", "QC Hold" and "Approved" are states the software
-     * keeps; a manager reading a report wants the six steps the work actually
-     * goes through. The order here IS the order the report prints.
-     *
-     * ⚠️ **`quoted` has no work-order status and never will** — a quotation
-     * that has gone to the customer but produced no work order yet is not in
-     * `work_orders` at all. It is counted from `quotations`, which is why this
-     * report starts where IED's own work starts. See quotedRows().
-     *
-     * ⚠️ **Every open status must appear in exactly one stage.** `pcd_review`
-     * and `pcd_release_pending` were added long after this report and nobody
-     * put them in the old flat list, so a work order sitting with the
-     * নির্বাহী প্রকৌশলী was simply invisible here. assertStagesCoverStatuses()
-     * in the test suite is what stops that happening again.
-     */
-    public const PIPELINE_STAGES = [
-        'quoted'        => ['label' => 'Quoted',              'statuses' => []],
-        'wo_received'   => ['label' => 'Work Order Received', 'statuses' => ['draft', 'approved', 'ied_pending', 'pcd_review']],
-        'planning'      => ['label' => 'Production Planning', 'statuses' => ['pcd_pending', 'pcd_release_pending']],
-        'in_production' => ['label' => 'In Production',       'statuses' => ['released_to_shops', 'in_production']],
-        'qc'            => ['label' => 'QC',                  'statuses' => ['qc_hold']],
-        'ready'         => ['label' => 'Ready to Deliver',    'statuses' => ['qc_passed', 'ready_for_delivery', 'partially_delivered']],
-    ];
-
-    /**
-     * Quotation statuses that mean "given to the customer and still live".
-     *
-     * ⚠️ `approved` is NOT here: a quotation is approved internally before it
-     * is sent, so it has not been quoted to anybody yet. `superseded` and
-     * `customer_rejected` are dead, and `converted` already became a work
-     * order — counting any of them would inflate the front of the pipe.
+     * The statuses below are where a given quotation can stand while it waits.
+     * `superseded` is there for the window in which a re-quotation is being
+     * prepared — see pipeline(). `approved` is NOT: a quotation is approved
+     * internally before it is sent, so it has not been quoted to anybody.
+     * `customer_rejected` is dead and `converted` already became an order.
      */
     public const QUOTED_STATUSES = ['sent_to_customer', 'revision_requested', 'customer_accepted'];
 
-    /**
-     * ⚠️ The pipeline is defined by what it EXCLUDES, not by a list of what it
-     * includes.
-     *
-     * It used to be an explicit list of open statuses, and when `pcd_review`
-     * and `pcd_release_pending` were added nobody extended it — so those work
-     * orders were not merely miscategorised, they were **invisible**, and the
-     * report's own headline count was wrong. Selecting by exclusion means a
-     * status added tomorrow still shows up. An unmapped status lands in the
-     * first stage rather than vanishing, which is the right way for a report
-     * to fail; the test suite asserts that none is unmapped.
-     */
-    public const CLOSED_STATUSES = ['delivered', 'cancelled'];
+    /** Where a waiting quotation stands, in the order the report prints them. */
+    public const WAITING_STATES = [
+        'sent_to_customer'   => 'Awaiting the client\'s reply',
+        'revision_requested' => 'Client asked for a revision',
+        'superseded'         => 'Re-quotation in preparation',
+        'customer_accepted'  => 'Accepted — order not received',
+    ];
 
-    /** Which stage a work order's status belongs to. */
-    public static function stageFor(string $status): ?string
-    {
-        foreach (self::PIPELINE_STAGES as $key => $stage) {
-            if (in_array($status, $stage['statuses'], true)) {
-                return $key;
-            }
-        }
-
-        return null;
-    }
+    /** How long a quotation has been waiting, for follow-up. */
+    public const AGEING = [
+        '0_30'   => ['label' => '0–30 days',   'max' => 30],
+        '31_60'  => ['label' => '31–60 days',  'max' => 60],
+        '61_90'  => ['label' => '61–90 days',  'max' => 90],
+        '90_up'  => ['label' => 'Over 90 days', 'max' => null],
+    ];
 
     /**
      * A work order's date for reporting: the customer's own work-order date,
@@ -248,71 +214,26 @@ class IedReportService
     }
 
     /**
-     * Work in the pipe — everything neither delivered nor cancelled, by stage.
-     * Not year-scoped: what is open is open, whenever it started.
+     * Jobs in Pipeline: quotations given to a client against which no order
+     * has come in. Not year-scoped — what is waiting is waiting, however long
+     * ago it was quoted; the ageing buckets are the time dimension.
+     *
+     * ⚠️ **One row per job, at the version the client is holding**
+     * (`Quotation::applyStanding(..., approvedCounts: false)`): the latest
+     * version that actually went out. A re-quotation replaces the earlier one
+     * only once it is sent; while it is being prepared the job stays here at
+     * the earlier price (that version is `superseded` by then).
+     *
+     * ⚠️ **"No order" is checked on the RFQ, not the quotation.** A work order
+     * is issued against one version, so checking only
+     * `work_orders.quotation_id` would leave the other versions of the same
+     * job waiting for ever. Any work order on the RFQ that was not cancelled
+     * means the order came in; cancelling it puts the job back here.
      */
     public function pipeline(?int $centerId = null): array
     {
-        $rows = $this->quotedRows($centerId)->concat($this->workOrderRows($centerId));
+        $today = now()->startOfDay();
 
-        // One bucket per stage, in the declared order, present even when empty
-        // — a stage that disappears when nothing is in it makes the report
-        // read differently from one week to the next.
-        $byStage = [];
-        foreach (self::PIPELINE_STAGES as $key => $stage) {
-            $byStage[$key] = ['stage' => $key, 'label' => $stage['label'], 'jobs' => 0, 'value' => 0.0];
-        }
-
-        foreach ($rows as $r) {
-            $byStage[$r['stage']]['jobs']++;
-            $byStage[$r['stage']]['value'] += (float) $r['value'];
-        }
-        foreach ($byStage as &$st) $st['value'] = round($st['value'], 2);
-        unset($st);
-
-        // The table reads like the pipeline above it: by stage, then by what
-        // is due soonest, with undated work last.
-        $order = array_flip(array_keys(self::PIPELINE_STAGES));
-        $sorted = $rows->sort(function ($a, $b) use ($order) {
-            return [$order[$a['stage']], $a['due_date'] === null, (string) $a['due_date']]
-               <=> [$order[$b['stage']], $b['due_date'] === null, (string) $b['due_date']];
-        })->values();
-
-        // A job still being planned may have no quotation against it yet; its
-        // value is genuinely unknown, not zero, and the report says so rather
-        // than quietly dragging the total down.
-        $unquoted = $sorted->filter(fn ($r) => $r['quotation'] === null)->count();
-
-        return [
-            'stages' => array_values($byStage),
-            'total'  => [
-                'jobs'       => $sorted->count(),
-                'quoted'     => $byStage['quoted']['jobs'],
-                'work_orders'=> $sorted->count() - $byStage['quoted']['jobs'],
-                'value'      => round($sorted->sum('value'), 2),
-                'unquoted'   => $unquoted,
-            ],
-            'jobs' => $sorted->all(),
-        ];
-    }
-
-    /**
-     * Quotations given to the customer that no work order has come in against.
-     *
-     * ⚠️ The guard is on the **RFQ**, not on the quotation: a work order is
-     * issued against one version, so checking only `work_orders.quotation_id`
-     * would leave the other versions of the same job sitting in "Quoted" for
-     * ever. If any live work order exists for the RFQ, the job has moved on.
-     *
-     * ⚠️ **One row per job, at the version the customer is holding**
-     * (`applyStanding(..., approvedCounts: false)`): the latest version that
-     * actually went out. A re-quotation replaces the earlier one here only
-     * once it is sent; while it is being prepared the job stays in Quoted at
-     * the earlier price (that version is `superseded` by then, and is marked
-     * `revising` so the report can say so).
-     */
-    private function quotedRows(?int $centerId): \Illuminate\Support\Collection
-    {
         $q = DB::table('quotations')
             ->leftJoin('customers', 'customers.id', '=', 'quotations.customer_id')
             ->where(fn ($w) => $w->whereIn('quotations.status', self::QUOTED_STATUSES)
@@ -323,8 +244,7 @@ class IedReportService
             ->when($centerId, fn ($q) => $q->where('quotations.center_id', $centerId));
         Quotation::applyStanding($q, 'quotations', approvedCounts: false);
 
-        return $q
-            ->select(
+        $rows = $q->select(
                 'quotations.id',
                 'quotations.version',
                 'quotations.memo_no',
@@ -332,79 +252,61 @@ class IedReportService
                 'quotations.rfq_id',
                 'quotations.total_amount as value',
                 DB::raw('customers.name as customer'),
-                DB::raw('COALESCE(DATE(quotations.sent_to_customer_at), quotations.memo_date, DATE(quotations.created_at)) as started')
+                DB::raw(Quotation::quotedDateSql() . ' as quoted_on'),
+                // What the job is: the first item on its RFQ, and how many there are.
+                DB::raw('(SELECT ri.job_description FROM rfq_items ri WHERE ri.rfq_id = quotations.rfq_id ORDER BY ri.id LIMIT 1) as job'),
+                DB::raw('(SELECT COUNT(*) FROM rfq_items ri WHERE ri.rfq_id = quotations.rfq_id) as item_count')
             )
             ->get()
-            ->map(fn ($r) => [
-                'id'         => (int) $r->id,
-                'kind'       => 'quotation',
-                'stage'      => 'quoted',
-                'stage_label'=> self::PIPELINE_STAGES['quoted']['label'],
-                'wo_number'  => null,
-                'job_number' => null,
-                'rfq_id'     => $r->rfq_id ? (int) $r->rfq_id : null,
-                'status'     => $r->status,
-                'customer'   => $r->customer,
-                // A quotation carries no delivery date — the customer has not
-                // ordered yet, so there is nothing to be late for.
-                'due_date'   => null,
-                'started'    => $r->started,
-                'value'      => round((float) $r->value, 2),
-                'quotation'  => $this->quotationRef((int) $r->id, (int) $r->version, $r->memo_no, $r->status),
-                // The customer holds this version; a re-quotation is being prepared.
-                'revising'   => $r->status === 'superseded',
-                'overdue'    => false,
-            ]);
+            ->map(function ($r) use ($today) {
+                $days = $r->quoted_on ? (int) \Carbon\Carbon::parse($r->quoted_on)->startOfDay()->diffInDays($today) : null;
+
+                return [
+                    'id'          => (int) $r->id,
+                    'rfq_id'      => $r->rfq_id ? (int) $r->rfq_id : null,
+                    'customer'    => $r->customer,
+                    'job'         => $r->job ? trim(strtok($r->job, "\n")) : null,
+                    'more_items'  => max(0, (int) $r->item_count - 1),
+                    'state'       => $r->status,
+                    'state_label' => self::WAITING_STATES[$r->status] ?? $r->status,
+                    'quoted_on'   => $r->quoted_on,
+                    'days'        => $days,
+                    'ageing'      => self::ageingBucket($days),
+                    'value'       => round((float) $r->value, 2),
+                    'quotation'   => $this->quotationRef((int) $r->id, (int) $r->version, $r->memo_no, $r->status),
+                ];
+            })
+            // Longest waiting first — this is a list to follow up from.
+            ->sortByDesc(fn ($r) => $r['days'] ?? -1)
+            ->values();
+
+        $bucket = function (string $field, array $keys, callable $label) use ($rows) {
+            return collect($keys)->map(fn ($k) => [
+                'key'   => $k,
+                'label' => $label($k),
+                'jobs'  => $rows->where($field, $k)->count(),
+                'value' => round($rows->where($field, $k)->sum('value'), 2),
+            ])->values()->all();
+        };
+
+        return [
+            'total' => [
+                'jobs'        => $rows->count(),
+                'value'       => round($rows->sum('value'), 2),
+                'oldest_days' => $rows->max('days'),
+            ],
+            'by_state' => $bucket('state', array_keys(self::WAITING_STATES), fn ($k) => self::WAITING_STATES[$k]),
+            'ageing'   => $bucket('ageing', array_keys(self::AGEING), fn ($k) => self::AGEING[$k]['label']),
+            'jobs'     => $rows->all(),
+        ];
     }
 
-    /** Work orders that are neither delivered nor cancelled. */
-    private function workOrderRows(?int $centerId): \Illuminate\Support\Collection
+    private static function ageingBucket(?int $days): string
     {
-        $today = now()->startOfDay();
-
-        return DB::table('work_orders')
-            ->leftJoin('quotations', 'quotations.id', '=', 'work_orders.quotation_id')
-            ->leftJoin('customers', 'customers.id', '=', 'work_orders.customer_id')
-            ->whereNotIn('work_orders.status', self::CLOSED_STATUSES)
-            ->when($centerId, fn ($q) => $q->where('work_orders.center_id', $centerId))
-            ->select(
-                'work_orders.id',
-                'work_orders.wo_number',
-                'work_orders.job_number',
-                'work_orders.status',
-                'work_orders.due_date',
-                DB::raw($this->woDateExpr() . ' as started'),
-                DB::raw('customers.name as customer'),
-                // ⚠️ A work order carries no money of its own — the figure is
-                // the quotation it was issued against. A job with NO quotation
-                // must read as "not quoted", never as a quoted zero.
-                DB::raw('COALESCE(quotations.total_amount, 0) as value'),
-                DB::raw('work_orders.quotation_id as quotation_id'),
-                DB::raw('quotations.version as quotation_version'),
-                DB::raw('quotations.memo_no as quotation_memo_no'),
-                DB::raw('quotations.status as quotation_status')
-            )
-            ->get()
-            ->map(fn ($r) => [
-                'id'         => (int) $r->id,
-                'kind'       => 'work_order',
-                'stage'      => self::stageFor($r->status) ?? 'wo_received',
-                'stage_label'=> self::PIPELINE_STAGES[self::stageFor($r->status) ?? 'wo_received']['label'],
-                'wo_number'  => $r->wo_number,
-                'job_number' => $r->job_number,
-                'rfq_id'     => null,
-                'status'     => $r->status,
-                'customer'   => $r->customer,
-                'due_date'   => $r->due_date,
-                'started'    => $r->started,
-                'value'      => round((float) $r->value, 2),
-                'quotation'  => $r->quotation_id
-                    ? $this->quotationRef((int) $r->quotation_id, (int) $r->quotation_version,
-                        $r->quotation_memo_no, $r->quotation_status)
-                    : null,
-                'revising'   => false,
-                'overdue'    => $r->due_date !== null && $today->gt($r->due_date),
-            ]);
+        foreach (self::AGEING as $key => $b) {
+            if ($b['max'] === null || ($days ?? 0) <= $b['max']) return $key;
+        }
+        return '90_up';
     }
 
     /** The same reference the quotation screens use, so it is recognisable. */

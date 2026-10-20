@@ -8,8 +8,9 @@ const taka = (n: number) =>
     '৳ ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const VIEWS = [
-    { key: 'clients',    label: 'Client List' },
-    { key: 'sector',     label: 'By Type & Sector' },
+    // BITAC's names (2026-10-20). The keys stay, so old links still open the right tab.
+    { key: 'clients',    label: 'Stakeholder' },
+    { key: 'sector',     label: 'Sector Wise Job' },
     { key: 'quotations', label: 'Quotation Value' },
     { key: 'pipeline',   label: 'Jobs in Pipeline' },
     // ⚠️ Target vs Achievement lives here rather than under the production
@@ -18,22 +19,18 @@ const VIEWS = [
     { key: 'target',     label: 'Target vs Achievement' },
 ] as const;
 
-/** One colour per pipeline stage, earliest to latest. Written out in full —
- *  Tailwind only ships classes it can see in the source. */
-const STAGE_DOT: Record<string, string> = {
-    quoted: 'bg-slate-400',
-    wo_received: 'bg-sky-500',
-    planning: 'bg-indigo-500',
-    in_production: 'bg-violet-500',
-    qc: 'bg-amber-500',
-    ready: 'bg-emerald-500',
+/** Where a waiting quotation stands. Written out in full — Tailwind only
+ *  ships classes it can see in the source. */
+const STATE_TONE: Record<string, string> = {
+    sent_to_customer:   'bg-sky-50 text-sky-700 border-sky-200',
+    revision_requested: 'bg-amber-50 text-amber-700 border-amber-200',
+    superseded:         'bg-violet-50 text-violet-700 border-violet-200',
+    customer_accepted:  'bg-emerald-50 text-emerald-700 border-emerald-200',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-    draft: 'Draft', ied_pending: 'Awaiting IED', pcd_pending: 'Production Planning',
-    released_to_shops: 'Released to Shops', approved: 'Approved', in_production: 'In Production',
-    qc_hold: 'QC Hold', qc_passed: 'QC Passed', ready_for_delivery: 'Ready for Delivery',
-    partially_delivered: 'Partially Delivered',
+/** Older is redder: these are quotations to follow up. */
+const AGE_TONE: Record<string, string> = {
+    '0_30': 'text-surface-600', '31_60': 'text-amber-600', '61_90': 'text-orange-600', '90_up': 'text-rose-600 font-semibold',
 };
 
 const typeBadge = (t: string | null) =>
@@ -98,7 +95,7 @@ export default function IedReports({
                             <form onSubmit={runSearch}>
                                 <label className="form-label !mb-1">Search</label>
                                 <input value={q} onChange={(e) => setQ(e.target.value)}
-                                    placeholder="Client name…" className="form-input text-sm w-56" />
+                                    placeholder="Stakeholder name…" className="form-input text-sm w-56" />
                             </form>
                         )}
                         <div className="ml-auto flex items-center gap-3">
@@ -133,11 +130,11 @@ export default function IedReports({
                     />
                 )}
 
-                {/* ── Client list ───────────────────────────────────────── */}
+                {/* ── Stakeholders (was "Client List") ─────────────────── */}
                 {view === 'clients' && clients && (
                     <div className="card">
                         <div className="card-header">
-                            <h3 className="text-sm font-bold text-surface-900">Clients ({clients.length})</h3>
+                            <h3 className="text-sm font-bold text-surface-900">Stakeholders ({clients.length})</h3>
                             <p className="text-xs text-surface-400 mt-0.5">
                                 Jobs and value are for {year}; the classification is current.
                             </p>
@@ -146,7 +143,7 @@ export default function IedReports({
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-surface-100 text-[10px] uppercase tracking-wider text-surface-500 font-bold">
-                                        <th className="text-left px-4 py-2">Client</th>
+                                        <th className="text-left px-4 py-2">Stakeholder</th>
                                         <th className="text-left px-3 py-2 w-28">Type</th>
                                         <th className="text-left px-3 py-2 w-32">Sector</th>
                                         <th className="text-right px-3 py-2 w-16">Jobs</th>
@@ -156,7 +153,7 @@ export default function IedReports({
                                 </thead>
                                 <tbody>
                                     {clients.length === 0 ? (
-                                        <tr><td colSpan={6} className="text-center py-10 text-sm text-surface-400">No clients found.</td></tr>
+                                        <tr><td colSpan={6} className="text-center py-10 text-sm text-surface-400">No stakeholders found.</td></tr>
                                     ) : clients.map((c: any) => (
                                         <tr key={c.id} className="border-b border-surface-50 hover:bg-surface-50/60">
                                             <td className="px-4 py-2.5">
@@ -180,7 +177,7 @@ export default function IedReports({
                     </div>
                 )}
 
-                {/* ── By type & sector ──────────────────────────────────── */}
+                {/* ── Sector Wise Job ───────────────────────────────────── */}
                 {view === 'sector' && sectors && (
                     sectors.length === 0 ? (
                         <div className="card"><div className="card-body text-center py-10 text-sm text-surface-400">
@@ -281,135 +278,97 @@ export default function IedReports({
                     </>
                 )}
 
-                {/* ── Pipeline ──────────────────────────────────────────── */}
+                {/* ── Jobs in Pipeline: quoted, no order yet ─────────────── */}
                 {view === 'pipeline' && pipeline && (
                     <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="card"><div className="card-body">
-                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">In the pipeline</p>
+                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">Quoted, no order yet</p>
                                 <p className="text-xl font-bold text-surface-900 mt-1">{pipeline.total.jobs}</p>
-                                <p className="text-[11px] text-surface-400 mt-1">
-                                    {pipeline.total.quoted} quoted · {pipeline.total.work_orders} work order{pipeline.total.work_orders !== 1 ? 's' : ''}
-                                </p>
+                                <p className="text-[11px] text-surface-400 mt-1">job{pipeline.total.jobs !== 1 ? 's' : ''} waiting for a work order</p>
                             </div></div>
                             <div className="card"><div className="card-body">
-                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">Quoted value in the pipe</p>
+                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">Quoted value</p>
                                 <p className="text-xl font-bold text-surface-900 mt-1">{taka(pipeline.total.value)}</p>
-                                {pipeline.total.unquoted > 0 && (
-                                    <p className="text-[11px] text-amber-600 font-semibold mt-1">
-                                        {pipeline.total.unquoted} job{pipeline.total.unquoted !== 1 ? 's' : ''} not quoted yet — not in this figure
-                                    </p>
-                                )}
+                                <p className="text-[11px] text-surface-400 mt-1">at the price each client is holding</p>
+                            </div></div>
+                            <div className="card"><div className="card-body">
+                                <p className="text-[10px] uppercase tracking-wider text-surface-400 font-bold">Longest waiting</p>
+                                <p className="text-xl font-bold text-surface-900 mt-1">
+                                    {pipeline.total.oldest_days !== null && pipeline.total.oldest_days !== undefined ? `${pipeline.total.oldest_days} days` : '—'}
+                                </p>
+                                <p className="text-[11px] text-surface-400 mt-1">since the quotation was given</p>
                             </div></div>
                         </div>
 
-                        <div className="card">
-                            <div className="card-header">
-                                <h3 className="text-sm font-bold text-surface-900">By stage</h3>
-                                <p className="text-xs text-surface-400 mt-0.5">
-                                    From the quotation to the gate — everything neither delivered nor cancelled.
-                                </p>
-                            </div>
-                            <div className="card-body p-0">
-                                <table className="w-full text-sm">
-                                    <tbody>
-                                        {pipeline.stages.map((s: any) => (
-                                            <tr key={s.stage}
-                                                className={`border-b border-surface-50 last:border-0 ${s.jobs === 0 ? 'opacity-40' : ''}`}>
-                                                <td className="px-4 py-2">
-                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-2 align-middle ${STAGE_DOT[s.stage] ?? 'bg-surface-300'}`} />
-                                                    <span className="text-surface-700">{s.label}</span>
-                                                </td>
-                                                <td className="px-3 py-2 text-right font-mono text-surface-500 w-16">{s.jobs}</td>
-                                                <td className="px-4 py-2 text-right font-mono font-semibold w-32">{taka(s.value)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SummaryCard title="Where they stand" rows={pipeline.by_state}
+                                dot={(k: string) => STATE_TONE[k] ?? 'bg-surface-100 text-surface-600 border-surface-200'} />
+                            <SummaryCard title="How long they have been waiting" rows={pipeline.ageing}
+                                text={(k: string) => AGE_TONE[k] ?? 'text-surface-600'} />
                         </div>
 
                         <div className="card">
                             <div className="card-header">
-                                <h3 className="text-sm font-bold text-surface-900">In the pipeline ({pipeline.jobs.length})</h3>
-                                <p className="text-xs text-surface-400 mt-0.5">In pipeline order, soonest due first.</p>
+                                <h3 className="text-sm font-bold text-surface-900">Quotations waiting for an order ({pipeline.jobs.length})</h3>
+                                <p className="text-xs text-surface-400 mt-0.5">
+                                    Given to the client, no work order received. Longest waiting first. A job leaves this list when its order comes in.
+                                </p>
                             </div>
                             <div className="card-body p-0 overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-surface-100 text-[10px] uppercase tracking-wider text-surface-500 font-bold">
-                                            <th className="text-left px-4 py-2 w-40">Reference</th>
-                                            <th className="text-left px-3 py-2">Customer</th>
-                                            <th className="text-left px-3 py-2 w-40">Stage</th>
-                                            <th className="text-left px-3 py-2 w-32">Quotation</th>
-                                            <th className="text-left px-3 py-2 w-28">Due</th>
+                                            <th className="text-left px-4 py-2 w-36">Quotation</th>
+                                            <th className="text-left px-3 py-2">Stakeholder</th>
+                                            <th className="text-left px-3 py-2">Job</th>
+                                            <th className="text-left px-3 py-2 w-28">Quoted on</th>
+                                            <th className="text-right px-3 py-2 w-16">Days</th>
+                                            <th className="text-left px-3 py-2 w-44">Status</th>
                                             <th className="text-right px-4 py-2 w-32">Quoted value</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pipeline.jobs.length === 0 ? (
-                                            <tr><td colSpan={6} className="text-center py-10 text-sm text-surface-400">Nothing open.</td></tr>
+                                            <tr><td colSpan={7} className="text-center py-10 text-sm text-surface-400">No quotation is waiting for an order.</td></tr>
                                         ) : pipeline.jobs.map((j: any) => (
-                                            <tr key={j.id} className="border-b border-surface-50 hover:bg-surface-50/60">
+                                            <tr key={j.id} className="border-b border-surface-50 hover:bg-surface-50/60 align-top">
                                                 <td className="px-4 py-2.5">
-                                                    {j.kind === 'quotation' ? (
-                                                        <>
-                                                            <Link href={`/quotations/${j.id}`}
-                                                                className="font-mono text-xs font-semibold text-brand-600 hover:text-brand-700">
-                                                                {j.quotation.ref}
-                                                            </Link>
-                                                            {j.rfq_id && <p className="text-[10px] text-surface-400">RFQ #{j.rfq_id}</p>}
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Link href={`/work-orders/${j.id}`}
-                                                                className="font-mono text-xs font-semibold text-brand-600 hover:text-brand-700">
-                                                                {j.wo_number}
-                                                            </Link>
-                                                            {j.job_number && <p className="text-[10px] text-surface-400">Job {j.job_number}</p>}
-                                                        </>
+                                                    <Link href={`/quotations/${j.quotation.id}`}
+                                                        className="font-mono text-xs font-semibold text-brand-600 hover:text-brand-700">
+                                                        {j.quotation.ref}{j.quotation.version > 1 ? ` v${j.quotation.version}` : ''}
+                                                    </Link>
+                                                    {j.quotation.memo_no && (
+                                                        <p className="text-[10px] text-surface-400 truncate max-w-[9rem]" title={j.quotation.memo_no}>{j.quotation.memo_no}</p>
                                                     )}
                                                 </td>
-                                                <td className="px-3 py-2.5 text-surface-700">{j.customer ?? '—'}</td>
-                                                <td className="px-3 py-2.5 text-xs">
-                                                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${STAGE_DOT[j.stage] ?? 'bg-surface-300'}`} />
-                                                    <span className="text-surface-600">{j.stage_label}</span>
+                                                <td className="px-3 py-2.5 text-surface-800">{j.customer ?? '—'}</td>
+                                                <td className="px-3 py-2.5 text-surface-700">
+                                                    <span className="line-clamp-2">{j.job ?? '—'}</span>
+                                                    {j.more_items > 0 && <span className="text-[10px] text-surface-400">+{j.more_items} more item{j.more_items > 1 ? 's' : ''}</span>}
+                                                    {j.rfq_id && <Link href={`/rfqs/${j.rfq_id}`} className="block text-[10px] text-surface-400 hover:text-brand-600">RFQ #{j.rfq_id}</Link>}
                                                 </td>
-                                                <td className="px-3 py-2.5 text-xs">
-                                                    {j.quotation ? (
-                                                        <>
-                                                            <Link href={`/quotations/${j.quotation.id}`}
-                                                                className="font-mono text-[11px] font-semibold text-brand-600 hover:text-brand-700">
-                                                                {j.quotation.ref}{j.quotation.version > 1 ? ` v${j.quotation.version}` : ''}
-                                                            </Link>
-                                                            {j.quotation.memo_no && (
-                                                                <p className="text-[10px] text-surface-400 truncate max-w-[9rem]"
-                                                                    title={j.quotation.memo_no}>{j.quotation.memo_no}</p>
-                                                            )}
-                                                            {j.revising && (
-                                                                <p className="text-[10px] font-semibold text-amber-600">re-quotation in preparation</p>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-[11px] font-semibold text-amber-600">not quoted</span>
-                                                    )}
+                                                <td className="px-3 py-2.5 text-xs text-surface-600 whitespace-nowrap">
+                                                    {j.quoted_on ? new Date(j.quoted_on).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                                 </td>
-                                                <td className="px-3 py-2.5 text-xs">
-                                                    {j.due_date
-                                                        ? <span className={j.overdue ? 'text-rose-600 font-semibold' : 'text-surface-500'}>
-                                                            {j.due_date}{j.overdue ? ' · overdue' : ''}
-                                                          </span>
-                                                        : <span className="text-surface-300"
-                                                            title={j.kind === 'quotation' ? 'Not ordered yet — nothing to be late for' : undefined}>—</span>}
+                                                <td className={`px-3 py-2.5 text-right font-mono ${AGE_TONE[j.ageing] ?? ''}`}>{j.days ?? '—'}</td>
+                                                <td className="px-3 py-2.5">
+                                                    <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded border font-semibold ${STATE_TONE[j.state] ?? 'bg-surface-100 text-surface-600 border-surface-200'}`}>
+                                                        {j.state_label}
+                                                    </span>
                                                 </td>
-                                                <td className="px-4 py-2.5 text-right tabular-nums">
-                                                    {j.quotation
-                                                        ? <span className="font-semibold text-surface-900">{taka(j.value)}</span>
-                                                        : <span className="text-surface-300">—</span>}
-                                                </td>
+                                                <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-surface-900">{taka(j.value)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
+                                    {pipeline.jobs.length > 0 && (
+                                        <tfoot>
+                                            <tr className="border-t-2 border-surface-200 font-bold">
+                                                <td className="px-4 py-2.5" colSpan={6}>Total</td>
+                                                <td className="px-4 py-2.5 text-right tabular-nums">{taka(pipeline.total.value)}</td>
+                                            </tr>
+                                        </tfoot>
+                                    )}
                                 </table>
                             </div>
                         </div>
@@ -417,5 +376,34 @@ export default function IedReports({
                 )}
             </div>
         </AppLayout>
+    );
+}
+
+/** A small breakdown: label, number of jobs, quoted value. */
+function SummaryCard({ title, rows, dot, text }: {
+    title: string; rows: { key: string; label: string; jobs: number; value: number }[];
+    dot?: (k: string) => string; text?: (k: string) => string;
+}) {
+    return (
+        <div className="card">
+            <div className="card-header"><h3 className="text-sm font-bold text-surface-900">{title}</h3></div>
+            <div className="card-body p-0">
+                <table className="w-full text-sm">
+                    <tbody>
+                        {rows.map(r => (
+                            <tr key={r.key} className={`border-b border-surface-50 last:border-0 ${r.jobs === 0 ? 'opacity-40' : ''}`}>
+                                <td className="px-4 py-2">
+                                    {dot
+                                        ? <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded border font-semibold ${dot(r.key)}`}>{r.label}</span>
+                                        : <span className={text ? text(r.key) : 'text-surface-700'}>{r.label}</span>}
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono text-surface-500 w-14">{r.jobs}</td>
+                                <td className="px-4 py-2 text-right font-mono font-semibold w-32">{taka(r.value)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     );
 }
