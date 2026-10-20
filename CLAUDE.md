@@ -220,6 +220,21 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
 - **Example staff**: `admin@bitac.gov.bd` / `password`
 - **Example customer**: `shoeb@acimotors.com.bd` / `password`
 
+### The customer sign-in is the "Stakeholder Portal" (2026-10-20)
+- `/customer/login` (`Auth/CustomerLogin.tsx`) is reached from the public
+  site's **Stakeholder Login**, so it wears the website's identity rather than
+  the app's: an **ink brand panel** (BITAC emblem + Bangla name + ministry
+  line, "Your work with BITAC, in one place.", three things the portal does,
+  BITAC's phone and email) beside a clean form (icon inputs, show-password,
+  keep-me-signed-in, forgot password, violet Sign in). On a phone the panel is
+  hidden and the emblem + name sit above the form, with the contacts under it.
+- `CustomerLoginController@showLoginForm` passes **`bitac`** — the default
+  centre's letterhead (`name_bn`, `ministry_bn`, `government_bn`, `phone_bn`,
+  `email`, `logo_left`). The form still posts `email` / `password` /
+  `remember` to `/customer/login`; nothing about authentication changed.
+- Links: **Back to website** (`/portfolio`) and **BITAC staff? Sign in here**
+  (`/login`). The forgot / reset password pages were not restyled.
+
 ### ⚠️ Important: Customer model does NOT use Spatie
 Customer extends Authenticatable but does NOT have `hasRole()`. In middleware, use:
 ```php
