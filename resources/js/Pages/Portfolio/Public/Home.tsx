@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import PublicLayout from '@/Layouts/PublicLayout';
 import {
-    GalleryRow, KindBadge, NewsRow, PartnerRow, PartnerWall, Project, ProjectCard, Prose, Section, SectionHead,
+    GalleryRow, KindBadge, NewsRow, PartnerRow, PartnerWall, PostCover, Project, ProjectCard, Prose, Section, SectionHead,
 } from './parts';
 import HeroSlider, { HeroSlide } from '@/Components/Public/HeroSlider';
 import { ServiceRow } from './Services';
@@ -486,106 +486,104 @@ function ClientMarquee({ clients }: { clients: { name: string; type: string | nu
 // ── Newsroom ─────────────────────────────────────────────────────────────
 
 /**
- * News & Events, as the page's closing band — it took the place of the old
- * "Have a job for us?" call to action (BITAC's call), so it is dark like that
- * was and the page still ends on a strong block rather than trailing off.
+ * News & Events — the last section, in the place the old "Have a job for us?"
+ * band had (BITAC's call).
  *
- * ⚠️ Unlike every other section it does NOT disappear when empty: it is the
- * last thing before the footer, and with nothing to say it would leave the
- * page ending abruptly. It says plainly that there is nothing yet and points
- * at the newsroom and the contact page instead.
+ * ⚠️ LIGHT, deliberately. The first version was a dark band, and with the
+ * footer dark too the bottom of the page became one undivided purple block —
+ * the section had no edge. Light, it reads as a newsroom and the footer reads
+ * as a footer. The events panel carries the dark instead, contained, so the
+ * section still has contrast.
+ *
+ * ⚠️ It is the one section that does not vanish when empty: as the last thing
+ * before the footer, hiding it would end the page abruptly.
  */
 function Newsroom({ news, events }: { news: NewsRow[]; events: NewsRow[] }) {
     const has = news.length > 0 || events.length > 0;
 
     return (
-        <section className="relative overflow-hidden bg-brand-950">
-            <div className="absolute inset-0 bg-blueprint" />
-            <div className="absolute -top-40 right-0 w-[40rem] h-[40rem] rounded-full bg-brand-600/20 blur-3xl" />
-            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
-                <SectionHead dark eyebrow="Newsroom" title="News & Events"
+        <section className="bg-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
+                <SectionHead eyebrow="Newsroom" title="News & Events"
                              lead="Announcements, notices and what is coming up at BITAC."
                              action={{ href: '/portfolio/news', label: 'All news & events' }} />
 
                 {!has ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-8 py-14 text-center">
-                        <i className="fi fi-rr-newspaper text-3xl text-brand-300" />
-                        <p className="text-white/70 mt-4">No announcements right now — check back soon.</p>
-                        <Link href="/portfolio/contact"
-                              className="inline-flex items-center gap-2 mt-6 px-5 py-3 rounded-2xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/15 text-white text-sm font-bold transition-colors">
-                            <i className="fi fi-rr-envelope text-xs leading-none" />
-                            Get in touch
-                        </Link>
+                    <div className="rounded-3xl border border-dashed border-surface-300 bg-surface-50 px-8 py-14 text-center">
+                        <i className="fi fi-rr-newspaper text-3xl text-brand-400" />
+                        <p className="text-surface-600 mt-4">No announcements right now — check back soon.</p>
+                        <div className="mt-6">
+                            <GhostButton href="/portfolio/contact" icon="fi-rr-envelope">Get in touch</GhostButton>
+                        </div>
                     </div>
                 ) : (
                     <div className={`grid gap-8 ${news.length && events.length ? 'lg:grid-cols-12' : ''}`}>
                         {news.length > 0 && (
                             <div className={events.length ? 'lg:col-span-8' : ''}>
-                                <DarkNews news={news} />
+                                <NewsGrid news={news} />
                             </div>
                         )}
                         {events.length > 0 && (
-                            <div className={news.length ? 'lg:col-span-4' : ''}>
-                                <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-300 mb-4 flex items-center gap-2">
-                                    <i className="fi fi-rr-calendar text-xs leading-none" />
-                                    Upcoming events
-                                </div>
-                                <div className="space-y-3">
-                                    {events.map(e => <DarkEvent key={e.slug} e={e} />)}
-                                </div>
+                            <div className={news.length ? 'lg:col-span-4' : 'max-w-md'}>
+                                <EventsPanel events={events} />
                             </div>
                         )}
                     </div>
                 )}
-
-                <div className="mt-10 sm:hidden">
-                    <Link href="/portfolio/news" className="inline-flex items-center gap-2 text-sm font-bold text-white/80">
-                        All news & events <i className="fi fi-rr-arrow-small-right text-base leading-none" />
-                    </Link>
-                </div>
             </div>
         </section>
     );
 }
 
-/** The newest story large, the rest as a list beside it. */
-function DarkNews({ news }: { news: NewsRow[] }) {
+/** The newest story as a feature card, the rest stacked beside it. */
+function NewsGrid({ news }: { news: NewsRow[] }) {
     const [lead, ...rest] = news;
     return (
-        <div className="grid md:grid-cols-2 gap-5">
+        <div className="grid md:grid-cols-2 gap-6">
             <Link href={`/portfolio/news/${lead.slug}`}
-                  className="group relative rounded-3xl overflow-hidden border border-white/10 min-h-[20rem] flex flex-col justify-end p-7 bg-gradient-to-br from-brand-700/60 via-brand-900 to-brand-950">
-                {lead.cover_url ? (
-                    <img src={lead.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-700" />
-                ) : (
-                    <i className="fi fi-rr-megaphone absolute top-7 right-7 text-6xl text-white/10 leading-none" />
-                )}
-                <span className="absolute inset-0 bg-gradient-to-t from-brand-950 via-brand-950/50 to-transparent" />
-                <span className="relative">
-                    <KindBadge kind={lead.kind} />
-                    <span className="block text-xl font-bold text-white mt-4 leading-snug group-hover:text-brand-200 transition-colors">
+                  className="group flex flex-col rounded-3xl overflow-hidden bg-white border border-surface-200 hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-900/10 hover:-translate-y-1 transition-all duration-300">
+                <div className="aspect-[16/10] overflow-hidden">
+                    <PostCover kind={lead.kind} url={lead.cover_url}
+                               className="group-hover:scale-105 transition-transform duration-700" />
+                </div>
+                <div className="flex flex-col flex-1 p-6">
+                    <div className="flex items-center gap-2.5">
+                        <KindBadge kind={lead.kind} />
+                        <span className="text-xs text-surface-400">{lead.published}</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-surface-900 mt-3 leading-snug group-hover:text-brand-700 transition-colors">
                         {lead.title}
+                    </h3>
+                    {lead.excerpt && (
+                        <p className="text-sm text-surface-600 mt-2.5 leading-relaxed line-clamp-3">{lead.excerpt}</p>
+                    )}
+                    <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-sm font-bold text-brand-700 group-hover:gap-2.5 transition-all">
+                        Read the story <i className="fi fi-rr-arrow-small-right text-base leading-none" />
                     </span>
-                    {lead.excerpt && <span className="block text-sm text-white/60 mt-3 leading-relaxed line-clamp-3">{lead.excerpt}</span>}
-                    <span className="flex items-center gap-2 text-[11px] text-white/40 mt-5">
-                        <i className="fi fi-rr-clock text-[10px] leading-none" />{lead.published}
-                    </span>
-                </span>
+                </div>
             </Link>
 
             {rest.length > 0 && (
-                <div className="space-y-3">
+                <div className="flex flex-col gap-4">
                     {rest.map(n => (
                         <Link key={n.slug} href={`/portfolio/news/${n.slug}`}
-                              className="group block p-5 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-brand-400/40 transition-all">
-                            <span className="flex items-center gap-2">
-                                <KindBadge kind={n.kind} />
-                                <span className="text-[11px] text-white/40">{n.published}</span>
+                              className="group flex-1 flex items-center gap-4 p-3 rounded-2xl bg-white border border-surface-200 hover:border-brand-200 hover:shadow-lg hover:shadow-brand-900/5 transition-all">
+                            <span className="w-28 h-28 shrink-0 rounded-xl overflow-hidden">
+                                <PostCover kind={n.kind} url={n.cover_url} size="sm"
+                                           className="group-hover:scale-105 transition-transform duration-500" />
                             </span>
-                            <span className="block text-[15px] font-bold text-white mt-2.5 leading-snug group-hover:text-brand-200 transition-colors line-clamp-2">
-                                {n.title}
+                            <span className="min-w-0 py-1 pr-2 flex flex-col">
+                                <span className="flex items-center gap-2">
+                                    <KindBadge kind={n.kind} />
+                                    <span className="text-[11px] text-surface-400">{n.published}</span>
+                                </span>
+                                <span className="block text-[15px] font-bold text-surface-900 mt-2 leading-snug line-clamp-2 group-hover:text-brand-700 transition-colors">
+                                    {n.title}
+                                </span>
+                                {n.excerpt && (
+                                    <span className="block text-[13px] text-surface-500 mt-1 leading-relaxed line-clamp-2">{n.excerpt}</span>
+                                )}
                             </span>
-                            {n.excerpt && <span className="block text-[13px] text-white/50 mt-1.5 line-clamp-1">{n.excerpt}</span>}
                         </Link>
                     ))}
                 </div>
@@ -594,27 +592,58 @@ function DarkNews({ news }: { news: NewsRow[] }) {
     );
 }
 
-function DarkEvent({ e }: { e: NewsRow }) {
-    const [day, month, year] = (e.event_date ?? '').split(' ');
+/**
+ * The diary, as one dark panel. The contrast lives here now rather than across
+ * the whole band, which is what kept the section from merging into the footer.
+ */
+function EventsPanel({ events }: { events: NewsRow[] }) {
     return (
-        <Link href={`/portfolio/news/${e.slug}`}
-              className="group flex gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-brand-400/40 transition-all">
-            <span className="w-16 shrink-0 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex flex-col items-center justify-center py-2 shadow-lg shadow-brand-900/50">
-                <span className="text-2xl font-extrabold leading-none tabular-nums">{day}</span>
-                <span className="text-[10px] uppercase font-bold tracking-wider mt-1 text-white/80">{month}</span>
-                {year && <span className="text-[9px] text-white/55 tabular-nums">{year}</span>}
-            </span>
-            <span className="min-w-0 py-0.5">
-                <span className="block text-sm font-bold text-white leading-snug line-clamp-2 group-hover:text-brand-200 transition-colors">
-                    {e.title}
-                </span>
-                {e.location && (
-                    <span className="flex items-center gap-1.5 text-[11px] text-white/45 mt-2">
-                        <i className="fi fi-rr-marker text-[10px] leading-none" />{e.location}
+        <div className="relative h-full rounded-3xl bg-brand-950 overflow-hidden p-7">
+            <div className="absolute inset-0 bg-blueprint" />
+            <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-brand-500/25 blur-3xl" />
+            <div className="relative">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-300">Diary</div>
+                        <h3 className="text-xl font-bold text-white mt-1">Upcoming events</h3>
+                    </div>
+                    <span className="w-11 h-11 rounded-2xl bg-white/10 text-brand-200 flex items-center justify-center">
+                        <i className="fi fi-rr-calendar-star text-lg leading-none" />
                     </span>
-                )}
-            </span>
-        </Link>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                    {events.map(e => {
+                        const [day, month, year] = (e.event_date ?? '').split(' ');
+                        return (
+                            <Link key={e.slug} href={`/portfolio/news/${e.slug}`}
+                                  className="group flex gap-4 p-3 rounded-2xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.1] hover:border-brand-400/40 transition-all">
+                                <span className="w-16 shrink-0 rounded-xl bg-white text-center py-2.5 shadow-lg shadow-black/20">
+                                    <span className="block text-[10px] uppercase font-bold tracking-wider text-brand-600">{month}</span>
+                                    <span className="block text-2xl font-extrabold text-surface-900 leading-none mt-0.5 tabular-nums">{day}</span>
+                                    {year && <span className="block text-[9px] text-surface-400 mt-0.5 tabular-nums">{year}</span>}
+                                </span>
+                                <span className="min-w-0 py-1">
+                                    <span className="block text-sm font-bold text-white leading-snug line-clamp-2 group-hover:text-brand-200 transition-colors">
+                                        {e.title}
+                                    </span>
+                                    {e.location && (
+                                        <span className="flex items-center gap-1.5 text-[11px] text-white/50 mt-2">
+                                            <i className="fi fi-rr-marker text-[10px] leading-none" />{e.location}
+                                        </span>
+                                    )}
+                                </span>
+                            </Link>
+                        );
+                    })}
+                </div>
+
+                <Link href="/portfolio/news"
+                      className="mt-6 flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 text-sm font-bold text-white transition-colors">
+                    See all events <i className="fi fi-rr-arrow-small-right text-base leading-none" />
+                </Link>
+            </div>
+        </div>
     );
 }
 

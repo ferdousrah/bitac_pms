@@ -1370,11 +1370,22 @@ blank falls back to the Site text headline.
 - Marquee, gears and floats all stop under `prefers-reduced-motion`; the
   marquee pauses on hover. CSS lives in `app.css` under "Public website".
 - **News & Events closes the page** (BITAC, 2026-10-20) — it replaced the
-  "Have a job for us?" call to action, and is a dark band like that was, so
-  the page still ends on a strong block. ⚠️ It is the ONE section that does
-  not vanish when empty: as the last thing before the footer, hiding it would
-  end the page abruptly, so it says "no announcements right now" and offers
-  the contact page instead.
+  "Have a job for us?" call to action. ⚠️ **It is LIGHT, not dark.** The first
+  version was a dark band like the CTA had been, and with the footer dark too
+  the bottom of the page became one undivided purple block — the section had
+  no edge (BITAC: *"designta valo lagtesena"*). Now: a feature story with a
+  cover, two stories stacked beside it (`flex-1`, so the column ends level),
+  and the **diary as one contained dark panel** — the contrast lives there.
+  ⚠️ It is the ONE section that does not vanish when empty: as the last thing
+  before the footer, hiding it would end the page abruptly, so it says "no
+  announcements right now" and offers the contact page instead.
+  - **`PostCover`** (`parts.tsx`) is a post's cover when it has no
+    photograph — which is all of them on day one. ⚠️ **Each kind has its own
+    gradient and icon** (news violet / notice amber→rose / event fuchsia /
+    tender emerald) so a row of stories reads as different things, not the
+    same purple box four times. The gradients are written out in full —
+    Tailwind does not ship a class built from a variable. `NewsCard` uses it
+    too, so `/portfolio/news` has the same covers.
   - ⚠️ The home page's `news` query **excludes events**, which have their own
     column beside it — left in, an upcoming event showed twice in one section.
   - **`NewsSampleSeeder`**: three stories that are true about this system (the

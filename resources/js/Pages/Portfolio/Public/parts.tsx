@@ -213,6 +213,43 @@ const KIND_TONE: Record<string, string> = {
     tender: 'text-emerald-700 bg-emerald-50',
 };
 
+/**
+ * A post's cover when it has no photograph — which, on the day the site goes
+ * up, is all of them.
+ *
+ * ⚠️ Each kind gets its own colour and its own icon, so a row of stories reads
+ * as a row of different things rather than the same purple box four times.
+ * The four gradients are written out in full: Tailwind only ships classes it
+ * can see in the source, so building `from-${tone}-500` produces no CSS.
+ */
+const COVER: Record<string, { bg: string; icon: string; label: string }> = {
+    news:   { bg: 'from-brand-500 via-brand-600 to-brand-800',     icon: 'fi-rr-megaphone',    label: 'News' },
+    notice: { bg: 'from-amber-400 via-orange-500 to-rose-600',     icon: 'fi-rr-bell-ring',    label: 'Notice' },
+    event:  { bg: 'from-fuchsia-500 via-purple-600 to-brand-800',  icon: 'fi-rr-calendar-star', label: 'Event' },
+    tender: { bg: 'from-emerald-500 via-teal-600 to-cyan-800',     icon: 'fi-rr-document-signed', label: 'Tender' },
+};
+
+export function PostCover({ kind, url, size = 'lg', className = '' }: {
+    kind: string; url?: string | null; size?: 'lg' | 'sm'; className?: string;
+}) {
+    if (url) {
+        return <img src={url} alt="" loading="lazy" className={`w-full h-full object-cover ${className}`} />;
+    }
+    const c = COVER[kind] ?? COVER.news;
+    return (
+        <div className={`relative w-full h-full overflow-hidden bg-gradient-to-br ${c.bg} ${className}`}>
+            <div className="absolute inset-0 bg-blueprint opacity-60" />
+            <div className="absolute -bottom-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+            <i className={`fi ${c.icon} absolute leading-none text-white/90 ${
+                size === 'lg' ? 'text-6xl left-8 bottom-8' : 'text-2xl inset-0 m-auto w-fit h-fit'
+            }`} />
+            {size === 'lg' && (
+                <i className={`fi ${c.icon} absolute -top-6 -right-6 text-[9rem] leading-none text-white/[0.08]`} />
+            )}
+        </div>
+    );
+}
+
 export function KindBadge({ kind }: { kind: string }) {
     return (
         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${KIND_TONE[kind] ?? 'text-surface-600 bg-surface-100'}`}>
@@ -225,10 +262,9 @@ export function NewsCard({ n }: { n: NewsRow }) {
     return (
         <Link href={`/portfolio/news/${n.slug}`}
               className="group flex gap-4 p-4 rounded-2xl bg-white border border-surface-200 hover:border-brand-300 hover:shadow-md transition-all">
-            {n.cover_url && (
-                <img src={n.cover_url} alt="" loading="lazy"
-                     className="w-24 h-24 rounded-xl object-cover shrink-0" />
-            )}
+            <span className="w-24 h-24 rounded-xl overflow-hidden shrink-0">
+                <PostCover kind={n.kind} url={n.cover_url} size="sm" />
+            </span>
             <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
                     <KindBadge kind={n.kind} />
