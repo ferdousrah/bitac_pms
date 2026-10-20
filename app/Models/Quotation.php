@@ -70,4 +70,66 @@ class Quotation extends Model
         }
         return $chain;
     }
+
+    // ── Which version a report counts ────────────────────────────────────
+
+    /**
+     * Statuses that mean the quotation was given out (or ready to go) and is
+     * a real figure. `superseded` is handled separately — see applyStanding().
+     */
+    public const GIVEN_STATUSES = [
+        'approved', 'sent_to_customer', 'revision_requested',
+        'customer_accepted', 'customer_rejected', 'converted',
+    ];
+
+    /**
+     * Narrow a query on `quotations` (aliased `$alias`) to the ONE version per
+     * RFQ that a report should count: the newest version that was given out.
+     *
+     * BITAC (2026-10-20): once a re-quotation is given, every figure uses the
+     * re-quotation's price. So:
+     *  - v1 sent, v2 still a draft or awaiting approval → **v1 counts**. The
+     *    customer is holding v1's price; the job must not vanish from the
+     *    reports while the re-quotation is being prepared. (Creating the
+     *    revision marks v1 `superseded` at once, which is why a plain "not
+     *    superseded" filter dropped the job entirely in that window.)
+     *  - v2 given → **v2 counts, v1 does not**. Never both.
+     *  - A superseded version counts only if it actually went out
+     *    (`sent_to_customer_at`); one superseded by "request changes" during
+     *    approval never reached anybody.
+     *
+     * Versions are numbered per RFQ (`getNextVersion($rfqId)`), so the RFQ is
+     * the chain. Works on Eloquent and on `DB::table()` builders alike.
+     *
+     * `$approvedCounts = false` is the stricter reading the pipeline's
+     * "Quoted" stage uses: an approved re-quotation that has not gone out yet
+     * has not replaced what the customer is holding.
+     */
+    public static function applyStanding($query, string $alias = 'quotations', bool $approvedCounts = true)
+    {
+        $statuses = $approvedCounts ? self::GIVEN_STATUSES : array_values(array_diff(self::GIVEN_STATUSES, ['approved']));
+
+        $given = function ($q, string $a) use ($statuses) {
+            $q->where(fn ($w) => $w->whereIn("{$a}.status", $statuses)
+                ->orWhere(fn ($s) => $s->where("{$a}.status", 'superseded')->whereNotNull("{$a}.sent_to_customer_at")));
+        };
+
+        $given($query, $alias);
+
+        return $query->whereNotExists(function ($sub) use ($alias, $given) {
+            $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                ->from('quotations as newer_q')
+                ->whereColumn('newer_q.rfq_id', "{$alias}.rfq_id")
+                ->whereColumn('newer_q.version', '>', "{$alias}.version");
+            $given($sub, 'newer_q');
+        });
+    }
+
+    /** The date a quotation counts on: when it went out, else its memo date, else entry. */
+    public const QUOTED_DATE_SQL = 'COALESCE(DATE(%1$s.sent_to_customer_at), %1$s.memo_date, DATE(%1$s.created_at))';
+
+    public static function quotedDateSql(string $alias = 'quotations'): string
+    {
+        return sprintf(self::QUOTED_DATE_SQL, $alias);
+    }
 }

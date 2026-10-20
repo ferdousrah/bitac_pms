@@ -2569,10 +2569,16 @@ HTML;
         }
         $tableHtml .= '</tbody></table>';
 
-        $totalAmt = number_format($quotations->sum(fn($q) => (float) $q->total_amount), 2);
+        // The list shows every version; the total counts each job ONCE, at the
+        // price that stands — a re-quotation replaces the version before it.
+        $standingIds = $quotations->isEmpty() ? collect() : \App\Models\Quotation::applyStanding(
+            \App\Models\Quotation::query()->whereIn('quotations.id', $quotations->pluck('id'))
+        )->pluck('quotations.id');
+        $totalAmt = number_format($quotations->whereIn('id', $standingIds)->sum(fn($q) => (float) $q->total_amount), 2);
         $date = now()->format('d M Y, H:i');
         $summary = "<div style='margin-bottom:14px;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;'>"
-            . "<strong>Total Quotations:</strong> {$quotations->count()} | <strong>Total Value:</strong> ৳{$totalAmt}</div>";
+            . "<strong>Total Quotations:</strong> {$quotations->count()} | <strong>Total Value:</strong> ৳{$totalAmt}"
+            . "<div style='font-size:10px;color:#64748b;margin-top:4px;'>Total Value counts each job once, at its latest given price — earlier versions and drafts are listed but not added.</div></div>";
 
         $html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>"
             . "body{font-family:tinos,serif;font-size:11px;color:#334155;margin:30px;}"

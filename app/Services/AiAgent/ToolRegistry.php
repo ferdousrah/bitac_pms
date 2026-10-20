@@ -581,7 +581,11 @@ DESC,
 
         $invoicedPeriod   = (float) Invoice::where('created_at', '>=', $from)->sum('total_amount');
         $outstanding      = (float) Invoice::where('status', 'issued')->sum('total_amount');
-        $quotedPeriod     = (float) Quotation::where('created_at', '>=', $from)->sum('total_amount');
+        // One figure per job at the price that stands — never a quotation AND
+        // its re-quotation (Quotation::applyStanding).
+        $quotedPeriod     = (float) Quotation::applyStanding(Quotation::query())
+                                ->whereRaw(Quotation::quotedDateSql() . ' >= ?', [$from->toDateString()])
+                                ->sum('quotations.total_amount');
         $convertedPeriod  = (float) Quotation::where('status', 'converted')->where('updated_at', '>=', $from)->sum('total_amount');
         $conversionRate   = $quotedPeriod > 0 ? round(($convertedPeriod / $quotedPeriod) * 100, 1) : 0;
         $pendingQuotes    = Quotation::where('status', 'pending_approval')->count();

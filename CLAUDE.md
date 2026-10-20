@@ -356,6 +356,37 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - Refusal is a redirect + flash naming the current status, not an `abort()`.
 - The revision then goes through approval again from scratch, and `sendToCustomer` requires `approved`, so a re-quotation cannot reach the customer un-approved.
 
+### ⚠️ Reports count a re-quotation's price, once (2026-10-20)
+> BITAC: *"কোটেশন দেওয়ার পর রি-কোটেশন দিলে রিপোর্ট এ রি-কোটেশনের মূল্য হিসাবে ধরে সকল হিসাব বা রিপোর্ট জেনারেট হবে।"*
+
+- **`Quotation::applyStanding($query, $alias, $approvedCounts = true)`** is the one
+  rule: per RFQ (versions are numbered per RFQ, so the RFQ is the chain), count
+  the **newest version that was given out** — `GIVEN_STATUSES` (approved, sent,
+  revision requested, accepted, rejected, converted) **or `superseded` with a
+  `sent_to_customer_at`**. Works on Eloquent and `DB::table()` builders.
+  `Quotation::quotedDateSql()` is the matching date (sent → memo date → entry).
+- What that gives, verified stage by stage (v1 ৳100,000 → re-quotation v2 ৳85,000):
+  v1 sent → **v1** · re-quotation started (draft / awaiting approval) → **still v1**,
+  never v1 + v2 · v2 approved/sent → **v2 only** · work order on v2 → Target vs
+  Achievement, Client List, By Sector and the pipeline all read **v2**. A version
+  superseded by "request changes" during approval was never sent and never counts.
+- ⚠️ **The window that used to be wrong:** starting a revision marks the parent
+  `superseded` at once, so the old "exclude superseded" filter dropped the job from
+  Quotation Value and from the pipeline's Quoted stage until the re-quotation went
+  out — while the customer was still holding v1's price.
+- **Where it is applied:** IED Reports → Quotation Value (screen + print), Jobs in
+  Pipeline → Quoted (`approvedCounts: false` — an approved re-quotation not yet sent
+  has not replaced what the customer holds; such a row is `revising` and reads
+  "re-quotation in preparation"), the **live dashboard's "Quoted this month"** and
+  **Oli's `finance_analyst`** (both used to sum EVERY row created in the period —
+  v1 + v2 + drafts), and the **Quotations list PDF's Total Value** (the list still
+  shows every version; the total adds each job once).
+- Work-order figures (Target vs Achievement, Client List, By Sector, pipeline work
+  orders) need no rule: `work_orders.quotation_id` is the version the order was
+  issued against, and a `converted` quotation cannot be revised.
+- ⚠️ `LiveDashboardService::getData()` caches for **8 s** (`live_dashboard`) — a test
+  that changes data and re-reads it must `Cache::forget('live_dashboard')`.
+
 ### Deleting a draft quotation (`QuotationController@destroy`)
 - **Only `draft`** can be deleted (anything submitted/approved/sent is revised, never deleted); refusal is a redirect + flash. Allowed for the creator, a super admin, or anyone with `edit quotations`. UI: trash icon on draft rows in the Quotation list, **Delete** in the Draft card on Show, **Delete Draft** on the edit form — all `confirm()` first.
 - Items, file rows, approvals and customer responses cascade; physical attachments are removed from the `public` disk.

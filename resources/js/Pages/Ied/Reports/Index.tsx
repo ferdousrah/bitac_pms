@@ -247,8 +247,8 @@ export default function IedReports({
                             <div className="card-header">
                                 <h3 className="text-sm font-bold text-surface-900">Month by month</h3>
                                 <p className="text-xs text-surface-400 mt-0.5">
-                                    Counted from the date each quotation went to the customer. Drafts and superseded
-                                    versions are excluded — a revised quotation would otherwise be counted twice.
+                                    Each job counts once, at its latest given price — after a re-quotation, at the
+                                    re-quotation&rsquo;s price. Dated from when that version went to the customer; drafts are not counted.
                                 </p>
                             </div>
                             <div className="card-body p-0">
@@ -385,6 +385,9 @@ export default function IedReports({
                                                             {j.quotation.memo_no && (
                                                                 <p className="text-[10px] text-surface-400 truncate max-w-[9rem]"
                                                                     title={j.quotation.memo_no}>{j.quotation.memo_no}</p>
+                                                            )}
+                                                            {j.revising && (
+                                                                <p className="text-[10px] font-semibold text-amber-600">re-quotation in preparation</p>
                                                             )}
                                                         </>
                                                     ) : (

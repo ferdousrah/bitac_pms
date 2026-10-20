@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\Quotation;
 use App\Support\FinancialYear;
 use Illuminate\Support\Facades\DB;
 
@@ -191,21 +192,27 @@ class IedReportService
     /**
      * What was quoted in the year.
      *
-     * ⚠️ Counts quotations that actually REACHED the customer — a draft sitting
-     * in the system was not "given". Dated by when it was sent, falling back to
-     * its memo date and then to creation, so older rows still land somewhere
-     * sensible. Superseded versions are excluded: a revised quotation would
-     * otherwise be counted twice for the same job.
+     * ⚠️ **One figure per job, at the price that stands** —
+     * `Quotation::applyStanding()`. After a re-quotation is given, the job is
+     * counted at the re-quotation's price and the earlier version is not
+     * counted at all (BITAC, 2026-10-20). While the re-quotation is still being
+     * prepared, the version the customer is holding keeps counting — it used
+     * to be dropped the moment the revision was started, because starting one
+     * marks the parent `superseded`.
+     *
+     * A draft or a quotation awaiting approval was not "given" and never
+     * counts. Dated by when the counted version went out, falling back to its
+     * memo date and then to creation, so older rows still land somewhere.
      */
     public function quotationValue(string $year, ?int $centerId = null): array
     {
         [$start, $end] = FinancialYear::range($year);
-        $dateExpr = 'COALESCE(DATE(quotations.sent_to_customer_at), quotations.memo_date, DATE(quotations.created_at))';
+        $dateExpr = Quotation::quotedDateSql();
 
         $base = DB::table('quotations')
-            ->whereNotIn('quotations.status', ['draft', 'pending_approval', 'superseded'])
             ->whereBetween(DB::raw($dateExpr), [$start->toDateString(), $end->toDateString()])
             ->when($centerId, fn ($q) => $q->where('quotations.center_id', $centerId));
+        Quotation::applyStanding($base);
 
         $totals = (clone $base)
             ->select(DB::raw('COUNT(*) as count'), DB::raw('COALESCE(SUM(total_amount),0) as value'))
@@ -296,16 +303,27 @@ class IedReportService
      * issued against one version, so checking only `work_orders.quotation_id`
      * would leave the other versions of the same job sitting in "Quoted" for
      * ever. If any live work order exists for the RFQ, the job has moved on.
+     *
+     * ⚠️ **One row per job, at the version the customer is holding**
+     * (`applyStanding(..., approvedCounts: false)`): the latest version that
+     * actually went out. A re-quotation replaces the earlier one here only
+     * once it is sent; while it is being prepared the job stays in Quoted at
+     * the earlier price (that version is `superseded` by then, and is marked
+     * `revising` so the report can say so).
      */
     private function quotedRows(?int $centerId): \Illuminate\Support\Collection
     {
-        return DB::table('quotations')
+        $q = DB::table('quotations')
             ->leftJoin('customers', 'customers.id', '=', 'quotations.customer_id')
-            ->whereIn('quotations.status', self::QUOTED_STATUSES)
+            ->where(fn ($w) => $w->whereIn('quotations.status', self::QUOTED_STATUSES)
+                ->orWhere('quotations.status', 'superseded'))
             ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('work_orders')
                 ->whereColumn('work_orders.rfq_id', 'quotations.rfq_id')
                 ->where('work_orders.status', '<>', 'cancelled'))
-            ->when($centerId, fn ($q) => $q->where('quotations.center_id', $centerId))
+            ->when($centerId, fn ($q) => $q->where('quotations.center_id', $centerId));
+        Quotation::applyStanding($q, 'quotations', approvedCounts: false);
+
+        return $q
             ->select(
                 'quotations.id',
                 'quotations.version',
@@ -333,6 +351,8 @@ class IedReportService
                 'started'    => $r->started,
                 'value'      => round((float) $r->value, 2),
                 'quotation'  => $this->quotationRef((int) $r->id, (int) $r->version, $r->memo_no, $r->status),
+                // The customer holds this version; a re-quotation is being prepared.
+                'revising'   => $r->status === 'superseded',
                 'overdue'    => false,
             ]);
     }
@@ -382,6 +402,7 @@ class IedReportService
                     ? $this->quotationRef((int) $r->quotation_id, (int) $r->quotation_version,
                         $r->quotation_memo_no, $r->quotation_status)
                     : null,
+                'revising'   => false,
                 'overdue'    => $r->due_date !== null && $today->gt($r->due_date),
             ]);
     }

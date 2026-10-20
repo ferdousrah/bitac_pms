@@ -164,9 +164,9 @@ class IedReportSheets
                 'total' => ['Total', R::money($data['count'], 0), R::money($data['value'])],
                 'empty' => 'No quotation reached a customer in this year.',
             ]],
-            'notes' => 'Counts quotations that actually <b>reached the customer</b> — drafts and those still '
-                . 'awaiting approval are not counted, because they were never given. A quotation that has been '
-                . 'revised is counted once, as the version that stands.',
+            'notes' => 'Each job is counted <b>once, at the price that stands</b>: after a re-quotation is given, '
+                . 'at the re-quotation\'s price, and the earlier version is not counted. Drafts and quotations '
+                . 'awaiting approval are not counted, because they were never given.',
             'signatories' => ['Prepared By', 'Executive Engineer (IED)', 'Director (Centre Head)'],
         ];
     }
@@ -186,6 +186,7 @@ class IedReportSheets
 
             $quotation = $j['quotation']
                 ? $j['quotation']['ref'] . ($j['quotation']['version'] > 1 ? ' v' . $j['quotation']['version'] : '')
+                    . (! empty($j['revising']) ? '<br><i>re-quotation in preparation</i>' : '')
                 : '<i>not quoted</i>';
 
             return [

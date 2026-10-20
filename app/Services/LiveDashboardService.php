@@ -62,7 +62,11 @@ class LiveDashboardService
         $invoicedToday   = (float) Invoice::whereDate('created_at', $today)->sum('total_amount');
         $invoicedMonth   = (float) Invoice::where('created_at', '>=', $monthStart)->sum('total_amount');
         $outstandingAmt  = (float) Invoice::whereIn('status', ['issued', 'acknowledged'])->sum('total_amount');
-        $quotedMonth     = (float) Quotation::where('created_at', '>=', $monthStart)->sum('total_amount');
+        // One figure per job at the price that stands — a re-quotation replaces
+        // the version before it rather than adding to it (Quotation::applyStanding).
+        $quotedMonth     = (float) Quotation::applyStanding(Quotation::query())
+                                            ->whereRaw(Quotation::quotedDateSql() . ' >= ?', [$monthStart->toDateString()])
+                                            ->sum('quotations.total_amount');
         $convertedMonth  = (float) Quotation::where('status', 'converted')
                                             ->where('updated_at', '>=', $monthStart)->sum('total_amount');
         $approvedQuotes  = Quotation::where('status', 'approved')->count();
