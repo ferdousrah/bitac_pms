@@ -15,7 +15,7 @@ export default function NewsShow({ post, more, bitac, links }: Props) {
     return (
         <PublicLayout title={`${post.title} — BITAC`} bitac={bitac} links={links}>
             <article>
-                <header className="bg-brand-950 text-white">
+                <header className="bg-ink-950 text-white">
                     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
                         <Link href="/portfolio/news" className="inline-flex items-center gap-1.5 text-xs text-surface-400 hover:text-white mb-6">
                             <i className="fi fi-rr-arrow-small-left text-base leading-none" />

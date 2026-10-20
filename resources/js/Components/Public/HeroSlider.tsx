@@ -114,7 +114,7 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
 
     return (
         <section
-            className="relative overflow-hidden bg-brand-950"
+            className="relative overflow-hidden bg-ink-950"
             aria-roledescription="carousel"
             aria-label="BITAC"
             tabIndex={0}
@@ -194,13 +194,13 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
             {/* ⚠️ The scrim is not decoration — white type over a photograph
                 nobody has seen yet is unreadable on half of them. It is
                 heaviest on the left, where the words are. */}
-            <div className="absolute inset-0 bg-gradient-to-r from-brand-950/95 via-brand-950/75 to-brand-950/30" />
-            <div className="absolute inset-0 bg-gradient-to-t from-brand-950 via-transparent to-brand-950/50" />
+            <div className="absolute inset-0 bg-gradient-to-r from-ink-950/95 via-ink-950/70 to-ink-950/20" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-transparent to-ink-950/50" />
 
             {/* ── The words ───────────────────────────────────────────── */}
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 sm:py-32 lg:py-40">
                 <div className="max-w-3xl" key={index}>
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-brand-200 text-[11px] font-bold uppercase tracking-[0.15em] mb-6 backdrop-blur animate-fade-in">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-amber-200 text-[11px] font-bold uppercase tracking-[0.15em] mb-6 backdrop-blur animate-fade-in">
                         <i className="fi fi-rr-industry-windows text-[11px] leading-none" />
                         Since 1962 · Government of Bangladesh
                     </div>
@@ -216,12 +216,12 @@ export default function HeroSlider({ slides, fallbackTitle, fallbackSubtitle, ch
                     )}
                     <div className="mt-9 flex flex-wrap items-center gap-3 animate-fade-in">
                         {current.cta_label && current.cta_url ? (
-                            <CtaLink href={current.cta_url} className="bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-900/40">
+                            <CtaLink href={current.cta_url} className="bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-black/30">
                                 {current.cta_label}
                                 <i className="fi fi-rr-arrow-small-right text-base leading-none" />
                             </CtaLink>
                         ) : (
-                            <CtaLink href="/portfolio/services" className="bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-900/40">
+                            <CtaLink href="/portfolio/services" className="bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-black/30">
                                 Our Services
                                 <i className="fi fi-rr-arrow-small-right text-base leading-none" />
                             </CtaLink>

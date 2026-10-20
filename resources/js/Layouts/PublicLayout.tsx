@@ -132,7 +132,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             <Head title={title} />
 
             {/* ── Utility strip: whose office this is, and the two ways in ── */}
-            <div className="bg-brand-950 text-white text-[11px]">
+            <div className="bg-ink-950 text-white text-[11px]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
                     <div className="truncate">
                         {bitac?.ministry_bn || 'শিল্প মন্ত্রণালয়'} · {bitac?.government_bn || 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার'}
@@ -336,15 +336,15 @@ function SiteFooter({ bitac, important, ministry }: {
             <svg className="absolute bottom-full left-0 w-full h-10 sm:h-20 pointer-events-none" viewBox="0 0 1440 120"
                  preserveAspectRatio="none" aria-hidden="true">
                 <path d="M0,46 C170,96 360,4 610,34 C860,64 1010,112 1250,62 C1350,42 1410,48 1440,54 L1440,120 L0,120 Z"
-                      fill="rgb(var(--brand-600, 98 49 155))" opacity="0.9" />
+                      fill="rgb(var(--brand-600, 98 49 155))" opacity="0.75" />
                 <path d="M0,84 C230,40 430,114 720,82 C1010,50 1210,110 1440,72 L1440,120 L0,120 Z"
-                      fill="rgb(var(--brand-950, 29 13 48))" />
+                      fill="#0e0c14" />
             </svg>
 
-            <div className="relative bg-brand-950 overflow-hidden">
+            <div className="relative bg-ink-950 overflow-hidden">
                 <div className="absolute inset-0 bg-blueprint opacity-70" />
-                <div className="absolute -top-32 -left-24 w-[32rem] h-[32rem] rounded-full bg-brand-600/20 blur-3xl" />
-                <div className="absolute bottom-0 right-1/4 w-[28rem] h-[20rem] rounded-full bg-fuchsia-600/10 blur-3xl" />
+                <div className="absolute -top-32 -left-24 w-[32rem] h-[32rem] rounded-full bg-brand-600/15 blur-3xl" />
+                <div className="absolute bottom-0 right-1/4 w-[28rem] h-[20rem] rounded-full bg-amber-500/[0.05] blur-3xl" />
                 {/* A large gear turning slowly behind the columns — the site's
                     one motif, carried down from the hero. */}
                 <svg viewBox="0 0 400 400" aria-hidden="true"
@@ -458,7 +458,7 @@ function ContactTile({ icon, label, value, href, internal = false }: {
                 <i className={`fi ${icon} text-lg leading-none`} />
             </span>
             <span className="min-w-0">
-                <span className="block text-[10px] uppercase tracking-[0.18em] font-bold text-brand-300">{label}</span>
+                <span className="block text-[10px] uppercase tracking-[0.18em] font-bold text-amber-300">{label}</span>
                 <span className="block text-sm font-semibold text-white mt-1 leading-snug break-words">{value}</span>
             </span>
         </>
@@ -475,7 +475,7 @@ function FooterColumn({ title, className = '', children }: { title: string; clas
     return (
         <div className={className}>
             <div className="flex items-center gap-2.5 mb-5">
-                <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-brand-300 to-brand-500" />
+                <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-amber-300 to-amber-500" />
                 <span className="text-[12px] font-bold text-white uppercase tracking-[0.14em]">{title}</span>
             </div>
             <ul className="space-y-2.5 text-[13px]">{children}</ul>

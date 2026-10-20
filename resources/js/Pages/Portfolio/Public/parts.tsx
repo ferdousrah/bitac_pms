@@ -69,10 +69,13 @@ export function Prose({ text, className = '' }: { text?: string | null; classNam
 /** A page's own title band — every inner page opens with one. */
 export function PageHead({ eyebrow, title, lead }: { eyebrow?: string; title: string; lead?: string }) {
     return (
-        <section className="bg-gradient-to-br from-brand-950 via-brand-950 to-brand-800/70 text-white">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
+        <section className="relative overflow-hidden bg-ink-950 text-white">
+            <div className="absolute inset-0 bg-blueprint" />
+            <div className="absolute -top-32 right-0 w-[34rem] h-[34rem] rounded-full bg-brand-600/20 blur-3xl" />
+            <div className="absolute -bottom-40 left-1/4 w-[26rem] h-[26rem] rounded-full bg-amber-500/[0.06] blur-3xl" />
+            <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
                 {eyebrow && (
-                    <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-400 mb-3">{eyebrow}</div>
+                    <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-300 mb-3">{eyebrow}</div>
                 )}
                 <h1 className="text-3xl sm:text-4xl font-bold leading-tight max-w-3xl">{title}</h1>
                 {lead && <p className="text-surface-300 mt-4 max-w-2xl leading-relaxed">{lead}</p>}
@@ -97,9 +100,9 @@ export function SectionHead({ eyebrow, title, lead, action, dark = false, center
             <div className={center ? 'max-w-2xl mx-auto' : 'max-w-2xl'}>
                 {eyebrow && (
                     <div className={`inline-flex items-center gap-2.5 text-[11px] uppercase tracking-[0.2em] font-bold mb-3 ${
-                        dark ? 'text-brand-300' : 'text-brand-600'
+                        dark ? 'text-amber-300' : 'text-brand-600'
                     }`}>
-                        <span className={`h-px w-8 ${dark ? 'bg-brand-400' : 'bg-brand-500'}`} />
+                        <span className={`h-px w-8 ${dark ? 'bg-amber-400' : 'bg-brand-500'}`} />
                         {eyebrow}
                     </div>
                 )}
@@ -180,8 +183,8 @@ export function ProjectCard({ p }: { p: Project }) {
                        own icon large. Still plainly "no photo", but designed.
                        The category is NOT repeated here — the badge under the
                        picture already says it. */
-                    <div className="w-full h-full bg-gradient-to-br from-brand-50 via-white to-brand-100 bg-blueprint-light flex items-center justify-center">
-                        <span className="w-20 h-20 rounded-2xl bg-white shadow-lg shadow-brand-500/10 border border-brand-100 flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+                    <div className="w-full h-full bg-gradient-to-br from-surface-50 via-white to-surface-100 bg-blueprint-light flex items-center justify-center">
+                        <span className="w-20 h-20 rounded-2xl bg-white shadow-lg shadow-surface-900/5 border border-surface-200 flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
                             <i className={`fi ${categoryIcon(p.category)} text-3xl text-brand-500 leading-none`} />
                         </span>
                     </div>
@@ -225,7 +228,7 @@ const KIND_TONE: Record<string, string> = {
 const COVER: Record<string, { bg: string; icon: string; label: string }> = {
     news:   { bg: 'from-brand-500 via-brand-600 to-brand-800',     icon: 'fi-rr-megaphone',    label: 'News' },
     notice: { bg: 'from-amber-400 via-orange-500 to-rose-600',     icon: 'fi-rr-bell-ring',    label: 'Notice' },
-    event:  { bg: 'from-fuchsia-500 via-purple-600 to-brand-800',  icon: 'fi-rr-calendar-star', label: 'Event' },
+    event:  { bg: 'from-sky-500 via-blue-600 to-indigo-700',       icon: 'fi-rr-calendar-star', label: 'Event' },
     tender: { bg: 'from-emerald-500 via-teal-600 to-cyan-800',     icon: 'fi-rr-document-signed', label: 'Tender' },
 };
 

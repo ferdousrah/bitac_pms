@@ -63,15 +63,15 @@ export default function Home({ slides, featured, services, news, events, photos,
                     {/* The mission card is dark on purpose — the one block of
                         contrast in an otherwise white section. */}
                     <div className="lg:col-span-5 relative">
-                        <div className="absolute -inset-3 rounded-[1.75rem] bg-gradient-to-br from-brand-200 via-brand-100 to-transparent blur-2xl opacity-70" />
+                        <div className="absolute -inset-3 rounded-[1.75rem] bg-gradient-to-br from-brand-100 via-surface-100 to-transparent blur-2xl opacity-70" />
                         {/* pb-16, not p-8 all round: the years badge hangs off the
                             bottom-left corner, and at p-8 it sat on top of the last
                             service in the list. */}
-                        <div className="relative rounded-3xl bg-brand-950 bg-blueprint text-white px-8 pt-8 pb-8 sm:pb-16 overflow-hidden shadow-2xl shadow-brand-900/30">
+                        <div className="relative rounded-3xl bg-ink-900 bg-blueprint text-white px-8 pt-8 pb-8 sm:pb-16 overflow-hidden shadow-2xl shadow-ink-950/30">
                             <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-brand-500/30 blur-3xl" />
                             <i className="fi fi-rr-quote-right absolute top-6 right-7 text-5xl text-white/10 leading-none" />
                             <div className="relative">
-                                <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-300">Our mission</div>
+                                <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-300">Our mission</div>
                                 <p className="text-lg leading-relaxed mt-3 text-white/90 font-medium">{site?.mission}</p>
 
                                 {services.length > 0 && (
@@ -102,8 +102,8 @@ export default function Home({ slides, featured, services, news, events, photos,
 
             {/* ── Services — the dark band ─────────────────────────────── */}
             {services.length > 0 && (
-                <section className="relative overflow-hidden bg-brand-950 bg-blueprint">
-                    <div className="absolute top-0 left-1/4 w-[40rem] h-[40rem] rounded-full bg-brand-600/20 blur-3xl -translate-y-1/2" />
+                <section className="relative overflow-hidden bg-ink-900 bg-blueprint">
+                    <div className="absolute top-0 left-1/4 w-[40rem] h-[40rem] rounded-full bg-brand-600/15 blur-3xl -translate-y-1/2" />
                     <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
                         <SectionHead dark eyebrow="What we do" title="Services under one roof"
                                      lead="From a single spare part to a training programme — manufacturing, skills, testing and development for government and private industry."
@@ -115,7 +115,7 @@ export default function Home({ slides, featured, services, news, events, photos,
                                     <span className="absolute -top-2 right-4 text-7xl font-extrabold text-white/[0.04] group-hover:text-brand-400/10 tabular-nums transition-colors select-none">
                                         {String(i + 1).padStart(2, '0')}
                                     </span>
-                                    <span className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-lg shadow-brand-900/50 group-hover:scale-110 transition-transform duration-300">
+                                    <span className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shadow-lg shadow-black/40 group-hover:scale-110 transition-transform duration-300">
                                         <i className={`fi ${x.icon_class} text-xl leading-none`} />
                                     </span>
                                     <h3 className="relative text-base font-bold text-white leading-snug mt-6">{x.title}</h3>
@@ -187,7 +187,7 @@ export default function Home({ slides, featured, services, news, events, photos,
                                     <img src={g.image_url} alt={g.title ?? ''} loading="lazy"
                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                                 )}
-                                <span className="absolute inset-0 bg-gradient-to-t from-brand-950/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <span className="absolute inset-0 bg-gradient-to-t from-ink-950/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             </Link>
                         ))}
                     </div>
@@ -211,11 +211,11 @@ export default function Home({ slides, featured, services, news, events, photos,
  */
 function EngineeringHero({ site, stats, bitac, services }: { site: any; stats: Stats; bitac: any; services: ServiceRow[] }) {
     return (
-        <section className="relative overflow-hidden bg-brand-950">
+        <section className="relative overflow-hidden bg-ink-950">
             <div className="absolute inset-0 bg-blueprint" />
-            <div className="absolute -top-40 -left-40 w-[36rem] h-[36rem] rounded-full bg-brand-600/30 blur-3xl" />
-            <div className="absolute top-1/3 -right-32 w-[30rem] h-[30rem] rounded-full bg-fuchsia-600/15 blur-3xl" />
-            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-brand-950 to-transparent" />
+            <div className="absolute -top-40 -left-40 w-[36rem] h-[36rem] rounded-full bg-brand-600/20 blur-3xl" />
+            <div className="absolute top-1/3 -right-32 w-[30rem] h-[30rem] rounded-full bg-amber-500/[0.07] blur-3xl" />
+            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-ink-950 to-transparent" />
 
             <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-20 sm:pb-28 grid lg:grid-cols-12 gap-12 items-center">
                 <div className="lg:col-span-7 animate-fade-in">
@@ -250,7 +250,7 @@ function EngineeringHero({ site, stats, bitac, services }: { site: any; stats: S
                     <div className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-3 text-[13px] text-white/55">
                         {['Import-substitute manufacturing', 'Industrial training', 'Testing & R&D'].map(t => (
                             <span key={t} className="inline-flex items-center gap-2">
-                                <i className="fi fi-rr-badge-check text-brand-300 text-sm leading-none" />{t}
+                                <i className="fi fi-rr-badge-check text-amber-300 text-sm leading-none" />{t}
                             </span>
                         ))}
                     </div>
@@ -279,7 +279,7 @@ function HeroTitle({ text }: { text?: string }) {
     return (
         <>
             {head}{' '}
-            <span className="bg-gradient-to-r from-brand-300 via-fuchsia-300 to-brand-200 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-amber-200 via-amber-300 to-brand-300 bg-clip-text text-transparent">
                 {tail}
             </span>
         </>
@@ -330,8 +330,8 @@ function GearVisual({ stats, services }: { stats: Stats; services: ServiceRow[] 
                 <g className="gear-turn-rev">
                     <path d={gearPath(300, 118, 62, 50, 8)} fill="url(#gearB)" fillRule="evenodd" opacity="0.9" />
                 </g>
-                <circle cx="170" cy="200" r="22" fill="rgb(var(--brand-950, 29 13 48))" />
-                <circle cx="300" cy="118" r="12" fill="rgb(var(--brand-950, 29 13 48))" />
+                <circle cx="170" cy="200" r="22" fill="#0e0c14" />
+                <circle cx="300" cy="118" r="12" fill="#0e0c14" />
             </svg>
 
             {cards}
@@ -344,12 +344,12 @@ function FloatCard({ className, icon, value, title, label }: {
 }) {
     return (
         <div className={`absolute float-slow ${className}`}>
-            <div className="flex items-center gap-3 rounded-2xl bg-brand-950/70 border border-white/15 backdrop-blur-md pl-3 pr-5 py-3 shadow-2xl shadow-black/40 max-w-[17rem]">
+            <div className="flex items-center gap-3 rounded-2xl bg-ink-900/75 border border-white/15 backdrop-blur-md pl-3 pr-5 py-3 shadow-2xl shadow-black/40 max-w-[17rem]">
                 <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center shrink-0">
                     <i className={`fi ${icon} text-base leading-none`} />
                 </span>
                 <span className="min-w-0">
-                    <span className="block text-[10px] uppercase tracking-wider font-semibold text-brand-300">{label}</span>
+                    <span className="block text-[10px] uppercase tracking-wider font-semibold text-amber-300">{label}</span>
                     {value ? (
                         <span className="block text-xl font-extrabold text-white tabular-nums leading-none mt-1">{value}</span>
                     ) : (
@@ -374,7 +374,7 @@ function StatsStrip({ stats }: { stats: Stats }) {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 divide-white/10 lg:divide-x">
                 {items.map(([icon, value, label]) => (
                     <div key={label} className="flex items-center gap-4 py-7 lg:px-8 first:lg:pl-0">
-                        <span className="w-12 h-12 rounded-2xl bg-white/[0.06] border border-white/10 text-brand-300 flex items-center justify-center shrink-0">
+                        <span className="w-12 h-12 rounded-2xl bg-white/[0.06] border border-white/10 text-amber-300 flex items-center justify-center shrink-0">
                             <i className={`fi ${icon} text-lg leading-none`} />
                         </span>
                         <span>
@@ -402,13 +402,13 @@ function Process() {
     return (
         <div className="relative">
             {/* The line the steps sit on — desktop only, where they are in a row. */}
-            <div className="hidden lg:block absolute top-8 left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-brand-300 to-transparent" />
+            <div className="hidden lg:block absolute top-8 left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-surface-300 to-transparent" />
             <ol className="relative grid sm:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-6">
                 {STEPS.map(([icon, title, text], i) => (
                     <li key={title} className="group text-center">
-                        <span className="relative mx-auto w-16 h-16 rounded-2xl bg-white border border-brand-200 shadow-lg shadow-brand-500/10 flex items-center justify-center text-brand-600 group-hover:bg-brand-600 group-hover:text-white group-hover:border-brand-600 group-hover:-translate-y-1 transition-all duration-300">
+                        <span className="relative mx-auto w-16 h-16 rounded-2xl bg-white border border-surface-200 shadow-lg shadow-surface-900/5 flex items-center justify-center text-brand-600 group-hover:bg-brand-600 group-hover:text-white group-hover:border-brand-600 group-hover:-translate-y-1 transition-all duration-300">
                             <i className={`fi ${icon} text-xl leading-none`} />
-                            <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-brand-950 text-white text-[10px] font-bold flex items-center justify-center tabular-nums ring-4 ring-white">
+                            <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-ink-900 text-white text-[10px] font-bold flex items-center justify-center tabular-nums ring-4 ring-white">
                                 {i + 1}
                             </span>
                         </span>
@@ -519,7 +519,7 @@ function NewsGrid({ news }: { news: NewsRow[] }) {
     return (
         <div className="grid md:grid-cols-2 gap-6">
             <Link href={`/portfolio/news/${lead.slug}`}
-                  className="group flex flex-col rounded-3xl overflow-hidden bg-white border border-surface-200 hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-900/10 hover:-translate-y-1 transition-all duration-300">
+                  className="group flex flex-col rounded-3xl overflow-hidden bg-white border border-surface-200 hover:border-brand-200 hover:shadow-2xl hover:shadow-surface-900/10 hover:-translate-y-1 transition-all duration-300">
                 <div className="aspect-[16/10] overflow-hidden">
                     <PostCover kind={lead.kind} url={lead.cover_url}
                                className="group-hover:scale-105 transition-transform duration-700" />
@@ -545,7 +545,7 @@ function NewsGrid({ news }: { news: NewsRow[] }) {
                 <div className="flex flex-col gap-4">
                     {rest.map(n => (
                         <Link key={n.slug} href={`/portfolio/news/${n.slug}`}
-                              className="group flex-1 flex items-center gap-4 p-3 rounded-2xl bg-white border border-surface-200 hover:border-brand-200 hover:shadow-lg hover:shadow-brand-900/5 transition-all">
+                              className="group flex-1 flex items-center gap-4 p-3 rounded-2xl bg-white border border-surface-200 hover:border-brand-200 hover:shadow-lg hover:shadow-surface-900/5 transition-all">
                             <span className="w-28 h-28 shrink-0 rounded-xl overflow-hidden">
                                 <PostCover kind={n.kind} url={n.cover_url} size="sm"
                                            className="group-hover:scale-105 transition-transform duration-500" />
@@ -576,16 +576,16 @@ function NewsGrid({ news }: { news: NewsRow[] }) {
  */
 function EventsPanel({ events }: { events: NewsRow[] }) {
     return (
-        <div className="relative h-full rounded-3xl bg-brand-950 overflow-hidden p-7">
+        <div className="relative h-full rounded-3xl bg-ink-900 overflow-hidden p-7">
             <div className="absolute inset-0 bg-blueprint" />
             <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-brand-500/25 blur-3xl" />
             <div className="relative">
                 <div className="flex items-center justify-between">
                     <div>
-                        <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-300">Diary</div>
+                        <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-300">Diary</div>
                         <h3 className="text-xl font-bold text-white mt-1">Upcoming events</h3>
                     </div>
-                    <span className="w-11 h-11 rounded-2xl bg-white/10 text-brand-200 flex items-center justify-center">
+                    <span className="w-11 h-11 rounded-2xl bg-white/10 text-amber-300 flex items-center justify-center">
                         <i className="fi fi-rr-calendar-star text-lg leading-none" />
                     </span>
                 </div>

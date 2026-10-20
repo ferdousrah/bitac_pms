@@ -124,10 +124,10 @@ The test asserts the tint is actually tinted.
   `Admin/Branding` (default + the reset button + the preset list),
   `Admin/ChatbotSettings`, `app.css`, the settings migration). All violet now;
   the test greps each file.
-- The public site's dark bands (utility strip, footer, page heads, the hero)
-  moved from `surface-900` onto **`brand-950`**, so the website's dark
-  surfaces match the app's sidebar and follow the admin's colour. ⚠️ `surface`
-  is a fixed slate scale used system-wide and was **not** repurposed.
+- ⚠️ **Superseded the same day — see "Colour balance" below.** The public
+  site's dark bands briefly moved onto `brand-950`; with every dark surface in
+  saturated plum the site read as wall-to-wall purple, and they are on the
+  neutral **`ink`** scale now.
 
 ### ⚠️ Migration `..._000066` changes stored data, and is guarded
 The colour is a settings row, so changing the code defaults alone would have
@@ -1434,6 +1434,35 @@ blank falls back to the Site text headline.
 - ⚠️ **Fixed: the website link was `https://${bitac.website}`**, so a stored
   `https://www.bitac.gov.bd` became `https://https://…`. `siteHref()` adds a
   scheme only when there is none.
+
+#### Colour balance: ink, violet, gold (2026-10-20)
+> BITAC: *"purple er domination ta beshi hoye gese, color tone gulu perfect
+> koro."* Every dark surface — topbar, hero, services band, mission card,
+> events panel, footer — was the same saturated plum, and the light areas
+> carried violet washes too, so violet was everywhere and stood out nowhere.
+
+- **Dark surfaces are `ink`** (`tailwind.config.js`: 700 `#2b2838` → 950
+  `#0e0c14`) — near-black with a whisper of violet so it still harmonises.
+  ⚠️ **Fixed hex, NOT theme-driven**: a different brand colour must not repaint
+  the night behind it. Hero / topbar / footer / page heads are `ink-950`; the
+  services band, mission card and events panel are `ink-900`, so adjacent dark
+  blocks differ.
+- **Violet is the accent**: buttons, icon tiles, the gears, links, and the
+  footer's back wave (the one brand stripe). Glows behind dark sections are
+  violet at 15–20%, not 30%.
+- **Gold (`amber`) is the second accent, in small doses**: eyebrows and rules
+  on dark sections (`SectionHead dark`, `PageHead`), the hero's highlighted
+  words (gold → violet gradient), the stat icons, the footer column bars and
+  contact labels. ⚠️ Not on buttons and not on links — once it is everywhere it
+  is just a second thing dominating.
+- **Light areas go neutral**: the no-photo product tile is a slate drafting
+  sheet (`.bg-blueprint-light` lines are slate now, not violet), process icons
+  sit in neutral rims. The icon is the only violet on it.
+- ⚠️ **The hero slider's scrim is ink, not violet** — a violet scrim tints every
+  photograph violet; neutral darkens it for the type and leaves its colours.
+- **Event covers are blue**, not fuchsia: news covers are already violet, and
+  two purple covers side by side put half the newsroom back in the brand
+  colour.
 
 #### ⚠️ Checking the site visually: headless Chrome will not go below 500px
 `chrome --headless=new --window-size=390,…` lays the page out at **500px** and

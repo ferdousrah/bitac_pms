@@ -32,6 +32,17 @@ export default {
                     900: 'rgb(var(--brand-900, 51 23 84) / <alpha-value>)',
                     950: 'rgb(var(--brand-950, 29 13 48) / <alpha-value>)',
                 },
+                // The public site's dark surfaces. Near-black with a whisper of
+                // violet, so the dark bands read as DARK rather than as purple
+                // and violet is left for the things that should catch the eye.
+                // Fixed, not theme-driven: a different brand colour should not
+                // repaint the night sky behind it.
+                ink: {
+                    700: '#2b2838',
+                    800: '#1d1a28',
+                    900: '#15131d',
+                    950: '#0e0c14',
+                },
                 surface: {
                     0:   '#ffffff',
                     50:  '#f8fafc',

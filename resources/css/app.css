@@ -423,8 +423,8 @@
 }
 .bg-blueprint-light {
     background-image:
-        linear-gradient(rgb(var(--brand-500, 118 58 187) / 0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgb(var(--brand-500, 118 58 187) / 0.07) 1px, transparent 1px);
+        linear-gradient(rgb(100 116 139 / 0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgb(100 116 139 / 0.09) 1px, transparent 1px);
     background-size: 22px 22px;
 }
 
