@@ -131,7 +131,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             <Head title={title} />
 
             {/* ── Utility strip: whose office this is, and the two ways in ── */}
-            <div className="bg-brand-950 text-brand-200/80 text-[11px]">
+            <div className="bg-brand-950 text-white text-[11px]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
                     <div className="truncate">
                         {bitac?.ministry_bn || 'শিল্প মন্ত্রণালয়'} · {bitac?.government_bn || 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার'}
@@ -145,10 +145,10 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                         {/* Two different doors, and the difference matters to a
                             visitor: a client tracks their own order, staff run
                             the system. */}
-                        <a href="/customer/login" className="hover:text-white transition-colors font-semibold">
+                        <a href="/customer/login" className="hover:text-brand-300 transition-colors font-semibold">
                             <i className="fi fi-rr-briefcase text-[10px] mr-1" />Customer Login
                         </a>
-                        <a href="/login" className="hover:text-white transition-colors">
+                        <a href="/login" className="hover:text-brand-300 transition-colors">
                             <i className="fi fi-rr-user text-[10px] mr-1" />Staff
                         </a>
                     </div>
