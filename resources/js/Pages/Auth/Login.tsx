@@ -14,11 +14,8 @@ interface Bitac {
  *
  * Deliberately NOT the stakeholder page's split layout: one white card
  * floating on the dark BITAC backdrop, so a person who has opened the wrong
- * door sees at a glance that this is the office's own system. The
- * department flow under the card names what the system runs.
+ * door sees at a glance that this is the office's own system.
  */
-const FLOW = ['IED', 'PCD', 'Shops', 'QC', 'Delivery', 'Billing'];
-
 export default function Login({ status, canResetPassword, bitac }: {
     status?: string;
     canResetPassword: boolean;
@@ -152,15 +149,6 @@ export default function Login({ status, canResetPassword, bitac }: {
                         </p>
                     </div>
 
-                    {/* What the system runs, end to end. */}
-                    <div className="mt-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                        {FLOW.map((s, i) => (
-                            <span key={s} className="inline-flex items-center gap-2">
-                                <span className="px-2.5 py-1 rounded-full border border-white/10 bg-white/[0.04]">{s}</span>
-                                {i < FLOW.length - 1 && <i className="fi fi-rr-angle-small-right text-xs leading-none text-amber-300/70" />}
-                            </span>
-                        ))}
-                    </div>
                 </main>
 
                 <footer className="relative px-6 sm:px-10 py-6 flex items-center justify-between text-xs text-white/40">

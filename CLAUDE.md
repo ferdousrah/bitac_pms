@@ -240,8 +240,8 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
   split layout: one white card floating on the dark BITAC backdrop (blueprint
   grid, violet glow, two slowly turning gears), the emblem + Bangla name +
   ministry above it, "Staff sign in · BITAC PMS — Production Management
-  System" on it, and the department flow (IED → PCD → Shops → QC → Delivery →
-  Billing) as chips beneath. Someone who opened the wrong door sees at once
+  System" on it. (A strip of department chips under the card was tried and
+  removed — BITAC did not want it.) Someone who opened the wrong door sees at once
   that this is the office's own system; the header links to the website and
   to the stakeholder sign-in.
 - `AuthenticatedSessionController@create` passes **`bitac`** (`name_bn`,
