@@ -1356,6 +1356,15 @@ stops listing somebody.
   than a jumble.
 - A `url` makes the logo a link (`target="_blank"`, `rel="noopener"`); without
   one it is a plain tile, not a dead anchor.
+- **`PartnerSampleSeeder`** fills the wall with ten of BITAC's real
+  counterparts (ministry, Railway, BPDB, BWDB, Petrobangla, BSFIC, BSTI,
+  BSCIC, BUET, NSDA). ⚠️ **The logos are DRAWN placeholders** — a coloured
+  disc with initials beside the abbreviation, transparent PNG via GD —
+  **not anybody's real emblem**, which would be the wrong thing to ship.
+  Idempotent and keyed on the name, so a re-run cannot overwrite real
+  artwork someone has since uploaded. It is a **seeder, not a migration**,
+  because this is demo content somebody will delete; the service lines are
+  seeded in their migration because those are BITAC's own wording.
 
 ### Stored copy is set as paragraphs (2026-10-20)
 - **`Prose`** and **`splitParagraphs()`** in `Portfolio/Public/parts.tsx` are

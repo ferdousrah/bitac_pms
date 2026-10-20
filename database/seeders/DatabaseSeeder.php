@@ -16,6 +16,10 @@ class DatabaseSeeder extends Seeder
             WorkCentreSeeder::class,
             ProductSeeder::class,
             DemoWorkflowSeeder::class,
+            // Sample logos for the public site's partners wall. The marks are
+            // drawn placeholders, not anybody's real emblem -- replaced under
+            // Admin > Website > Partners.
+            PartnerSampleSeeder::class,
         ]);
     }
 }
