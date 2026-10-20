@@ -33,7 +33,7 @@ export interface NavItem {
     href: string;
     label: string;
     /** A group: the parent is a dropdown, and `href` is where its first child goes. */
-    children?: { href: string; label: string }[];
+    children?: { href: string; label: string; icon?: string; note?: string }[];
 }
 
 /**
@@ -56,8 +56,8 @@ export const NAV: NavItem[] = [
     {
         href: '/portfolio/gallery', label: 'Gallery',
         children: [
-            { href: '/portfolio/gallery', label: 'Photo Gallery' },
-            { href: '/portfolio/videos',  label: 'Video Gallery' },
+            { href: '/portfolio/gallery', label: 'Photo Gallery', icon: 'fi-rr-picture',  note: 'Events, training and the shop floor' },
+            { href: '/portfolio/videos',  label: 'Video Gallery', icon: 'fi-rr-play-alt', note: 'Films and recorded events' },
         ],
     },
     { href: '/portfolio/contact',  label: 'Contact Us' },
@@ -65,7 +65,7 @@ export const NAV: NavItem[] = [
 
 /** Every page, flattened, plus the ones the top menu leaves out. */
 export const FOOTER_NAV: { href: string; label: string }[] = [
-    ...NAV.slice(1).flatMap(n => n.children ?? [n]),
+    ...NAV.slice(1).flatMap(n => (n.children ?? [n]).map(({ href, label }) => ({ href, label }))),
     { href: '/portfolio/news', label: 'News & Events' },
 ];
 
@@ -85,17 +85,19 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
     const { url } = usePage();
     const [open, setOpen] = useState(false);
     const [menu, setMenu] = useState<string | null>(null);
-    const [solid, setSolid] = useState(!transparentHeader);
-
+    const [scrolled, setScrolled] = useState(false);
     // A transparent header over a hero has to become solid once it is scrolled
     // onto white, or the links vanish into the page.
+    const solid = !transparentHeader || scrolled;
+
+    // Scrolled -> the masthead tightens (80 -> 64px), so the sticky bar takes
+    // less of the page while someone is reading.
     useEffect(() => {
-        if (!transparentHeader) return;
-        const onScroll = () => setSolid(window.scrollY > 24);
+        const onScroll = () => setScrolled(window.scrollY > 24);
         onScroll();
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
-    }, [transparentHeader]);
+    }, []);
 
     // Close the mobile menu on navigation — otherwise it stays open over the
     // page you just asked for. The desktop dropdown goes with it.
@@ -146,6 +148,13 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                         {/* Two different doors, and the difference matters to a
                             visitor: a client tracks their own order, staff run
                             the system. */}
+                        {/* The one action every page offers. It lived in the menu bar
+                            at first, but next to seven links it squeezed the BITAC
+                            name into "…" and wrapped "About Us" onto two lines. */}
+                        <Link href="/portfolio/request-quotation"
+                              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors">
+                            <i className="fi fi-rr-paper-plane text-[10px] leading-none" />Request a Quotation
+                        </Link>
                         <a href="/customer/login" className="hover:text-brand-300 transition-colors font-semibold">
                             <i className="fi fi-rr-briefcase text-[10px] mr-1" />Customer Login
                         </a>
@@ -157,20 +166,23 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             </div>
 
             {/* ── Masthead + navigation ─────────────────────────────────── */}
-            <header className={`sticky top-0 z-40 transition-colors ${
-                solid ? 'bg-white/95 backdrop-blur border-b border-surface-200 shadow-sm' : 'bg-transparent'
-            }`}>
+            <header className={`sticky top-0 z-40 transition-all duration-300 ${
+                solid ? 'bg-white/95 backdrop-blur border-b border-surface-200' : 'bg-transparent'
+            } ${scrolled ? 'shadow-[0_6px_24px_-12px_rgba(14,12,20,0.25)]' : ''}`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="h-20 flex items-center justify-between gap-4">
+                    <div className={`flex items-center justify-between gap-4 transition-[height] duration-300 ${scrolled ? 'h-16' : 'h-20'}`}>
                         <Link href="/portfolio" className="flex items-center gap-3 min-w-0 group">
                             {bitac?.logo_left && (
-                                <img src={bitac.logo_left} alt="" className="h-12 w-12 object-contain shrink-0" />
+                                <img src={bitac.logo_left} alt=""
+                                     className={`object-contain shrink-0 transition-all duration-300 ${scrolled ? 'h-10 w-10' : 'h-12 w-12'}`} />
                             )}
                             <div className="min-w-0">
-                                <div className="text-[9px] uppercase tracking-[0.18em] text-brand-600 font-bold">
+                                <div className={`text-[9px] uppercase tracking-[0.18em] text-brand-600 font-bold transition-all duration-300 ${
+                                    scrolled ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-4 opacity-100'
+                                }`}>
                                     {bitac?.caption || 'BITAC — A Centre of Excellence'}
                                 </div>
-                                <div className="text-[15px] sm:text-lg font-bold text-surface-900 leading-tight truncate group-hover:text-brand-600 transition-colors">
+                                <div className="text-[15px] sm:text-lg lg:text-base xl:text-lg font-bold text-surface-900 leading-tight line-clamp-2 sm:line-clamp-none sm:truncate group-hover:text-brand-600 transition-colors">
                                     {bitac?.name_bn || 'বাংলাদেশ শিল্প কারিগরি সহায়তা কেন্দ্র (বিটাক)'}
                                 </div>
                                 {/* No centre-name line under it (BITAC, 2026-10-20): the
@@ -183,109 +195,141 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                             onClick={() => setOpen(o => !o)}
                             aria-label="Menu"
                             aria-expanded={open}
-                            className="lg:hidden p-2 rounded-lg text-surface-700 hover:bg-surface-100"
+                            className={`lg:hidden w-11 h-11 shrink-0 rounded-xl border flex items-center justify-center transition-colors ${
+                                open ? 'bg-ink-950 border-ink-950 text-white' : 'border-surface-200 text-surface-800 hover:bg-surface-50'
+                            }`}
                         >
                             <i className={`fi ${open ? 'fi-rr-cross-small text-xl' : 'fi-rr-menu-burger text-base'} leading-none`} />
                         </button>
 
-                        <nav className="hidden lg:flex items-center gap-1">
-                            {NAV.map(n => n.children ? (
-                                <div
-                                    key={n.label}
-                                    data-navgroup
-                                    className="relative"
-                                    onMouseEnter={() => setMenu(n.label)}
-                                    onMouseLeave={() => setMenu(m => (m === n.label ? null : m))}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => setMenu(m => (m === n.label ? null : n.label))}
-                                        aria-expanded={menu === n.label}
-                                        aria-haspopup="true"
-                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
-                                            groupActive(n) || menu === n.label
-                                                ? 'text-brand-700 bg-brand-50'
-                                                : 'text-surface-600 hover:text-brand-700 hover:bg-surface-50'
-                                        }`}
+                        {/* Each link is the full height of the bar, so its underline
+                            sits exactly on the header's bottom edge. */}
+                        <div className="hidden lg:flex items-stretch self-stretch">
+                            <nav className="flex items-stretch shrink-0">
+                                {NAV.map(n => n.children ? (
+                                    <div
+                                        key={n.label}
+                                        data-navgroup
+                                        className="relative flex"
+                                        onMouseEnter={() => setMenu(n.label)}
+                                        onMouseLeave={() => setMenu(m => (m === n.label ? null : m))}
                                     >
-                                        {n.label}
-                                        <i className={`fi fi-rr-angle-small-down text-[11px] leading-none transition-transform ${
-                                            menu === n.label ? 'rotate-180' : ''
-                                        }`} />
-                                    </button>
-                                    {menu === n.label && (
-                                        /* No gap between the button and the panel —
-                                           a few pixels of nothing is enough for the
-                                           pointer to leave and the menu to shut
-                                           while someone is reaching for it. */
-                                        <div className="absolute left-0 top-full pt-1 w-52">
-                                            <div className="rounded-xl bg-white border border-surface-200 shadow-xl py-1.5 overflow-hidden">
-                                                {n.children.map(c => (
-                                                    <Link
-                                                        key={c.href}
-                                                        href={c.href}
-                                                        className={`block px-4 py-2.5 text-[13px] font-semibold transition-colors ${
-                                                            isActive(c.href)
-                                                                ? 'text-brand-700 bg-brand-50'
-                                                                : 'text-surface-600 hover:text-brand-700 hover:bg-surface-50'
-                                                        }`}
-                                                    >
-                                                        {c.label}
-                                                    </Link>
-                                                ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setMenu(m => (m === n.label ? null : n.label))}
+                                            aria-expanded={menu === n.label}
+                                            aria-haspopup="true"
+                                            className={navLinkClass(groupActive(n), menu === n.label)}
+                                        >
+                                            <span className="flex items-center gap-1">
+                                                {n.label}
+                                                <i className={`fi fi-rr-angle-small-down text-[12px] leading-none transition-transform duration-200 ${
+                                                    menu === n.label ? 'rotate-180' : ''
+                                                }`} />
+                                            </span>
+                                        </button>
+                                        {menu === n.label && (
+                                            /* No gap between the button and the panel —
+                                               a few pixels of nothing is enough for the
+                                               pointer to leave and the menu to shut
+                                               while someone is reaching for it. */
+                                            <div className="absolute left-1/2 -translate-x-1/2 top-full pt-2 w-72 animate-fade-in">
+                                                <div className="rounded-2xl bg-white border border-surface-200 shadow-[0_18px_40px_-16px_rgba(14,12,20,0.35)] p-2">
+                                                    {n.children.map(c => (
+                                                        <Link
+                                                            key={c.href}
+                                                            href={c.href}
+                                                            className={`group/item flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                                                                isActive(c.href) ? 'bg-brand-50' : 'hover:bg-surface-50'
+                                                            }`}
+                                                        >
+                                                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                                                                isActive(c.href)
+                                                                    ? 'bg-brand-600 text-white'
+                                                                    : 'bg-surface-100 text-surface-600 group-hover/item:bg-brand-600 group-hover/item:text-white'
+                                                            }`}>
+                                                                <i className={`fi ${c.icon ?? 'fi-rr-angle-small-right'} text-sm leading-none`} />
+                                                            </span>
+                                                            <span className="min-w-0">
+                                                                <span className={`block text-[14px] font-semibold ${isActive(c.href) ? 'text-brand-700' : 'text-surface-900'}`}>
+                                                                    {c.label}
+                                                                </span>
+                                                                {c.note && <span className="block text-xs text-surface-500 mt-0.5">{c.note}</span>}
+                                                            </span>
+                                                        </Link>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <Link
-                                    key={n.href}
-                                    href={n.href}
-                                    className={`px-3 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
-                                        isActive(n.href)
-                                            ? 'text-brand-700 bg-brand-50'
-                                            : 'text-surface-600 hover:text-brand-700 hover:bg-surface-50'
-                                    }`}
-                                >
-                                    {n.label}
-                                </Link>
-                            ))}
-                        </nav>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Link key={n.href} href={n.href} className={navLinkClass(isActive(n.href))}
+                                          aria-current={isActive(n.href) ? 'page' : undefined}>
+                                        {n.label}
+                                    </Link>
+                                ))}
+                            </nav>
+
+                        </div>
                     </div>
                 </div>
 
                 {/* Mobile drawer */}
                 {open && (
-                    <div className="lg:hidden border-t border-surface-200 bg-white">
-                        <nav className="max-w-7xl mx-auto px-4 py-2 grid grid-cols-1">
+                    <div className="lg:hidden border-t border-surface-200 bg-white max-h-[calc(100vh-8rem)] overflow-y-auto">
+                        <nav className="max-w-7xl mx-auto px-4 py-3 grid grid-cols-1 gap-0.5">
                             {NAV.map(n => n.children ? (
-                                <div key={n.label} className="py-1">
-                                    <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-surface-400">
+                                <div key={n.label} className="pt-2">
+                                    <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-surface-500">
                                         {n.label}
                                     </div>
-                                    {n.children.map(c => (
-                                        <Link
-                                            key={c.href}
-                                            href={c.href}
-                                            className={`block pl-6 pr-3 py-2.5 rounded-lg text-sm font-semibold ${
-                                                isActive(c.href) ? 'text-brand-700 bg-brand-50' : 'text-surface-700'
-                                            }`}
-                                        >
-                                            {c.label}
-                                        </Link>
-                                    ))}
+                                    <div className="grid grid-cols-2 gap-2 px-1 pb-1">
+                                        {n.children.map(c => (
+                                            <Link
+                                                key={c.href}
+                                                href={c.href}
+                                                className={`flex items-center gap-2.5 rounded-xl border px-3 py-3 text-sm font-semibold ${
+                                                    isActive(c.href)
+                                                        ? 'border-brand-600 bg-brand-50 text-brand-700'
+                                                        : 'border-surface-200 text-surface-800'
+                                                }`}
+                                            >
+                                                <i className={`fi ${c.icon ?? 'fi-rr-angle-small-right'} text-sm leading-none`} />
+                                                {c.label}
+                                            </Link>
+                                        ))}
+                                    </div>
                                 </div>
                             ) : (
                                 <Link
                                     key={n.href}
                                     href={n.href}
-                                    className={`px-3 py-2.5 rounded-lg text-sm font-semibold ${
-                                        isActive(n.href) ? 'text-brand-700 bg-brand-50' : 'text-surface-700'
+                                    className={`flex items-center justify-between px-3 py-3 rounded-xl text-[15px] font-semibold ${
+                                        isActive(n.href) ? 'text-brand-700 bg-brand-50' : 'text-surface-800 hover:bg-surface-50'
                                     }`}
                                 >
-                                    {n.label}
+                                    <span className="flex items-center gap-3">
+                                        <span className={`w-1 h-5 rounded-full ${isActive(n.href) ? 'bg-brand-600' : 'bg-surface-200'}`} />
+                                        {n.label}
+                                    </span>
+                                    <i className="fi fi-rr-angle-small-right text-base leading-none text-surface-400" />
                                 </Link>
                             ))}
+
+                            <div className="mt-3 pt-4 border-t border-surface-200 grid grid-cols-1 gap-2 pb-2">
+                                <Link href="/portfolio/request-quotation"
+                                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">
+                                    <i className="fi fi-rr-paper-plane text-xs leading-none" /> Request a Quotation
+                                </Link>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <a href="/customer/login" className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-surface-200 text-surface-800 text-sm font-semibold">
+                                        <i className="fi fi-rr-briefcase text-xs leading-none" /> Customer Login
+                                    </a>
+                                    <a href="/login" className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-surface-200 text-surface-800 text-sm font-semibold">
+                                        <i className="fi fi-rr-user text-xs leading-none" /> Staff
+                                    </a>
+                                </div>
+                            </div>
                         </nav>
                     </div>
                 )}
@@ -302,6 +346,20 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             <SiteFooter bitac={bitac} important={important} ministry={ministry} />
         </div>
     );
+}
+
+/**
+ * A top-level menu entry: the full height of the bar, with a 3px underline on
+ * its bottom edge — drawn in for the current page, sliding in on hover.
+ * Written out in full; Tailwind does not ship a class built from a variable.
+ */
+function navLinkClass(active: boolean, open = false): string {
+    const base = 'relative flex items-center whitespace-nowrap px-2.5 xl:px-3.5 text-[13px] xl:text-[14px] font-semibold transition-colors '
+        + 'after:absolute after:left-2.5 after:right-2.5 xl:after:left-3.5 xl:after:right-3.5 after:bottom-0 after:h-[3px] after:rounded-t-full '
+        + 'after:bg-brand-600 after:transition-transform after:duration-200 ';
+    if (active) return base + 'text-brand-700 after:scale-x-100';
+    if (open) return base + 'text-brand-700 after:scale-x-0';
+    return base + 'text-surface-700 hover:text-brand-700 after:scale-x-0 hover:after:scale-x-100';
 }
 
 /** A stored website may or may not carry its scheme; never prefix it twice. */

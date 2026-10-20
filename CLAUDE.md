@@ -1255,6 +1255,23 @@ three new tables (migration `..._000064`):
   exist fails in the test rather than 404ing for a visitor. (The nav is
   client-side React and is **not** in the server's HTML, so asserting on the
   rendered page would prove nothing.)
+- **How the menu looks** (2026-10-20, BITAC: *"main menuta niye kaj koro"*):
+  each top-level link is the full height of the bar and the current page is
+  marked by a **3px violet underline on the header's bottom edge**, which also
+  slides in on hover (`navLinkClass()` — no pale pill). Gallery opens a panel
+  with an icon and a one-line note per entry (`children[].icon/.note`). On
+  scroll the masthead tightens 80 → 64px and the caption line folds away.
+  The phone drawer: plain rows, Gallery as two tiles, then **Request a
+  Quotation** + Customer Login / Staff at the foot. On a phone the BITAC name
+  wraps to two lines instead of being cut to "…".
+  - ⚠️ **Request a Quotation is in the dark utility strip, NOT the menu bar.**
+    Put beside the seven links it pushed the BITAC name into "…" and wrapped
+    "About Us" / "Contact Us" onto two lines even at 1440px. Links are
+    `whitespace-nowrap`, and between 1024 and 1279px they and the name step
+    down a size so the bar fits at 1024.
+  - Checking it headless: `html` has `scroll-behavior: smooth`, so a probe's
+    `scrollTo(0, y)` is still animating when it measures — pass
+    `{ behavior: 'instant' }`.
 - Renamings that came with it: **Products & Services → Products** (services are
   their own page now) and **About BITAC → About Us**, **Contact → Contact Us**.
 
