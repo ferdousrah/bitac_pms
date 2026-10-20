@@ -13,6 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
+            // Says which letterhead a PDF was printed on (X-Pdf-Pad), so the
+            // PDF popup can offer বাংলা / English pad for every document.
+            \App\Http\Middleware\AnnouncePdfPad::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\SetActiveCenter::class,
         ]);

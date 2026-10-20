@@ -273,19 +273,11 @@ export default function JobDetail({ job, checklist }: Props) {
 
     // Open any controller PDF endpoint in the popup viewer (base64 to dodge
     // download-manager intercept); falls back to a new tab on failure.
-    const openPdf = async (baseUrl: string, title: string, subtitle?: string) => {
-        try {
-            const res = await fetch(`${baseUrl}?preview=base64`, {
-                credentials: 'same-origin',
-                headers: { Accept: 'application/json' },
-            });
-            if (!res.ok) throw new Error('PDF fetch failed');
-            const data = await res.json();
-            const blob = new Blob([Uint8Array.from(atob(data.data), (c) => c.charCodeAt(0))], { type: 'application/pdf' });
-            setPdfPopup({ open: true, url: URL.createObjectURL(blob), title, subtitle });
-        } catch {
-            window.open(`${baseUrl}?preview=1`, '_blank');
-        }
+    // The popup fetches it — handing it a ready blob instead (as this used to)
+    // meant it could not re-ask for the other pad.
+    const openPdf = (baseUrl: string, title: string, subtitle?: string) => {
+        const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'preview=base64';
+        setPdfPopup({ open: true, url, title, subtitle });
     };
 
     const steps = [

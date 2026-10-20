@@ -533,6 +533,34 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - Verified: the rendered English header matches the sample line for line, and the PDF embeds
   only Tinos (all four styles are registered — the italic/bold-italic lines need them) + Nikosh.
 
+#### Every PDF: বাংলা or English pad (2026-10-20)
+> BITAC: *"protita pdf er sathei bangla ebong english pad er option thakbe."*
+
+- **`?pad=bn|en` on ANY request that renders through `BitacLetterhead::render()`** chooses the
+  letterhead. It is read inside `render()`, once, so no PDF can be left without the choice and
+  none has to remember the parameter. It changes the **pad only** — a letter's `lang` still
+  decides its wording, and `pad` overrides `lang` for the letterhead.
+- `render()` records what it used in the container (`BitacLetterhead::PAD_USED`), and
+  **`App\Http\Middleware\AnnouncePdfPad`** (web, appended) puts it on the response as
+  **`X-Pdf-Pad`** (used) and **`X-Pdf-Pad-Default`** (the document's own). It clears the record
+  at the start of every request. ⚠️ `renderPlain()` records nothing — **notes, envelopes and
+  মূসক ৬.৩ are plain paper and must not offer a pad**; the absence of the header is how the
+  popup knows.
+- **`PdfPopupModal`** reads the header and shows a **বাংলা প্যাড / English pad** switch (in the
+  header bar; its own strip on a phone) that re-requests the same URL with `pad=`. A new
+  document starts on its own pad. Verified on quotation, cost estimate, work order sheet, gate
+  pass, IED report and receivables (each prints the other letterhead with `pad=`), and that
+  office notes and envelopes carry no header.
+- ⚠️ **Fixed while there: the popup's Open and Download linked to the request URL**, which
+  usually carries `preview=base64` and answers with JSON — Download saved a data file, not the
+  PDF. Both now use the loaded blob, with the server's filename (`-EN-pad` / `-BN-pad` appended
+  when the pad is not the document's own).
+- To get the switch a PDF must open in the popup. Moved into it: the bill's top **View PDF**,
+  the **QC inspection certificate**, and the PCD job page's `openPdf` (it fetched the PDF itself
+  and handed the popup a blob, which cannot be re-asked for the other pad). The RFQ PDF button
+  is still switched off (`false &&`); the Quotation / Cost-estimate **list exports** are
+  DomPDF tables with no letterhead.
+
 #### PDF fonts — Tinos (English) + Nikosh (Bangla), 2026-09
 - **Every BITAC PDF sets English in `tinos` and Bangla in `nikosh`.** Both are registered in `BitacLetterhead::buildMpdf()` and live in `public/fonts/`. `default_font` is `tinos`.
 - **`tinos` IS Times New Roman.** Monotype's own metric-compatible libre clone — advance widths verified identical to `C:\Windows\Fonts	imes.ttf` glyph for glyph. It is used *instead of* the real `times.ttf` because Times New Roman is a licensed Windows/Office font that may not be redistributed in the repo or embedded in generated PDFs; Tinos is Apache-2.0 and sets the same. Don't "fix" this by dropping in times.ttf.

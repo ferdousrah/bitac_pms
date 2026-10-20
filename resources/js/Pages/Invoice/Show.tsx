@@ -334,15 +334,14 @@ export default function InvoiceShow({
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-3">
-                    <a
-                        href={`/invoices/${invoice.id}/pdf`}
-                        target="_blank"
-                        rel="noreferrer"
+                    <button
+                        type="button"
+                        onClick={() => setPdf(`/invoices/${invoice.id}/pdf?preview=base64`)}
                         className="btn-danger btn-sm"
                     >
                         <i className="fi fi-rr-file-pdf text-xs leading-none" />
                         View PDF
-                    </a>
+                    </button>
                     {canSign && !invoice.signed && (
                         <button
                             type="button"

@@ -1,5 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, useForm } from '@inertiajs/react';
+import { useState } from 'react';
+import PdfPopupModal from '@/Components/PdfPopupModal';
 
 const resultBadge: Record<string, string> = {
     pass: 'badge-green',
@@ -9,6 +11,8 @@ const resultBadge: Record<string, string> = {
 };
 
 export default function QCResult({ inspection }: any) {
+    // The certificate opens in the shared PDF popup, which offers বাংলা / English pad.
+    const [certOpen, setCertOpen] = useState(false);
     const ncrForm = useForm({ qc_inspection_id: inspection.id });
 
     const toggleShare = () => {
@@ -148,15 +152,14 @@ export default function QCResult({ inspection }: any) {
                                         {ncrForm.processing ? 'Raising...' : 'Raise NCR'}
                                     </button>
                                 )}
-                                <a
-                                    href={`/qc/inspection/${inspection.id}/pdf`}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                <button
+                                    type="button"
+                                    onClick={() => setCertOpen(true)}
                                     className="btn-danger btn-sm w-full justify-center"
                                 >
                                     <i className="fi fi-rr-file-pdf text-xs leading-none" />
                                     Inspection Certificate
-                                </a>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={toggleShare}
@@ -214,6 +217,13 @@ export default function QCResult({ inspection }: any) {
                     </aside>
                 </div>
             </div>
+
+            <PdfPopupModal
+                open={certOpen}
+                pdfUrl={`/qc/inspection/${inspection.id}/pdf`}
+                title="Inspection Certificate"
+                onClose={() => setCertOpen(false)}
+            />
         </AppLayout>
     );
 }

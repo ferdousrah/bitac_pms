@@ -40,6 +40,22 @@ class BitacLetterhead
     {
         $center   = $this->resolveCenter($center);
         $language = in_array($language, ['bn', 'en'], true) ? $language : 'bn';
+
+        /*
+         * Every PDF can go on either pad (BITAC, 2026-10-20). `?pad=bn|en` on
+         * the request chooses the LETTERHEAD only — the document's own text is
+         * whatever it is (a letter's `lang` still decides its wording). Done
+         * here, once, so no PDF can be left without the choice and none has
+         * to remember to read the parameter. What was used is recorded for
+         * AnnouncePdfPad, which tells the PDF popup.
+         */
+        $default = $language;
+        $asked   = app()->bound('request') ? request()->query('pad') : null;
+        if (in_array($asked, ['bn', 'en'], true)) {
+            $language = $asked;
+        }
+        app()->instance(self::PAD_USED, ['used' => $language, 'default' => $default]);
+
         $mpdf     = $this->buildMpdf($documentTitle, $overrides);
 
         // No watermark. A faded BITAC gear used to sit behind the page to
@@ -56,6 +72,9 @@ class BitacLetterhead
 
         return $mpdf->Output('', \Mpdf\Output\Destination::STRING_RETURN);
     }
+
+    /** Container key: which pad the last render() used, for AnnouncePdfPad. */
+    public const PAD_USED = 'bitac.pdf_pad';
 
     /** Legal paper, 8.5″ × 14″, in millimetres — what internal notes print on. */
     public const LEGAL_MM = [215.9, 355.6];
