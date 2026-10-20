@@ -34,6 +34,23 @@ class PortfolioPublicController extends Controller
     /** How many customers' names a visitor can usefully read at once. */
     private const CLIENT_WALL = 24;
 
+    /**
+     * The About paragraphs the home and About pages open with.
+     *
+     * ⚠️ A DEFAULT, not fixed copy — everything here is editable at
+     * Admin → Website → Site text, and the moment anything is typed there this
+     * is never seen again. It exists so the page reads as a finished site on
+     * the day it goes up rather than as two lines over a lot of white space.
+     * Blank paragraphs are split on the empty line between them.
+     */
+    private const ABOUT_BODY = <<<'TXT'
+        Established in 1962, BITAC was set up to give the country's industry something it could not buy in: the means to make its own spare parts, train its own technicians and prove its own materials. Six decades on, that is still the work. Our shops take a drawing, a sample or a broken component and return a part made to specification — and where no drawing exists, our engineers reverse-engineer one.
+
+        We work from six centres — Dhaka, Chittagong, Chandpur, Khulna, Bogra and the Tool & Technology Institute — each serving the industry around it. Bangladesh Railway, the Power Development Board, the Water Development Board, the sugar mills and a long list of private manufacturers bring us work that would otherwise be imported, and wait on a ship.
+
+        Every job runs the same route whoever the client is: an enquiry is costed part by part, quoted formally, planned and routed through the shops, inspected before it leaves, and delivered with a challan and a bill. Nothing is priced by guess, and the figures behind a quotation can be shown on request.
+        TXT;
+
     // ── Pages ────────────────────────────────────────────────────────────
 
     public function index()
@@ -224,7 +241,7 @@ class PortfolioPublicController extends Controller
             'hero_title'    => self::text('site_hero_title', 'Engineering precision for Bangladesh\'s industry.'),
             'hero_subtitle' => self::text('site_hero_subtitle', 'BITAC has delivered import-substitute manufacturing, training, testing and R&D to Railway, BPDB, Petrobangla, sugar mills and private industry for over six decades.'),
             'about_lead'    => self::text('site_about_lead', 'Bangladesh Industrial Technical Assistance Centre (BITAC) is an autonomous body under the Ministry of Industries, serving the country\'s industry since 1962.'),
-            'about_body'    => self::text('site_about_body', ''),
+            'about_body'    => self::text('site_about_body', self::ABOUT_BODY),
             'mission'       => self::text('site_mission', 'To support the nation\'s industrialisation through skilled manpower, import-substitute manufacturing and reliable technical services.'),
             'map_embed'     => self::text('site_map_embed', ''),
         ];

@@ -1,5 +1,5 @@
 import PublicLayout from '@/Layouts/PublicLayout';
-import { PageHead, Section, SectionHead, Stat } from './parts';
+import { PageHead, Prose, Section, SectionHead, Stat } from './parts';
 
 interface Props {
     stats: { years: number; projects: number; clients: number; centres: number };
@@ -21,18 +21,7 @@ export default function About({ stats, centres, bitac, site, links }: Props) {
                     <div className="lg:col-span-2 space-y-5">
                         <h2 className="text-2xl font-bold text-surface-900">Who we are</h2>
                         <p className="text-sm text-surface-700 leading-relaxed">{site?.about_lead}</p>
-                        {site?.about_body ? (
-                            <p className="text-sm text-surface-600 leading-relaxed whitespace-pre-line">
-                                {site.about_body}
-                            </p>
-                        ) : (
-                            <p className="text-sm text-surface-600 leading-relaxed">
-                                BITAC supports the country&rsquo;s industrialisation through skilled manpower
-                                development, import-substitute manufacturing, materials testing and applied
-                                research &mdash; working with Bangladesh Railway, BPDB, BWDB, Petrobangla, the
-                                sugar mills and a wide range of private manufacturers.
-                            </p>
-                        )}
+                        <Prose text={site?.about_body} className="text-sm text-surface-600 leading-[1.9]" />
                         <div className="rounded-2xl bg-brand-50 border border-brand-200 p-6">
                             <div className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-700 mb-2">
                                 Mission

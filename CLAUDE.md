@@ -1333,6 +1333,22 @@ blank falls back to the Site text headline.
   `video_url` whenever the key is present, and the form posts every field, so a
   box that opened blank would wipe the link on the first save.
 
+### Stored copy is set as paragraphs (2026-10-20)
+- **`Prose`** and **`splitParagraphs()`** in `Portfolio/Public/parts.tsx` are
+  the one way the site renders a block of stored text. ⚠️ **The separator can
+  be `\r\n\r\n`** — the copy comes from a settings row or a PHP heredoc in a
+  CRLF repo — and `/\n{2,}/` never matches that, so the whole thing renders as
+  one slab. Caught exactly that way the first time.
+- `PortfolioPublicController::ABOUT_BODY` is a **default**, not fixed copy:
+  three paragraphs so the page reads as a finished site on day one, replaced
+  the moment anything is typed at Admin → Website → Site text. The About page's
+  own hardcoded fallback was removed — a second copy could only disagree with
+  it.
+- The home page's About **"Read more" moved out of the heading and under the
+  text, as a button** (gradient, arrow in a chip, with a quieter "Talk to us"
+  beside it). A link tucked beside the title sits *above* the thing it carries
+  on from, so it reads as a label rather than the next step.
+
 ### ⚠️ A blank setting is not a missing setting
 `SettingService::get($key, $default)` returns the **empty string** when the row
 exists and holds `''` — the default only fires on a missing key. Clearing a

@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import PublicLayout from '@/Layouts/PublicLayout';
-import { Empty, GalleryRow, NewsCard, NewsRow, Project, ProjectCard, Section, SectionHead } from './parts';
+import { Empty, GalleryRow, NewsCard, NewsRow, Project, ProjectCard, Prose, Section, SectionHead } from './parts';
 import HeroSlider, { HeroSlide } from '@/Components/Public/HeroSlider';
 import { ServiceRow } from './Services';
 
@@ -103,16 +103,27 @@ export default function Home({ slides, featured, services, news, events, photos,
             <Section>
                 <div className="grid lg:grid-cols-5 gap-10 items-start">
                     <div className="lg:col-span-3">
-                        <SectionHead eyebrow="About BITAC" title="A national centre for industrial capability"
-                                     action={{ href: '/portfolio/about', label: 'Read more' }} />
-                        <p className="text-sm text-surface-700 leading-relaxed">{site?.about_lead}</p>
-                        {site?.about_body && (
-                            <p className="text-sm text-surface-600 leading-relaxed mt-4 whitespace-pre-line">{site.about_body}</p>
-                        )}
-                        <Link href="/portfolio/about"
-                              className="sm:hidden inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 mt-5">
-                            Read more <i className="fi fi-rr-arrow-small-right text-base leading-none" />
-                        </Link>
+                        {/* No `action` on the heading: a "Read more" tucked up
+                            beside the title sits above the thing it carries on
+                            from, so it reads as a label rather than the next
+                            step. It belongs under the text, as a button. */}
+                        <SectionHead eyebrow="About BITAC" title="A national centre for industrial capability" />
+                        <p className="text-[15px] text-surface-700 leading-[1.8]">{site?.about_lead}</p>
+                        <Prose text={site?.about_body} className="text-sm text-surface-600 leading-[1.9] mt-4" />
+                        <div className="mt-7 flex flex-wrap items-center gap-3">
+                            <Link href="/portfolio/about"
+                                  className="group inline-flex items-center gap-2.5 pl-5 pr-4 py-3 rounded-xl bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white text-sm font-bold shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30 transition-all">
+                                Read more about BITAC
+                                <span className="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
+                                    <i className="fi fi-rr-arrow-small-right text-sm leading-none" />
+                                </span>
+                            </Link>
+                            <Link href="/portfolio/contact"
+                                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-surface-300 hover:border-brand-400 hover:bg-brand-50 text-surface-700 hover:text-brand-700 text-sm font-bold transition-colors">
+                                <i className="fi fi-rr-envelope text-xs leading-none" />
+                                Talk to us
+                            </Link>
+                        </div>
                     </div>
                     <div className="lg:col-span-2 rounded-2xl bg-surface-50 border border-surface-200 p-6">
                         <div className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600 mb-3">Our mission</div>

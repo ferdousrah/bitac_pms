@@ -42,6 +42,30 @@ export interface GalleryRow {
     taken_on: string | null;
 }
 
+/**
+ * Split stored copy into paragraphs.
+ *
+ * ⚠️ The text comes from a settings row or a PHP heredoc and can arrive with
+ * EITHER line ending. On a CRLF file the separator is "\r\n\r\n", which
+ * /\n{2,}/ never matches — the whole thing then renders as one slab of text,
+ * which is exactly what happened the first time.
+ */
+export function splitParagraphs(text?: string | null): string[] {
+    return (text ?? '').split(/\r?\n[ \t]*\r?\n/).map(p => p.trim()).filter(Boolean);
+}
+
+/** Stored copy, set as paragraphs rather than one block. */
+export function Prose({ text, className = '' }: { text?: string | null; className?: string }) {
+    const paras = splitParagraphs(text);
+    if (!paras.length) return null;
+
+    return (
+        <div className={`space-y-4 ${className}`}>
+            {paras.map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}
+        </div>
+    );
+}
+
 /** A page's own title band — every inner page opens with one. */
 export function PageHead({ eyebrow, title, lead }: { eyebrow?: string; title: string; lead?: string }) {
     return (
