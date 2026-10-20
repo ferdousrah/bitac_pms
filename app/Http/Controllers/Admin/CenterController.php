@@ -53,6 +53,13 @@ class CenterController extends Controller
             'phone_bn'          => 'nullable|string|max:120',
             'fax_bn'            => 'nullable|string|max:120',
             'website'           => 'nullable|string|max:120',
+            // English letterhead
+            'name_en'           => 'nullable|string|max:200',
+            'ministry_en'       => 'nullable|string|max:200',
+            'government_en'     => 'nullable|string|max:200',
+            'address_en'        => 'nullable|string|max:300',
+            'phone_en'          => 'nullable|string|max:120',
+            'fax_en'            => 'nullable|string|max:120',
             'letterhead_color'  => 'nullable|string|max:16',
             'logo_left'         => 'nullable|image|max:2048',
             'logo_right'        => 'nullable|image|max:2048',

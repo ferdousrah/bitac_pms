@@ -232,24 +232,37 @@ class BitacLetterhead
         $rule  = $center?->letterhead_color ?: '#1e40af';
 
         if ($language === 'en') {
-            // English-only letterhead — same shape, English wording.
-            $nameEn    = $this->escape($center?->name ?? 'Bangladesh Industrial Technical Assistance Centre (BITAC)');
-            $addressEn = $this->escape($center?->address ?? '');
-            $contactEn = $this->contactLine($center, 'en');
+            /*
+             * The English letterhead — transcribed from BITAC's printed English
+             * pad (2026-10-20): the same emblem / gear / rule as the Bangla one,
+             * the centre name in the violet, the ministry in red, then the
+             * government line, the address and "Telephone … Fax … Website …"
+             * in italic, as the paper sets them.
+             *
+             * ⚠️ The title is `name_en` — the formal English name — never
+             * `name`, which is the app's short label ("BITAC Dhaka"). Every
+             * line falls back to what every BITAC pad says, so a centre whose
+             * English fields were never filled still prints a proper header.
+             */
+            $nameEn       = $this->escape($center?->name_en       ?: 'Bangladesh Industrial Technical Assistance Center (BITAC)');
+            $ministryEn   = $this->escape($center?->ministry_en   ?: 'Ministry of Industries');
+            $governmentEn = $this->escape($center?->government_en ?: "Government of the People's Republic of Bangladesh");
+            $addressEn    = $this->escape($center?->address_en    ?: ($center?->address ?? ''));
+            $contactEn    = $this->contactLine($center, 'en');
 
             $addressRow = $addressEn
-                ? '<div style="font-size: 9.5pt; color: ' . $ink . '; margin-top: 2pt;">' . $addressEn . '</div>' : '';
+                ? '<div style="font-size: 9.5pt; font-weight: bold; font-style: italic; color: ' . $ink . '; margin-top: 1pt;">' . $addressEn . '</div>' : '';
             $contactRow = $contactEn
-                ? '<div style="font-size: 8.5pt; color: ' . $ink . '; margin-top: 1pt;">' . $contactEn . '</div>' : '';
+                ? '<div style="font-size: 8pt; font-style: italic; color: ' . $ink . '; margin-top: 1pt;">' . $contactEn . '</div>' : '';
 
             return <<<HTML
 <table width="100%" cellspacing="0" cellpadding="0" style="border-bottom: 1pt solid {$rule}; padding-bottom: 3pt;">
     <tr>
         <td width="70" align="center" style="vertical-align: middle;">{$leftLogo}</td>
         <td align="center" style="vertical-align: middle; padding: 0 6pt;">
-            <div style="font-size: 17pt; font-weight: bold; color: {$title};">{$nameEn}</div>
-            <div style="font-size: 11pt; color: {$red}; margin-top: 1pt;">Ministry of Industries</div>
-            <div style="font-size: 10pt; color: {$ink}; margin-top: 1pt;">Government of the People's Republic of Bangladesh</div>
+            <div style="font-size: 14pt; font-weight: bold; color: {$title};">{$nameEn}</div>
+            <div style="font-size: 11pt; font-weight: bold; color: {$red}; margin-top: 1pt;">{$ministryEn}</div>
+            <div style="font-size: 10pt; font-weight: bold; font-style: italic; color: {$ink}; margin-top: 1pt;">{$governmentEn}</div>
             {$addressRow}
             {$contactRow}
         </td>
@@ -300,12 +313,14 @@ HTML;
         $parts   = [];
 
         if ($language === 'en') {
-            $phone = $this->escape($center?->phone ?? '');
-            $email = $this->escape($center?->email ?? '');
-            if ($phone) $parts[] = "Phone: {$phone}";
-            if ($email) $parts[] = "Email: {$email}";
+            // As the printed pad: "Telephone: … Fax: … Website: …", the three
+            // groups separated by space, not commas (the phone group has its own).
+            $phone = $this->escape($center?->phone_en ?: ($center?->phone ?? ''));
+            $fax   = $this->escape($center?->fax_en ?? '');
+            if ($phone)   $parts[] = "Telephone: {$phone}";
+            if ($fax)     $parts[] = "Fax: {$fax}";
             if ($website) $parts[] = "Website: {$website}";
-            return implode(', ', $parts);
+            return implode(' &nbsp; ', $parts);
         }
 
         $phoneBn = $this->escape($center?->phone_bn ?? '');

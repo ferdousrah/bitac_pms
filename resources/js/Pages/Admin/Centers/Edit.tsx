@@ -19,6 +19,12 @@ interface Center {
     phone_bn?: string | null;
     fax_bn?: string | null;
     website?: string | null;
+    name_en?: string | null;
+    ministry_en?: string | null;
+    government_en?: string | null;
+    address_en?: string | null;
+    phone_en?: string | null;
+    fax_en?: string | null;
     letterhead_color?: string | null;
     logo_left_url?: string | null;
     logo_right_url?: string | null;
@@ -44,6 +50,12 @@ export default function CenterEdit({ center }: { center: Center }) {
         phone_bn:          center.phone_bn         ?? '',
         fax_bn:            center.fax_bn           ?? '',
         website:           center.website          ?? '',
+        name_en:           center.name_en          ?? '',
+        ministry_en:       center.ministry_en      ?? '',
+        government_en:     center.government_en    ?? '',
+        address_en:        center.address_en       ?? '',
+        phone_en:          center.phone_en         ?? '',
+        fax_en:            center.fax_en           ?? '',
         letterhead_color:  center.letterhead_color ?? '#1e40af',
         logo_left:         null as File | null,
         logo_right:        null as File | null,
@@ -165,6 +177,42 @@ export default function CenterEdit({ center }: { center: Center }) {
                                 <input className="form-input font-mono w-32" value={data.letterhead_color} onChange={e => setData('letterhead_color', e.target.value)} />
                             </div>
                         </Field>
+                    </div>
+                </div>
+
+                {/* ─── English letterhead ─── */}
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="text-sm font-bold text-surface-900">PDF Letterhead — English</h3>
+                        <p className="text-xs text-surface-400 mt-0.5">
+                            Printed on documents issued in English — letters, forwarding letters and quotations when English is chosen.
+                            The Bangla letterhead above is unchanged. Blank lines fall back to BITAC&rsquo;s standard English wording.
+                        </p>
+                    </div>
+                    <div className="card-body space-y-4">
+                        <Field label="Centre name in English" error={errors.name_en} hint="The big line at the top — the formal name, not the short name used inside the app.">
+                            <input className="form-input" value={data.name_en} onChange={e => setData('name_en', e.target.value)} placeholder="Bangladesh Industrial Technical Assistance Center (BITAC)" />
+                        </Field>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Ministry (English)" error={errors.ministry_en}>
+                                <input className="form-input" value={data.ministry_en} onChange={e => setData('ministry_en', e.target.value)} placeholder="Ministry of Industries" />
+                            </Field>
+                            <Field label="Government line (English)" error={errors.government_en}>
+                                <input className="form-input" value={data.government_en} onChange={e => setData('government_en', e.target.value)} placeholder="Government of the People's Republic of Bangladesh" />
+                            </Field>
+                        </div>
+                        <Field label="Address (English letterhead)" error={errors.address_en}>
+                            <input className="form-input" value={data.address_en} onChange={e => setData('address_en', e.target.value)} placeholder="116 (kha), Tejgaon Industrial Area, Dhaka-1208." />
+                        </Field>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Telephone (English)" error={errors.phone_en}>
+                                <input className="form-input" value={data.phone_en} onChange={e => setData('phone_en', e.target.value)} placeholder="02-55030046, 02-55030057" />
+                            </Field>
+                            <Field label="Fax (English)" error={errors.fax_en}>
+                                <input className="form-input" value={data.fax_en} onChange={e => setData('fax_en', e.target.value)} placeholder="02-55030049" />
+                            </Field>
+                        </div>
+                        <p className="text-[11px] text-surface-400">The website is shared with the Bangla letterhead.</p>
                     </div>
                 </div>
 

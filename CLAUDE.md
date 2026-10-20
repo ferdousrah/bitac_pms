@@ -505,6 +505,34 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **No watermark.** A faded BITAC gear used to sit behind every page to suggest a preprinted pad; even at 4% opacity it read as a smudge under the text and the real stationery has nothing there. Removed — don't reintroduce it without being asked.
 - The website is Latin inside a Bangla line, so it's wrapped in a `tinos` span (`contactLine()`) or mPDF substitutes glyphs.
 
+#### The English letterhead (2026-10-20)
+> BITAC: *"চিঠির লেটার হেড বা কোটেশন লেটার হেড বাংলায় যা আছে তাই থাকবে সাথে প্রদত্ত লেটার হেড অনুযায়ী ইংলিশ লেটার হেড সংযুক্ত করতে হবে।"*
+
+- **The Bangla letterhead is unchanged.** Documents in English print an **English letterhead**
+  transcribed from BITAC's own English pad (the Biman "Training Details" sheet, 20.09.2026):
+  emblem left, gear right, **Bangladesh Industrial Technical Assistance Center (BITAC)** in the
+  violet (14pt bold — at 15pt+ "(BITAC)" wraps onto a second line between the logos; measured),
+  **Ministry of Industries** in red, then in italic: *Government of the People's Republic of
+  Bangladesh* · *116 (kha), Tejgaon Industrial Area, Dhaka-1208.* · *Telephone: … Fax: …
+  Website: …* (space-separated groups, as the paper), closed by the same rule.
+- **Per-centre `*_en` columns** (migration `..._000075`): `name_en`, `ministry_en`,
+  `government_en`, `address_en`, `phone_en`, `fax_en`, edited in a new **PDF Letterhead —
+  English** card on Admin → Centres. Dhaka is filled with the sample's exact text; every centre
+  gets the standard name/ministry/government lines; only blanks are filled.
+- ⚠️ **The title is `name_en`, never `name`.** `name` is the app's short label ("BITAC Dhaka" in
+  the centre switcher) — printing it was what the old English header did. Every English line
+  falls back to BITAC's standard wording (or `address` / `phone`), so an unfilled centre still
+  prints a proper header.
+- **Who prints it:** everything that already rendered `'en'` — RFQ letters, the quotation
+  forwarding letter and the bill's forwarding letter in English, the work order routing sheet,
+  the job QC certificate, operation sheets — plus **the quotation PDF itself**, which gained a
+  **বাংলা / English** letterhead choice on Quotation Show (`/quotations/{id}/pdf?lang=en`; the
+  body is already bilingual দরপত্র / QUOTATION; the file name gets `-EN`). **Email to customer**
+  now sends the quotation on the same letterhead as the forwarding letter ("Letterhead
+  language" toggle, shown even when there is no forwarding letter).
+- Verified: the rendered English header matches the sample line for line, and the PDF embeds
+  only Tinos (all four styles are registered — the italic/bold-italic lines need them) + Nikosh.
+
 #### PDF fonts — Tinos (English) + Nikosh (Bangla), 2026-09
 - **Every BITAC PDF sets English in `tinos` and Bangla in `nikosh`.** Both are registered in `BitacLetterhead::buildMpdf()` and live in `public/fonts/`. `default_font` is `tinos`.
 - **`tinos` IS Times New Roman.** Monotype's own metric-compatible libre clone — advance widths verified identical to `C:\Windows\Fonts	imes.ttf` glyph for glyph. It is used *instead of* the real `times.ttf` because Times New Roman is a licensed Windows/Office font that may not be redistributed in the repo or embedded in generated PDFs; Tinos is Apache-2.0 and sets the same. Don't "fix" this by dropping in times.ttf.

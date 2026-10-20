@@ -1031,20 +1031,31 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                         {/* Action buttons */}
                         <div className="card">
                             <div className="card-body space-y-2.5">
-                                {/* PDF preview popup (download button is inside the popup header) */}
-                                <button
-                                    type="button"
-                                    onClick={() => setEstimatePdf({
-                                        open:     true,
-                                        url:      `/quotations/${quotation.id}/pdf?preview=base64`,
-                                        title:    `Quotation Q-${String(quotation.id).padStart(5, '0')} v${quotation.version}`,
-                                        subtitle: typeof quotation.customer === 'string' ? quotation.customer : quotation.customer?.name,
-                                    })}
-                                    className="btn-secondary w-full"
-                                >
-                                    <i className="fi fi-rr-file-pdf text-sm leading-none" />
-                                    Preview / Download PDF
-                                </button>
+                                {/* Quotation PDF — on the Bangla or the English letterhead.
+                                    The body is bilingual either way; only the pad changes. */}
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-wider font-bold text-surface-400 mb-1.5 flex items-center gap-1.5">
+                                        <i className="fi fi-rr-file-pdf text-[11px] leading-none" /> Quotation PDF — letterhead
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {([['bn', 'বাংলা'], ['en', 'English']] as const).map(([lng, label]) => (
+                                            <button
+                                                key={lng}
+                                                type="button"
+                                                onClick={() => setEstimatePdf({
+                                                    open:     true,
+                                                    url:      `/quotations/${quotation.id}/pdf?preview=base64&lang=${lng}`,
+                                                    title:    `Quotation Q-${String(quotation.id).padStart(5, '0')} v${quotation.version} (${label})`,
+                                                    subtitle: typeof quotation.customer === 'string' ? quotation.customer : quotation.customer?.name,
+                                                })}
+                                                className="btn-secondary w-full justify-center"
+                                            >
+                                                <i className="fi fi-rr-file-pdf text-sm leading-none" />
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
 
                                 {/* Forwarding Letter PDF — Bangla & English variants */}
                                 {quotation.forwarding_letter && quotation.forwarding_letter.trim().length > 0 && (
@@ -1314,9 +1325,9 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                         Attach forwarding letter
                                     </label>
                                 )}
-                                {hasForwarding && (
+                                {(
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-surface-500">Forwarding letter language:</span>
+                                        <span className="text-xs text-surface-500">Letterhead language:</span>
                                         {(['bn', 'en'] as const).map(lng => (
                                             <button key={lng} type="button" onClick={() => setMail(s => ({ ...s, lang: lng }))}
                                                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${mail.lang === lng ? 'bg-brand-500 text-white border-brand-500' : 'bg-surface-50 text-surface-600 border-surface-200 hover:bg-surface-100'}`}>

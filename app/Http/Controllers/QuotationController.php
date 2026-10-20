@@ -1770,7 +1770,8 @@ class QuotationController extends Controller
         $qNo  = 'Q-' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT);
 
         $files = [[
-            'data' => $grab($this->pdf(new \Illuminate\Http\Request(['preview' => 'base64']), $quotation)),
+            // Same language as the forwarding letter, so the two that travel together match.
+            'data' => $grab($this->pdf(new \Illuminate\Http\Request(['preview' => 'base64', 'lang' => $lang]), $quotation)),
             'name' => "Quotation-{$qNo}.pdf",
         ]];
 
@@ -2185,8 +2186,12 @@ class QuotationController extends Controller
         {$notesHtml}
 HTML;
 
-        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Quotation {$quotationNo}");
-        $filename = 'Quotation-Q' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . '-v' . $quotation->version . '.pdf';
+        // `?lang=en` prints the same quotation on the ENGLISH letterhead (BITAC,
+        // 2026-10-20). The body is already bilingual (দরপত্র / QUOTATION).
+        $letterhead = $request->input('lang') === 'en' ? 'en' : 'bn';
+        $bytes    = app(\App\Services\BitacLetterhead::class)->render($bodyHtml, "Quotation {$quotationNo}", null, $letterhead);
+        $filename = 'Quotation-Q' . str_pad((string) $quotation->id, 5, '0', STR_PAD_LEFT) . '-v' . $quotation->version
+            . ($letterhead === 'en' ? '-EN' : '') . '.pdf';
 
         // ?preview=base64 → JSON with base64 bytes (bypasses IDM/FDM).
         // ?preview=1      → inline PDF stream.

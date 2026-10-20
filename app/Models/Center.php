@@ -14,6 +14,8 @@ class Center extends Model
         // Letterhead fields (per-center PDF header/footer config)
         'name_bn', 'caption_en', 'ministry_bn', 'government_bn',
         'address_bn', 'phone_bn', 'fax_bn', 'website',
+        // The English letterhead — the same block, in English (2026-10-20).
+        'name_en', 'ministry_en', 'government_en', 'address_en', 'phone_en', 'fax_en',
         'logo_left_path', 'logo_right_path', 'letterhead_color',
     ];
 
