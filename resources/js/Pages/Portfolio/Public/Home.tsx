@@ -49,7 +49,7 @@ export default function Home({ slides, featured, services, news, events, photos,
 
             {/* ── About ────────────────────────────────────────────────── */}
             <Section>
-                <div className="grid lg:grid-cols-12 gap-12 items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                     <div className="lg:col-span-7">
                         <SectionHead eyebrow="About BITAC" title="A national centre for industrial capability" />
                         <p className="text-base text-surface-800 leading-[1.8] font-medium">{site?.about_lead}</p>
@@ -495,7 +495,7 @@ function Newsroom({ news, events }: { news: NewsRow[]; events: NewsRow[] }) {
                         </div>
                     </div>
                 ) : (
-                    <div className={`grid gap-8 ${news.length && events.length ? 'lg:grid-cols-12' : ''}`}>
+                    <div className={`grid grid-cols-1 gap-8 ${news.length && events.length ? 'lg:grid-cols-12' : ''}`}>
                         {news.length > 0 && (
                             <div className={events.length ? 'lg:col-span-8' : ''}>
                                 <NewsGrid news={news} />

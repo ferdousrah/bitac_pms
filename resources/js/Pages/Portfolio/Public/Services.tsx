@@ -63,7 +63,7 @@ export default function Services({ services, stats, bitac, links }: Props) {
             </Section>
 
             <Section tint>
-                <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
                     <div>
                         <SectionHead
                             eyebrow="Why BITAC"

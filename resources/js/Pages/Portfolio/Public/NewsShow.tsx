@@ -59,7 +59,7 @@ export default function NewsShow({ post, more, bitac, links }: Props) {
             {more.length > 0 && (
                 <Section tint>
                     <h2 className="text-xl font-bold text-surface-900 mb-6">More from BITAC</h2>
-                    <div className="grid lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {more.map((n) => <NewsCard key={n.slug} n={n} />)}
                     </div>
                 </Section>

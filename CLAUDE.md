@@ -1526,6 +1526,26 @@ blank falls back to the Site text headline.
   `tel:` and `splitNumbers()` gives each its own link. A Bangla-digit `tel:`
   dials nothing.
 
+**Layout** (refined 2026-10-20 — BITAC: *"designta kemon khapsara lagtese"*)
+- The office list is a **sticky** panel (`lg:sticky lg:top-24`) with a "not
+  sure which centre?" card under it pointing at the head office. Before, the
+  list scrolled away and left ~370px of empty page beside the details.
+- **The map and everything needed to reach the office are ONE card.** Address
+  on its own line; phone / email / fax then **share one row equally, however
+  many exist** (`OfficeInfo`, `COLS[n]`). A fixed two-column grid left the odd
+  one alone in half a row — fax at Bogura, phone at Khulna.
+- ⚠️ **Contacts are shown two ways.** A NAMED person (the centre head, with a
+  mobile) gets a featured card with tap-to-call buttons; a POST with only its
+  official email is a row in a list. As cards, the posts were big boxes with a
+  grey placeholder icon and one line, which made the section look ragged.
+- ⚠️ **`grid grid-cols-1 lg:grid-cols-…`, never a bare `grid lg:grid-cols-…`.**
+  With no template, the single mobile column sizes itself to its widest
+  unbreakable child — a `truncate`d office name — and pushed the Contact page
+  past 390px. Fixed there and on the six other public sections with the same
+  latent pattern (About, Home ×2, News, NewsShow, Services).
+- Seen in a rendered map: the **Khulna pin lands on "Bangladesh Industrial
+  Technical Assistance…" on Cable Ghat Road**, confirming the pin.
+
 **Maps**
 - The keyless `maps.google.com/maps?q=…&output=embed` form — no API key to
   provision. **An exact pin (latitude/longitude, both or neither) wins over the
@@ -1537,10 +1557,10 @@ blank falls back to the Site text headline.
   Bengal, another on BITAC Dhaka — so it has no pin and maps the Nishindara
   neighbourhood its address names. The admin form explains how to copy an
   exact pin from Google Maps.
-- ⚠️ **Headless Chrome on this machine will not draw a Google Maps iframe**
-  (blank even on a bare page). What WAS verified: the URL is a valid embed
-  (Google refuses it only outside an iframe), and each pin resolves to the
-  right town. Check the tiles in a real browser.
+- ⚠️ **Headless Chrome draws Google Maps iframes only intermittently** (blank
+  even on a bare page on some runs, fine on others). The URL is a valid embed
+  — Google refuses it only outside an iframe — and BITAC confirmed the maps in
+  a real browser.
 - The single site-wide "Map embed URL" setting is **retired** — removed from
   Site text, ignored if posted. A field that changes nothing invites edits.
 

@@ -68,7 +68,7 @@ export default function News({ posts, bitac, links }: Props) {
                 </div>
 
                 {shown.length ? (
-                    <div className="grid lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {shown.map((n) => <NewsCard key={n.slug} n={n} />)}
                     </div>
                 ) : (

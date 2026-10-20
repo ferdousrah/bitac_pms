@@ -17,7 +17,7 @@ export default function About({ stats, centres, bitac, site, links }: Props) {
             />
 
             <Section>
-                <div className="grid lg:grid-cols-3 gap-10">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                     <div className="lg:col-span-2 space-y-5">
                         <h2 className="text-2xl font-bold text-surface-900">Who we are</h2>
                         <p className="text-sm text-surface-700 leading-relaxed">{site?.about_lead}</p>
