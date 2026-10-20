@@ -45,6 +45,8 @@ class CustomerCompletionCertificateController extends Controller
                 'customer_id'           => $customer->id,
                 'center_id'             => $workOrder->center_id ?? $customer->center_id,
                 'mode'                  => $validated['mode'],
+                'source'                => 'customer',
+                'uploaded_by'           => null,
                 'issued_by_name'        => $validated['issued_by_name'],
                 'issued_by_designation' => $validated['issued_by_designation'] ?? null,
                 'issued_date'           => $validated['issued_date'],

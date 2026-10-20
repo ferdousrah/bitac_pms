@@ -153,6 +153,8 @@ class WorkOrder extends Model
     }
 
     public function items()               { return $this->hasMany(WorkOrderItem::class)->orderBy('display_order')->orderBy('id'); }
+    /** The client's completion certificate for this job — one per job (portal or IED upload). */
+    public function completionCertificate() { return $this->hasOne(CompletionCertificate::class); }
     public function operationSheets()     { return $this->hasMany(OperationSheet::class); }
     public function jobExecutions()       { return $this->hasMany(JobExecution::class); }
     public function qcInspections()       { return $this->hasMany(QcInspection::class); }

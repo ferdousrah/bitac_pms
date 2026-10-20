@@ -201,6 +201,49 @@ export default function IedJobShow({ job }: any) {
 
                     {/* Right: facts */}
                     <div className="space-y-4">
+                        {/* The client's completion certificate for this job. */}
+                        <div className="card">
+                            <div className="card-header flex items-center justify-between gap-2">
+                                <h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Completion Certificate</h3>
+                                {job.completion_certificate && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Received</span>
+                                )}
+                            </div>
+                            <div className="card-body text-sm">
+                                {job.completion_certificate ? (
+                                    <div className="space-y-2">
+                                        <div className="font-mono text-xs font-bold text-indigo-600">{job.completion_certificate.certificate_number}</div>
+                                        <div className="text-surface-800">
+                                            Signed by <span className="font-semibold">{job.completion_certificate.issued_by_name}</span>
+                                            {job.completion_certificate.issued_date && <> on {job.completion_certificate.issued_date}</>}
+                                        </div>
+                                        {job.completion_certificate.client_ref_no && (
+                                            <div className="text-xs text-surface-500">Client ref: {job.completion_certificate.client_ref_no}</div>
+                                        )}
+                                        <div className="text-[11px] text-surface-500">
+                                            {job.completion_certificate.source === 'ied' ? 'Uploaded by IED' : 'Issued by the client in the portal'}
+                                        </div>
+                                        <a href={`/ied/completion-certificates/${job.completion_certificate.id}/preview`} target="_blank" rel="noreferrer"
+                                           className="btn-outline btn-sm w-full justify-center mt-1">
+                                            <i className="fi fi-rr-eye text-xs leading-none" /> View certificate
+                                        </a>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-surface-600 leading-relaxed">
+                                            No certificate yet. When the client hands over the signed completion certificate, upload the scan here.
+                                        </p>
+                                        {job.can_upload_certificate && (
+                                            <Link href={`/ied/completion-certificates?upload=${job.id}&return=${encodeURIComponent(`/ied/jobs/${job.id}`)}`}
+                                                  className="btn-primary btn-sm w-full justify-center">
+                                                <i className="fi fi-rr-cloud-upload text-xs leading-none" /> Upload certificate
+                                            </Link>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="card">
                             <div className="card-header"><h3 className="text-xs font-bold text-surface-900 uppercase tracking-wider">Details</h3></div>
                             <div className="card-body space-y-3 text-sm">

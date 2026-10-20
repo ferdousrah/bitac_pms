@@ -14,8 +14,8 @@ class CompletionCertificate extends Model
 
     protected $fillable = [
         'center_id', 'work_order_id', 'customer_id', 'certificate_number',
-        'mode', 'issued_by_name', 'issued_by_designation', 'issued_date',
-        'rating', 'remarks',
+        'mode', 'source', 'uploaded_by', 'issued_by_name', 'issued_by_designation', 'issued_date',
+        'client_ref_no', 'rating', 'remarks',
         'uploaded_file_path', 'generated_pdf_path', 'signature_path',
     ];
 
@@ -34,6 +34,20 @@ class CompletionCertificate extends Model
 
     public function workOrder(): BelongsTo  { return $this->belongsTo(WorkOrder::class); }
     public function customer(): BelongsTo   { return $this->belongsTo(Customer::class); }
+    public function uploader(): BelongsTo   { return $this->belongsTo(User::class, 'uploaded_by'); }
+
+    /**
+     * Where it came from: `customer` — issued by the client in the customer
+     * portal; `ied` — the client's signed paper certificate, scanned and
+     * uploaded by IED. Only an IED upload can be replaced or deleted by staff;
+     * a certificate the client issued is theirs.
+     */
+    public const SOURCES = ['customer' => 'Client portal', 'ied' => 'Uploaded by IED'];
+
+    public function isIedUpload(): bool
+    {
+        return $this->source === 'ied';
+    }
 
     /** URL to whichever PDF/image the customer's certificate is stored as. */
     public function getFileUrlAttribute(): ?string

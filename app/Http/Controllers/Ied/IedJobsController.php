@@ -188,6 +188,18 @@ class IedJobsController extends Controller
                 ] : null,
                 'rfq_id'         => $workOrder->rfq_id,
                 'quotation_id'   => $workOrder->quotation_id,
+                // The client's completion certificate — from the portal, or
+                // uploaded by IED from the signed paper (Completion Certificates).
+                'completion_certificate' => ($cc = $workOrder->completionCertificate) ? [
+                    'id'                 => $cc->id,
+                    'certificate_number' => $cc->certificate_number,
+                    'source'             => $cc->source ?? 'customer',
+                    'issued_by_name'     => $cc->issued_by_name,
+                    'issued_date'        => $cc->issued_date?->format('d M Y'),
+                    'client_ref_no'      => $cc->client_ref_no,
+                ] : null,
+                'can_upload_certificate' => (bool) request()->user()?->can('manage completion-certificates')
+                    && $workOrder->status !== 'cancelled',
                 'items'          => $workOrder->items->map(fn ($i) => [
                     'id'          => $i->id,
                     'job_number'  => $i->job_number,

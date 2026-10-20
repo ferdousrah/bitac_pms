@@ -68,6 +68,8 @@ class BitacDepartmentRolesSeeder extends Seeder
             'view cost-estimates', 'create cost-estimates', 'edit cost-estimates',
             // The yearly target per centre is set from IED → Reports.
             'set targets',
+            // IED uploads the client's signed completion certificate.
+            'view completion-certificates', 'manage completion-certificates',
         ];
         $ied->syncPermissions($iedPermissions);
 

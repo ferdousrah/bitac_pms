@@ -433,6 +433,13 @@ Route::middleware(['auth'])->group(function () {
     // ─── IED Completion Certificates inbox + download ───
     Route::prefix('ied/completion-certificates')->middleware('permission:view completion-certificates')->name('ied.completion-certificates.')->group(function () {
         Route::get('/',                            [\App\Http\Controllers\CompletionCertificateController::class, 'index'])->name('index');
+        // IED uploads the client's signed paper certificate (2026-10-20).
+        Route::post('/',                           [\App\Http\Controllers\CompletionCertificateController::class, 'store'])
+            ->middleware('permission:manage completion-certificates')->name('store');
+        Route::put('/{certificate}',               [\App\Http\Controllers\CompletionCertificateController::class, 'update'])
+            ->middleware('permission:manage completion-certificates')->name('update');
+        Route::delete('/{certificate}',            [\App\Http\Controllers\CompletionCertificateController::class, 'destroy'])
+            ->middleware('permission:manage completion-certificates')->name('destroy');
         Route::get('/{certificate}/download',      [\App\Http\Controllers\CompletionCertificateController::class, 'download'])->name('download');
         Route::get('/{certificate}/preview',       [\App\Http\Controllers\CompletionCertificateController::class, 'preview'])->name('preview');
     });

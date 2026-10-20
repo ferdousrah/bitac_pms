@@ -67,6 +67,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view wip', 'view qc', 'view qc-reports',
             'view delivery', 'view invoices',
             'view reports', 'export reports', 'set targets',
+            'view completion-certificates',
         ]);
 
         // 3. production-supervisor

@@ -1124,6 +1124,44 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ Testing a `role:` middleware: **Spatie's `RoleMiddleware` reads `Auth::guard()->user()`, not the request's user resolver.** Without an `Auth::login()` every call throws `notLoggedIn` — which looks exactly like the gate working, so the test tells the two refusals apart by message.
 - ⚠️ The test **proves the cascade from `information_schema`** rather than assuming it, so if someone later changes a foreign key to `SET NULL` the guard's reason is re-checked rather than quietly outliving its cause.
 
+## 📜 IED uploads a job's completion certificate (2026-10-20)
+> BITAC: *"IED te job er কমপ্লেশন সার্টিফিকেট আপলোডের ব্যবস্থা থাকতে হবে, atar ekta submenu hobe Completion Certificates."*
+
+- A certificate used to come **only from the client**, in the customer portal
+  (uploaded or e-signed, after delivery). In practice the client hands BITAC a
+  signed paper certificate, so **IED → Completion Certificates** gained an
+  **Upload certificate** form: pick the job (searchable), signed by +
+  designation, the certificate date (not in the future), the **client's own
+  ref. no.**, the scan (PDF/JPG/PNG ≤ 10 MB), remarks.
+- ⚠️ **The menu entry existed but nobody in IED could see it** — it was gated by
+  `view completion-certificates`, which only super-admin held. Migration
+  `..._000073` grants `view` + `manage completion-certificates` to **ied-officer**
+  and **Executive Engineer (IED)**, `view` to **management** (and both seeders),
+  so the submenu now appears for IED. `manage` (which already existed, unused)
+  gates upload / replace / delete; **management can read but not upload, and is
+  sent no job list.**
+- New columns: **`source`** (`customer` = client portal · `ied` = uploaded by IED;
+  every existing row is `customer`), **`uploaded_by`**, **`client_ref_no`**.
+  `WorkOrder::completionCertificate()` (hasOne) is new.
+- **One certificate per job.** A second upload for the same job is refused
+  (redirect + flash naming the one there). **Only an IED upload can be replaced
+  or deleted by staff** (`isIedUpload()`); a certificate the client issued is
+  theirs — no edit/delete, refused server-side too. Replacing the file removes
+  the old one; saving without a file keeps it. If the client later re-issues from
+  the portal, the record becomes theirs (`source = customer`).
+- **Which jobs can take one:** any job not **cancelled** without a certificate yet
+  — delivered ones listed first, others flagged "not delivered yet", because a
+  certificate for older work can arrive for a job whose status here never reached
+  delivered. (The customer portal still only issues after delivery.)
+- **IED → Jobs → a job** has a **Completion Certificate** card: the certificate
+  (number, signed by, date, client ref, source, View) or an **Upload certificate**
+  button → `/ied/completion-certificates?upload=<wo>&return=/ied/jobs/<wo>`, which
+  opens the form on that job and comes back to the job page after saving
+  (`return_to` is only honoured for `/ied/jobs/…`).
+- The page's tiles: Total · From client · Uploaded by IED · **Delivered, no
+  certificate** (what is still to be collected) · Avg rating. The client sees an
+  IED-uploaded certificate on their own job in the portal (same `customer_id`).
+
 ## ⚠️ A row must never be written with NO centre (2026-09-29)
 
 > Reported from the live system: the approval chain screen listed **Md Rakib Hassan → Mir Md. Anisuzzaman**, yet Quotation #18 sat pending with the **Director General**, who is not in the chain at all.
