@@ -1509,16 +1509,9 @@ blank falls back to the Site text headline.
 - Link arrows are `w-0` until hover, not merely transparent: an invisible arrow
   that keeps its width indents every link under its heading, and a phone has
   no hover to ever reveal it.
-- ⚠️ **Fixed: the website link was `https://${bitac.website}`**, so a stored
-  `https://www.bitac.gov.bd` became `https://https://…`. `siteHref()` adds a
-  scheme only when there is none.
-
-#### Colour balance: ink, violet, gold (2026-10-20)
-> BITAC: *"purple er domination ta beshi hoye gese, color tone gulu perfect
-> koro."* Every dark surface — topbar, hero, services band, mission card,
-> events panel, footer — was the same saturated plum, and the light areas
-> carried violet washes too, so violet was everywhere and stood out nowhere.
-
+- The bottom bar's right side is **"Developed by Technocrats"** (→
+  technocratsbd.com) and the back-to-top button. It replaced the
+  www.bitac.gov.bd link (BITAC, 2026-10-20) — and `siteHref()` went with it.
 - **Dark surfaces are `ink`** (`tailwind.config.js`: 700 `#2b2838` → 950
   `#0e0c14`) — near-black with a whisper of violet so it still harmonises.
   ⚠️ **Fixed hex, NOT theme-driven**: a different brand colour must not repaint

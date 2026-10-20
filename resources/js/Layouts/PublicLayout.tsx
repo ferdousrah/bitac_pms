@@ -355,12 +355,6 @@ function navLinkClass(active: boolean, open = false): string {
     return base + 'text-surface-700 hover:text-brand-700 after:scale-x-0 hover:after:scale-x-100';
 }
 
-/** A stored website may or may not carry its scheme; never prefix it twice. */
-function siteHref(website?: string | null): string | undefined {
-    if (!website) return undefined;
-    return /^https?:\/\//i.test(website) ? website : `https://${website}`;
-}
-
 /**
  * The public footer.
  *
@@ -498,13 +492,12 @@ function SiteFooter({ bitac, important, ministry }: {
                             © {new Date().getFullYear()} BITAC · {bitac?.ministry_bn || 'শিল্প মন্ত্রণালয়'}, {bitac?.government_bn || 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার'}
                         </span>
                         <div className="flex items-center gap-5">
-                            {bitac?.website && (
-                                <a href={siteHref(bitac.website)} target="_blank" rel="noopener noreferrer"
-                                   className="inline-flex items-center gap-1.5 hover:text-white transition-colors">
-                                    <i className="fi fi-rr-globe text-[11px] leading-none" />
-                                    {bitac.website.replace(/^https?:\/\//i, '')}
-                                </a>
-                            )}
+                            {/* BITAC (2026-10-20): the developer's credit sits here,
+                                where the www.bitac.gov.bd link used to be. */}
+                            <a href="https://technocratsbd.com" target="_blank" rel="noopener noreferrer"
+                               className="hover:text-white transition-colors">
+                                Developed by <span className="font-semibold text-white/70">Technocrats</span>
+                            </a>
                             <button type="button" aria-label="Back to top"
                                     onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                                     className="group w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-brand-500 border border-white/10 hover:border-brand-400 text-white flex items-center justify-center transition-all">
