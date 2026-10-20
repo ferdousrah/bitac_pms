@@ -22,9 +22,9 @@ return new class extends Migration
         \DB::table('settings')->insert([
             ['key' => 'brand_name',      'value' => 'BITAC PMS',  'created_at' => now(), 'updated_at' => now()],
             ['key' => 'brand_subtitle',   'value' => 'Production Management', 'created_at' => now(), 'updated_at' => now()],
-            ['key' => 'primary_color',    'value' => '#ff7a0f',   'created_at' => now(), 'updated_at' => now()],
-            ['key' => 'sidebar_color',    'value' => '#0f172a',   'created_at' => now(), 'updated_at' => now()],
-            ['key' => 'sidebar_accent',   'value' => '#1e293b',   'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'primary_color',    'value' => '#5b2d90',   'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'sidebar_color',    'value' => '#1b1233',   'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'sidebar_accent',   'value' => '#2b1d4d',   'created_at' => now(), 'updated_at' => now()],
             ['key' => 'logo_path',        'value' => null,        'created_at' => now(), 'updated_at' => now()],
         ]);
     }

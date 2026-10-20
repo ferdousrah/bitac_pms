@@ -45,7 +45,7 @@ export interface GalleryRow {
 /** A page's own title band — every inner page opens with one. */
 export function PageHead({ eyebrow, title, lead }: { eyebrow?: string; title: string; lead?: string }) {
     return (
-        <section className="bg-gradient-to-br from-surface-900 via-surface-900 to-brand-900/40 text-white">
+        <section className="bg-gradient-to-br from-brand-950 via-brand-950 to-brand-800/70 text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
                 {eyebrow && (
                     <div className="text-[11px] uppercase tracking-[0.2em] font-bold text-brand-400 mb-3">{eyebrow}</div>

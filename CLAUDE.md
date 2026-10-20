@@ -69,11 +69,80 @@ database/
 └── seeders/                # Default password: 'password' for all seeded users
 ```
 
+## 🟣 The theme is violet, and the server paints it (2026-10-20)
+
+> BITAC asked for purple instead of the yellow. The brand colour is now
+> **`#5b2d90` — the violet on BITAC's own letterhead** (`BitacLetterhead::TITLE_INK`),
+> so the application, the public website and the printed page are one identity.
+> Sidebar `#1b1233`, sidebar accent `#2b1d4d`.
+
+- The whole ramp is generated from that one hex: **`brand-500` = `#763abb`**,
+  600 `#62319b`, 700 `#4f277c`, 950 `#1d0d30`, 50 `#f7f4fb`.
+- Nothing is hardcoded violet in a component. It is still
+  `primary_color` in `settings`, still changeable at **Admin → Branding**, and
+  the ramp still follows whatever is picked there.
+
+### ⚠️ `App\Support\BrandPalette` (PHP) and `resources/js/lib/theme.ts` are ONE ramp in two places
+- The **PHP** copy is what renders: `app.blade.php` writes a `:root{…}` block
+  with all 11 `--brand-*` vars plus the sidebar.
+- The **JS** copy exists only so Admin → Branding can preview a colour live
+  without a round trip.
+- They must agree exactly, and the check runs the **real exported
+  `themeToCSS`** (transpiled with esbuild) against `BrandPalette::generate()`
+  over eight hexes, shade by shade. ⚠️ The first attempt stripped the
+  TypeScript types with a regex instead and mangled
+  `function hexToHsl(hex: string): [number, number, number]` into a syntax
+  error — which looks exactly like the palette being broken.
+
+### ⚠️ The blade claimed to inject the theme server-side and did not
+`applyTheme` runs in **`AppLayout` and the auth pages only**. So every page
+flashed the Tailwind fallback before JS ran, and the **public website was never
+themed at all** — which is how `/portfolio` came to be orange while the app was
+amber. The blade now emits the variables before `@vite`, so:
+- the public site, the login screens and anything else get the real colour,
+- there is no flash, and
+- ⚠️ **the Tailwind fallbacks in `tailwind.config.js` must equal the generated
+  ramp for the configured hex**, or the page shifts colour the moment the
+  variable lands. The test asserts all 11.
+- `BrandPalette::cssVars()` **ignores a non-hex value** rather than printing it
+  — the colour comes out of a settings row, and a row reachable by hand must
+  not be able to write arbitrary CSS into every page.
+
+### ⚠️ `bg-brand-50` used to be grey, whatever colour you picked
+`generatePalette` cut saturation to **30%** for the 50/100 shades; at 97%
+lightness that is indistinguishable from grey, so every tinted card, chip and
+band in the system read as a grey box. The light end now keeps most of the hue
+(`0.85` / `0.90` / `0.95`, capped), which is why `brand-50` is a visible lilac.
+The test asserts the tint is actually tinted.
+
+### Other things that were pinned to orange
+- ⚠️ **`shadow-glow` was a literal `rgb(255 122 15 / 0.2)`** — a faint amber
+  halo under every primary button, whatever the brand colour. It reads
+  `var(--brand-500)` now.
+- Defaults were `#ff7a0f` in **nine** places (`SettingService`, the blade,
+  `HandleInertiaRequests`, `ChatbotSettingsController`, `ChatPanel`,
+  `Admin/Branding` (default + the reset button + the preset list),
+  `Admin/ChatbotSettings`, `app.css`, the settings migration). All violet now;
+  the test greps each file.
+- The public site's dark bands (utility strip, footer, page heads, the hero)
+  moved from `surface-900` onto **`brand-950`**, so the website's dark
+  surfaces match the app's sidebar and follow the admin's colour. ⚠️ `surface`
+  is a fixed slate scale used system-wide and was **not** repurposed.
+
+### ⚠️ Migration `..._000066` changes stored data, and is guarded
+The colour is a settings row, so changing the code defaults alone would have
+left this database on `#f59e0b` and the screen still yellow. The migration
+rewrites it — but **only if the value is still one of the shipped
+oranges/ambers**. A colour somebody picked deliberately is left alone
+(`chatbot.primary_color` was on rose `#f43f5e` and still is, which the test
+asserts). It also **forgets the `app_settings` cache**, which `SettingService`
+holds forever, or the old colour survives the deploy.
+
 ## 🎨 UI / Styling Conventions
 
 - Use existing classes: `btn-primary`, `btn-outline`, `btn-ghost`, `card`, `card-header`, `card-body`, `form-input`, `form-textarea`, `form-label`, `form-group`, `form-error`, `alert alert-info`
 - Surface colors: `bg-surface-50/100/200`, `text-surface-400/500/800/900`
-- Brand color: `text-brand-500`, `bg-brand-50`, etc.
+- Brand color: `text-brand-500`, `bg-brand-50`, etc. — a **violet** ramp generated from `settings.primary_color` (see the theme section above); never hardcode the hex
 - Animations: `animate-fade-in` for page loads
 - Icons: use Lucide React for most icons; Flaticon classes (`fi fi-rr-*`) are also used in legacy code
 - Currency: `৳` for BDT, numbers formatted `toLocaleString('en-IN', { minimumFractionDigits: 2 })`

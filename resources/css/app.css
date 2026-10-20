@@ -49,7 +49,7 @@
 
 @layer base {
     :root {
-        --color-brand: 255 122 15;
+        --color-brand: 118 58 187;
         --sidebar-width: 260px;
         --topbar-height: 64px;
     }

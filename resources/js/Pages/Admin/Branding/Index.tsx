@@ -4,7 +4,7 @@ import { FormEvent, useEffect } from 'react';
 import { applyTheme } from '@/lib/theme';
 
 const COLOR_PRESETS = [
-    { label: 'Orange',  hex: '#ff7a0f' },
+    { label: 'BITAC Violet', hex: '#5b2d90' },
     { label: 'Blue',    hex: '#3b82f6' },
     { label: 'Emerald', hex: '#10b981' },
     { label: 'Violet',  hex: '#8b5cf6' },
@@ -29,9 +29,9 @@ export default function BrandingIndex({ settings }: any) {
     const { data, setData, post, errors, processing } = useForm({
         brand_name:     settings.brand_name ?? 'BITAC PMS',
         brand_subtitle: settings.brand_subtitle ?? 'Production Management',
-        primary_color:  settings.primary_color ?? '#ff7a0f',
-        sidebar_color:  settings.sidebar_color ?? '#0f172a',
-        sidebar_accent: settings.sidebar_accent ?? '#1e293b',
+        primary_color:  settings.primary_color ?? '#5b2d90',
+        sidebar_color:  settings.sidebar_color ?? '#1b1233',
+        sidebar_accent: settings.sidebar_accent ?? '#2b1d4d',
         logo:           null as File | null,
         remove_logo:    false,
     });
@@ -232,9 +232,9 @@ export default function BrandingIndex({ settings }: any) {
                                 </button>
                                 <button type="button" className="btn-outline"
                                     onClick={() => {
-                                        setData('primary_color', '#ff7a0f');
-                                        setData('sidebar_color', '#0f172a');
-                                        setData('sidebar_accent', '#1e293b');
+                                        setData('primary_color', '#5b2d90');
+                                        setData('sidebar_color', '#1b1233');
+                                        setData('sidebar_accent', '#2b1d4d');
                                     }}>
                                     Reset to Default
                                 </button>

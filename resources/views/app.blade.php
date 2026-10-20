@@ -10,8 +10,9 @@
         @php
             $ss = app(\App\Services\SettingService::class);
             $brandName  = $ss->get('brand_name', config('app.name', 'BITAC PMS'));
-            $primaryHex = $ss->get('primary_color', '#ff7a0f');
-            $sidebarHex = $ss->get('sidebar_color', '#0f172a');
+            $primaryHex = $ss->get('primary_color', '#5b2d90');
+            $sidebarHex = $ss->get('sidebar_color', '#1b1233');
+            $accentHex  = $ss->get('sidebar_accent', '#2b1d4d');
             $isLiveDashboard = request()->routeIs('dashboard.live');
             $logoPath = $ss->get('logo_path');
         @endphp
@@ -20,7 +21,6 @@
         <!-- Make brand name available to the JS bundle for the Inertia title callback -->
         <script>window.__BRAND_NAME__ = @json($brandName);</script>
 
-        <!-- Server-side theme injection (prevents flash of default colors) -->
         @php
             $logoUrl = $logoPath ? \Illuminate\Support\Facades\Storage::disk('public')->url($logoPath) : null;
             $logoMime = $logoUrl ? (\Illuminate\Support\Str::endsWith(strtolower($logoPath), '.svg') ? 'image/svg+xml'
@@ -45,6 +45,17 @@
         <!-- Fonts — Inter (premium) + JetBrains Mono (code) -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800|jetbrains-mono:400,500&display=swap" rel="stylesheet" />
+
+        {{-- The brand palette, written here rather than applied by JS after
+             paint. The old comment above claimed this already happened; it did
+             not -- `applyTheme` runs in AppLayout and the auth pages only, so
+             every page flashed the Tailwind fallback first and the PUBLIC
+             WEBSITE never got themed at all, which is how the site came to be
+             a different colour from the application. --}}
+        @php $themeCss = \App\Support\BrandPalette::cssVars($primaryHex, $sidebarHex, $accentHex); @endphp
+        @if($themeCss)
+            <style>{!! $themeCss !!}</style>
+        @endif
 
         @routes
         @viteReactRefresh

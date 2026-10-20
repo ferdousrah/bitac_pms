@@ -131,7 +131,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             <Head title={title} />
 
             {/* ── Utility strip: whose office this is, and the two ways in ── */}
-            <div className="bg-surface-900 text-surface-300 text-[11px]">
+            <div className="bg-brand-950 text-brand-200/80 text-[11px]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-4">
                     <div className="truncate">
                         {bitac?.ministry_bn || 'শিল্প মন্ত্রণালয়'} · {bitac?.government_bn || 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার'}
@@ -294,7 +294,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             <main className="flex-1">{children}</main>
 
             {/* ── Footer ────────────────────────────────────────────────── */}
-            <footer className="bg-surface-900 text-surface-400 mt-16">
+            <footer className="bg-brand-950 text-brand-200/70 mt-16">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                     <div className="lg:col-span-1">
                         <div className="flex items-center gap-2.5 mb-3">
@@ -368,8 +368,8 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                     </div>
                 </div>
 
-                <div className="border-t border-surface-800">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-surface-500">
+                <div className="border-t border-white/10">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-brand-200/50">
                         <span>© {new Date().getFullYear()} BITAC — Bangladesh Industrial Technical Assistance Centre</span>
                         <span className="flex items-center gap-4">
                             <a href="/customer/login" className="hover:text-white">Customer Login</a>

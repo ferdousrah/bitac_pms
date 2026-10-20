@@ -35,7 +35,7 @@ export default function Contact({ centres, bitac, site, links }: Props) {
                     {/* Head office, said once and prominently — it is where
                         almost every enquiry should land. */}
                     <div className="lg:col-span-2 rounded-2xl border border-surface-200 overflow-hidden">
-                        <div className="bg-surface-900 text-white px-6 py-5">
+                        <div className="bg-brand-950 text-white px-6 py-5">
                             <div className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-400">Head office</div>
                             <h2 className="text-lg font-bold mt-1">{hq.name_bn || hq.name_en}</h2>
                             {hq.name_bn && hq.name_en && (

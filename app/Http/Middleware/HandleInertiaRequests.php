@@ -213,7 +213,7 @@ class HandleInertiaRequests extends Middleware
                     'welcome_sub'   => $s->get('chatbot.welcome_sub', 'Your AI assistant for BITAC PMS.'),
                     'placeholder'   => $s->get('chatbot.placeholder', 'Ask about production, machines, finance...'),
                     'footer'        => $s->get('chatbot.footer', 'Powered by Technocrats'),
-                    'primary_color' => $s->get('chatbot.primary_color', '#ff7a0f'),
+                    'primary_color' => $s->get('chatbot.primary_color', '#5b2d90'),
                     'bubble_user'   => $s->get('chatbot.bubble_user', 'light'),
                     'bubble_bot'    => $s->get('chatbot.bubble_bot', 'light'),
                     'fab_position'  => $s->get('chatbot.fab_position', 'bottom-right'),

@@ -371,7 +371,7 @@ export default function ChatPanel() {
     const botEnabled  = masterAiEnabled && cs?.enabled !== 'no';
     const showAvatar  = cs?.show_avatar !== 'no';
     const fabLeft     = cs?.fab_position === 'bottom-left';
-    const primaryColor = cs?.primary_color || '#ff7a0f';
+    const primaryColor = cs?.primary_color || '#5b2d90';
     const bubbleUser  = cs?.bubble_user || 'light';
     const bubbleBotStyle = cs?.bubble_bot || 'light';
     const iconType    = cs?.icon_type || 'font';

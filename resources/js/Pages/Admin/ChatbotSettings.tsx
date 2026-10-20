@@ -3,7 +3,7 @@ import { useForm } from '@inertiajs/react';
 import { useRef, useState } from 'react';
 
 const colorPresets = [
-    { label: 'Brand Orange', value: '#ff7a0f' },
+    { label: 'BITAC Violet', value: '#5b2d90' },
     { label: 'Blue', value: '#3b82f6' },
     { label: 'Emerald', value: '#10b981' },
     { label: 'Purple', value: '#8b5cf6' },
@@ -119,7 +119,7 @@ export default function ChatbotSettings({ settings }: any) {
                                         <div className="flex items-center gap-3 pt-2">
                                             <span className="text-xs text-surface-500">Preview:</span>
                                             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
-                                                style={{ background: data.chatbot_primary_color || '#ff7a0f' }}>
+                                                style={{ background: data.chatbot_primary_color || '#5b2d90' }}>
                                                 <i className={`fi ${data.chatbot_icon_font || 'fi-rr-robot'} text-lg leading-none`} />
                                             </div>
                                             {/* Quick picks */}
@@ -138,7 +138,7 @@ export default function ChatbotSettings({ settings }: any) {
                                         <div className="flex items-center gap-4">
                                             {/* Current/preview */}
                                             <div className="w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden border-2 border-dashed border-surface-300 bg-surface-50 shrink-0"
-                                                style={iconPreview ? { borderStyle: 'solid', borderColor: data.chatbot_primary_color || '#ff7a0f' } : undefined}>
+                                                style={iconPreview ? { borderStyle: 'solid', borderColor: data.chatbot_primary_color || '#5b2d90' } : undefined}>
                                                 {iconPreview ? (
                                                     <img src={iconPreview} alt="Icon" className="w-full h-full object-contain" />
                                                 ) : (
@@ -180,7 +180,7 @@ export default function ChatbotSettings({ settings }: any) {
                                 <div className="form-group">
                                     <label className="form-label">Primary Color</label>
                                     <div className="flex items-center gap-3">
-                                        <input type="color" value={data.chatbot_primary_color ?? '#ff7a0f'}
+                                        <input type="color" value={data.chatbot_primary_color ?? '#5b2d90'}
                                             onChange={e => setData('chatbot_primary_color', e.target.value)}
                                             className="w-10 h-10 rounded-lg border border-surface-200 cursor-pointer p-0.5" />
                                         <div className="flex flex-wrap gap-1.5">
@@ -377,7 +377,7 @@ export default function ChatbotSettings({ settings }: any) {
                     <div className="card-body">
                         <div className="max-w-sm mx-auto bg-white rounded-2xl border border-surface-200 shadow-lg overflow-hidden">
                             {/* Mock header */}
-                            <div className="px-4 py-3 flex items-center gap-3" style={{ background: data.chatbot_primary_color ?? '#ff7a0f' }}>
+                            <div className="px-4 py-3 flex items-center gap-3" style={{ background: data.chatbot_primary_color ?? '#5b2d90' }}>
                                 <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center overflow-hidden">
                                     {data.chatbot_icon_type === 'image' && iconPreview ? (
                                         <img src={iconPreview} alt="" className="w-6 h-6 object-contain" />
@@ -405,12 +405,12 @@ export default function ChatbotSettings({ settings }: any) {
                                 </div>
                                 <div className="flex gap-2 flex-row-reverse">
                                     <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
-                                         style={{ background: data.chatbot_primary_color ?? '#ff7a0f', color: 'white', opacity: 0.8 }}>U</div>
+                                         style={{ background: data.chatbot_primary_color ?? '#5b2d90', color: 'white', opacity: 0.8 }}>U</div>
                                     <div className={`rounded-2xl rounded-tr-md px-3 py-2 text-xs max-w-[75%] ${
                                         data.chatbot_bubble_user === 'brand' ? 'text-white' :
                                         data.chatbot_bubble_user === 'dark' ? 'bg-surface-800 text-white border border-surface-700' :
                                         'bg-brand-50 border border-brand-200 text-surface-800'
-                                    }`} style={data.chatbot_bubble_user === 'brand' ? { background: data.chatbot_primary_color ?? '#ff7a0f' } : undefined}>
+                                    }`} style={data.chatbot_bubble_user === 'brand' ? { background: data.chatbot_primary_color ?? '#5b2d90' } : undefined}>
                                         Show me production stats
                                         <span className="block text-right text-[8px] opacity-50 mt-1">10:31 AM</span>
                                     </div>
@@ -421,7 +421,7 @@ export default function ChatbotSettings({ settings }: any) {
                                 <div className="flex items-center gap-2">
                                     <input type="text" disabled value="" placeholder={data.chatbot_placeholder || 'Ask something...'}
                                         className="flex-1 form-input !py-1.5 !text-xs !rounded-lg opacity-60" />
-                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: data.chatbot_primary_color ?? '#ff7a0f' }}>
+                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: data.chatbot_primary_color ?? '#5b2d90' }}>
                                         <i className="fi fi-rr-paper-plane text-white text-xs leading-none" />
                                     </div>
                                 </div>

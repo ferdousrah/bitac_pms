@@ -21,7 +21,7 @@ class ChatbotSettingsController extends Controller
                 'chatbot_welcome_sub' => $this->settings->get('chatbot.welcome_sub', 'Your AI assistant for BITAC PMS. I can analyze data, generate reports, navigate pages and more!'),
                 'chatbot_placeholder' => $this->settings->get('chatbot.placeholder', 'Ask about production, machines, finance...'),
                 'chatbot_footer'      => $this->settings->get('chatbot.footer', 'Powered by Technocrats'),
-                'chatbot_primary_color'   => $this->settings->get('chatbot.primary_color', '#ff7a0f'),
+                'chatbot_primary_color'   => $this->settings->get('chatbot.primary_color', '#5b2d90'),
                 'chatbot_bubble_user'     => $this->settings->get('chatbot.bubble_user', 'light'),
                 'chatbot_bubble_bot'      => $this->settings->get('chatbot.bubble_bot', 'light'),
                 'chatbot_fab_position'    => $this->settings->get('chatbot.fab_position', 'bottom-right'),

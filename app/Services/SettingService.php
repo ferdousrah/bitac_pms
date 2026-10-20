@@ -41,9 +41,9 @@ class SettingService
         return [
             'brand_name'     => $this->get('brand_name', 'BITAC PMS'),
             'brand_subtitle' => $this->get('brand_subtitle', 'Production Management'),
-            'primary_color'  => $this->get('primary_color', '#ff7a0f'),
-            'sidebar_color'  => $this->get('sidebar_color', '#0f172a'),
-            'sidebar_accent' => $this->get('sidebar_accent', '#1e293b'),
+            'primary_color'  => $this->get('primary_color', '#5b2d90'),
+            'sidebar_color'  => $this->get('sidebar_color', '#1b1233'),
+            'sidebar_accent' => $this->get('sidebar_accent', '#2b1d4d'),
             'logo_path'      => $this->get('logo_path'),
         ];
     }

@@ -81,10 +81,19 @@ function generatePalette(hex: string): Record<number, string> {
     const palette: Record<number, string> = {};
 
     for (const [shade, lightness] of Object.entries(SHADE_LIGHTNESS)) {
-        // Slightly desaturate lighter shades, slightly boost darker ones
+        // The light end keeps most of the hue on purpose. It used to be cut
+        // to 30%, which at 97% lightness is indistinguishable from grey -- so
+        // every `bg-brand-50` surface in the system read as a grey box whatever
+        // brand colour was chosen. Capped, so a fully saturated brand still
+        // gives a tint rather than a wash of colour.
+        //
+        // Mirrored in `App\Support\BrandPalette` (PHP), which is what actually
+        // renders the page; BrandPaletteTest compares the two shade by shade.
+        // Change both or neither.
         const shadeNum = Number(shade);
-        const satAdj = shadeNum <= 100 ? s * 0.3 :
-                       shadeNum <= 300 ? s * 0.6 :
+        const satAdj = shadeNum <= 100 ? Math.min(s * 0.85, 70) :
+                       shadeNum <= 200 ? Math.min(s * 0.90, 80) :
+                       shadeNum <= 300 ? s * 0.95 :
                        shadeNum >= 800 ? Math.min(s * 1.1, 100) : s;
         const [r, g, b] = hslToRgb(h, satAdj, lightness);
         palette[shadeNum] = `${r} ${g} ${b}`;

@@ -20,7 +20,7 @@ export default function Home({ featured, services, news, events, photos, clients
     return (
         <PublicLayout title="BITAC — Bangladesh Industrial Technical Assistance Centre" bitac={bitac} links={links}>
             {/* ── Hero ─────────────────────────────────────────────────── */}
-            <section className="relative overflow-hidden bg-surface-900">
+            <section className="relative overflow-hidden bg-brand-950">
                 {/* A quiet engineering texture rather than a stock photo we do
                     not have — a broken <img> would be worse than none. */}
                 <div className="absolute inset-0 opacity-[0.07]"
