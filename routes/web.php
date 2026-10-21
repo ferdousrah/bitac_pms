@@ -223,6 +223,19 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/reset',                       [\App\Http\Controllers\AiAgentController::class, 'reset'])->name('ai-agent.reset');
     });
 
+    // Section chats + the common chat — membership is checked in
+    // ChatController against App\Services\SectionChat, not by a permission:
+    // every staff member is in the common chat.
+    Route::prefix('chat')->name('chat.')->group(function () {
+        Route::get('/',                              [\App\Http\Controllers\ChatController::class, 'index'])->name('index');
+        Route::get('/files/{file}',                  [\App\Http\Controllers\ChatController::class, 'file'])->name('file');
+        Route::delete('/messages/{message}',         [\App\Http\Controllers\ChatController::class, 'destroy'])->name('destroy');
+        Route::post('/messages/{message}/pin',       [\App\Http\Controllers\ChatController::class, 'pin'])->name('pin');
+        Route::get('/{channel}/poll',                [\App\Http\Controllers\ChatController::class, 'poll'])->name('poll')->where('channel', 'common|[0-9]+');
+        Route::get('/{channel}/older',               [\App\Http\Controllers\ChatController::class, 'older'])->name('older')->where('channel', 'common|[0-9]+');
+        Route::post('/{channel}/messages',           [\App\Http\Controllers\ChatController::class, 'store'])->name('store')->where('channel', 'common|[0-9]+')->middleware('throttle:60,1');
+    });
+
     // Meetings
     Route::prefix('meetings')->group(function () {
         Route::get('/',                             [\App\Http\Controllers\MeetingController::class, 'index'])->name('meetings.index');

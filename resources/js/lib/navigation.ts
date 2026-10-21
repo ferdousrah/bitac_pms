@@ -157,6 +157,7 @@ export const mainGroups: NavGroup[] = [
         label: 'Collaboration',
         icon: 'fi-rr-users',
         items: [
+            { label: 'Chat',               href: '/chat',             icon: 'fi-rr-comments', badgeKey: 'chat_unread' },
             { label: 'Meeting Room',       href: '/meetings',         icon: 'fi-rr-video-camera-alt' },
             { label: 'Meeting Analytics',  href: '/meeting-analytics',icon: 'fi-rr-chart-simple' },
             { label: 'My Files',           href: '/files',            icon: 'fi-rr-folder' },

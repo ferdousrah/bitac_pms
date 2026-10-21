@@ -61,7 +61,7 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Notifications & Audit Trail',
-        tables: ['notifications', 'customer_notifications', 'entity_comments', 'entity_revisions'],
+        tables: ['notifications', 'customer_notifications', 'entity_comments', 'entity_revisions', 'chat_messages', 'chat_message_files', 'chat_reads'],
     },
 ];
 

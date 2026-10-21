@@ -95,8 +95,12 @@ class HandleInertiaRequests extends Middleware
             // Counts shown beside sidebar links that declare a `badgeKey`.
             // Lazy, so a page that never renders the sidebar never pays for it.
             'navBadges' => function () use ($user, $hasSpatieRoles) {
-                if (! $user || ! $hasSpatieRoles || ! $user->can('use notes')) return [];
-                return ['notes_awaiting' => count(\App\Services\NoteWorkflow::awaitingIds($user))];
+                if (! $user || ! $hasSpatieRoles) return [];
+                $badges = ['chat_unread' => \App\Services\SectionChat::unreadTotal($user)];
+                if ($user->can('use notes')) {
+                    $badges['notes_awaiting'] = count(\App\Services\NoteWorkflow::awaitingIds($user));
+                }
+                return $badges;
             },
             'productionSections' => function () use ($user, $hasSpatieRoles, $isSuperAdmin) {
                 if (!$user || !$hasSpatieRoles) return [];

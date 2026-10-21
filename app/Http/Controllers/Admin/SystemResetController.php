@@ -27,6 +27,9 @@ class SystemResetController extends Controller
         // Notifications / audit / comments — touch many entities, wipe first
         'notifications',
         'customer_notifications',
+        'chat_reads',
+        'chat_message_files',
+        'chat_messages',
         'entity_comments',
         'entity_revisions',
 
@@ -139,6 +142,7 @@ class SystemResetController extends Controller
      */
     private const PRIVATE_STORAGE_DIRS_TO_WIPE = [
         'quotation-requests',
+        'chat',
     ];
 
     public function index(Request $request)

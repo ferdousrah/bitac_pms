@@ -94,13 +94,7 @@ class NoteWorkflow
         };
 
         $ids = match ($step) {
-            'xen' => (function () use ($sectionId, $byRole, $atCentre) {
-                $code = strtoupper((string) Section::whereKey($sectionId)->value('code'));
-                if ($code === 'IED') return $byRole('Executive Engineer (IED)');
-                if ($code === 'PCD') return $byRole('Executive Engineer (PCD)');
-                $xens = $sectionId ? ShopAssignment::xenIds($sectionId) : [];
-                return $atCentre(User::whereIn('id', $xens ?: [0]))->pluck('id');
-            })(),
+            'xen' => $sectionId ? collect(self::departmentHeadIds($sectionId, $centre)) : collect(),
             'pcd_xen' => $byRole('Executive Engineer (PCD)'),
             'head'    => (function () use ($atCentre, $byRole) {
                 try { $heads = $atCentre(User::permission('head notes'))->pluck('id'); }
@@ -112,6 +106,31 @@ class NoteWorkflow
         };
 
         return $ids->map(fn ($id) => (int) $id)->unique()->values();
+    }
+
+    /**
+     * The নির্বাহী প্রকৌশলী of a department, at a centre (or with no centre
+     * set): IED / PCD by their Executive Engineer role, a shop by its
+     * in-charge (`assign shop-jobs`). Empty for a department with none —
+     * Stores and QC today. Also read by SectionChat (who may post a নির্দেশনা).
+     *
+     * @return int[]
+     */
+    public static function departmentHeadIds(int $sectionId, ?int $centre): array
+    {
+        $atCentre = fn ($q) => $q->where('is_active', true)
+            ->where(fn ($w) => $w->whereNull('center_id')->when($centre, fn ($x) => $x->orWhere('center_id', $centre)));
+        $code = strtoupper((string) Section::whereKey($sectionId)->value('code'));
+        $role = ['IED' => 'Executive Engineer (IED)', 'PCD' => 'Executive Engineer (PCD)'][$code] ?? null;
+
+        if ($role) {
+            try { $q = User::role($role); }
+            catch (\Spatie\Permission\Exceptions\RoleDoesNotExist) { return []; }
+        } else {
+            $q = User::whereIn('id', ShopAssignment::xenIds($sectionId) ?: [0]);
+        }
+
+        return $atCentre($q)->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     /** Is the head step being signed by management because nobody holds Centre Head? */

@@ -2062,6 +2062,50 @@ here: they are maintained in Portfolio, Customers and Centres.
   **`PRIVATE_STORAGE_DIRS_TO_WIPE`** for the private-disk folder.
 - Still no general "contact us" message form — only this one, which BITAC asked for.
 
+## 💬 Section chat + the common chat (2026-10-21)
+> BITAC: *"প্রতিটি সেকশনে নির্দেশনা ও উক্ত সেকশন এর মধ্যে যোগাযোগের জন্য প্রতিটি সেকশনের জন্য একটি ইন্টার্নাল চ্যাট বক্স (শুধু ওই সেকশনের যারা তারা দেখতে ও রিপলাই দিতে পারবে) ও সকলের জন্য একটি কমন চ্যাট বক্স।"*
+
+- **Collaboration → Chat** (`/chat`, `ChatController`, `Pages/Chat/Index.tsx`), with an amber
+  unread count in the sidebar (`navBadges.chat_unread`). Every staff member is in **Common**;
+  each section's chat is open **only to that section's people**. **`App\Services\SectionChat`
+  holds every rule** — the controller only checks them.
+- **Who is in a section** (`sectionIdsOf()`): where they are **posted** (`users.section_id`, a
+  bench counts as its shop) **or** the role that *is* that desk (`ROLE_SECTIONS`: IED =
+  ied-officer / Executive Engineer (IED) / Estimator / sales-officer; PCD = pcd-officer /
+  Executive Engineer (PCD) / Assistant Engineer (PCD); QC = qc-inspector / qc-officer; STORES =
+  stores-officer / procurement-officer). ⚠️ **Roles, not permissions** — `view rfqs` /
+  `view qc` are also held by management, and management is not a member of IED's chat. Shops
+  are joined by posting only. Someone posted nowhere sees just Common, and the page says how to
+  fix it.
+- ⚠️ **Outsiders are told nothing**: a section chat they are not in is not listed, `/chat?c=`
+  falls back to Common, and every endpoint answers **404** (not 403). The **super admin** can
+  open every chat — the one exception, stated in the member list.
+- **নির্দেশনা (instruction)**: a message flagged `is_instruction` is **pinned** at the top of
+  the chat (latest first, up to 10) and **notifies every member** (`chat_instruction`, bell
+  link `/chat?c=…`). In a section it is posted / pinned / unpinned by the section's নির্বাহী
+  প্রকৌশলী — **`NoteWorkflow::departmentHeadIds()`**, now the one answer for both notes and
+  chat (IED/PCD by their Executive Engineer role, a shop by `assign shop-jobs`). ⚠️ **A section
+  with nobody in that seat (QC, Stores today) lets any member post one** — a gate with nobody
+  behind it must not silence the section. In Common: the centre head (`head notes`),
+  management or the super admin.
+- **Per centre**: sections are national, so `chat_messages.center_id` tells Dhaka's CNC chat
+  from Chattogram's. `centreFor()` = the active centre → the user's own → `Center::defaultId()`.
+- **Polling, no WebSockets** (`BROADCAST_CONNECTION=null`, same as the meeting room): the page
+  polls `GET chat/{channel}/poll?after=&since=` every 4 s while the tab is visible — new
+  messages, older ones **changed** since (removed / pinned), the pinned strip and every chat's
+  unread count. `older?before=` pages back 50 at a time. Reading a chat stamps `chat_reads`
+  (`channel` is `'common'` or the section id, because a NULL cannot take part in a UNIQUE).
+- **Replies** quote a message — ⚠️ only one **in the same chat**; an id from another chat is
+  dropped, or it would quote that chat's text into this one. **Files**: up to 5 × 10 MB
+  (images, PDF, Office, DWG/DXF), on the **private `local` disk** (`storage/app/private/chat/…`),
+  served only through `chat.file` after the same membership check. Bodies render as **text**
+  (links made clickable), never HTML.
+- **Removing**: the author or the super admin; it stays as "This message was removed", its
+  files are deleted from disk and it is unpinned. No editing.
+- `chat_messages.user_id` is **`nullOnDelete`** — deleting an account must not take the
+  conversation with it. `chat_messages` / `chat_message_files` / `chat_reads` are
+  transactional (Reset), with `chat` in `PRIVATE_STORAGE_DIRS_TO_WIPE`.
+
 ## 📦 What's Been Built (Feature Inventory)
 
 - 13 core modules (IED, PCD, Shops, QC, Delivery, Invoicing, Reports, etc.)
