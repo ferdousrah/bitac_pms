@@ -337,7 +337,7 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                         </span>
                         <div className="min-w-0 flex-1">
                             <h3 className="font-bold text-surface-900 truncate">
-                                {active?.name}{active?.name_bn && <span className="font-medium text-surface-500"> · {active.name_bn}</span>}
+                                {active?.name}
                             </h3>
                             <p className="text-[11px] text-surface-500 flex items-center gap-1">
                                 {isCommon
@@ -390,7 +390,7 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                                     <Megaphone className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                                     <button onClick={() => jumpTo(p.id)} className="min-w-0 flex-1 text-left">
                                         <p className="text-[11px] font-bold text-amber-800">
-                                            নির্দেশনা · {p.user.name} <span className="font-normal text-amber-700">· {dayLabel(p.created_at)} {time(p.created_at)}</span>
+                                            Instruction · {p.user.name} <span className="font-normal text-amber-700">· {dayLabel(p.created_at)} {time(p.created_at)}</span>
                                         </p>
                                         <p className="text-sm text-surface-900 line-clamp-2 whitespace-pre-wrap">{p.body || (p.files.length ? `📎 ${p.files[0].name}` : '')}</p>
                                     </button>
@@ -403,7 +403,7 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                             ))}
                             {pinned.length > 1 && (
                                 <button onClick={() => setShowAllPinned(s => !s)} className="w-full px-4 pb-2 text-left text-[11px] font-semibold text-amber-700 hover:text-amber-900">
-                                    {showAllPinned ? 'Show only the latest' : `+ ${pinned.length - 1} more নির্দেশনা`}
+                                    {showAllPinned ? 'Show only the latest' : `+ ${pinned.length - 1} more ${pinned.length === 2 ? 'instruction' : 'instructions'}`}
                                 </button>
                             )}
                         </div>
@@ -470,10 +470,10 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                             <input ref={fileInput} type="file" multiple className="hidden" onChange={pickFiles}
                                 accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.txt,.csv" />
                             <textarea ref={textarea} value={text} onChange={e => setText(e.target.value)} onKeyDown={onKey} rows={1}
-                                placeholder={asInstruction ? 'নির্দেশনা লিখুন — pinned for the whole section' : `Message ${active?.name ?? ''}…`}
+                                placeholder={asInstruction ? 'Write an instruction — pinned for the whole chat' : `Message ${active?.name ?? ''}…`}
                                 className="flex-1 resize-none bg-transparent border-0 focus:ring-0 text-sm py-2 px-1 max-h-40 placeholder:text-surface-400" />
                             {props.canInstruct && (
-                                <button onClick={() => setAsInstruction(s => !s)} title="Post as নির্দেশনা — pinned at the top and sent to everyone's notifications"
+                                <button onClick={() => setAsInstruction(s => !s)} title="Post as an instruction — pinned at the top and sent to everyone's notifications"
                                     className={`p-2 rounded-xl transition ${asInstruction ? 'bg-amber-500 text-white' : 'text-surface-500 hover:bg-amber-100 hover:text-amber-700'}`}>
                                     <Megaphone className="w-[18px] h-[18px]" />
                                 </button>
@@ -486,7 +486,7 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                         </div>
                         <p className={`mt-1.5 px-1 text-[10px] text-surface-400 ${compact ? 'hidden' : 'hidden sm:block'}`}>
                             Enter to send · Shift + Enter for a new line
-                            {props.canInstruct && <> · <Megaphone className="inline w-3 h-3 -mt-0.5" /> posts a নির্দেশনা</>}
+                            {props.canInstruct && <> · <Megaphone className="inline w-3 h-3 -mt-0.5" /> posts an instruction</>}
                         </p>
                     </footer>
                 </section>
@@ -513,7 +513,7 @@ function ChannelRow({ c, active, loading, onClick }: { c: Channel; active: boole
                 </span>
                 <span className="flex items-center gap-2 mt-0.5">
                     <span className={`truncate text-xs ${c.unread ? 'text-surface-800' : 'text-surface-500'}`}>
-                        {c.last ? <>{c.last.who && <b className="font-semibold">{shortName(c.last.who)}: </b>}{c.last.text}</> : (c.name_bn ?? (common ? 'সকলের জন্য' : 'No messages yet'))}
+                        {c.last ? <>{c.last.who && <b className="font-semibold">{shortName(c.last.who)}: </b>}{c.last.text}</> : (common ? 'Everyone at the centre' : 'No messages yet')}
                     </span>
                     {c.unread > 0 && (
                         <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-5 text-center shrink-0">
@@ -538,7 +538,7 @@ function EmptyThread({ isCommon, name, canInstruct }: { isCommon: boolean; name:
                     {isCommon
                         ? 'Anything written here is read by everyone at the centre.'
                         : 'Only the people of this section see what is written here.'}
-                    {canInstruct && ' Use the megaphone to post a নির্দেশনা — it stays pinned at the top.'}
+                    {canInstruct && ' Use the megaphone to post an instruction — it stays pinned at the top.'}
                 </p>
             </div>
         </div>
@@ -608,7 +608,7 @@ function Bubble({ m, grouped, flash, onReply, onDelete, onPin, onJump }: {
                     <div className={`shrink-0 flex items-center gap-0.5 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition ${mine ? '' : 'order-2'}`}>
                         {!m.deleted && <IconBtn title="Reply" onClick={() => onReply(m)}><Reply className="w-3.5 h-3.5" /></IconBtn>}
                         {m.can_pin && (
-                            <IconBtn title={m.is_instruction ? 'Unpin নির্দেশনা' : 'Pin as নির্দেশনা'} onClick={() => onPin(m)}>
+                            <IconBtn title={m.is_instruction ? 'Unpin instruction' : 'Pin as instruction'} onClick={() => onPin(m)}>
                                 {m.is_instruction ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
                             </IconBtn>
                         )}
@@ -621,7 +621,7 @@ function Bubble({ m, grouped, flash, onReply, onDelete, onPin, onJump }: {
                             <>
                                 {m.is_instruction && (
                                     <p className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                                        <Megaphone className="w-3 h-3" /> নির্দেশনা
+                                        <Megaphone className="w-3 h-3" /> Instruction
                                     </p>
                                 )}
                                 {m.reply_to && (

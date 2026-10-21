@@ -154,7 +154,7 @@ class SectionChat
             ->pluck('last_read_id', 'channel');
 
         $sections = Section::whereIn('id', self::sectionIdsOf($u) ?: [0])->orderBy('id')->get();
-        $list = [['key' => self::COMMON, 'name' => 'Common', 'name_bn' => 'সকলের জন্য', 'code' => null]];
+        $list = [['key' => self::COMMON, 'name' => 'Common', 'name_bn' => null, 'code' => null]];
         foreach ($sections as $s) {
             $list[] = ['key' => (string) $s->id, 'name' => $s->name,
                        'name_bn' => NoteWorkflow::DEPARTMENT_BN[strtoupper((string) $s->code)] ?? null,

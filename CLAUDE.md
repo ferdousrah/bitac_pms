@@ -2093,7 +2093,11 @@ here: they are maintained in Portfolio, Customers and Centres.
 - ⚠️ **Outsiders are told nothing**: a section chat they are not in is not listed, `/chat?c=`
   falls back to Common, and every endpoint answers **404** (not 403). The **super admin** can
   open every chat — the one exception, stated in the member list.
-- **নির্দেশনা (instruction)**: a message flagged `is_instruction` is **pinned** at the top of
+- ⚠️ **The chat's own wording is English only** (BITAC, 2026-10-21: *"chat box theke bangla
+  likha gulu remove kore dao"*) — "Instruction", "Common", no Bangla section name beside the
+  title, and the bell notification reads "Instruction · CNC". What people TYPE is untouched; this
+  is the interface's text. Don't reintroduce Bangla labels here.
+- **Instruction (নির্দেশনা)**: a message flagged `is_instruction` is **pinned** at the top of
   the chat (latest first, up to 10) and **notifies every member** (`chat_instruction`, bell
   link `/chat?c=…`). In a section it is posted / pinned / unpinned by the section's নির্বাহী
   প্রকৌশলী — **`NoteWorkflow::departmentHeadIds()`**, now the one answer for both notes and

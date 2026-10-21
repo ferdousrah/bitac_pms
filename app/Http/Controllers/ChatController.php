@@ -130,7 +130,7 @@ class ChatController extends Controller
 
         $instruction = (bool) ($data['is_instruction'] ?? false);
         if ($instruction && ! SectionChat::canInstruct($user, $channel, $centre)) {
-            return response()->json(['message' => 'Only the head of this section can post a নির্দেশনা.'], 403);
+            return response()->json(['message' => 'Only the head of this section can post an instruction.'], 403);
         }
 
         // A reply must point into the same chat, or a message id from another
@@ -189,7 +189,7 @@ class ChatController extends Controller
     {
         $user = $this->guardMessage($request, $message);
         if (! SectionChat::canInstruct($user, $message->channel, $message->center_id)) {
-            return response()->json(['message' => 'Only the head of this section can pin a নির্দেশনা.'], 403);
+            return response()->json(['message' => 'Only the head of this section can pin an instruction.'], 403);
         }
         if ($message->deleted_at) return response()->json(['message' => 'That message was removed.'], 422);
 
@@ -275,10 +275,10 @@ class ChatController extends Controller
             ->map(fn ($i) => (int) $i)->reject(fn ($i) => $i === $author->id)->values()->all();
         if (! $ids) return;
 
-        $where = $channel === SectionChat::COMMON ? 'সকলের জন্য' : (Section::find((int) $channel)?->name ?? 'section');
+        $where = $channel === SectionChat::COMMON ? 'Common' : (Section::find((int) $channel)?->name ?? 'section');
         NotifyService::send(
             $ids, 'chat_instruction',
-            "নির্দেশনা · {$where}",
+            "Instruction · {$where}",
             $author->name . ': ' . mb_strimwidth((string) ($message->body ?: 'sent a file'), 0, 140, '…'),
             '/chat?c=' . $channel,
             'fi-rr-megaphone', 'amber',
