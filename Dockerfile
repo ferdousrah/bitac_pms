@@ -45,7 +45,13 @@ RUN composer dump-autoload --optimize --no-dev --no-scripts
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3 — Runtime: PHP 8.2 + Apache + LibreOffice (for DWG/Office conversions)
 # ─────────────────────────────────────────────────────────────────────────────
-FROM php:8.2-apache
+# ⚠️ Pinned to the PATCH version on purpose. A floating `php:8.2-apache` is
+# whatever the build host already has cached, so a rebuild can quietly keep an
+# unpatched PHP. 8.2.35 (21 Oct 2026) fixes CVE-2026-109618 / CVE-2026-109619,
+# two critical unauthenticated RCEs — mod_php, which this image runs, is the
+# most exposed setup. Bump this line for each PHP security release.
+# PHP 8.2 reaches end of life on 31 Dec 2026: move to 8.3/8.4 before then.
+FROM php:8.2.35-apache
 
 # System packages: image libs, zip, ICU, MySQL client, LibreOffice headless
 RUN apt-get update && apt-get install -y --no-install-recommends \

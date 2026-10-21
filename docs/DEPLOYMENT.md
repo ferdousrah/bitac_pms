@@ -182,6 +182,20 @@ php artisan config:clear
 php artisan cache:clear
 ```
 
+### PHP security releases
+
+The runtime image is pinned to an exact PHP patch version (`FROM php:8.2.35-apache` in the
+`Dockerfile`). When php.net announces a security release, change that line to the new
+patch tag, push, and after the deploy check the running version from the Coolify terminal:
+
+```bash
+php -v        # must print the patched version
+```
+
+Pinning matters: a floating `php:8.2-apache` tag can be served from the build host's cache,
+so a redeploy may keep the old, vulnerable PHP without any warning. PHP 8.2 reaches end of
+life on **31 December 2026** — move to 8.3 or 8.4 (and test) before then.
+
 ---
 
 ## 12. Common gotchas
