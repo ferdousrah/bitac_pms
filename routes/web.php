@@ -228,6 +228,8 @@ Route::middleware(['auth'])->group(function () {
     // every staff member is in the common chat.
     Route::prefix('chat')->name('chat.')->group(function () {
         Route::get('/',                              [\App\Http\Controllers\ChatController::class, 'index'])->name('index');
+        Route::get('/state',                         [\App\Http\Controllers\ChatController::class, 'stateJson'])->name('state');
+        Route::get('/unread',                        [\App\Http\Controllers\ChatController::class, 'unread'])->name('unread');
         Route::get('/files/{file}',                  [\App\Http\Controllers\ChatController::class, 'file'])->name('file');
         Route::delete('/messages/{message}',         [\App\Http\Controllers\ChatController::class, 'destroy'])->name('destroy');
         Route::post('/messages/{message}/pin',       [\App\Http\Controllers\ChatController::class, 'pin'])->name('pin');

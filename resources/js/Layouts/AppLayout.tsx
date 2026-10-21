@@ -3,7 +3,7 @@ import { PropsWithChildren, ReactNode, useState, useEffect, useRef, useCallback 
 import axios from 'axios';
 import { applyTheme, type AppSettings } from '@/lib/theme';
 import FloatingCalculator from '@/Components/Widgets/FloatingCalculator';
-import ChatPanel from '@/Components/AiChat/ChatPanel';
+import ChatDock from '@/Components/Chat/ChatDock';
 import { dashboardItem, flatGroups, type NavGroup, type NavItem as TypedNavItem } from '@/lib/navigation';
 import { BellRing, CloudDownload, Sparkles } from '@/Components/AnimatedIcons';
 import { motion } from 'motion/react';
@@ -1055,8 +1055,8 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
             {/* ─── Scientific Calculator (triggered from header) ─────────── */}
             <FloatingCalculator open={calcOpen} onClose={() => setCalcOpen(false)} />
 
-            {/* AI Chat Panel */}
-            <ChatPanel />
+            {/* Floating chat — the section chats (the AI assistant's floating button was removed, BITAC 2026-10-21) */}
+            <ChatDock />
         </div>
     );
 }

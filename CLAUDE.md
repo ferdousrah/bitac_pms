@@ -153,7 +153,7 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
 
 - **`app/Services/AiAgent/GeminiChatService.php`** — API calls, history sanitization, system prompt (which includes BITAC knowledge + industrial production expertise)
 - **`app/Services/AiAgent/ToolRegistry.php`** — all tool declarations + implementations (1200+ lines)
-- **`resources/js/Components/AiChat/ChatPanel.tsx`** — floating chat UI (1400+ lines)
+- **`resources/js/Components/AiChat/ChatPanel.tsx`** — Oli's chat UI (1400+ lines). ⚠️ **No longer mounted** — the floating button is the section chat now (see "Section chat")
 - **`resources/js/Components/AiChat/PresentationViewer.tsx`** — fullscreen live presenter
 
 ### Key Tools
@@ -2066,7 +2066,20 @@ here: they are maintained in Portfolio, Customers and Centres.
 > BITAC: *"প্রতিটি সেকশনে নির্দেশনা ও উক্ত সেকশন এর মধ্যে যোগাযোগের জন্য প্রতিটি সেকশনের জন্য একটি ইন্টার্নাল চ্যাট বক্স (শুধু ওই সেকশনের যারা তারা দেখতে ও রিপলাই দিতে পারবে) ও সকলের জন্য একটি কমন চ্যাট বক্স।"*
 
 - **Collaboration → Chat** (`/chat`, `ChatController`, `Pages/Chat/Index.tsx`), with an amber
-  unread count in the sidebar (`navBadges.chat_unread`). Every staff member is in **Common**;
+  unread count in the sidebar (`navBadges.chat_unread`).
+- **The floating button bottom-right is the chat now** (`Components/Chat/ChatDock.tsx`, mounted
+  in `AppLayout`). ⚠️ **It replaced Oli's floating panel** (BITAC, 2026-10-21: *"AI floating
+  chatbot ta lagbena, ekhane chat er optionta niye asho"*) — `<ChatPanel />` is no longer
+  mounted anywhere; the component, the AI backend and Admin → Chatbot settings still exist
+  (Oli still joins meetings). The dock opens a 400px window on the chat list (straight into
+  Common if that is the only chat), has expand → `/chat?c=…` and close, stays open across page
+  changes for the session (`sessionStorage`, try/catch), hides itself on `/chat`, and while
+  closed refreshes its badge from `GET /chat/unread` every 30 s.
+- ⚠️ **The page and the dock render ONE component, `Components/Chat/ChatWindow.tsx`**
+  (`compact` = one pane at a time). Switching chats loads **`GET /chat/state?c=`** — the same
+  array `index()` renders, from `ChatController::state()` — and the view under it is keyed on
+  the chat, so message and composer state start fresh. Two chat UIs is how one quietly stops
+  getting the fixes the other gets. Every staff member is in **Common**;
   each section's chat is open **only to that section's people**. **`App\Services\SectionChat`
   holds every rule** — the controller only checks them.
 - **Who is in a section** (`sectionIdsOf()`): where they are **posted** (`users.section_id`, a

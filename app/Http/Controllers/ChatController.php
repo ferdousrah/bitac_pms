@@ -24,6 +24,26 @@ class ChatController extends Controller
 
     public function index(Request $request)
     {
+        return Inertia::render('Chat/Index', $this->state($request));
+    }
+
+    /**
+     * The same state as JSON — what the floating chat window opens with, and
+     * what either view loads when switching to another chat.
+     */
+    public function stateJson(Request $request): JsonResponse
+    {
+        return response()->json($this->state($request));
+    }
+
+    /** Unread across this person's chats — the floating button's badge while it is closed. */
+    public function unread(Request $request): JsonResponse
+    {
+        return response()->json(['unread' => SectionChat::unreadTotal($request->user())]);
+    }
+
+    private function state(Request $request): array
+    {
         $user = $request->user();
         $centre = SectionChat::centreFor($user);
         $channel = SectionChat::parse($request->query('c', SectionChat::COMMON)) ?? SectionChat::COMMON;
@@ -38,7 +58,7 @@ class ChatController extends Controller
 
         SectionChat::markRead($user, $channel, $centre, (int) ($rows->last()?->id ?? 0));
 
-        return Inertia::render('Chat/Index', [
+        return [
             'channels'    => SectionChat::channelsFor($user, $centre),
             'channel'     => $channel,
             'messages'    => $rows->map(fn ($m) => SectionChat::pack($m, $user, $canInstruct))->all(),
@@ -47,7 +67,7 @@ class ChatController extends Controller
             'canInstruct' => $canInstruct,
             'members'     => $this->members($channel, $centre),
             'serverTime'  => now()->toIso8601String(),
-        ]);
+        ];
     }
 
     /** New messages after `after`, and any older ones changed since `since` (deleted, pinned). */
