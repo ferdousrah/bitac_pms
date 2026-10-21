@@ -2113,6 +2113,13 @@ here: they are maintained in Portfolio, Customers and Centres.
   (images, PDF, Office, DWG/DXF), on the **private `local` disk** (`storage/app/private/chat/…`),
   served only through `chat.file` after the same membership check. Bodies render as **text**
   (links made clickable), never HTML.
+- **Emoji** (2026-10-21): a 😊 button in the composer opens `Components/Chat/EmojiPicker.tsx` —
+  a fixed set in five groups (smileys, hands, work tools / paperwork, symbols, weather & food)
+  plus **Recent** (localStorage, try/catch), no dependency; the emoji goes in **at the cursor**.
+  ⚠️ **Nothing from Emoji 13+** (🪛 🪚 🫡 🫶 🫵 …): Windows 10's emoji font lacks them and draws
+  an empty box — seen in a screenshot, so check one before adding any. A message that is only
+  **1–3 emoji** (`isJumboEmoji`, counted as graphemes so 👨‍🔧 and 🇧🇩 are one) shows large with no
+  bubble; digits alone don't count, though they are `Emoji_Component`.
 - **Removing**: the author or the super admin; it stays as "This message was removed", its
   files are deleted from disk and it is unpinned. No editing.
 - `chat_messages.user_id` is **`nullOnDelete`** — deleting an account must not take the

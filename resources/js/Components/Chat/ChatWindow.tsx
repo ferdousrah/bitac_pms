@@ -1,8 +1,9 @@
 import { ChangeEvent, KeyboardEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
     ArrowDown, ChevronLeft, ClipboardList, Factory, FileText, Globe2, Loader2, Lock, Megaphone, MessagesSquare,
-    Package, Paperclip, PencilRuler, Pin, PinOff, Reply, SendHorizontal, ShieldCheck, Trash2, Users, X,
+    Package, Paperclip, PencilRuler, Pin, PinOff, Reply, SendHorizontal, ShieldCheck, Smile, Trash2, Users, X,
 } from 'lucide-react';
+import EmojiPicker from '@/Components/Chat/EmojiPicker';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 interface Channel {
@@ -44,6 +45,16 @@ function shortWhen(iso: string | null) {
     if (!iso) return '';
     const d = new Date(iso);
     return d.toDateString() === new Date().toDateString() ? time(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+/** A message that is nothing but 1–3 emoji is shown large, as in any messenger. */
+function isJumboEmoji(body: string | null): boolean {
+    const t = (body ?? '').trim();
+    if (!t || t.length > 40 || !/^[\p{Extended_Pictographic}\p{Emoji_Component}\u200d\ufe0f\s]+$/u.test(t)) return false;
+    if (/^[\d#*\s]+$/.test(t)) return false;   // digits are Emoji_Component too
+    const Seg = (Intl as any).Segmenter;
+    const count = Seg ? [...new Seg(undefined, { granularity: 'grapheme' }).segment(t.replace(/\s+/g, ''))].length : t.length;
+    return count <= 3;
 }
 
 /** "Md. Rafiqul Islam" → "Rafiqul" — the honorific says nothing about who wrote it. */
@@ -132,6 +143,7 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
     const [replyTo, setReplyTo] = useState<Message | null>(null);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [emojiOpen, setEmojiOpen] = useState(false);
 
     const scroller = useRef<HTMLDivElement>(null);
     const textarea = useRef<HTMLTextAreaElement>(null);
@@ -216,12 +228,25 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
             stickNext.current = true;
             setMessages(prev => byId([...prev, data.message]));
             if (data.message.is_instruction) setPinned(p => [data.message, ...p]);
-            setText(''); setFiles([]); setReplyTo(null); setAsInstruction(false);
+            setText(''); setFiles([]); setReplyTo(null); setAsInstruction(false); setEmojiOpen(false);
             requestAnimationFrame(() => textarea.current?.focus());
         } catch (e: any) {
             const res = e?.response?.data;
             setError(res?.errors ? Object.values(res.errors).flat().join(' ') : (res?.message ?? 'Could not send. Check the connection and try again.'));
         } finally { setSending(false); }
+    };
+
+    /** Put the emoji where the cursor is, and keep the cursor after it. */
+    const insertEmoji = (emoji: string) => {
+        const t = textarea.current;
+        const start = t?.selectionStart ?? text.length;
+        const end = t?.selectionEnd ?? text.length;
+        setText(prev => prev.slice(0, start) + emoji + prev.slice(end));
+        requestAnimationFrame(() => {
+            if (!t) return;
+            const at = start + emoji.length;
+            t.focus(); t.setSelectionRange(at, at);
+        });
     };
 
     const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -410,7 +435,8 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                     )}
 
                     {/* Composer */}
-                    <footer className="border-t border-surface-200 bg-white px-3 sm:px-4 py-3">
+                    <footer className="relative border-t border-surface-200 bg-white px-3 sm:px-4 py-3">
+                        {emojiOpen && <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />}
                         {replyTo && (
                             <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-brand-400 bg-brand-50/60 px-3 py-1.5">
                                 <Reply className="w-3.5 h-3.5 text-brand-600 shrink-0" />
@@ -436,6 +462,10 @@ function ChatView({ compact, thread: mobileThread, setThread: setMobileThread, o
                             <button onClick={() => fileInput.current?.click()} title="Attach files (up to 5, 10 MB each)"
                                 className="p-2 rounded-xl text-surface-500 hover:bg-surface-200/60 hover:text-surface-800">
                                 <Paperclip className="w-[18px] h-[18px]" />
+                            </button>
+                            <button type="button" data-emoji-toggle onClick={() => setEmojiOpen(o => !o)} title="Emoji" aria-label="Emoji"
+                                className={`-ml-1.5 p-2 rounded-xl transition ${emojiOpen ? 'bg-brand-100 text-brand-700' : 'text-surface-500 hover:bg-surface-200/60 hover:text-surface-800'}`}>
+                                <Smile className="w-[18px] h-[18px]" />
                             </button>
                             <input ref={fileInput} type="file" multiple className="hidden" onChange={pickFiles}
                                 accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.dwg,.dxf,.txt,.csv" />
@@ -552,7 +582,11 @@ function Bubble({ m, grouped, flash, onReply, onDelete, onPin, onJump }: {
     onReply: (m: Message) => void; onDelete: (m: Message) => void; onPin: (m: Message) => void; onJump: (id: number) => void;
 }) {
     const mine = m.mine;
-    const tone = m.deleted
+    // Emoji on their own are shown large and bare, with no bubble behind them.
+    const jumbo = !m.deleted && !m.is_instruction && !m.reply_to && !m.files.length && isJumboEmoji(m.body);
+    const tone = jumbo
+        ? 'bg-transparent !px-0 !py-0'
+        : m.deleted
         ? 'bg-transparent border border-dashed border-surface-300 text-surface-400'
         : m.is_instruction
             ? 'bg-amber-50 border border-amber-300 text-surface-900'
@@ -597,7 +631,9 @@ function Bubble({ m, grouped, flash, onReply, onDelete, onPin, onJump }: {
                                         <span className="block truncate">{m.reply_to.excerpt ?? 'message removed'}</span>
                                     </button>
                                 )}
-                                {m.body && <p className="whitespace-pre-wrap break-words"><Linkified text={m.body} /></p>}
+                                {m.body && (jumbo
+                                    ? <p className="text-4xl leading-tight tracking-wide py-0.5">{m.body}</p>
+                                    : <p className="whitespace-pre-wrap break-words"><Linkified text={m.body} /></p>)}
                                 {m.files.length > 0 && <Files files={m.files} light={mine && !m.is_instruction} />}
                             </>
                         )}
