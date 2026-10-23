@@ -502,6 +502,15 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   sides is the same job in `linkRequisition`, which also copies the demand's shop onto the MR). Everything
   that reads `$mr->workOrder` guards it — `tryRelease()` is only called when there is a job — and the list,
   page and PDF say **"No job — {shop}"**. Material spent with no job is shop overhead, not a job's cost.
+- **A line can be ANY item, not only a master material** (BITAC, 2026-10-23: *"material sarao je kono
+  item"* — gloves, oil, bolts, a cutting disc). Migration `..._000082` adds **`item_name`** to both
+  `material_requisition_items` and `material_demand_items` (and makes the demand line's `material_id`
+  nullable). A line names a master `material_id` **or** a typed `item_name` (`required_without`); picking
+  a material drops any typed name. The forms keep the master picker and show **"Or type any item"** under it
+  when nothing is picked. **`->name`** on both item models is the one display name (material, else the
+  typed item) — the pages, the issue dialog and the PDF read it. The estimate prefill now carries a line
+  costed as a typed item across **by name** instead of dropping it. A typed item has no purchase rate, so
+  it will not price into a job's material cost.
 
 ### Selling rate vs purchase rate on a material (2026-10-23)
 - ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the

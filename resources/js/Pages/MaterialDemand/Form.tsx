@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
 import WeightCalculator from '@/Components/Widgets/WeightCalculator';
 
-interface Line { material_id: number | null; description: string; unit: string; quantity: number | string; remarks: string }
+interface Line { material_id: number | null; item_name: string; description: string; unit: string; quantity: number | string; remarks: string }
 interface Job { section_id: number; id: number; wo_number: string; job_number?: string | null; customer?: string | null; leg_status: string }
 interface MaterialOption { id: number; name: string; category?: string | null; unit?: string | null; density_kg_m3: number }
 
@@ -16,7 +16,7 @@ interface Props {
     materials: MaterialOption[];
 }
 
-const emptyLine = (): Line => ({ material_id: null, description: '', unit: 'kg', quantity: '', remarks: '' });
+const emptyLine = (): Line => ({ material_id: null, item_name: '', description: '', unit: 'kg', quantity: '', remarks: '' });
 
 /**
  * A shop asks PCD for material for one of its jobs. Materials come from the
@@ -32,7 +32,7 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
         work_order_id: (demand?.work_order_id ?? presets.work_order_id ?? '') as number | '',
         needed_by: demand?.needed_by ?? '',
         notes: demand?.notes ?? '',
-        items: (demand?.items?.length ? demand.items : [emptyLine()]) as Line[],
+        items: (demand?.items?.length ? demand.items.map((l: any) => ({ ...l, item_name: l.item_name ?? '' })) : [emptyLine()]) as Line[],
     });
     const [calcFor, setCalcFor] = useState<number | null>(null);
     const err = (k: string) => (errors as Record<string, string>)[k];
@@ -47,7 +47,7 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
     const pickMaterial = (i: number, v: string | number | '') => {
         const id = v === '' ? null : Number(v);
         const mat = materials.find((m) => m.id === id);
-        updateLine(i, { material_id: id, ...(mat?.unit ? { unit: mat.unit } : {}) });
+        updateLine(i, { material_id: id, ...(id ? { item_name: '' } : {}), ...(mat?.unit ? { unit: mat.unit } : {}) });
     };
 
     const onWeight = (weight: number, materialName?: string, spec?: string) => {
@@ -137,7 +137,7 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                             <thead>
                                 <tr>
                                     <th className="w-10">#</th>
-                                    <th className="w-[26%]">Material <span className="text-red-500">*</span></th>
+                                    <th className="w-[26%]">Material / item <span className="text-red-500">*</span></th>
                                     <th>Size / spec</th>
                                     <th className="w-44">Quantity <span className="text-red-500">*</span></th>
                                     <th className="w-24">Unit</th>
@@ -152,7 +152,13 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                                         <td>
                                             <SearchableSelect size="sm" value={l.material_id ?? ''} onChange={(v) => pickMaterial(i, v)}
                                                 options={materialOptions} placeholder="Select material…" />
+                                            {!l.material_id && (
+                                                <input type="text" value={l.item_name ?? ''} maxLength={255}
+                                                    onChange={(e) => updateLine(i, { item_name: e.target.value })}
+                                                    className="form-input text-xs py-1.5 mt-1" placeholder="Or type any item — e.g. Cotton gloves" />
+                                            )}
                                             {err(`items.${i}.material_id`) && <div className="form-error">{err(`items.${i}.material_id`)}</div>}
+                                            {err(`items.${i}.item_name`) && <div className="form-error">{err(`items.${i}.item_name`)}</div>}
                                         </td>
                                         <td>
                                             <textarea value={l.description} rows={2} style={{ resize: 'vertical' }}

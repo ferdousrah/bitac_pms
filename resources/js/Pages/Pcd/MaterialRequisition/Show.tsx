@@ -261,7 +261,7 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                                 <thead>
                                     <tr>
                                         <th className="w-10">#</th>
-                                        <th>Material</th>
+                                        <th>Material / item</th>
                                         <th>Size / spec</th>
                                         <th className="text-right w-28">Required</th>
                                         <th className="text-right w-28">Issued</th>

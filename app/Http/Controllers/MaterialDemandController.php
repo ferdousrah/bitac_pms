@@ -187,7 +187,8 @@ class MaterialDemandController extends Controller
                 'created_at'    => $d->created_at?->format('d M Y, H:i'),
                 'items'         => $d->items->map(fn ($i) => [
                     'id'          => $i->id,
-                    'material'    => $i->material?->name,
+                    'material'    => $i->name,
+                    'from_master' => (bool) $i->material_id,
                     'description' => $i->description,
                     'unit'        => $i->unit,
                     'quantity'    => (float) $i->quantity,
@@ -227,7 +228,7 @@ class MaterialDemandController extends Controller
                 'needed_by'     => $materialDemand->needed_by?->toDateString(),
                 'notes'         => $materialDemand->notes,
                 'items'         => $materialDemand->items->map(fn ($i) => [
-                    'material_id' => $i->material_id, 'description' => $i->description ?? '',
+                    'material_id' => $i->material_id, 'item_name' => $i->item_name ?? '', 'description' => $i->description ?? '',
                     'unit' => $i->unit, 'quantity' => (float) $i->quantity, 'remarks' => $i->remarks ?? '',
                 ]),
             ],
@@ -340,14 +341,15 @@ class MaterialDemandController extends Controller
             'needed_by'           => 'nullable|date',
             'notes'               => 'nullable|string|max:1000',
             'items'               => 'required|array|min:1',
-            'items.*.material_id' => 'required|exists:materials,id',
+            'items.*.material_id' => 'nullable|exists:materials,id',
+            'items.*.item_name'   => 'nullable|required_without:items.*.material_id|string|max:255',
             'items.*.description' => 'nullable|string|max:1000',
             'items.*.unit'        => 'nullable|string|max:20',
             'items.*.quantity'    => 'required|numeric|gt:0',
             'items.*.remarks'     => 'nullable|string|max:500',
         ], [
             'section_id.in'                 => 'You can only ask for material for your own shop.',
-            'items.*.material_id.required'  => 'Pick a material for every line.',
+            'items.*.item_name.required_without' => 'Pick a material, or type the item.',
             'items.*.quantity.gt'           => 'Enter how much is needed.',
         ]);
 
@@ -366,8 +368,10 @@ class MaterialDemandController extends Controller
     private function saveItems(MaterialDemand $d, array $items): void
     {
         foreach ($items as $i) {
+            $materialId = ($i['material_id'] ?? null) ?: null;
             $d->items()->create([
-                'material_id' => $i['material_id'],
+                'material_id' => $materialId,
+                'item_name'   => $materialId ? null : trim((string) ($i['item_name'] ?? '')),
                 'description' => ($i['description'] ?? null) ?: null,
                 'unit'        => ($i['unit'] ?? null) ?: 'kg',
                 'quantity'    => (float) $i['quantity'],

@@ -131,7 +131,7 @@ export default function MaterialDemandShow({ demand, can }: any) {
                             <thead>
                                 <tr>
                                     <th className="w-10">#</th>
-                                    <th>Material</th>
+                                    <th>Material / item</th>
                                     <th>Size / spec</th>
                                     <th className="text-right w-32">Quantity</th>
                                     <th>Why / remarks</th>

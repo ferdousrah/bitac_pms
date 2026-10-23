@@ -6,6 +6,7 @@ import WeightCalculator from '@/Components/Widgets/WeightCalculator';
 
 interface RequisitionItem {
     material_id: number | null;
+    item_name: string;
     description: string;
     unit: string;
     required_qty: number | string;
@@ -42,7 +43,7 @@ interface Props {
     demand?: { id: number; demand_no: string; section_id?: number; shop?: string | null; requested_by?: string | null; needed_by?: string | null; notes?: string | null } | null;
 }
 
-const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', unit: 'kg', required_qty: '', remarks: '' });
+const emptyItem = (): RequisitionItem => ({ material_id: null, item_name: '', description: '', unit: 'kg', required_qty: '', remarks: '' });
 
 /**
  * Raise (or edit) a material requisition. No IMS: the form saves the lines and
@@ -56,12 +57,12 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
 
     const initialItems: RequisitionItem[] = isEdit && requisition.items?.length
         ? requisition.items.map((i: any) => ({
-            material_id: i.material_id, description: i.description ?? '', unit: i.unit ?? 'kg',
+            material_id: i.material_id, item_name: i.item_name ?? '', description: i.description ?? '', unit: i.unit ?? 'kg',
             required_qty: i.required_qty ?? '', remarks: i.remarks ?? '',
         }))
         : prefilled_items.length
             ? prefilled_items.map((p: any) => ({
-                material_id: p.material_id, description: p.description ?? '', unit: p.unit ?? 'kg',
+                material_id: p.material_id, item_name: p.item_name ?? '', description: p.description ?? '', unit: p.unit ?? 'kg',
                 required_qty: p.required_qty ?? '', remarks: p.remarks ?? '',
             }))
             : [emptyItem()];
@@ -104,7 +105,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
         const id = value === '' ? null : Number(value);
         const mat = materials.find((m) => m.id === id);
         // The unit follows how that material is bought; the spec stays the preparer's.
-        updateItem(index, { material_id: id, ...(mat?.unit ? { unit: mat.unit } : {}) });
+        updateItem(index, { material_id: id, ...(id ? { item_name: '' } : {}), ...(mat?.unit ? { unit: mat.unit } : {}) });
     };
 
     const addRow = () => setData('items', [...data.items, emptyItem()]);
@@ -273,7 +274,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                             <thead>
                                 <tr>
                                     <th className="w-10">#</th>
-                                    <th className="w-[26%]">Material <span className="text-red-500">*</span></th>
+                                    <th className="w-[26%]">Material / item <span className="text-red-500">*</span></th>
                                     <th>Size / spec <span className="font-normal text-surface-400">— what to cut</span></th>
                                     <th className="w-44">Required <span className="text-red-500">*</span></th>
                                     <th className="w-24">Unit</th>
@@ -293,7 +294,13 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                                 options={materialOptions}
                                                 placeholder="Select material…"
                                             />
+                                            {!it.material_id && (
+                                                <input type="text" value={it.item_name} maxLength={255}
+                                                    onChange={(e) => updateItem(index, { item_name: e.target.value })}
+                                                    className="form-input text-xs py-1.5 mt-1" placeholder="Or type any item — e.g. Cotton gloves" />
+                                            )}
                                             {err(`items.${index}.material_id`) && <div className="form-error">{err(`items.${index}.material_id`)}</div>}
+                                            {err(`items.${index}.item_name`) && <div className="form-error">{err(`items.${index}.item_name`)}</div>}
                                         </td>
                                         <td>
                                             <textarea

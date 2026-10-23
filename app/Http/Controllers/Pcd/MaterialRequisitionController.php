@@ -83,6 +83,7 @@ class MaterialRequisitionController extends Controller
         $prefilledItems = $demand
             ? $demand->items->map(fn ($i) => [
                 'material_id'  => $i->material_id,
+                'item_name'    => (string) $i->item_name,
                 'description'  => (string) $i->description,
                 'unit'         => $i->unit,
                 'required_qty' => (float) $i->quantity,
@@ -149,10 +150,11 @@ class MaterialRequisitionController extends Controller
             $jobQty = max(1, (float) ($estimate->job_quantity ?: 1));
             $lines = $estimate->lines()->where('section', 'material')->with('material:id,name,unit')->get();
             foreach ($lines as $l) {
-                if (! $l->material_id) continue;   // a typed-only line has no material to ask the store for
+                // A line costed as a typed item (no master material) is asked for by that name.
                 $rows[] = [
                     'material_id'  => $l->material_id,
-                    'description'  => $l->description !== $l->material?->name ? (string) $l->description : '',
+                    'item_name'    => $l->material_id ? '' : (string) $l->description,
+                    'description'  => $l->material_id && $l->description !== $l->material?->name ? (string) $l->description : '',
                     'unit'         => $l->unit ?: ($l->material?->unit ?: 'kg'),
                     'required_qty' => round((float) $l->quantity * $jobQty, 3),
                     'remarks'      => trim("From {$estimate->estimate_no}" . ($partLabel ? " ({$partLabel})" : '')),
@@ -396,13 +398,16 @@ class MaterialRequisitionController extends Controller
     {
         $n = 0;
         foreach ($items as $item) {
-            if (empty($item['material_id'])) continue;
+            $materialId = ($item['material_id'] ?? null) ?: null;
+            $itemName = $materialId ? null : (trim((string) ($item['item_name'] ?? '')) ?: null);
+            if (! $materialId && ! $itemName) continue;
             $required = (float) ($item['required_qty'] ?? 0);
 
             $mr->items()->create([
                 'item_no'      => ++$n,
                 'description'  => ($item['description'] ?? null) ?: null,
-                'material_id'  => $item['material_id'],
+                'material_id'  => $materialId,
+                'item_name'    => $itemName,
                 'unit'         => ($item['unit'] ?? null) ?: 'kg',
                 'required_qty' => $required,
                 'pending_qty'  => $required ?: null,
@@ -481,7 +486,8 @@ class MaterialRequisitionController extends Controller
                 'item_no'        => $i->item_no,
                 'description'    => $i->description,
                 'material_id'    => $i->material_id,
-                'material_name'  => $i->material?->name,
+                'item_name'      => $i->item_name,
+                'material_name'  => $i->name,
                 'unit'           => $i->unit,
                 'required_qty'   => $i->required_qty,
                 'issue_qty'      => $i->issue_qty,
@@ -572,7 +578,7 @@ class MaterialRequisitionController extends Controller
                 $sl = str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT);
                 $itemsHtml .= '<tr>';
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $sl . '</td>';
-                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 10pt; font-weight: bold; vertical-align: top;">' . $esc($item->material?->name ?? '—') . '</td>';
+                $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 10pt; font-weight: bold; vertical-align: top;">' . $esc($item->name ?: '—') . '</td>';
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 6pt; font-size: 9.5pt; vertical-align: top; line-height: 1.4;">' . nl2br($esc($item->description ?? ''), false) . '</td>';
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 2pt; font-size: 10pt; text-align: center; vertical-align: middle;">' . $esc($item->unit) . '</td>';
                 $itemsHtml .=   '<td style="border: 0.75pt solid #000; padding: 6pt 4pt; font-size: 10pt; text-align: right; vertical-align: middle; white-space: nowrap;">' . $fmt($item->required_qty) . '</td>';
@@ -670,14 +676,16 @@ HTML;
             'notes'                => 'nullable|string|max:1000',
             'items'                => 'required|array|min:1',
             // The material is what the store hands over — it must come from the master.
-            'items.*.material_id'  => 'required|exists:materials,id',
+            // A master material — or, when the item is not in the master, its name typed.
+            'items.*.material_id'  => 'nullable|exists:materials,id',
+            'items.*.item_name'    => 'nullable|required_without:items.*.material_id|string|max:255',
             // The size / thickness / spec to cut — optional, multi-line.
             'items.*.description'  => 'nullable|string|max:1000',
             'items.*.unit'         => 'nullable|string|max:20',
             'items.*.required_qty' => 'required|numeric|gt:0',
             'items.*.remarks'      => 'nullable|string|max:500',
         ], [
-            'items.*.material_id.required'  => 'Pick a material for every line.',
+            'items.*.item_name.required_without' => 'Pick a material, or type the item.',
             'items.*.required_qty.gt'       => 'Enter how much is required.',
             'mrn_number.unique'             => 'Another requisition already has that MRN number.',
             'section_id.required_without'   => 'With no job, say which shop it is for.',
