@@ -624,6 +624,12 @@ Route::middleware(['auth'])->group(function () {
             ->name('material-requisitions.approve');
         Route::post('material-requisitions/{materialRequisition}/issue', [PcdMaterialRequisitionController::class, 'issue'])
             ->name('material-requisitions.issue');
+        Route::post('material-requisitions/{materialRequisition}/revert', [PcdMaterialRequisitionController::class, 'revert'])
+            ->name('material-requisitions.revert');
+        Route::post('material-requisitions/{materialRequisition}/receive', [PcdMaterialRequisitionController::class, 'receive'])
+            ->name('material-requisitions.receive');
+        Route::post('material-requisitions/{materialRequisition}/cancel', [PcdMaterialRequisitionController::class, 'cancel'])
+            ->name('material-requisitions.cancel');
         Route::get('material-requisitions/{materialRequisition}/pdf', [PcdMaterialRequisitionController::class, 'pdf'])
             ->name('material-requisitions.pdf');
 

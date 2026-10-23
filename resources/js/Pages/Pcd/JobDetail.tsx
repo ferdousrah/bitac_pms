@@ -4,6 +4,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 import JobDocuments from '@/Components/Pcd/JobDocuments';
 import JobTypeBadge from '@/Components/JobTypeBadge';
+import { mrBadge, mrLabel } from '@/lib/mrStatus';
 
 interface ItemFile {
     id: number;
@@ -1280,7 +1281,7 @@ export default function JobDetail({ job, checklist }: Props) {
                                                     <div className="text-[11px] text-surface-500">{mr.item_count} item{mr.item_count !== 1 ? 's' : ''} · {formatDate(mr.request_date)}</div>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 shrink-0">
-                                                    <span className={statusBadgeClass(mr.status)}>{mr.status}</span>
+                                                    <span className={`badge ${mrBadge(mr.status)}`}>{mrLabel(mr.status)}</span>
                                                     <Link href={`/pcd/material-requisitions/${mr.id}`} className="btn-ghost btn-xs"><i className="fi fi-rr-arrow-right" /></Link>
                                                 </div>
                                             </div>

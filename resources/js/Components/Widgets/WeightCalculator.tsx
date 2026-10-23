@@ -3,8 +3,10 @@ import { useState, useEffect } from 'react';
 interface Props {
     open: boolean;
     onClose: () => void;
-    onApply?: (weight: number, materialName?: string) => void;
+    onApply?: (weight: number, materialName?: string, spec?: string) => void;
     materials?: Array<{ id: number; name: string; density_kg_m3: number }>;
+    /** Preselect this material when the calculator opens (the row's own pick). */
+    initialMaterialId?: number | null;
 }
 
 type Shape =
@@ -95,7 +97,7 @@ function ShapeIcon({ shape, active }: { shape: Shape; active: boolean }) {
     }
 }
 
-export default function WeightCalculator({ open, onClose, onApply, materials = [] }: Props) {
+export default function WeightCalculator({ open, onClose, onApply, materials = [], initialMaterialId = null }: Props) {
     const [shape, setShape] = useState<Shape>('round_bar');
     const [unit, setUnit] = useState<Unit>('mm');
     // Universal dimensions — different shapes use different subsets
@@ -120,6 +122,7 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
         setLength(''); setWidth(''); setHeight(''); setSide('');
         setDiaOuter(''); setDiaInner('');
         setThickness(''); setWebThk(''); setFlangeThk(''); setFlangeWidth('');
+        if (initialMaterialId) setMaterialId(initialMaterialId);
     }, [open]);
 
     const m = (v: string) => (parseFloat(v) || 0) * UNIT_TO_M[unit];
@@ -185,9 +188,36 @@ export default function WeightCalculator({ open, onClose, onApply, materials = [
     const fos = parseFloat(safetyFactor) || 1;
     const finalWeight = totalWeight * fos;
 
+    /**
+     * The size in words — "Round Bar Ø50 × 200 mm, 10 pcs" — handed back with the
+     * weight so a requisition line can say WHAT to cut, not only how heavy it is.
+     * Callers that only want the weight (the cost estimate) ignore it.
+     */
+    const specText = (): string => {
+        const dims: Record<Shape, string[]> = {
+            rectangular:      [length, width, height],
+            square:           [side && `${side} sq`, height],
+            sheet_plate:      [length, width, thickness && `${thickness} thk`],
+            round_bar:        [diaOuter && `Ø${diaOuter}`, height],
+            hexagonal_bar:    [side && `${side} A/F`, height],
+            triangular_bar:   [side, height],
+            round_tube:       [diaOuter && `OD ${diaOuter}`, diaInner && `ID ${diaInner}`, height],
+            square_tube:      [side && `${side} sq`, thickness && `${thickness} thk`, height],
+            rectangular_tube: [width, height, thickness && `${thickness} thk`, length],
+            ring:             [diaOuter && `OD ${diaOuter}`, diaInner && `ID ${diaInner}`, thickness && `${thickness} thk`],
+            angle:            [width, height, thickness && `${thickness} thk`, length],
+            channel:          [height, flangeWidth, webThk && `web ${webThk}`, flangeThk && `flange ${flangeThk}`, length],
+            i_beam:           [height, flangeWidth, webThk && `web ${webThk}`, flangeThk && `flange ${flangeThk}`, length],
+            t_section:        [height, flangeWidth, webThk && `web ${webThk}`, flangeThk && `flange ${flangeThk}`, length],
+        } as Record<Shape, string[]>;
+        const parts = (dims[shape] ?? []).filter(Boolean);
+        const label = SHAPES.find(s => s.value === shape)?.label ?? '';
+        return `${label} ${parts.join(' × ')} ${unit}` + (pieces > 1 ? `, ${pieces} pcs` : '');
+    };
+
     const handleApply = () => {
         if (finalWeight > 0 && onApply) {
-            onApply(finalWeight, selectedMaterial?.name);
+            onApply(finalWeight, selectedMaterial?.name, specText());
             onClose();
         }
     };

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Pcd;
 
 use App\Http\Controllers\Controller;
+use App\Models\CostEstimate;
 use App\Models\Material;
 use App\Models\MaterialRequisition;
 use App\Models\WorkOrder;
@@ -12,13 +13,33 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
+/**
+ * Material requisitions (MRN). ⚠️ Not connected to IMS (BITAC, 2026-10-23):
+ * PCD raises the requisition here and moves its status along by hand —
+ * Draft → Submitted → Approved → (Partially) Issued → Received, or Cancelled.
+ * The rules — which step follows which — live on MaterialRequisition.
+ *
+ * Recording an issue is the one step that carries data: what the store handed
+ * over, line by line. The status follows those quantities (every line covered
+ * → Issued, anything less → Partially Issued), and `issue_qty` is what a job's
+ * actual material cost is worked out from.
+ */
 class MaterialRequisitionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $status = $request->query('status');
         $requisitions = MaterialRequisition::with('workOrder.customer', 'requestedBy', 'items')
+            ->when($status && isset(MaterialRequisition::STATUSES[$status]), fn ($q) => $q->where('status', $status))
+            ->when(trim((string) $request->query('search')), function ($q, $term) {
+                $q->where(fn ($w) => $w->where('mrn_number', 'like', "%{$term}%")
+                    ->orWhereHas('workOrder', fn ($wo) => $wo->where('wo_number', 'like', "%{$term}%")
+                        ->orWhere('job_number', 'like', "%{$term}%")
+                        ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$term}%"))));
+            })
             ->latest()
             ->paginate(20)
+            ->withQueryString()
             ->through(fn($mr) => [
                 'id'           => $mr->id,
                 'mrn_number'   => $mr->mrn_number,
@@ -36,6 +57,7 @@ class MaterialRequisitionController extends Controller
 
         return Inertia::render('Pcd/MaterialRequisition/Index', [
             'requisitions' => $requisitions,
+            'filters'      => ['status' => $status, 'search' => $request->query('search')],
         ]);
     }
 
@@ -45,100 +67,99 @@ class MaterialRequisitionController extends Controller
             ? WorkOrder::with('customer', 'rfq.items.product')->findOrFail($request->query('work_order_id'))
             : null;
 
-        // Pre-fill material lines from the cost estimate that drives this WO.
-        // Eliminates the chance of PCD picking a different material than what
-        // was actually costed and quoted.
-        $prefilledItems = $workOrder ? $this->materialLinesFromEstimate($workOrder) : [];
+        // Pre-fill material lines from the costing that priced this job, so PCD
+        // does not pick a different material from the one that was quoted.
+        $prefilledItems = $workOrder ? $this->materialLinesFromEstimates($workOrder) : [];
 
         return Inertia::render('Pcd/MaterialRequisition/Form', [
             'requisition'     => null,
             'work_order'      => $workOrder ? $this->serializeWorkOrder($workOrder) : null,
             'prefilled_items' => $prefilledItems,
-            'work_orders' => WorkOrder::with('customer')
-                ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops'])
-                ->orderByDesc('id')
-                ->get()
-                ->map(fn($w) => [
-                    'id'         => $w->id,
-                    'wo_number'  => $w->wo_number,
-                    'job_number' => $w->job_number,
-                    'customer'   => $w->customer?->name,
-                ]),
-            'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'unit', 'rate_per_kg']),
+            'work_orders'     => $this->workOrderOptions(),
+            'materials'       => $this->materialOptions(),
         ]);
     }
 
     /**
-     * Pull material lines from the cost estimate tied to this work order.
-     * Lookup order: WO.quotation.id → CostEstimate.quotation_id, else
-     * WO.rfq_id → CostEstimate.rfq_id (latest). Returns rows shaped for the
-     * requisition form's items table — material_id, qty, unit, description.
+     * The material lines of the costing behind this job, as requisition rows.
+     *
+     * ⚠️ A job is costed PART BY PART — so this walks every RFQ item's
+     * `jobCostBreakdown()` and takes each part's effective estimate (or the
+     * item's whole-job estimate), never "the latest estimate on the RFQ", which
+     * would requisition the material for one part of a multi-part job.
+     *
+     * An estimate's material quantity is per unit of what it costs, so the
+     * requisition needs `quantity × job_quantity` (a part's quantity is already
+     * the total pieces for the order).
      */
-    private function materialLinesFromEstimate(WorkOrder $wo): array
+    private function materialLinesFromEstimates(WorkOrder $wo): array
     {
-        $estimate = null;
-        if ($wo->quotation_id) {
-            $estimate = \App\Models\CostEstimate::where('quotation_id', $wo->quotation_id)
-                ->latest('id')->first();
+        $estimates = collect();
+        foreach ($wo->rfq?->items()->with('parts.costEstimates')->get() ?? [] as $item) {
+            $b = $item->jobCostBreakdown();
+            if ($b['mode'] === 'parts') {
+                foreach ($b['parts'] as $row) {
+                    if ($row['estimate']) $estimates->push([$row['estimate'], "part {$row['part_no']}"]);
+                }
+            } elseif ($b['estimate']) {
+                $estimates->push([$b['estimate'], null]);
+            }
         }
-        if (!$estimate && $wo->rfq_id) {
-            $estimate = \App\Models\CostEstimate::where('rfq_id', $wo->rfq_id)
-                ->latest('id')->first();
+
+        // Older estimates were tied to the RFQ or the quotation only, not to an item.
+        if ($estimates->isEmpty()) {
+            $legacy = ($wo->quotation_id ? CostEstimate::where('quotation_id', $wo->quotation_id)->latest('id')->first() : null)
+                ?? ($wo->rfq_id ? CostEstimate::where('rfq_id', $wo->rfq_id)->latest('id')->first() : null);
+            if ($legacy) $estimates->push([$legacy, null]);
         }
-        if (!$estimate) return [];
 
-        $jobQty = max(1, (int) ($estimate->job_quantity ?: 1));
+        $rows = [];
+        foreach ($estimates as [$estimate, $partLabel]) {
+            $jobQty = max(1, (float) ($estimate->job_quantity ?: 1));
+            $lines = $estimate->lines()->where('section', 'material')->with('material:id,name,unit')->get();
+            foreach ($lines as $l) {
+                if (! $l->material_id) continue;   // a typed-only line has no material to ask the store for
+                $rows[] = [
+                    'material_id'  => $l->material_id,
+                    'description'  => $l->description !== $l->material?->name ? (string) $l->description : '',
+                    'unit'         => $l->unit ?: ($l->material?->unit ?: 'kg'),
+                    'required_qty' => round((float) $l->quantity * $jobQty, 3),
+                    'remarks'      => trim("From {$estimate->estimate_no}" . ($partLabel ? " ({$partLabel})" : '')),
+                ];
+            }
+        }
 
-        return $estimate->lines()
-            ->where('section', 'material')
-            ->with('material:id,name,unit')
-            ->get()
-            ->map(fn ($l) => [
-                'material_id'   => $l->material_id,
-                'material_name' => $l->material?->name ?? $l->description,
-                'description'   => $l->description,
-                'unit'          => $l->unit ?: ($l->material?->unit ?? 'pcs'),
-                // Scale per-piece estimate quantity by WO quantity so a 10-piece
-                // job pulls 10× the material the cost sheet assumes.
-                'required_qty'  => round(((float) $l->quantity) * (max(1, (int) $wo->quantity) / $jobQty), 3),
-                'stock_qty'     => 0,
-                'issue_qty'     => 0,
-                'remarks'       => null,
-                'estimate_no'   => $estimate->estimate_no,
-            ])->values()->toArray();
+        return $rows;
     }
 
     public function store(Request $request)
     {
         $validated = $this->validateRequisition($request);
+        $submit = $request->boolean('submit');
 
-        $mr = DB::transaction(function () use ($validated) {
+        $mr = DB::transaction(function () use ($validated, $submit) {
             $mr = MaterialRequisition::create([
                 'mrn_number'    => MaterialRequisition::generateMrnNumber(),
                 'work_order_id' => $validated['work_order_id'],
                 'request_date'  => $validated['request_date'],
                 'requested_by'  => auth()->id(),
-                'status'        => $validated['status'] ?? 'draft',
+                'status'        => $submit ? 'pending_approval' : 'draft',
                 'notes'         => $validated['notes'] ?? null,
             ]);
             $this->saveItems($mr, $validated['items']);
             return $mr;
         });
 
-        // If saved as approved, try to release WO to shops
-        $sentUp = false;
-        if ($mr->status === 'approved' || $mr->status === 'issued') {
-            $sentUp = PcdReleaseService::tryRelease($mr->workOrder);
-        }
+        $sentUp = $submit && PcdReleaseService::tryRelease($mr->workOrder);
 
         return redirect()->route('pcd.material-requisitions.show', $mr)
-            ->with('success', "Material Requisition {$mr->mrn_number} created."
+            ->with('success', "Material Requisition {$mr->mrn_number} " . ($submit ? 'created and submitted.' : 'saved as a draft.')
                 . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     public function show(MaterialRequisition $materialRequisition)
     {
-        $materialRequisition->load(['workOrder.customer', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy', 'imsPushedBy']);
+        $materialRequisition->load(['workOrder.customer', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy']);
 
         return Inertia::render('Pcd/MaterialRequisition/Show', [
             'requisition' => $this->serializeRequisition($materialRequisition),
@@ -147,139 +168,200 @@ class MaterialRequisitionController extends Controller
 
     public function edit(MaterialRequisition $materialRequisition)
     {
+        if ($refusal = $this->notEditable($materialRequisition)) return $refusal;
+
         $materialRequisition->load(['items.material', 'workOrder.customer']);
 
         return Inertia::render('Pcd/MaterialRequisition/Form', [
             'requisition' => $this->serializeRequisition($materialRequisition),
             'work_order'  => $materialRequisition->workOrder ? $this->serializeWorkOrder($materialRequisition->workOrder) : null,
-            'work_orders' => WorkOrder::with('customer')
-                ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops'])
-                ->orderByDesc('id')
-                ->get()
-                ->map(fn($w) => [
-                    'id'         => $w->id,
-                    'wo_number'  => $w->wo_number,
-                    'job_number' => $w->job_number,
-                    'customer'   => $w->customer?->name,
-                ]),
-            'materials' => Material::active()->orderBy('name')->get(['id', 'name', 'unit', 'rate_per_kg']),
+            'work_orders' => $this->workOrderOptions(),
+            'materials'   => $this->materialOptions(),
         ]);
     }
 
     public function update(Request $request, MaterialRequisition $materialRequisition)
     {
-        $validated = $this->validateRequisition($request);
+        if ($refusal = $this->notEditable($materialRequisition)) return $refusal;
 
-        DB::transaction(function () use ($materialRequisition, $validated) {
+        $validated = $this->validateRequisition($request);
+        $submit = $request->boolean('submit') && $materialRequisition->status === 'draft';
+
+        DB::transaction(function () use ($materialRequisition, $validated, $submit) {
             $materialRequisition->update([
                 'work_order_id' => $validated['work_order_id'],
                 'request_date'  => $validated['request_date'],
-                'status'        => $validated['status'] ?? $materialRequisition->status,
+                'status'        => $submit ? 'pending_approval' : $materialRequisition->status,
                 'notes'         => $validated['notes'] ?? null,
             ]);
             $materialRequisition->items()->delete();
             $this->saveItems($materialRequisition, $validated['items']);
         });
 
-        $sentUp = false;
-        if (in_array($materialRequisition->status, ['approved', 'issued'])) {
-            $sentUp = PcdReleaseService::tryRelease($materialRequisition->workOrder);
-        }
+        $sentUp = $submit && PcdReleaseService::tryRelease($materialRequisition->workOrder);
 
         return redirect()->route('pcd.material-requisitions.show', $materialRequisition)
-            ->with('success', 'Material Requisition updated.'
+            ->with('success', 'Material Requisition ' . ($submit ? 'updated and submitted.' : 'updated.')
                 . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
+    /** Only a draft goes — anything submitted is on the store's record and is cancelled instead. */
     public function destroy(MaterialRequisition $materialRequisition)
     {
+        if ($materialRequisition->status !== 'draft') {
+            return back()->with('error', "{$materialRequisition->mrn_number} is {$materialRequisition->status_label} — only a draft can be deleted. Cancel it instead.");
+        }
         $materialRequisition->delete();
+
         return redirect()->route('pcd.material-requisitions.index')->with('success', 'Material Requisition deleted.');
     }
 
-    /**
-     * Push the draft requisition to BITAC's IMS for approval + issuance.
-     * Approval workflow happens entirely inside IMS; PMS only tracks the push.
-     */
-    public function submit(MaterialRequisition $materialRequisition)
+    // ── Moving the status along (no IMS) ────────────────────────────────
+
+    public function submit(MaterialRequisition $materialRequisition)  { return $this->transition($materialRequisition, 'submit'); }
+    public function revert(MaterialRequisition $materialRequisition)  { return $this->transition($materialRequisition, 'revert'); }
+    public function approve(MaterialRequisition $materialRequisition) { return $this->transition($materialRequisition, 'approve'); }
+    public function receive(MaterialRequisition $materialRequisition) { return $this->transition($materialRequisition, 'receive'); }
+
+    public function cancel(Request $request, MaterialRequisition $materialRequisition)
     {
-        abort_unless(in_array($materialRequisition->status, ['draft', 'pending_approval']), 422,
-            'Only drafts can be pushed to IMS.');
+        $reason = trim((string) $request->input('reason', ''));
 
-        $result = app(\App\Services\IMSService::class)->submitMaterialRequisition($materialRequisition);
+        return $this->transition($materialRequisition, 'cancel', $reason);
+    }
 
-        if (!$result['ok']) {
-            // Record the failure so the user can see what went wrong + retry later
-            $materialRequisition->update([
-                'ims_last_error' => $result['error'] ?? 'IMS push failed (unknown error).',
-                'ims_response'   => $result['response'] ?? null,
-            ]);
-            return back()->with('error', 'IMS push failed: ' . ($result['error'] ?? 'unknown error') . '. Saved as draft — you can retry.');
+    /**
+     * One hand-moved step. Refused with a redirect + flash, never abort() —
+     * a second click from a stale tab must read as a message, not a crash.
+     */
+    private function transition(MaterialRequisition $mr, string $action, string $reason = '')
+    {
+        [$from, $to] = MaterialRequisition::TRANSITIONS[$action];
+        if (! in_array($mr->status, $from, true)) {
+            return back()->with('error', "{$mr->mrn_number} is {$mr->status_label} — it cannot be moved to "
+                . MaterialRequisition::STATUSES[$to] . ' from there.');
+        }
+        if ($action === 'submit' && ! $mr->items()->exists()) {
+            return back()->with('error', 'Add at least one material line before submitting.');
         }
 
-        $materialRequisition->update([
-            'status'         => 'sent_to_ims',
-            'ims_reference'  => $result['reference'],
-            'ims_pushed_at'  => now(),
-            'ims_pushed_by'  => auth()->id(),
-            'ims_status'     => $result['status'] ?? 'pending_approval',
-            'ims_last_error' => null,
-            'ims_response'   => $result['response'] ?? null,
-        ]);
+        $user = auth()->user();
+        $patch = ['status' => $to];
+        if ($action === 'approve') $patch += ['approved_by' => $user->id, 'approved_at' => now()];
+        if ($action === 'receive') $patch += ['received_by' => $user->id, 'received_at' => now()];
+        if ($action === 'revert')  $patch += ['approved_by' => null, 'approved_at' => null];
+        if ($action === 'cancel') {
+            $patch['notes'] = trim(($mr->notes ? $mr->notes . "\n" : '')
+                . '[Cancelled · ' . $user->name . ', ' . now()->format('d M Y') . ']' . ($reason !== '' ? ' ' . $reason : ''));
+        }
+        $mr->update($patch);
 
-        // `sent_to_ims` counts as MR-done from PCD's perspective, so try to release
-        // the WO if Section Assignment + Operation Sheet are also in place.
-        $sentUp = PcdReleaseService::tryRelease($materialRequisition->workOrder);
+        $sentUp = in_array($to, MaterialRequisition::RAISED, true) && PcdReleaseService::tryRelease($mr->workOrder);
 
-        return back()->with('success', "Requisition pushed to IMS. Reference: {$result['reference']}"
+        return back()->with('success', "{$mr->mrn_number} is now " . MaterialRequisition::STATUSES[$to] . '.'
             . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     /**
-     * Approve — kept as an alias for backwards-compatibility with any direct links.
-     * Pushes to IMS just like submit().
-     */
-    public function approve(MaterialRequisition $materialRequisition)
-    {
-        return $this->submit($materialRequisition);
-    }
-
-    /**
-     * Mark as issued (Stock Keeper signature).
+     * Record what the store handed over, line by line. The figures are the
+     * running TOTAL issued per line (not an increment), so correcting a typo is
+     * just typing the right number. The status follows them.
      */
     public function issue(Request $request, MaterialRequisition $materialRequisition)
     {
-        $materialRequisition->update([
-            'status'    => $request->boolean('partial') ? 'partially_issued' : 'issued',
+        $mr = $materialRequisition;
+        if (! in_array($mr->status, MaterialRequisition::ISSUABLE, true)) {
+            return back()->with('error', "{$mr->mrn_number} is {$mr->status_label} — issue can be recorded once it is approved.");
+        }
+
+        $data = $request->validate([
+            'items'              => 'required|array|min:1',
+            'items.*.id'         => 'required|integer',
+            'items.*.issue_qty'  => 'nullable|numeric|min:0',
+            'items.*.issue_date' => 'nullable|date',
+        ]);
+
+        $lines = $mr->items()->get()->keyBy('id');
+        DB::transaction(function () use ($data, $lines) {
+            foreach ($data['items'] as $row) {
+                $line = $lines->get((int) $row['id']);
+                if (! $line) continue;   // a line of another requisition is ignored, never written
+                $issued = (float) ($row['issue_qty'] ?? 0);
+                $line->update([
+                    'issue_qty'   => $issued ?: null,
+                    'pending_qty' => max(0, (float) $line->required_qty - $issued) ?: null,
+                    'issue_date'  => $issued > 0 ? (($row['issue_date'] ?? null) ?: now()->toDateString()) : null,
+                ]);
+            }
+        });
+
+        $lines = $mr->items()->get();
+        $anything = $lines->contains(fn ($l) => (float) $l->issue_qty > 0);
+        if (! $anything) {
+            $mr->update(['status' => 'approved', 'issued_by' => null, 'issued_at' => null]);
+            return back()->with('success', 'Nothing is recorded as issued — the requisition stays Approved.');
+        }
+
+        $all = $lines->every(fn ($l) => (float) $l->issue_qty + 0.0005 >= (float) $l->required_qty);
+        $mr->update([
+            'status'    => $all ? 'issued' : 'partially_issued',
             'issued_by' => auth()->id(),
             'issued_at' => now(),
         ]);
 
-        return back()->with('success', 'Requisition marked as issued.');
+        return back()->with('success', $all
+            ? "{$mr->mrn_number} is fully issued."
+            : "{$mr->mrn_number} is partially issued — the rest is still pending.");
     }
 
+    private function notEditable(MaterialRequisition $mr)
+    {
+        return $mr->isEditable() ? null : redirect()->route('pcd.material-requisitions.show', $mr)
+            ->with('error', "{$mr->mrn_number} is {$mr->status_label} — its lines can no longer be changed.");
+    }
+
+    /**
+     * ⚠️ A line is kept when it names a MATERIAL — the description is the
+     * optional size/spec. This used to skip any line with no description, so a
+     * picked material with the spec left blank silently vanished on save.
+     */
     private function saveItems(MaterialRequisition $mr, array $items): void
     {
-        foreach ($items as $idx => $item) {
-            if (empty($item['description'])) continue;
+        $n = 0;
+        foreach ($items as $item) {
+            if (empty($item['material_id'])) continue;
             $required = (float) ($item['required_qty'] ?? 0);
-            $stock    = (float) ($item['stock_qty'] ?? 0);
-            $issue    = (float) ($item['issue_qty'] ?? 0);
-            $pending  = max(0, $required - $issue);
 
             $mr->items()->create([
-                'item_no'      => $idx + 1,
-                'description'  => $item['description'],
-                'material_id'  => $item['material_id'] ?? null,
-                'unit'         => $item['unit'] ?? 'pcs',
+                'item_no'      => ++$n,
+                'description'  => ($item['description'] ?? null) ?: null,
+                'material_id'  => $item['material_id'],
+                'unit'         => ($item['unit'] ?? null) ?: 'kg',
                 'required_qty' => $required,
-                'stock_qty'    => $stock ?: null,
-                'issue_qty'    => $issue ?: null,
-                'pending_qty'  => $pending ?: null,
-                'issue_date'   => $item['issue_date'] ?? null,
-                'remarks'      => $item['remarks'] ?? null,
+                'pending_qty'  => $required ?: null,
+                'remarks'      => ($item['remarks'] ?? null) ?: null,
             ]);
         }
+    }
+
+    private function workOrderOptions()
+    {
+        return WorkOrder::with('customer')
+            ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops'])
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn($w) => [
+                'id'         => $w->id,
+                'wo_number'  => $w->wo_number,
+                'job_number' => $w->job_number,
+                'customer'   => $w->customer?->name,
+            ]);
+    }
+
+    /** What the picker and the weight calculator need — the density is the calculator's. */
+    private function materialOptions()
+    {
+        return Material::active()->orderBy('name')->get(['id', 'name', 'category', 'unit', 'density_kg_m3']);
     }
 
     private function serializeWorkOrder(WorkOrder $wo): array
@@ -307,6 +389,10 @@ class MaterialRequisitionController extends Controller
             'request_date' => $mr->request_date?->format('Y-m-d'),
             'request_date_display' => $mr->request_date?->format('d M Y'),
             'status'       => $mr->status,
+            'status_label' => $mr->status_label,
+            'can_edit'     => $mr->isEditable(),
+            'can_delete'   => $mr->status === 'draft',
+            'actions'      => $mr->availableActions(),
             'notes'        => $mr->notes,
             'requested_by' => $mr->requestedBy?->name,
             'approved_by'  => $mr->approvedBy?->name,
@@ -315,12 +401,6 @@ class MaterialRequisitionController extends Controller
             'issued_at'    => $mr->issued_at?->format('d M Y'),
             'received_by'  => $mr->receivedBy?->name,
             'received_at'  => $mr->received_at?->format('d M Y'),
-            // IMS push tracking
-            'ims_reference'  => $mr->ims_reference,
-            'ims_pushed_at'  => $mr->ims_pushed_at?->format('d M Y, H:i'),
-            'ims_pushed_by'  => $mr->imsPushedBy?->name,
-            'ims_status'     => $mr->ims_status,
-            'ims_last_error' => $mr->ims_last_error,
             'items'        => $mr->items->map(fn($i) => [
                 'id'             => $i->id,
                 'item_no'        => $i->item_no,
@@ -329,7 +409,6 @@ class MaterialRequisitionController extends Controller
                 'material_name'  => $i->material?->name,
                 'unit'           => $i->unit,
                 'required_qty'   => $i->required_qty,
-                'stock_qty'      => $i->stock_qty,
                 'issue_qty'      => $i->issue_qty,
                 'pending_qty'    => $i->pending_qty,
                 'issue_date'     => $i->issue_date?->format('Y-m-d'),
@@ -383,7 +462,7 @@ class MaterialRequisitionController extends Controller
             .   '</td>'
             .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
             .     '<div><b>Customer:</b> ' . $customer . '</div>'
-            .     '<div><b>Status:</b> ' . $esc(ucfirst(str_replace('_', ' ', $mr->status))) . '</div>'
+            .     '<div><b>Status:</b> ' . $esc($mr->status_label) . '</div>'
             .   '</td>'
             . '</tr>'
             . '</table>';
@@ -495,24 +574,27 @@ HTML;
         ]);
     }
 
+    /**
+     * The form posts the requisition and its lines; it never sets a status
+     * (the buttons do) nor issued quantities (recording an issue does).
+     */
     private function validateRequisition(Request $request): array
     {
         return $request->validate([
-            'work_order_id'    => 'required|exists:work_orders,id',
-            'request_date'     => 'required|date',
-            'status'           => 'nullable|in:draft,pending_approval,approved,partially_issued,issued,received,cancelled',
-            'notes'            => 'nullable|string|max:1000',
-            'items'            => 'required|array|min:1',
-            // Material is the primary identifier of a requisition line — must be picked from the master.
+            'work_order_id'        => 'required|exists:work_orders,id',
+            'request_date'         => 'required|date',
+            'notes'                => 'nullable|string|max:1000',
+            'items'                => 'required|array|min:1',
+            // The material is what the store hands over — it must come from the master.
             'items.*.material_id'  => 'required|exists:materials,id',
-            // Description carries the spec (size / thickness / grade). Multiline accepted, kept generous.
+            // The size / thickness / spec to cut — optional, multi-line.
             'items.*.description'  => 'nullable|string|max:1000',
             'items.*.unit'         => 'nullable|string|max:20',
-            'items.*.required_qty' => 'required|numeric|min:0',
-            'items.*.stock_qty'    => 'nullable|numeric|min:0',
-            'items.*.issue_qty'    => 'nullable|numeric|min:0',
-            'items.*.issue_date'   => 'nullable|date',
+            'items.*.required_qty' => 'required|numeric|gt:0',
             'items.*.remarks'      => 'nullable|string|max:500',
+        ], [
+            'items.*.material_id.required'  => 'Pick a material for every line.',
+            'items.*.required_qty.gt'       => 'Enter how much is required.',
         ]);
     }
 }

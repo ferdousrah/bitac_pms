@@ -423,6 +423,47 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Under-quote guard:** a `parts`-mode job with `missing > 0` is collected into the `uncostedJobs` prop and the quotation form shows an amber warning naming each job and how many parts are uncosted. The price shown genuinely is short until they're costed.
 - **Entry point:** RFQ Show lists each part with its qty and either its estimate amount (link) or a **+ Estimate** button → `/cost-estimates/create?rfq_item_part_id=N`. The estimate form derives `rfq_item_id` from the part, prefills `job_quantity` from the part's quantity, and stamps the positional `part_no` (`3/3`). The Cost Estimate column shows the job roll-up ("sum of N parts") plus the not-costed warning.
 - `grand_total_override` still applies **per part**, and flows into the sum.
+### Material requisitions — no IMS, status moved by hand (2026-10-23)
+> BITAC: *"jehetu ata IMS er sathe integrate hobena tai ekhane material requisition create hoar por just status update hobe… material selection IED er cost estimate e jemon… ekhaneo Metal Weight Calculator lagbe."*
+
+- ⚠️ **Nothing pushes to IMS any more.** `submit()` used to call `IMSService::submitMaterialRequisition`;
+  every MR now just moves through **Draft → Submitted → Approved → (Partially) Issued → Received**, or
+  **Cancelled**. The `ims_*` columns are a read-only legacy snapshot; `sent_to_ims` rows were migrated
+  to `pending_approval` (labelled **Submitted**). `IMSService` itself stays — MRP still reads stock from it.
+- **`MaterialRequisition` holds the rules**: `STATUSES` (key → label), `EDITABLE` (draft, submitted),
+  `RAISED` (what counts for PCD's optional MR gate — `WorkOrder::has_material_requisition` reads it),
+  `TRANSITIONS` (`submit` / `revert` / `approve` / `receive` / `cancel`: from → to), `ISSUABLE`, and
+  `availableActions()`, which is what the page's **Next step** panel renders. A step from the wrong status
+  is a redirect + flash, never `abort()`. Approve / issue / receive stamp `*_by` / `*_at`; cancel appends
+  `[Cancelled · name, date] reason` to the notes. Only a **draft** deletes; only draft/submitted edit.
+- ⚠️ **Recording an issue carries quantities** (`POST …/issue`, the **Record issue** dialog): the running
+  **total** issued per line (not an increment — a typo is fixed by typing the right number), with the date.
+  **The status follows the figures**: every line covered → Issued, anything less → Partially Issued,
+  nothing → back to Approved. A line id of another requisition is ignored. **`issue_qty` is what a job's
+  actual material cost will be worked out from** (× `materials.purchase_rate_per_kg`).
+- `status` was an ENUM — now **`varchar(30)`** (migration `..._000079`), like every other status column.
+- **The form** (`Pcd/MaterialRequisition/Form.tsx`): materials from the master through `SearchableSelect`
+  (category as sublabel), and the **Metal Weight Calculator** (`Components/Widgets/WeightCalculator`, the
+  cost estimate's) on every line. ⚠️ The calculator's `onApply` gained a third argument — the **size in
+  words** ("Round Bar Ø50 × 200 mm, 10 pcs") — which the MR writes into the line's spec; the estimate
+  editor ignores it. It also takes `initialMaterialId` to open on the row's material. No status dropdown:
+  **Save draft** or **Save & submit to store**. Stock/issue columns are gone from the form (no IMS).
+- ⚠️ **Bugs fixed on the way:**
+  - `saveItems()` **skipped any line with no description** — because `material_requisition_items.description`
+    was `NOT NULL varchar(255)`. A picked material with the spec left blank silently vanished. The line is
+    the **material**; the column is `TEXT NULL` now (and 1000 chars no longer overflows it).
+  - The prefill took the **single latest estimate on the RFQ** and scaled its per-unit quantity by
+    `wo.quantity / job_quantity` — for a part-costed job that requisitioned one part's material, and for a
+    whole-job estimate only one piece's worth. It now walks each RFQ item's **`jobCostBreakdown()`**: every
+    part's effective (newest non-draft) estimate, else the item-level one, else the legacy RFQ/quotation
+    lookup, and asks for **`line quantity × estimate job_quantity`**; typed-only lines (no material) are
+    skipped; each row's remark names the estimate and part (`From CE-0012 (part 2/3)`).
+  - "Save & Approve" called `setData('status')` and posted in the same tick, so the status never went.
+- Statuses read from **`resources/js/lib/mrStatus.ts`** (list, page, PCD job card — which used to print the
+  raw key). The list's search box now actually searches (MRN, WO, job number, customer).
+- ⚠️ Testing it: `RfqItem` and `RfqItemPart` are **centre-scoped** — fixtures inserted with `DB::table`
+  need a `center_id`, or the request's scope hides them and the prefill reads as broken.
+
 ### Selling rate vs purchase rate on a material (2026-10-23)
 - ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the
   client (labelled "Selling rate" on Admin → Materials). **`materials.purchase_rate_per_kg`**

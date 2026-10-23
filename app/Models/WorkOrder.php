@@ -168,10 +168,9 @@ class WorkOrder extends Model
     // ── PCD progress checks (used by PcdReleaseService) ──────────
     public function getHasMaterialRequisitionAttribute(): bool
     {
-        // MR is "done from PCD's side" once it's pushed to IMS (approval happens in IMS).
-        // Keep `approved/issued/received` for legacy MRs that approved locally.
+        // MR is "done from PCD's side" once it has been submitted to the store.
         return $this->materialRequisitions()
-            ->whereIn('status', ['sent_to_ims', 'approved', 'partially_issued', 'issued', 'received'])
+            ->whereIn('status', MaterialRequisition::RAISED)
             ->exists();
     }
 

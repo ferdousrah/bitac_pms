@@ -2,26 +2,10 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
+import { MR_STATUS_BADGE, MR_STATUS_LABEL } from '@/lib/mrStatus';
 
-const statusBadge: Record<string, string> = {
-    draft: 'badge-slate',
-    pending_approval: 'badge-amber',
-    approved: 'badge-blue',
-    partially_issued: 'badge-amber',
-    issued: 'badge-green',
-    received: 'badge-green',
-    cancelled: 'badge-red',
-};
-
-const statusLabel: Record<string, string> = {
-    draft: 'Draft',
-    pending_approval: 'Pending Approval',
-    approved: 'Approved',
-    partially_issued: 'Partially Issued',
-    issued: 'Issued',
-    received: 'Received',
-    cancelled: 'Cancelled',
-};
+const statusBadge = MR_STATUS_BADGE;
+const statusLabel = MR_STATUS_LABEL;
 
 export default function MaterialRequisitionIndex({ requisitions, filters }: any) {
     const rows = requisitions?.data ?? [];
@@ -80,13 +64,9 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                             <select value={filters?.status ?? ''} onChange={e => applyFilters({ status: e.target.value })}
                                 className="form-select !py-2 text-sm w-full sm:w-44">
                                 <option value="">All Status</option>
-                                <option value="draft">Draft</option>
-                                <option value="pending_approval">Pending Approval</option>
-                                <option value="approved">Approved</option>
-                                <option value="partially_issued">Partially Issued</option>
-                                <option value="issued">Issued</option>
-                                <option value="received">Received</option>
-                                <option value="cancelled">Cancelled</option>
+                                {Object.entries(MR_STATUS_LABEL).filter(([k]) => k !== 'sent_to_ims').map(([k, v]) => (
+                                    <option key={k} value={k}>{v}</option>
+                                ))}
                             </select>
                             <div className="flex items-center gap-1.5">
                                 <button type="submit" className="btn-primary btn-sm"><i className="fi fi-rr-search text-xs leading-none" /> Search</button>
