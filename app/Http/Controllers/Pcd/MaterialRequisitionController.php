@@ -63,18 +63,43 @@ class MaterialRequisitionController extends Controller
 
     public function create(Request $request)
     {
-        $workOrder = $request->query('work_order_id')
-            ? WorkOrder::with('customer', 'rfq.items.product')->findOrFail($request->query('work_order_id'))
+        // Answering a shop's material demand: its job and its lines, as asked.
+        $demand = $request->query('demand_id')
+            ? \App\Models\MaterialDemand::with('items.material', 'section', 'requestedBy')->find($request->query('demand_id'))
             : null;
+        if ($demand && ! $demand->isOpen()) {
+            return redirect()->route('material-demands.show', $demand)
+                ->with('error', "{$demand->demand_no} is already {$demand->status_label}.");
+        }
 
-        // Pre-fill material lines from the costing that priced this job, so PCD
-        // does not pick a different material from the one that was quoted.
-        $prefilledItems = $workOrder ? $this->materialLinesFromEstimates($workOrder) : [];
+        $woId = $demand?->work_order_id ?? $request->query('work_order_id');
+        $workOrder = $woId ? WorkOrder::with('customer', 'rfq.items.product')->findOrFail($woId) : null;
+
+        // Pre-fill: the shop's demand when answering one; otherwise the material
+        // lines of the costing that priced this job, so PCD does not pick a
+        // different material from the one that was quoted.
+        $prefilledItems = $demand
+            ? $demand->items->map(fn ($i) => [
+                'material_id'  => $i->material_id,
+                'description'  => (string) $i->description,
+                'unit'         => $i->unit,
+                'required_qty' => (float) $i->quantity,
+                'remarks'      => trim("From {$demand->demand_no}" . ($i->remarks ? " — {$i->remarks}" : '')),
+            ])->all()
+            : ($workOrder ? $this->materialLinesFromEstimates($workOrder) : []);
 
         return Inertia::render('Pcd/MaterialRequisition/Form', [
             'requisition'     => null,
             'work_order'      => $workOrder ? $this->serializeWorkOrder($workOrder) : null,
             'prefilled_items' => $prefilledItems,
+            'demand'          => $demand ? [
+                'id'           => $demand->id,
+                'demand_no'    => $demand->demand_no,
+                'shop'         => $demand->section?->name,
+                'requested_by' => $demand->requestedBy?->name,
+                'needed_by'    => $demand->needed_by?->format('d M Y'),
+                'notes'        => $demand->notes,
+            ] : null,
             // What a blank MRN box will be numbered — shown as the hint.
             'next_mrn'        => MaterialRequisition::generateMrnNumber(),
             'work_orders'     => $this->workOrderOptions(),
@@ -155,8 +180,17 @@ class MaterialRequisitionController extends Controller
 
         $sentUp = $submit && PcdReleaseService::tryRelease($mr->workOrder);
 
+        // Raised from a shop's demand → the demand now follows this requisition.
+        $answered = '';
+        if ($demandId = $request->integer('demand_id')) {
+            $demand = \App\Models\MaterialDemand::find($demandId);
+            if ($demand && \App\Http\Controllers\MaterialDemandController::linkRequisition($demand, $mr, $request->user())) {
+                $answered = " {$demand->demand_no} is answered — the shop has been told.";
+            }
+        }
+
         return redirect()->route('pcd.material-requisitions.show', $mr)
-            ->with('success', "Material Requisition {$mr->mrn_number} " . ($submit ? 'created and submitted.' : 'saved as a draft.')
+            ->with('success', "Material Requisition {$mr->mrn_number} " . ($submit ? 'created and submitted.' : 'saved as a draft.') . $answered
                 . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 

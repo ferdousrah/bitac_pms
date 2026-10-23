@@ -250,7 +250,7 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                     </div>
                     <div className="card-body p-0 overflow-x-auto">
                         {requisition.items.length > 0 ? (
-                            <table className="premium-table min-w-[820px]">
+                            <table className="premium-table w-full min-w-[820px]">
                                 <thead>
                                     <tr>
                                         <th className="w-10">#</th>

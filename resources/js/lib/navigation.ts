@@ -87,6 +87,7 @@ export const mainGroups: NavGroup[] = [
             { label: 'Schedule',             href: '/schedule',                  icon: 'fi-rr-calendar',        permission: 'view schedule' },
             { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
             { label: 'Delivery Orders',      href: '/delivery',                  icon: 'fi-rr-truck-side',      permission: 'view delivery' },
+            { label: 'Material Demands',     href: '/material-demands',          icon: 'fi-rr-boxes',           permission: 'view pcd-inbox', badgeKey: 'material_demands_open' },
             { label: 'Notes',                href: '/office-notes',              icon: 'fi-rr-notebook',        permissionAny: ['view pcd-inbox', 'review pcd-inbox'], badgeKey: 'notes_awaiting' },
         ],
     },
@@ -109,6 +110,7 @@ export const mainGroups: NavGroup[] = [
             // A super admin holds both and so sees Jobs twice; that is the
             // whole cost, and nobody else is affected.
             { label: 'Jobs', href: '/work-orders', icon: 'fi-rr-briefcase', permission: 'view production' },
+            { label: 'Material Demand', href: '/material-demands', icon: 'fi-rr-boxes', permission: 'view production' },
             { label: 'Notes', href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view production', badgeKey: 'notes_awaiting' },
         ],
     },

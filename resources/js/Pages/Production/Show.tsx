@@ -567,6 +567,10 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                     Transfers &amp; handoffs are handled by the shop in-charge.
                                 </div>
                             )}
+                            <Link href={`/material-demands/create?work_order_id=${wos.work_order.id}&section_id=${wos.section.id}`}
+                                className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 hover:border-sky-300 transition-colors">
+                                <i className="fi fi-rr-boxes text-xs leading-none" /> Request Material
+                            </Link>
                             <Link href={`/maintenance-requests/create?section_id=${wos.section.id}`}
                                 className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 transition-colors">
                                 <i className="fi fi-rr-wrench-simple text-xs leading-none" /> Request Maintenance

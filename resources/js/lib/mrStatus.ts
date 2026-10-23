@@ -36,3 +36,11 @@ export const MR_STEPS: { key: string; label: string; covers: string[] }[] = [
 
 export const mrLabel = (s: string) => MR_STATUS_LABEL[s] ?? s.replace(/_/g, ' ');
 export const mrBadge = (s: string) => MR_STATUS_BADGE[s] ?? 'badge-slate';
+
+/** A shop's material demand to PCD (MaterialDemand::STATUSES on the server). */
+export const DEMAND_BADGE: Record<string, string> = {
+    submitted: 'badge-amber',
+    accepted:  'badge-blue',
+    rejected:  'badge-red',
+    cancelled: 'badge-slate',
+};

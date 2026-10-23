@@ -28,6 +28,8 @@ class SystemResetController extends Controller
         'notifications',
         'customer_notifications',
         'chat_reads',
+        'material_demand_items',
+        'material_demands',
         'chat_message_files',
         'chat_messages',
         'entity_comments',

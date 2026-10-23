@@ -38,6 +38,7 @@ interface Props {
     materials: MaterialOption[];
     prefilled_items?: any[];
     next_mrn?: string;
+    demand?: { id: number; demand_no: string; shop?: string | null; requested_by?: string | null; needed_by?: string | null; notes?: string | null } | null;
 }
 
 const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', unit: 'kg', required_qty: '', remarks: '' });
@@ -48,7 +49,7 @@ const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', 
  * Materials are picked the way a cost estimate picks them (searchable master),
  * and the weight calculator works out the kilos and writes the size.
  */
-export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items = [], next_mrn }: Props) {
+export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items = [], next_mrn, demand = null }: Props) {
     const isEdit = !!requisition?.id;
     const isDraft = !isEdit || requisition.status === 'draft';
 
@@ -67,6 +68,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
     const submitRef = useRef(false);
     const { data, setData, post, put, processing, errors, transform } = useForm({
         mrn_number: requisition?.mrn_number ?? '',
+        demand_id: demand?.id ?? '',
         work_order_id: requisition?.work_order_id ?? work_order?.id ?? '',
         request_date: requisition?.request_date ?? new Date().toISOString().slice(0, 10),
         notes: requisition?.notes ?? '',
@@ -218,7 +220,22 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                         </button>
                     </div>
 
-                    {!isEdit && estimateSources.length > 0 && (
+                    {demand && (
+                        <div className="px-5 py-3 bg-sky-50 border-b border-sky-100 flex items-start gap-2.5">
+                            <i className="fi fi-rr-boxes text-sky-600 text-sm leading-none mt-0.5" />
+                            <div className="min-w-0 text-xs">
+                                <p className="font-bold text-sky-900">
+                                    Answering {demand.demand_no} from {demand.shop}{demand.requested_by ? ` (${demand.requested_by})` : ''}
+                                    {demand.needed_by ? ` — needed by ${demand.needed_by}` : ''}
+                                </p>
+                                <p className="text-sky-800/80 mt-0.5">
+                                    The lines are what the shop asked for. Saving links this requisition to the demand and tells the shop.
+                                    {demand.notes ? ` Shop's note: “${demand.notes}”` : ''}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    {!isEdit && !demand && estimateSources.length > 0 && (
                         <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-start gap-2.5">
                             <i className="fi fi-rr-check-circle text-emerald-600 text-sm leading-none mt-0.5" />
                             <div className="min-w-0 text-xs">

@@ -220,6 +220,17 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/reset',                       [\App\Http\Controllers\AiAgentController::class, 'reset'])->name('ai-agent.reset');
     });
 
+    // Material demands — a shop asks PCD for material for a job; PCD answers
+    // by raising a requisition from it, or rejects it. Who sees and does what
+    // is decided in the controller (shop by `view production`, PCD by
+    // `view pcd-inbox`). `create` is declared by the resource before
+    // `{material_demand}`, so it cannot be bound as a demand.
+    Route::middleware('permission:view production|view pcd-inbox')->group(function () {
+        Route::resource('material-demands', \App\Http\Controllers\MaterialDemandController::class)->except(['destroy']);
+        Route::post('material-demands/{materialDemand}/cancel', [\App\Http\Controllers\MaterialDemandController::class, 'cancel'])->name('material-demands.cancel');
+        Route::post('material-demands/{materialDemand}/reject', [\App\Http\Controllers\MaterialDemandController::class, 'reject'])->name('material-demands.reject');
+    });
+
     // Section chats + the common chat — membership is checked in
     // ChatController against App\Services\SectionChat, not by a permission:
     // every staff member is in the common chat.

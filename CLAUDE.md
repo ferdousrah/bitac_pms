@@ -470,6 +470,31 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - ⚠️ Testing it: `RfqItem` and `RfqItemPart` are **centre-scoped** — fixtures inserted with `DB::table`
   need a `center_id`, or the request's scope hides them and the prefill reads as broken.
 
+### Material demand — the shop asks PCD (2026-10-23)
+> BITAC: *"Material Demand from every shop to PCD, ata lagbe."*
+
+- `material_demands` + `material_demand_items` (migration `..._000080`), `MaterialDemand` (HasCenter,
+  `MD-YYYY-NNNN`), `MaterialDemandController`, `Pages/MaterialDemand/{Index,Form,Show}.tsx`. One URL set,
+  `/material-demands`, behind **`permission:view production|view pcd-inbox`**; the controller decides who
+  does what:
+  - **The shop raises** — `view production`, for the shop they are **posted** to (a bench counts as its
+    shop); someone posted nowhere, or a super admin, picks the shop. ⚠️ The **job must be routed through
+    that shop** with its leg not completed (`jobsFor()`), checked server-side — not any job id.
+  - **PCD answers** — `view pcd-inbox`. **Raise MR from this** opens the MR form with `?demand_id=`: the
+    demand's job and lines (remark `From MD-…`), a sky banner with the shop's note, and saving calls
+    **`MaterialDemandController::linkRequisition()`** — the demand becomes `accepted` and points at the MR.
+    It refuses a demand already answered or an MR for another job. **Reject** needs a reason.
+  - A shop sees **its own shop's** demands (and any it raised); PCD and the super admin see all at the centre.
+- **Statuses:** `submitted` (Waiting for PCD) → `accepted` (MR raised) | `rejected` | `cancelled` (the shop
+  withdrew it). Only the requester (or a super admin) edits or withdraws, and only while `submitted`.
+- ⚠️ **After that, the demand's progress IS the requisition's** — Show reads the linked MR's status and
+  issued total live; **nothing is copied back**, so the two can never disagree.
+- Notifications: a new demand → `view pcd-inbox` at the centre; accepted / rejected → the requester.
+- Menu: **Production → Material Demand** (`view production`) and **PCD → Material Demands**
+  (`view pcd-inbox`, amber count `navBadges.material_demands_open`). The shop's job page
+  (`Production/Show`) has **Request Material** in its Actions card, opening the form on that job and shop.
+- Transactional → `TABLES_TO_WIPE` + `Reset.tsx`. Status colours live in `lib/mrStatus.ts` (`DEMAND_BADGE`).
+
 ### Selling rate vs purchase rate on a material (2026-10-23)
 - ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the
   client (labelled "Selling rate" on Admin → Materials). **`materials.purchase_rate_per_kg`**

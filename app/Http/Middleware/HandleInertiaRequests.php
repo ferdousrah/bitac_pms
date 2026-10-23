@@ -97,6 +97,10 @@ class HandleInertiaRequests extends Middleware
             'navBadges' => function () use ($user, $hasSpatieRoles) {
                 if (! $user || ! $hasSpatieRoles) return [];
                 $badges = ['chat_unread' => \App\Services\SectionChat::unreadTotal($user)];
+                // Demands from the shops still waiting for PCD's answer.
+                if ($user->can('view pcd-inbox')) {
+                    $badges['material_demands_open'] = \App\Models\MaterialDemand::where('status', 'submitted')->count();
+                }
                 if ($user->can('use notes')) {
                     $badges['notes_awaiting'] = count(\App\Services\NoteWorkflow::awaitingIds($user));
                 }
