@@ -517,6 +517,28 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   kg show kortese keno?"*). A unit not in the list (e.g. from the materials master) is kept as its own
   option, so an old line never changes unit when opened.
 
+### The shop's "material received or not" step for a job (2026-10-23)
+> BITAC: *"Add a Step Material received or not in shop section against a job."*
+
+- Recorded on the job's leg at the shop — **`work_order_sections.material_status`** (`null` = not confirmed,
+  `received`, `not_received`) + `material_note`, `material_marked_by`, `material_marked_at` (migration
+  `..._000083`; ⚠️ all four are in `$fillable`, or the save is silently dropped).
+- **`POST production/wos/{wos}/material`** (`ProductionController@markMaterial`, behind the same
+  `authorizeAccess` as the rest of the job page): **Received**, or **Not received** with a reason
+  (`required_if`). Either can be changed later; Received clears an old reason.
+  - **Received also closes the MRs** the store issued to this shop for the job: Partially Issued / Issued →
+    **Received**, stamped with the shop's person. Drafts and other shops' MRs are untouched.
+  - **Not received tells PCD** (`view pcd-inbox` at the job's centre) **and whoever raised those MRs**, linking
+    to the PCD job page — a missing delivery gets chased instead of discovered at the machine.
+- **`WorkOrderSection::incomingRequisitions()`** is "the MRs bringing material to THIS shop for the job":
+  the job's own, addressed to this shop **or to no shop**, not cancelled. (A plain query method, deliberately
+  not named like a relation.)
+- **`Components/Production/MaterialReceipt`** on the shop's job page (top of the right column, above
+  Actions): the status, who/when/why, those MRs with "X of Y issued", the shop's still-open demands, and the
+  two buttons. Read-only once the leg is completed. The shop's **queue rows** show **Material in** /
+  **Material not received** (`material_status` on `serializeWosForQueue`). Nothing is blocked by it — it is a
+  recorded step, not a gate.
+
 ### Selling rate vs purchase rate on a material (2026-10-23)
 - ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the
   client (labelled "Selling rate" on Admin → Materials). **`materials.purchase_rate_per_kg`**

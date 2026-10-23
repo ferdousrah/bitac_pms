@@ -6,6 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class WorkOrderSection extends Model
 {
+    public const MATERIAL_STATUSES = ['received' => 'Material received', 'not_received' => 'Material not received'];
+
+    public function materialMarkedBy() { return $this->belongsTo(User::class, 'material_marked_by'); }
+
+    /**
+     * The requisitions that bring material to THIS shop for this job: the job's
+     * own, either addressed to this shop or to no shop in particular.
+     */
+    public function incomingRequisitions()
+    {
+        return MaterialRequisition::with('items')
+            ->where('work_order_id', $this->work_order_id)
+            ->where(fn ($q) => $q->whereNull('section_id')->orWhere('section_id', $this->section_id))
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('id');
+    }
+
     protected $fillable = [
         'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'status',
         'started_at', 'completed_at', 'completed_by', 'notes', 'work_hours', 'qc_notes', 'remarks',
@@ -13,6 +30,8 @@ class WorkOrderSection extends Model
         // WARNING: mass assignment drops anything missing from this list
         // SILENTLY - the forward would appear to work while nothing was written.
         'assigned_to', 'assigned_by', 'assigned_at', 'received_at', 'assign_note',
+        // Has the material for this job arrived at this shop (2026-10-23).
+        'material_status', 'material_note', 'material_marked_by', 'material_marked_at',
     ];
 
     protected function casts(): array
@@ -20,6 +39,7 @@ class WorkOrderSection extends Model
         return [
             'started_at'    => 'datetime',
             'completed_at'  => 'datetime',
+            'material_marked_at' => 'datetime',
             'weight_pct'    => 'decimal:2',
             'received_qty'  => 'decimal:2',
             'forwarded_qty' => 'decimal:2',

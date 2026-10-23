@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import ShopHandover from '@/Components/Production/ShopHandover';
+import MaterialReceipt, { MaterialPanel } from '@/Components/Production/MaterialReceipt';
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
@@ -211,7 +212,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], step_assignees = [], scoped_sub_section = null, assignment = null }: Props & { assignment?: any }) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], step_assignees = [], scoped_sub_section = null, assignment = null, material = null }: Props & { assignment?: any; material?: MaterialPanel | null }) {
     const scopedSub = scoped_sub_section;
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
@@ -529,6 +530,9 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
 
                 {/* ── Right column — actions + documents ── */}
                 <div className="space-y-6">
+                    {/* Has the material for this job arrived here? */}
+                    {material && <MaterialReceipt wosId={wos.id} material={material} readOnly={wos.status === 'completed'} />}
+
                     {/* Actions */}
                     <div className="card">
                         <div className="card-header">

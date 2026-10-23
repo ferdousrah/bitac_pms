@@ -1437,7 +1437,94 @@ class ProductionController extends Controller
                     ->where('is_active', true)->orderBy('display_order')
                     ->get(['id', 'name'])->map(fn ($x) => ['id' => $x->id, 'name' => $x->name])->values(),
             ],
+            'material' => $this->materialPanel($workOrderSection),
         ]);
+    }
+
+    /**
+     * The "material received?" step for a job at a shop, and what is coming:
+     * the requisitions to this shop for the job, and the shop's own demands.
+     */
+    private function materialPanel(WorkOrderSection $wos): array
+    {
+        $wos->loadMissing('materialMarkedBy');
+
+        return [
+            'status'    => $wos->material_status,
+            'label'     => WorkOrderSection::MATERIAL_STATUSES[$wos->material_status] ?? 'Not confirmed yet',
+            'note'      => $wos->material_note,
+            'marked_by' => $wos->materialMarkedBy?->name,
+            'marked_at' => $wos->material_marked_at?->format('d M Y, h:i A'),
+            'requisitions' => $wos->incomingRequisitions()->get()->map(fn ($mr) => [
+                'id'           => $mr->id,
+                'mrn_number'   => $mr->mrn_number,
+                'status'       => $mr->status,
+                'status_label' => $mr->status_label,
+                'lines'        => $mr->items->count(),
+                'required'     => (float) $mr->items->sum('required_qty'),
+                'issued'       => (float) $mr->items->sum('issue_qty'),
+            ])->values(),
+            'demands' => \App\Models\MaterialDemand::with('requisition:id,mrn_number')
+                ->where('work_order_id', $wos->work_order_id)->where('section_id', $wos->section_id)
+                ->latest('id')->get()->map(fn ($d) => [
+                    'id'           => $d->id,
+                    'demand_no'    => $d->demand_no,
+                    'status'       => $d->status,
+                    'status_label' => $d->status_label,
+                    'mrn_number'   => $d->requisition?->mrn_number,
+                ])->values(),
+        ];
+    }
+
+    /**
+     * The shop says whether the material for this job has arrived (BITAC,
+     * 2026-10-23). "Received" also closes the requisitions the store has issued
+     * to this shop for the job (status Received, stamped). "Not received" needs
+     * a reason and tells PCD — and whoever raised those requisitions — so a
+     * missing delivery is chased rather than discovered at the machine.
+     * Either answer can be changed later.
+     */
+    public function markMaterial(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+        $user = $request->user();
+        $data = $request->validate([
+            'status' => 'required|in:received,not_received',
+            'note'   => 'nullable|required_if:status,not_received|string|max:500',
+        ], ['note.required_if' => 'Say what has not arrived, so PCD can chase it.']);
+
+        $wos = $workOrderSection->loadMissing('section', 'workOrder');
+        $wos->update([
+            'material_status'    => $data['status'],
+            'material_note'      => trim((string) ($data['note'] ?? '')) ?: null,
+            'material_marked_by' => $user->id,
+            'material_marked_at' => now(),
+        ]);
+
+        $mrs = $wos->incomingRequisitions()->get();
+        if ($data['status'] === 'received') {
+            $closed = 0;
+            foreach ($mrs->whereIn('status', ['partially_issued', 'issued']) as $mr) {
+                $mr->update(['status' => 'received', 'received_by' => $user->id, 'received_at' => now()]);
+                $closed++;
+            }
+
+            return back()->with('success', 'Material marked received at ' . $wos->section->name . '.'
+                . ($closed ? " {$closed} requisition" . ($closed > 1 ? 's' : '') . ' closed as Received.' : ''));
+        }
+
+        $job = $wos->workOrder->job_number ? "Job {$wos->workOrder->job_number}" : $wos->workOrder->wo_number;
+        $title = "Material not received · {$wos->section->name}";
+        $body = "{$job}: " . $wos->material_note . " — {$user->name}";
+        NotifyService::toPermission('view pcd-inbox', 'material_not_received', $title, $body,
+            "/pcd/job-planning/{$wos->work_order_id}", 'fi-rr-triangle-warning', 'red', centerId: $wos->workOrder->center_id);
+        $raisers = $mrs->pluck('requested_by')->filter()->unique()->reject(fn ($id) => (int) $id === $user->id)->values()->all();
+        if ($raisers) {
+            NotifyService::send($raisers, 'material_not_received', $title, $body,
+                "/pcd/job-planning/{$wos->work_order_id}", 'fi-rr-triangle-warning', 'red');
+        }
+
+        return back()->with('success', 'Marked not received — PCD has been told.');
     }
 
     /**
@@ -1937,6 +2024,8 @@ class ProductionController extends Controller
             // How much this section has received from upstream (null = ungated
             // first section). Lets the queue show "5 / 10" instead of the full qty.
             'received_qty' => $wos->effectiveReceivedQty(),
+            // Has the material for this job arrived here (null = not confirmed).
+            'material_status' => $wos->material_status,
             // Who holds this job at this shop, and whether they have taken it
             // in hand yet. Null all round on a shop that does not work this way.
             'assigned_to'      => $wos->assignedTo?->name,

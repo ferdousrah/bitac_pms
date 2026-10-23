@@ -817,6 +817,8 @@ Route::middleware(['auth'])->group(function () {
         // Shop-floor bottleneck flag (→ PCD reroute).
         Route::post('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'flagBottleneck'])->name('wos.bottleneck');
         Route::delete('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'clearBottleneck'])->name('wos.bottleneck.clear');
+        // The shop's "material received or not" step for a job.
+        Route::post('/wos/{workOrderSection}/material', [ProductionController::class, 'markMaterial'])->name('wos.material');
         // View the PCD operation sheet PDF from the shop floor (production-permission gated).
         Route::get('/op-sheets/{sheet}/pdf', [\App\Http\Controllers\OperationSheetController::class, 'pdf'])->name('op-sheet.pdf');
         // ⚠️ And the WORK ORDER PCD issued — a third door onto the same routing

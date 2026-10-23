@@ -22,6 +22,7 @@ interface QueueJob {
     received_qty: number | null;
     sub_section_id: number | null;
     ready_to_transfer?: boolean;
+    material_status?: 'received' | 'not_received' | null;
     /** Open operations on this row named on ME. */
     my_steps?: number;
     /** How many of this row's steps the tab being shown is about. */
@@ -510,6 +511,12 @@ function JobCard({ job, onPdf, done = false, sl }: { job: QueueJob & { assigned_
                             <span className={`badge ${STATUS_BADGE[job.status] ?? 'badge-slate'}`}>
                                 {STATUS_LABEL[job.status] ?? job.status}
                             </span>
+                        )}
+                        {job.material_status === 'received' && (
+                            <span className="badge badge-green"><i className="fi fi-rr-check text-[9px]" /> Material in</span>
+                        )}
+                        {job.material_status === 'not_received' && (
+                            <span className="badge badge-red"><i className="fi fi-rr-cross-small text-[9px]" /> Material not received</span>
                         )}
                         {job.ready_to_transfer && (
                             <span className="badge badge-amber"><i className="fi fi-rr-paper-plane text-[9px]" /> Ready to transfer</span>
