@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 import { MR_STEPS, mrBadge } from '@/lib/mrStatus';
@@ -110,6 +110,12 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
     const [pdfOpen, setPdfOpen] = useState(false);
     const [issueOpen, setIssueOpen] = useState(false);
     const [busy, setBusy] = useState(false);
+    // The IMS number often arrives after the paper reaches the store — it can be set at any stage.
+    const { errors } = usePage().props as any;
+    const [editingNo, setEditingNo] = useState(false);
+    const [mrnNo, setMrnNo] = useState(requisition.mrn_number);
+    const saveNo = () => router.patch(`/pcd/material-requisitions/${requisition.id}/number`, { mrn_number: mrnNo },
+        { preserveScroll: true, onSuccess: () => setEditingNo(false) });
     const base = `/pcd/material-requisitions/${requisition.id}`;
 
     const run = (action: string) => {
@@ -146,9 +152,26 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                             <div className="min-w-0">
                                 <div className="flex items-center gap-3 flex-wrap">
-                                    <h2 className="font-mono font-bold text-brand-600 text-xl">{requisition.mrn_number}</h2>
+                                    {editingNo ? (
+                                        <span className="flex items-center gap-1.5">
+                                            <input autoFocus value={mrnNo} maxLength={30} onChange={(e) => setMrnNo(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') saveNo(); if (e.key === 'Escape') { setEditingNo(false); setMrnNo(requisition.mrn_number); } }}
+                                                className="form-input font-mono font-bold text-brand-700 !py-1.5 w-56" placeholder="IMS MRN number" />
+                                            <button type="button" onClick={saveNo} className="btn-primary btn-sm">Save</button>
+                                            <button type="button" onClick={() => { setEditingNo(false); setMrnNo(requisition.mrn_number); }} className="btn-ghost btn-sm">Cancel</button>
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-1">
+                                            <h2 className="font-mono font-bold text-brand-600 text-xl">{requisition.mrn_number}</h2>
+                                            <button type="button" onClick={() => setEditingNo(true)} title="Change the MRN number (e.g. the IMS number)"
+                                                className="btn-ghost btn-icon text-surface-400 hover:text-brand-600">
+                                                <i className="fi fi-rr-pencil text-xs leading-none" />
+                                            </button>
+                                        </span>
+                                    )}
                                     <span className={`badge ${mrBadge(requisition.status)}`}>{requisition.status_label}</span>
                                 </div>
+                                {editingNo && errors?.mrn_number && <p className="form-error">{errors.mrn_number}</p>}
                                 <p className="text-sm text-surface-600 mt-1">
                                     Material Requisition Note · requested {requisition.request_date_display}
                                     {requisition.requested_by && <> by <b className="font-semibold text-surface-800">{requisition.requested_by}</b></>}

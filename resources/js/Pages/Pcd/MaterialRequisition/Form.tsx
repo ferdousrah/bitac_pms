@@ -37,6 +37,7 @@ interface Props {
     work_orders: WorkOrderOption[];
     materials: MaterialOption[];
     prefilled_items?: any[];
+    next_mrn?: string;
 }
 
 const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', unit: 'kg', required_qty: '', remarks: '' });
@@ -47,7 +48,7 @@ const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', 
  * Materials are picked the way a cost estimate picks them (searchable master),
  * and the weight calculator works out the kilos and writes the size.
  */
-export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items = [] }: Props) {
+export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items = [], next_mrn }: Props) {
     const isEdit = !!requisition?.id;
     const isDraft = !isEdit || requisition.status === 'draft';
 
@@ -65,6 +66,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
 
     const submitRef = useRef(false);
     const { data, setData, post, put, processing, errors, transform } = useForm({
+        mrn_number: requisition?.mrn_number ?? '',
         work_order_id: requisition?.work_order_id ?? work_order?.id ?? '',
         request_date: requisition?.request_date ?? new Date().toISOString().slice(0, 10),
         notes: requisition?.notes ?? '',
@@ -142,16 +144,20 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                 What the job needs from the store. It goes to the store as a status — there is no IMS push.
                             </p>
                         </div>
-                        <div className="text-right shrink-0">
-                            <div className="font-mono font-semibold text-brand-600 text-sm">
-                                {isEdit ? requisition.mrn_number : 'MRN number on save'}
-                            </div>
-                            {isEdit && <span className="badge badge-slate mt-1">{requisition.status_label}</span>}
-                        </div>
+                        {isEdit && <span className="badge badge-slate shrink-0">{requisition.status_label}</span>}
                     </div>
                     <div className="card-body space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="form-group">
+                                <label className="form-label">MRN No. <span className="form-label-optional">from IMS</span></label>
+                                <input type="text" value={data.mrn_number} maxLength={30}
+                                    onChange={(e) => setData('mrn_number', e.target.value)}
+                                    className="form-input font-mono"
+                                    placeholder={isEdit ? '' : `Blank → ${next_mrn ?? 'auto-numbered'}`} />
+                                <p className="form-hint">The number IMS gave it. Can also be added later, on the requisition.</p>
+                                {err('mrn_number') && <div className="form-error">{err('mrn_number')}</div>}
+                            </div>
+                            <div className="form-group md:col-span-2">
                                 <label className="form-label">Work Order</label>
                                 {work_order || isEdit ? (
                                     <div className="form-input bg-surface-50 cursor-not-allowed truncate">

@@ -75,6 +75,8 @@ class MaterialRequisitionController extends Controller
             'requisition'     => null,
             'work_order'      => $workOrder ? $this->serializeWorkOrder($workOrder) : null,
             'prefilled_items' => $prefilledItems,
+            // What a blank MRN box will be numbered — shown as the hint.
+            'next_mrn'        => MaterialRequisition::generateMrnNumber(),
             'work_orders'     => $this->workOrderOptions(),
             'materials'       => $this->materialOptions(),
         ]);
@@ -139,7 +141,8 @@ class MaterialRequisitionController extends Controller
 
         $mr = DB::transaction(function () use ($validated, $submit) {
             $mr = MaterialRequisition::create([
-                'mrn_number'    => MaterialRequisition::generateMrnNumber(),
+                // The number IMS gave it, when PCD has one; otherwise numbered here.
+                'mrn_number'    => ($validated['mrn_number'] ?? null) ?: MaterialRequisition::generateMrnNumber(),
                 'work_order_id' => $validated['work_order_id'],
                 'request_date'  => $validated['request_date'],
                 'requested_by'  => auth()->id(),
@@ -184,11 +187,13 @@ class MaterialRequisitionController extends Controller
     {
         if ($refusal = $this->notEditable($materialRequisition)) return $refusal;
 
-        $validated = $this->validateRequisition($request);
+        $validated = $this->validateRequisition($request, $materialRequisition->id);
         $submit = $request->boolean('submit') && $materialRequisition->status === 'draft';
 
         DB::transaction(function () use ($materialRequisition, $validated, $submit) {
             $materialRequisition->update([
+                // Blank keeps the number it has — clearing the box must not lose it.
+                'mrn_number'    => ($validated['mrn_number'] ?? null) ?: $materialRequisition->mrn_number,
                 'work_order_id' => $validated['work_order_id'],
                 'request_date'  => $validated['request_date'],
                 'status'        => $submit ? 'pending_approval' : $materialRequisition->status,
@@ -214,6 +219,27 @@ class MaterialRequisitionController extends Controller
         $materialRequisition->delete();
 
         return redirect()->route('pcd.material-requisitions.index')->with('success', 'Material Requisition deleted.');
+    }
+
+    /**
+     * Put the IMS number on a requisition at any stage. The store's system
+     * often issues it only after the paper reaches them — after the lines are
+     * already locked — so this is deliberately separate from editing the lines.
+     */
+    public function setNumber(Request $request, MaterialRequisition $materialRequisition)
+    {
+        $data = $request->validate([
+            'mrn_number' => 'required|string|max:30|unique:material_requisitions,mrn_number,' . $materialRequisition->id,
+        ], [
+            'mrn_number.unique' => 'Another requisition already has that MRN number.',
+        ]);
+        $old = $materialRequisition->mrn_number;
+        $new = trim($data['mrn_number']);
+        if ($new === $old) return back();
+
+        $materialRequisition->update(['mrn_number' => $new]);
+
+        return back()->with('success', "MRN number changed from {$old} to {$new}.");
     }
 
     // ── Moving the status along (no IMS) ────────────────────────────────
@@ -578,9 +604,13 @@ HTML;
      * The form posts the requisition and its lines; it never sets a status
      * (the buttons do) nor issued quantities (recording an issue does).
      */
-    private function validateRequisition(Request $request): array
+    private function validateRequisition(Request $request, ?int $id = null): array
     {
+        $request->merge(['mrn_number' => trim((string) $request->input('mrn_number', ''))]);
+
         return $request->validate([
+            // The IMS number. Optional — blank is numbered here (MRN-YYYY-NNNN).
+            'mrn_number'           => 'nullable|string|max:30|unique:material_requisitions,mrn_number' . ($id ? ",{$id}" : ''),
             'work_order_id'        => 'required|exists:work_orders,id',
             'request_date'         => 'required|date',
             'notes'                => 'nullable|string|max:1000',
@@ -595,6 +625,7 @@ HTML;
         ], [
             'items.*.material_id.required'  => 'Pick a material for every line.',
             'items.*.required_qty.gt'       => 'Enter how much is required.',
+            'mrn_number.unique'             => 'Another requisition already has that MRN number.',
         ]);
     }
 }

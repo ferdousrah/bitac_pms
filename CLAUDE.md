@@ -442,6 +442,12 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   nothing → back to Approved. A line id of another requisition is ignored. **`issue_qty` is what a job's
   actual material cost will be worked out from** (× `materials.purchase_rate_per_kg`).
 - `status` was an ENUM — now **`varchar(30)`** (migration `..._000079`), like every other status column.
+- **The MRN number is IMS's number** (BITAC, 2026-10-23): the form has an **MRN No. (from IMS)** box. Typed
+  → stored as given (trimmed, `max:30`, **unique** — a clash is refused with a message); **blank → numbered
+  here** (`MRN-YYYY-NNNN`, shown as the box's hint via `next_mrn`). Saving the form with the box cleared
+  **keeps** the existing number. ⚠️ IMS often issues its number only once the paper reaches the store —
+  after the lines are locked — so **`PATCH …/{mr}/number`** (`setNumber`, the pencil beside the number on the
+  requisition page) changes it **at any stage**, separately from editing the lines.
 - **The form** (`Pcd/MaterialRequisition/Form.tsx`): materials from the master through `SearchableSelect`
   (category as sublabel), and the **Metal Weight Calculator** (`Components/Widgets/WeightCalculator`, the
   cost estimate's) on every line. ⚠️ The calculator's `onApply` gained a third argument — the **size in
