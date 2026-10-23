@@ -6,7 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class WorkOrderSection extends Model
 {
-    public const MATERIAL_STATUSES = ['received' => 'Material received', 'not_received' => 'Material not received'];
+    public const MATERIAL_STATUSES = [
+        'received'           => 'Material received',
+        'partially_received' => 'Material partly received',
+        'not_received'       => 'Material not received',
+    ];
 
     public function materialMarkedBy() { return $this->belongsTo(User::class, 'material_marked_by'); }
 

@@ -1479,19 +1479,21 @@ class ProductionController extends Controller
     /**
      * The shop says whether the material for this job has arrived (BITAC,
      * 2026-10-23). "Received" also closes the requisitions the store has issued
-     * to this shop for the job (status Received, stamped). "Not received" needs
-     * a reason and tells PCD — and whoever raised those requisitions — so a
-     * missing delivery is chased rather than discovered at the machine.
-     * Either answer can be changed later.
+     * to this shop for the job (status Received, stamped). "Partly received"
+     * and "Not received" need a note saying what is missing, and tell PCD —
+     * and whoever raised those requisitions — so a missing delivery is chased
+     * rather than discovered at the machine. ⚠️ "Partly received" does NOT
+     * close the requisitions: something is still to come, and they close when
+     * the shop finally says Received. Any answer can be changed later.
      */
     public function markMaterial(Request $request, WorkOrderSection $workOrderSection)
     {
         $this->authorizeAccess($workOrderSection);
         $user = $request->user();
         $data = $request->validate([
-            'status' => 'required|in:received,not_received',
-            'note'   => 'nullable|required_if:status,not_received|string|max:500',
-        ], ['note.required_if' => 'Say what has not arrived, so PCD can chase it.']);
+            'status' => 'required|in:received,partially_received,not_received',
+            'note'   => 'nullable|required_unless:status,received|string|max:500',
+        ], ['note.required_unless' => 'Say what has not arrived, so PCD can chase it.']);
 
         $wos = $workOrderSection->loadMissing('section', 'workOrder');
         $wos->update([
@@ -1514,7 +1516,8 @@ class ProductionController extends Controller
         }
 
         $job = $wos->workOrder->job_number ? "Job {$wos->workOrder->job_number}" : $wos->workOrder->wo_number;
-        $title = "Material not received · {$wos->section->name}";
+        $partly = $data['status'] === 'partially_received';
+        $title = ($partly ? 'Material partly received' : 'Material not received') . " · {$wos->section->name}";
         $body = "{$job}: " . $wos->material_note . " — {$user->name}";
         NotifyService::toPermission('view pcd-inbox', 'material_not_received', $title, $body,
             "/pcd/job-planning/{$wos->work_order_id}", 'fi-rr-triangle-warning', 'red', centerId: $wos->workOrder->center_id);
@@ -1524,7 +1527,7 @@ class ProductionController extends Controller
                 "/pcd/job-planning/{$wos->work_order_id}", 'fi-rr-triangle-warning', 'red');
         }
 
-        return back()->with('success', 'Marked not received — PCD has been told.');
+        return back()->with('success', ($partly ? 'Marked partly received' : 'Marked not received') . ' — PCD has been told what is missing.');
     }
 
     /**

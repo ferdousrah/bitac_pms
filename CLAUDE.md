@@ -521,11 +521,16 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 > BITAC: *"Add a Step Material received or not in shop section against a job."*
 
 - Recorded on the job's leg at the shop — **`work_order_sections.material_status`** (`null` = not confirmed,
-  `received`, `not_received`) + `material_note`, `material_marked_by`, `material_marked_at` (migration
-  `..._000083`; ⚠️ all four are in `$fillable`, or the save is silently dropped).
+  `received`, `partially_received`, `not_received`) + `material_note`, `material_marked_by`,
+  `material_marked_at` (migration `..._000083`; ⚠️ all four are in `$fillable`, or the save is silently
+  dropped).
 - **`POST production/wos/{wos}/material`** (`ProductionController@markMaterial`, behind the same
-  `authorizeAccess` as the rest of the job page): **Received**, or **Not received** with a reason
-  (`required_if`). Either can be changed later; Received clears an old reason.
+  `authorizeAccess` as the rest of the job page): **Received**, **Partly received** or **Not received** —
+  the last two need a note on what is missing (`required_unless:status,received`). Any answer can be changed
+  later; Received clears an old note.
+  - ⚠️ **Partly received leaves the MRs open** — something is still to come — and tells PCD like Not
+    received does. The MRs close when the shop finally says Received. (Per-line received quantities were
+    considered and deliberately not built: they would duplicate the store's issued figures.)
   - **Received also closes the MRs** the store issued to this shop for the job: Partially Issued / Issued →
     **Received**, stamped with the shop's person. Drafts and other shops' MRs are untouched.
   - **Not received tells PCD** (`view pcd-inbox` at the job's centre) **and whoever raised those MRs**, linking
@@ -535,8 +540,8 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   not named like a relation.)
 - **`Components/Production/MaterialReceipt`** on the shop's job page (top of the right column, above
   Actions): the status, who/when/why, those MRs with "X of Y issued", the shop's still-open demands, and the
-  two buttons. Read-only once the leg is completed. The shop's **queue rows** show **Material in** /
-  **Material not received** (`material_status` on `serializeWosForQueue`). Nothing is blocked by it — it is a
+  three buttons. Read-only once the leg is completed. The shop's **queue rows** show **Material in** /
+  **Material partly in** / **Material not received** (`material_status` on `serializeWosForQueue`). Nothing is blocked by it — it is a
   recorded step, not a gate.
 
 ### Selling rate vs purchase rate on a material (2026-10-23)

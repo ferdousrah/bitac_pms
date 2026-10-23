@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { DEMAND_BADGE, mrBadge, mrLabel } from '@/lib/mrStatus';
 
 export interface MaterialPanel {
-    status: 'received' | 'not_received' | null;
+    status: 'received' | 'partially_received' | 'not_received' | null;
     label: string;
     note?: string | null;
     marked_by?: string | null;
@@ -17,30 +17,41 @@ const qty = (v: number) => Number(v).toLocaleString('en-IN', { maximumFractionDi
 /**
  * The shop's "material received or not" step for one job (BITAC, 2026-10-23),
  * with what is on its way: the requisitions to this shop for the job and the
- * shop's own demands. Received closes the issued requisitions; Not received
- * needs a reason and tells PCD. Either can be changed later.
+ * shop's own demands. Received closes the issued requisitions; Partly received
+ * and Not received need a note on what is missing and tell PCD (partly
+ * received leaves the requisitions open — something is still to come).
+ * Any answer can be changed later.
  */
 export default function MaterialReceipt({ wosId, material, readOnly = false }: { wosId: number; material: MaterialPanel; readOnly?: boolean }) {
     const { errors } = usePage().props as any;
-    const [asking, setAsking] = useState(false);
+    // Which answer is waiting for its note — the two that tell PCD something is missing.
+    const [asking, setAsking] = useState<null | 'partially_received' | 'not_received'>(null);
     const [note, setNote] = useState('');
     const [busy, setBusy] = useState(false);
 
-    const post = (status: 'received' | 'not_received') => {
+    const post = (status: 'received' | 'partially_received' | 'not_received') => {
         setBusy(true);
-        router.post(`/production/wos/${wosId}/material`, { status, note: status === 'not_received' ? note : '' }, {
+        router.post(`/production/wos/${wosId}/material`, { status, note: status === 'received' ? '' : note }, {
             preserveScroll: true,
-            onSuccess: () => { setAsking(false); setNote(''); },
+            onSuccess: () => { setAsking(null); setNote(''); },
             onFinish: () => setBusy(false),
         });
     };
 
-    const tone = material.status === 'received'
-        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        : material.status === 'not_received'
-            ? 'bg-red-50 text-red-700 border-red-200'
-            : 'bg-amber-50 text-amber-700 border-amber-200';
-    const icon = material.status === 'received' ? 'fi-rr-check-circle' : material.status === 'not_received' ? 'fi-rr-cross-circle' : 'fi-rr-time-quarter-past';
+    const TONE: Record<string, string> = {
+        received:           'bg-emerald-50 text-emerald-700 border-emerald-200',
+        partially_received: 'bg-orange-50 text-orange-800 border-orange-200',
+        not_received:       'bg-red-50 text-red-700 border-red-200',
+    };
+    const ICON: Record<string, string> = {
+        received: 'fi-rr-check-circle', partially_received: 'fi-rr-chart-pie-alt', not_received: 'fi-rr-cross-circle',
+    };
+    const tone = TONE[material.status ?? ''] ?? 'bg-amber-50 text-amber-700 border-amber-200';
+    const icon = ICON[material.status ?? ''] ?? 'fi-rr-time-quarter-past';
+    const openNote = (mode: 'partially_received' | 'not_received') => {
+        setNote(material.status === mode ? (material.note ?? '') : '');
+        setAsking(mode);
+    };
 
     return (
         <div className="card">
@@ -89,27 +100,40 @@ export default function MaterialReceipt({ wosId, material, readOnly = false }: {
 
                 {!readOnly && (asking ? (
                     <div className="space-y-2">
+                        <p className="text-xs font-semibold text-surface-700">
+                            {asking === 'partially_received' ? 'Partly received — what is still missing?' : 'Not received — what has not arrived?'}
+                        </p>
                         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} autoFocus
-                            className="form-textarea text-sm" placeholder="What has not arrived? e.g. EN-24 bar issued on MRN-0031 not received yet" />
+                            className="form-textarea text-sm"
+                            placeholder={asking === 'partially_received'
+                                ? 'e.g. EN-24 bar came; the 12 mm plate on MRN-0034 has not'
+                                : 'e.g. EN-24 bar issued on MRN-0031 not received yet'} />
                         {errors?.note && <div className="form-error">{errors.note}</div>}
                         <div className="flex gap-2">
-                            <button type="button" onClick={() => setAsking(false)} className="btn-ghost btn-sm flex-1 justify-center">Back</button>
-                            <button type="button" disabled={busy} onClick={() => post('not_received')}
-                                className="btn-sm flex-1 justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-red-600 text-white hover:bg-red-700">
+                            <button type="button" onClick={() => setAsking(null)} className="btn-ghost btn-sm flex-1 justify-center">Back</button>
+                            <button type="button" disabled={busy} onClick={() => post(asking)}
+                                className={`btn-sm flex-1 justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold text-white ${
+                                    asking === 'partially_received' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}>
                                 Tell PCD
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
                         <button type="button" disabled={busy || material.status === 'received'} onClick={() => post('received')}
-                            className="btn-sm justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40">
+                            className="btn-sm w-full justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40">
                             <i className="fi fi-rr-check text-xs leading-none" /> Received
                         </button>
-                        <button type="button" disabled={busy} onClick={() => { setNote(material.status === 'not_received' ? (material.note ?? '') : ''); setAsking(true); }}
-                            className="btn-sm justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold border border-red-200 text-red-700 hover:bg-red-50">
-                            <i className="fi fi-rr-cross-small text-xs leading-none" /> Not received
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button type="button" disabled={busy} onClick={() => openNote('partially_received')}
+                                className="btn-sm justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold border border-orange-200 text-orange-800 hover:bg-orange-50">
+                                <i className="fi fi-rr-chart-pie-alt text-xs leading-none" /> Partly received
+                            </button>
+                            <button type="button" disabled={busy} onClick={() => openNote('not_received')}
+                                className="btn-sm justify-center inline-flex items-center gap-1.5 rounded-xl font-semibold border border-red-200 text-red-700 hover:bg-red-50">
+                                <i className="fi fi-rr-cross-small text-xs leading-none" /> Not received
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>

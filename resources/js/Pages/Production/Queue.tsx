@@ -22,7 +22,7 @@ interface QueueJob {
     received_qty: number | null;
     sub_section_id: number | null;
     ready_to_transfer?: boolean;
-    material_status?: 'received' | 'not_received' | null;
+    material_status?: 'received' | 'partially_received' | 'not_received' | null;
     /** Open operations on this row named on ME. */
     my_steps?: number;
     /** How many of this row's steps the tab being shown is about. */
@@ -514,6 +514,9 @@ function JobCard({ job, onPdf, done = false, sl }: { job: QueueJob & { assigned_
                         )}
                         {job.material_status === 'received' && (
                             <span className="badge badge-green"><i className="fi fi-rr-check text-[9px]" /> Material in</span>
+                        )}
+                        {job.material_status === 'partially_received' && (
+                            <span className="badge badge-amber"><i className="fi fi-rr-chart-pie-alt text-[9px]" /> Material partly in</span>
                         )}
                         {job.material_status === 'not_received' && (
                             <span className="badge badge-red"><i className="fi fi-rr-cross-small text-[9px]" /> Material not received</span>
