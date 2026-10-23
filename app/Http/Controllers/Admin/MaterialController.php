@@ -49,7 +49,7 @@ class MaterialController extends Controller
     {
         return Inertia::render('Admin/Materials/CreateEdit', [
             'material' => $material->only([
-                'id', 'name', 'category', 'unit', 'rate_per_kg', 'density_kg_m3', 'density_kg_in3', 'notes', 'is_active',
+                'id', 'name', 'category', 'unit', 'rate_per_kg', 'purchase_rate_per_kg', 'density_kg_m3', 'density_kg_in3', 'notes', 'is_active',
             ]),
             'categories' => \App\Models\MaterialCategory::active()->orderBy('display_order')->orderBy('name')->get(['code', 'name']),
         ]);
@@ -87,6 +87,8 @@ class MaterialController extends Controller
             'category'       => 'nullable|string|max:50',
             'unit'           => 'nullable|string|max:20',
             'rate_per_kg'    => 'required|numeric|min:0',
+            // What BITAC pays — blank means "not entered", never ৳0.
+            'purchase_rate_per_kg' => 'nullable|numeric|min:0',
             'density_kg_m3'  => 'nullable|numeric|min:0',
             'notes'          => 'nullable|string|max:255',
             'is_active'      => 'boolean',

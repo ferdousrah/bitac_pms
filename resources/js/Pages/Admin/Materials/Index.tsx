@@ -53,7 +53,8 @@ export default function MaterialsIndex({ materials, filters, categories }: any) 
                                 <tr>
                                     <th>Name</th>
                                     <th>Category</th>
-                                    <th className="text-right">Rate (৳/Kg)</th>
+                                    <th className="text-right">Selling rate (৳/Kg)</th>
+                                    <th className="text-right">Purchase rate (৳/Kg)</th>
                                     <th className="text-right">Density (kg/m³)</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -69,6 +70,11 @@ export default function MaterialsIndex({ materials, filters, categories }: any) 
                                             )}
                                         </td>
                                         <td className="text-right font-mono text-sm">{fmt(m.rate_per_kg)}</td>
+                                        <td className="text-right font-mono text-sm">
+                                            {m.purchase_rate_per_kg != null && m.purchase_rate_per_kg !== ''
+                                                ? fmt(m.purchase_rate_per_kg)
+                                                : <span className="text-surface-400 font-sans text-xs">Not entered</span>}
+                                        </td>
                                         <td className="text-right font-mono text-sm text-surface-600">{m.density_kg_m3 ?? '—'}</td>
                                         <td>
                                             <span className={`badge ${m.is_active ? 'badge-green' : 'badge-slate'}`}>

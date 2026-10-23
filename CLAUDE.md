@@ -423,6 +423,18 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - **Under-quote guard:** a `parts`-mode job with `missing > 0` is collected into the `uncostedJobs` prop and the quotation form shows an amber warning naming each job and how many parts are uncosted. The price shown genuinely is short until they're costed.
 - **Entry point:** RFQ Show lists each part with its qty and either its estimate amount (link) or a **+ Estimate** button → `/cost-estimates/create?rfq_item_part_id=N`. The estimate form derives `rfq_item_id` from the part, prefills `job_quantity` from the part's quantity, and stamps the positional `part_no` (`3/3`). The Cost Estimate column shows the job roll-up ("sum of N parts") plus the not-costed warning.
 - `grand_total_override` still applies **per part**, and flows into the sum.
+### Selling rate vs purchase rate on a material (2026-10-23)
+- ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the
+  client (labelled "Selling rate" on Admin → Materials). **`materials.purchase_rate_per_kg`**
+  (migration `..._000078`) is what BITAC itself pays, entered alongside it, for working out a
+  job's **actual** material cost (BITAC: *"ekta job e ki poriman material babod khoroch
+  hoilo"*).
+- It is **nullable and blank means "not entered"**, shown as such in the list — never read it
+  as ৳0, or every job's material cost looks free. All existing materials start blank.
+- Nothing computes a job's material cost from it yet. The natural source is what the store
+  **issued** against the work order (`material_requisition_items.issue_qty` × purchase rate),
+  not the estimate's planned weights.
+
 ### Job Costing — the consolidated view (`JobCostingController`)
 - **`GET cost-estimates/job/{rfqItem}`** (`cost-estimates.job`, page `CostEstimate/JobCosting.tsx`) + **`/pdf`** (letterhead, `?preview=base64`). Brings every part estimate of a job back into ONE sheet: part rows (estimate no, approval status, group), Material / Machining / Surface / Other / Overhead / VAT+Tax / Adjust. / Unit cost / Total, a Job-total footer, Job total + Per-unit + Net production cost tiles, uncosted-parts warning, click a row to see its cost lines, and **Submit Whole Job** when >1 is submittable. Jobs costed as a whole show a single row.
 - **Read-only and stores nothing** — derived from the estimates, and `job_total` comes from `jobCostBreakdown()`, so it is always the number the quotation uses.

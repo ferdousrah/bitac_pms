@@ -9,6 +9,7 @@ export default function MaterialCreateEdit({ material, categories = [] }: any) {
         category:       material?.category ?? '',
         unit:           material?.unit ?? 'kg',
         rate_per_kg:    material?.rate_per_kg ?? '',
+        purchase_rate_per_kg: material?.purchase_rate_per_kg ?? '',
         density_kg_m3:  material?.density_kg_m3 ?? '',
         notes:          material?.notes ?? '',
         is_active:      material?.is_active ?? true,
@@ -78,11 +79,20 @@ export default function MaterialCreateEdit({ material, categories = [] }: any) {
                                     {errors.unit && <p className="form-error">{errors.unit}</p>}
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Rate * <span className="form-label-optional">৳/Kg</span></label>
+                                    <label className="form-label">Selling rate * <span className="form-label-optional">৳/Kg</span></label>
                                     <input type="number" min="0" step="0.01" value={data.rate_per_kg}
                                         onChange={e => setData('rate_per_kg', e.target.value)}
                                         className="form-input font-mono" required />
+                                    <p className="form-hint">Charged to the client in cost estimates.</p>
                                     {errors.rate_per_kg && <p className="form-error">{errors.rate_per_kg}</p>}
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Purchase rate <span className="form-label-optional">৳/Kg</span></label>
+                                    <input type="number" min="0" step="0.01" value={data.purchase_rate_per_kg}
+                                        onChange={e => setData('purchase_rate_per_kg', e.target.value)}
+                                        className="form-input font-mono" placeholder="Not entered" />
+                                    <p className="form-hint">What BITAC pays — for a job's actual material cost.</p>
+                                    {errors.purchase_rate_per_kg && <p className="form-error">{errors.purchase_rate_per_kg}</p>}
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Density <span className="form-label-optional">kg/m³</span></label>
