@@ -3,6 +3,7 @@ import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo, useRef, useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
 import WeightCalculator from '@/Components/Widgets/WeightCalculator';
+import UnitSelect from '@/Components/UnitSelect';
 
 interface RequisitionItem {
     material_id: number | null;
@@ -277,7 +278,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                     <th className="w-[26%]">Material / item <span className="text-red-500">*</span></th>
                                     <th>Size / spec <span className="font-normal text-surface-400">— what to cut</span></th>
                                     <th className="w-44">Required <span className="text-red-500">*</span></th>
-                                    <th className="w-24">Unit</th>
+                                    <th className="w-28">Unit</th>
                                     <th className="w-[18%]">Remarks</th>
                                     <th className="w-10"></th>
                                 </tr>
@@ -326,9 +327,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                             {err(`items.${index}.required_qty`) && <div className="form-error">{err(`items.${index}.required_qty`)}</div>}
                                         </td>
                                         <td>
-                                            <input type="text" value={it.unit} list="mr-units"
-                                                onChange={(e) => updateItem(index, { unit: e.target.value })}
-                                                className="form-input text-sm py-1.5 text-center !px-2" />
+                                            <UnitSelect value={it.unit} onChange={(u) => updateItem(index, { unit: u })} />
                                         </td>
                                         <td>
                                             <input type="text" value={it.remarks}
@@ -345,9 +344,6 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                 ))}
                             </tbody>
                         </table>
-                        <datalist id="mr-units">
-                            {['kg', 'pcs', 'm', 'ft', 'sheet', 'set', 'L'].map((u) => <option key={u} value={u} />)}
-                        </datalist>
                         {err('items') && <div className="form-error px-5 pb-3">{err('items')}</div>}
                     </div>
                 </div>

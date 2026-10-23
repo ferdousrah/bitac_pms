@@ -3,6 +3,7 @@ import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useMemo, useState } from 'react';
 import SearchableSelect from '@/Components/SearchableSelect';
 import WeightCalculator from '@/Components/Widgets/WeightCalculator';
+import UnitSelect from '@/Components/UnitSelect';
 
 interface Line { material_id: number | null; item_name: string; description: string; unit: string; quantity: number | string; remarks: string }
 interface Job { section_id: number; id: number; wo_number: string; job_number?: string | null; customer?: string | null; leg_status: string }
@@ -140,7 +141,7 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                                     <th className="w-[26%]">Material / item <span className="text-red-500">*</span></th>
                                     <th>Size / spec</th>
                                     <th className="w-44">Quantity <span className="text-red-500">*</span></th>
-                                    <th className="w-24">Unit</th>
+                                    <th className="w-28">Unit</th>
                                     <th className="w-[18%]">Why / remarks</th>
                                     <th className="w-10"></th>
                                 </tr>
@@ -178,8 +179,7 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                                             {err(`items.${i}.quantity`) && <div className="form-error">{err(`items.${i}.quantity`)}</div>}
                                         </td>
                                         <td>
-                                            <input type="text" value={l.unit} list="md-units" onChange={(e) => updateLine(i, { unit: e.target.value })}
-                                                className="form-input text-sm py-1.5 text-center !px-2" />
+                                            <UnitSelect value={l.unit} onChange={(u) => updateLine(i, { unit: u })} />
                                         </td>
                                         <td>
                                             <input type="text" value={l.remarks} onChange={(e) => updateLine(i, { remarks: e.target.value })}
@@ -196,7 +196,6 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                                 ))}
                             </tbody>
                         </table>
-                        <datalist id="md-units">{['kg', 'pcs', 'm', 'ft', 'sheet', 'set', 'L'].map((u) => <option key={u} value={u} />)}</datalist>
                         {err('items') && <div className="form-error px-5 pb-3">{err('items')}</div>}
                     </div>
                 </div>

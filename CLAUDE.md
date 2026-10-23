@@ -511,6 +511,11 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   typed item) — the pages, the issue dialog and the PDF read it. The estimate prefill now carries a line
   costed as a typed item across **by name** instead of dropping it. A typed item has no purchase rate, so
   it will not price into a job's material cost.
+- **Unit is a dropdown** (`Components/UnitSelect`, list in `lib/units.ts`, grouped weight / count / length
+  / sheet / volume), on both forms. ⚠️ It was a text box with a `<datalist>`, which only suggests entries
+  matching what is already typed — a box holding "kg" offered nothing but "kg" (reported: *"unit e sudu
+  kg show kortese keno?"*). A unit not in the list (e.g. from the materials master) is kept as its own
+  option, so an old line never changes unit when opened.
 
 ### Selling rate vs purchase rate on a material (2026-10-23)
 - ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the
