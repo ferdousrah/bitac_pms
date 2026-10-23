@@ -44,7 +44,7 @@ export default function StakeholderAuthShell({ title, bitac, children }: {
                         <g className="gear-turn"><path d={gearPath(200, 200, 190, 160, 18)} fill="white" fillRule="evenodd" /></g>
                     </svg>
 
-                    <a href="/portfolio" className="relative flex items-center gap-4 group w-fit">
+                    <a href="/" className="relative flex items-center gap-4 group w-fit">
                         {emblem && (
                             <span className="w-14 h-14 rounded-2xl bg-white p-1.5 shrink-0">
                                 <img src={emblem} alt="" className="w-full h-full object-contain" />
@@ -99,7 +99,7 @@ export default function StakeholderAuthShell({ title, bitac, children }: {
                 {/* ── The form ─────────────────────────────────────────────── */}
                 <div className="flex flex-col min-h-[100dvh] lg:min-h-0">
                     <header className="flex items-center justify-between gap-4 px-6 sm:px-10 pt-6">
-                        <a href="/portfolio" className="inline-flex items-center gap-2 text-[13px] font-medium text-surface-600 hover:text-brand-700 transition-colors">
+                        <a href="/" className="inline-flex items-center gap-2 text-[13px] font-medium text-surface-600 hover:text-brand-700 transition-colors">
                             <i className="fi fi-rr-arrow-small-left text-base leading-none" /> Back to website
                         </a>
                         <Link href="/login" className="text-[13px] font-medium text-surface-600 hover:text-brand-700 transition-colors">

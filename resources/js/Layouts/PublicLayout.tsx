@@ -48,7 +48,7 @@ export interface NavItem {
  * exists separately rather than just flattening this.
  */
 export const NAV: NavItem[] = [
-    { href: '/portfolio',          label: 'Home' },
+    { href: '/',          label: 'Home' },
     { href: '/portfolio/about',    label: 'About Us' },
     { href: '/portfolio/services', label: 'Services' },
     { href: '/portfolio/products', label: 'Products' },
@@ -120,7 +120,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
     }, [menu]);
 
     const isActive = (href: string) =>
-        href === '/portfolio' ? url === '/portfolio' : url.startsWith(href);
+        href === '/' ? url === '/' || url.startsWith('/?') : url.startsWith(href);
 
     /** A group is lit when any page under it is open, not just its own href. */
     const groupActive = (n: NavItem) =>
@@ -168,7 +168,7 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
             } ${scrolled ? 'shadow-[0_6px_24px_-12px_rgba(14,12,20,0.25)]' : ''}`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className={`flex items-center justify-between gap-4 transition-[height] duration-300 ${scrolled ? 'h-16' : 'h-20'}`}>
-                        <Link href="/portfolio" className="flex items-center gap-3 min-w-0 group">
+                        <Link href="/" className="flex items-center gap-3 min-w-0 group">
                             {bitac?.logo_left && (
                                 <img src={bitac.logo_left} alt=""
                                      className={`object-contain shrink-0 transition-all duration-300 ${scrolled ? 'h-10 w-10' : 'h-12 w-12'}`} />

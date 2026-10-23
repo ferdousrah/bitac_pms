@@ -69,7 +69,7 @@ export default function PortfolioPublicShow({ project, related, bitac, links }: 
 
                 <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-14 sm:pb-20">
                     <nav className="flex items-center gap-2 text-xs text-white/50 mb-8" aria-label="Breadcrumb">
-                        <Link href="/portfolio" className="hover:text-white transition-colors">Home</Link>
+                        <Link href="/" className="hover:text-white transition-colors">Home</Link>
                         <i className="fi fi-rr-angle-small-right text-[10px] leading-none" />
                         <Link href="/portfolio/products" className="hover:text-white transition-colors">Products</Link>
                         {project.category && (

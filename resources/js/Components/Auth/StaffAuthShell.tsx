@@ -38,7 +38,7 @@ export default function StaffAuthShell({ title, bitac, children }: {
                 </svg>
 
                 <header className="relative flex items-center justify-between gap-4 px-6 sm:px-10 py-6">
-                    <a href="/portfolio" className="inline-flex items-center gap-2 text-[13px] font-medium text-white/60 hover:text-white transition-colors">
+                    <a href="/" className="inline-flex items-center gap-2 text-[13px] font-medium text-white/60 hover:text-white transition-colors">
                         <i className="fi fi-rr-arrow-small-left text-base leading-none" /> Back to website
                     </a>
                     <Link href="/customer/login" className="text-[13px] font-medium text-white/60 hover:text-white transition-colors">

@@ -47,7 +47,7 @@ export default function AdminPortfolioIndex({ projects, filters }: Props) {
                         <p className="page-subtitle">Public-facing project showcase · {projects.total} project{projects.total === 1 ? '' : 's'}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <a href="/portfolio" target="_blank" rel="noopener noreferrer" className="btn-outline">
+                        <a href="/" target="_blank" rel="noopener noreferrer" className="btn-outline">
                             <i className="fi fi-rr-eye text-xs leading-none" /> View Public Site
                         </a>
                         <Link href="/admin/portfolio/create" className="btn-primary">

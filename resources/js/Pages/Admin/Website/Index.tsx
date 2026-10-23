@@ -119,12 +119,12 @@ export default function WebsiteIndex({ tab, hero, text, services, partners, offi
                     <div>
                         <h1 className="text-xl font-bold text-surface-900">Website</h1>
                         <p className="text-sm text-surface-500 mt-1">
-                            The public site at <a href="/portfolio" target="_blank" rel="noreferrer"
-                               className="text-brand-600 hover:text-brand-700 font-medium">/portfolio</a>.
+                            The public site — the <a href="/" target="_blank" rel="noreferrer"
+                               className="text-brand-600 hover:text-brand-700 font-medium">home page</a> of this address.
                             Products come from Portfolio, clients from Customers and the address from Centres.
                         </p>
                     </div>
-                    <a href="/portfolio" target="_blank" rel="noreferrer" className="btn-outline">
+                    <a href="/" target="_blank" rel="noreferrer" className="btn-outline">
                         <i className="fi fi-rr-arrow-up-right-from-square text-xs mr-1.5" />
                         View site
                     </a>

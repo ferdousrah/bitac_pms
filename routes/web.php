@@ -65,17 +65,13 @@ Route::post('/switch-center', function (\Illuminate\Http\Request $request) {
 })->middleware('auth')->name('center.switch');
 
 // ======================================================================
-// Root redirect
+// The site root IS the public website (BITAC, 2026-10-23: "website ta main
+// page hok"). It used to send everyone to the staff login, so a visitor typing
+// the address landed on a sign-in form. Staff and stakeholders reach their
+// sign-in from the website's own links; a signed-in user who opens /login or
+// /customer/login is still sent on to their dashboard by the guest middleware.
 // ======================================================================
-Route::get('/', function () {
-    if (auth()->check()) {
-        return redirect()->route('dashboard');
-    }
-    if (auth('customer')->check()) {
-        return redirect()->route('customer.dashboard');
-    }
-    return redirect()->route('login');
-});
+Route::get('/', [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
 
 // ======================================================================
 // Staff Authentication (handled by Breeze)
@@ -111,7 +107,8 @@ Route::get('/dashboard/live', [LiveDashboardController::class, 'index'])
 // Designed to live cleanly under a future portfolio.bitac.gov.bd subdomain
 // by wrapping in Route::domain(...) when DNS is configured.
 // ======================================================================
-Route::get('/portfolio', [PortfolioPublicController::class, 'index'])->name('portfolio.public.index');
+// The home page used to live here; old links and bookmarks land on the root.
+Route::permanentRedirect('/portfolio', '/');
 // ⚠️ Every LITERAL section is declared BEFORE `/portfolio/{slug}`. Laravel
 // matches in registration order, so the other way round `/portfolio/about`
 // binds "about" as a project slug and 404s — the same trap as the receivables

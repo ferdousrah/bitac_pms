@@ -321,7 +321,7 @@ function Received({ submitted, submitted_email, offices }: Props) {
                     className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-surface-300 hover:border-brand-400 hover:bg-brand-50 text-surface-800 text-sm font-semibold transition-colors">
                     <i className="fi fi-rr-add text-xs leading-none" /> Send another request
                 </Link>
-                <Link href="/portfolio"
+                <Link href="/"
                     className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
                     Back to the home page
                 </Link>

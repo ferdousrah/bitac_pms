@@ -57,7 +57,7 @@ export default function ConsultancyRequest() {
                             <p className="text-[11px] text-surface-400">Bangladesh Industrial Technical Assistance Centre</p>
                         </div>
                     </Link>
-                    <Link href="/portfolio" target="_blank" className="text-xs font-semibold text-surface-500 hover:text-brand-600 hidden sm:inline-flex items-center gap-1">
+                    <Link href="/" target="_blank" className="text-xs font-semibold text-surface-500 hover:text-brand-600 hidden sm:inline-flex items-center gap-1">
                         Our Work <i className="fi fi-rr-arrow-up-right-from-square text-[9px] leading-none" />
                     </Link>
                 </div>

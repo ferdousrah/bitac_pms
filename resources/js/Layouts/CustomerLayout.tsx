@@ -17,7 +17,7 @@ const NAV_ITEMS: { href: string; label: string; icon: string; external?: boolean
     { href: '/customer/invoices',     label: 'Invoices',                 icon: 'fi-rr-receipt' },
     { href: '/customer/documents',    label: 'Documents',                icon: 'fi-rr-folder-open' },
     { href: '/customer/complaints',   label: 'Feedback',      icon: 'fi-rr-comment-alt' },
-    { href: '/portfolio',             label: 'Our Work',                 icon: 'fi-rr-briefcase',          external: true },
+    { href: '/',             label: 'Our Work',                 icon: 'fi-rr-briefcase',          external: true },
 ];
 
 export default function CustomerLayout({ title, backHref, backLabel, children, width = 'wide' }: Props) {
@@ -141,7 +141,7 @@ export default function CustomerLayout({ title, backHref, backLabel, children, w
                                             <i className="fi fi-rr-headset text-xs leading-none text-surface-400 w-4" />
                                             Send Feedback
                                         </Link>
-                                        <a href="/portfolio" target="_blank" rel="noreferrer noopener" onClick={() => setProfileOpen(false)}
+                                        <a href="/" target="_blank" rel="noreferrer noopener" onClick={() => setProfileOpen(false)}
                                             className="flex items-center gap-3 px-4 py-2 text-sm text-surface-700 hover:bg-surface-50 transition-colors">
                                             <i className="fi fi-rr-briefcase text-xs leading-none text-surface-400 w-4" />
                                             BITAC Portfolio

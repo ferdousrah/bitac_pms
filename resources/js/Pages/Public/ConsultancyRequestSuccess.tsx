@@ -45,7 +45,7 @@ export default function ConsultancyRequestSuccess({ requestNumber }: any) {
                         <Link href="/consultancy/request" className="btn-outline btn-sm">
                             <i className="fi fi-rr-plus text-xs leading-none" /> Submit Another
                         </Link>
-                        <Link href="/portfolio" target="_blank" className="btn-ghost btn-sm">
+                        <Link href="/" target="_blank" className="btn-ghost btn-sm">
                             See BITAC's Portfolio <i className="fi fi-rr-arrow-up-right-from-square text-[10px] leading-none" />
                         </Link>
                     </div>

@@ -1443,6 +1443,22 @@ tail -f storage/logs/laravel.log
 > corporate site: about, manufactured products, clients, news & events, photo
 > and video galleries, important links, contact and the customer login.
 
+### The site root IS the website (2026-10-23)
+> BITAC: *"ami chassi website ta main page hok, erpor website theke staff login, stakeholder login e click kore gelo"* — the domain used to open on the staff sign-in.
+
+- **`/` renders `PortfolioPublicController@index`** and carries the route name
+  **`portfolio.public.index`**; **`/portfolio` 301-redirects to `/`**, so old links and
+  bookmarks still land. Every sub-page keeps its address (`/portfolio/about`, `/contact`, …).
+- **Everyone gets the website at `/`, signed in or not.** Staff reach the app from the site's
+  Staff link (or `/dashboard`); a signed-in user who opens `/login` or `/customer/login` is
+  still sent to their own dashboard by the guest middleware. Logging out lands on the website.
+- The PWA is unaffected: `manifest.json` starts at **`/dashboard`**, and the service worker is
+  network-first for navigation, so a cached `/` cannot stick.
+- Every "Home" / "Back to website" link now points at `/` (PublicLayout's `NAV` + logo, both
+  sign-in shells, the customer portal, the request form, a product page's breadcrumb, the
+  consultancy pages, Admin → Website / Portfolio). `isActive('/')` is an **exact** match —
+  `startsWith('/')` would light Home on every page.
+
 ### ⚠️ One field per thing — there is NO Bangla/English pair
 BITAC's instruction: *"alada kore bangla english thakbena, banglai dile bangla,
 english e dile english."* So `news_posts.title`, `gallery_items.caption`,
