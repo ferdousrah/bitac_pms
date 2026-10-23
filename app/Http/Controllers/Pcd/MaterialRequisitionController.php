@@ -29,7 +29,7 @@ class MaterialRequisitionController extends Controller
     public function index(Request $request)
     {
         $status = $request->query('status');
-        $requisitions = MaterialRequisition::with('workOrder.customer', 'requestedBy', 'items')
+        $requisitions = MaterialRequisition::with('workOrder.customer', 'section:id,name', 'requestedBy', 'items')
             ->when($status && isset(MaterialRequisition::STATUSES[$status]), fn ($q) => $q->where('status', $status))
             ->when(trim((string) $request->query('search')), function ($q, $term) {
                 $q->where(fn ($w) => $w->where('mrn_number', 'like', "%{$term}%")
@@ -49,6 +49,7 @@ class MaterialRequisitionController extends Controller
                     'job_number' => $mr->workOrder->job_number,
                     'customer'   => $mr->workOrder->customer?->name,
                 ] : null,
+                'shop'         => $mr->section?->name,
                 'request_date' => $mr->request_date?->format('d M Y'),
                 'status'       => $mr->status,
                 'item_count'   => $mr->items->count(),
@@ -72,7 +73,8 @@ class MaterialRequisitionController extends Controller
                 ->with('error', "{$demand->demand_no} is already {$demand->status_label}.");
         }
 
-        $woId = $demand?->work_order_id ?? $request->query('work_order_id');
+        // A demand decides the job — including "no job".
+        $woId = $demand ? $demand->work_order_id : $request->query('work_order_id');
         $workOrder = $woId ? WorkOrder::with('customer', 'rfq.items.product')->findOrFail($woId) : null;
 
         // Pre-fill: the shop's demand when answering one; otherwise the material
@@ -95,6 +97,7 @@ class MaterialRequisitionController extends Controller
             'demand'          => $demand ? [
                 'id'           => $demand->id,
                 'demand_no'    => $demand->demand_no,
+                'section_id'   => $demand->section_id,
                 'shop'         => $demand->section?->name,
                 'requested_by' => $demand->requestedBy?->name,
                 'needed_by'    => $demand->needed_by?->format('d M Y'),
@@ -103,6 +106,7 @@ class MaterialRequisitionController extends Controller
             // What a blank MRN box will be numbered — shown as the hint.
             'next_mrn'        => MaterialRequisition::generateMrnNumber(),
             'work_orders'     => $this->workOrderOptions(),
+            'shops'           => $this->shopOptions(),
             'materials'       => $this->materialOptions(),
         ]);
     }
@@ -168,7 +172,8 @@ class MaterialRequisitionController extends Controller
             $mr = MaterialRequisition::create([
                 // The number IMS gave it, when PCD has one; otherwise numbered here.
                 'mrn_number'    => ($validated['mrn_number'] ?? null) ?: MaterialRequisition::generateMrnNumber(),
-                'work_order_id' => $validated['work_order_id'],
+                'work_order_id' => $validated['work_order_id'] ?? null,
+                'section_id'    => $validated['section_id'] ?? null,
                 'request_date'  => $validated['request_date'],
                 'requested_by'  => auth()->id(),
                 'status'        => $submit ? 'pending_approval' : 'draft',
@@ -178,7 +183,7 @@ class MaterialRequisitionController extends Controller
             return $mr;
         });
 
-        $sentUp = $submit && PcdReleaseService::tryRelease($mr->workOrder);
+        $sentUp = $submit && $mr->workOrder && PcdReleaseService::tryRelease($mr->workOrder);
 
         // Raised from a shop's demand → the demand now follows this requisition.
         $answered = '';
@@ -196,7 +201,7 @@ class MaterialRequisitionController extends Controller
 
     public function show(MaterialRequisition $materialRequisition)
     {
-        $materialRequisition->load(['workOrder.customer', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy']);
+        $materialRequisition->load(['workOrder.customer', 'section', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy']);
 
         return Inertia::render('Pcd/MaterialRequisition/Show', [
             'requisition' => $this->serializeRequisition($materialRequisition),
@@ -213,6 +218,7 @@ class MaterialRequisitionController extends Controller
             'requisition' => $this->serializeRequisition($materialRequisition),
             'work_order'  => $materialRequisition->workOrder ? $this->serializeWorkOrder($materialRequisition->workOrder) : null,
             'work_orders' => $this->workOrderOptions(),
+            'shops'       => $this->shopOptions(),
             'materials'   => $this->materialOptions(),
         ]);
     }
@@ -228,7 +234,8 @@ class MaterialRequisitionController extends Controller
             $materialRequisition->update([
                 // Blank keeps the number it has — clearing the box must not lose it.
                 'mrn_number'    => ($validated['mrn_number'] ?? null) ?: $materialRequisition->mrn_number,
-                'work_order_id' => $validated['work_order_id'],
+                'work_order_id' => $validated['work_order_id'] ?? null,
+                'section_id'    => $validated['section_id'] ?? null,
                 'request_date'  => $validated['request_date'],
                 'status'        => $submit ? 'pending_approval' : $materialRequisition->status,
                 'notes'         => $validated['notes'] ?? null,
@@ -237,7 +244,7 @@ class MaterialRequisitionController extends Controller
             $this->saveItems($materialRequisition, $validated['items']);
         });
 
-        $sentUp = $submit && PcdReleaseService::tryRelease($materialRequisition->workOrder);
+        $sentUp = $submit && $materialRequisition->workOrder && PcdReleaseService::tryRelease($materialRequisition->workOrder);
 
         return redirect()->route('pcd.material-requisitions.show', $materialRequisition)
             ->with('success', 'Material Requisition ' . ($submit ? 'updated and submitted.' : 'updated.')
@@ -316,7 +323,7 @@ class MaterialRequisitionController extends Controller
         }
         $mr->update($patch);
 
-        $sentUp = in_array($to, MaterialRequisition::RAISED, true) && PcdReleaseService::tryRelease($mr->workOrder);
+        $sentUp = in_array($to, MaterialRequisition::RAISED, true) && $mr->workOrder && PcdReleaseService::tryRelease($mr->workOrder);
 
         return back()->with('success', "{$mr->mrn_number} is now " . MaterialRequisition::STATUSES[$to] . '.'
             . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
@@ -418,6 +425,12 @@ class MaterialRequisitionController extends Controller
             ]);
     }
 
+    /** Who a requisition can be for — every active top-level section (shops, and Stores / QC). */
+    private function shopOptions()
+    {
+        return \App\Models\Section::topLevel()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
+    }
+
     /** What the picker and the weight calculator need — the density is the calculator's. */
     private function materialOptions()
     {
@@ -446,6 +459,8 @@ class MaterialRequisitionController extends Controller
             'mrn_number'   => $mr->mrn_number,
             'work_order_id' => $mr->work_order_id,
             'work_order'   => $mr->workOrder ? $this->serializeWorkOrder($mr->workOrder) : null,
+            'section_id'   => $mr->section_id,
+            'shop'         => $mr->section?->name,
             'request_date' => $mr->request_date?->format('Y-m-d'),
             'request_date_display' => $mr->request_date?->format('d M Y'),
             'status'       => $mr->status,
@@ -486,7 +501,7 @@ class MaterialRequisitionController extends Controller
     public function pdf(Request $request, MaterialRequisition $materialRequisition)
     {
         $mr = $materialRequisition->load([
-            'workOrder.customer', 'workOrder.rfq',
+            'workOrder.customer', 'workOrder.rfq', 'section',
             'items.material',
             'requestedBy.center',
         ]);
@@ -517,8 +532,10 @@ class MaterialRequisitionController extends Controller
         $headerBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 8pt; border-collapse: collapse; border: 0.75pt solid #000;">'
             . '<tr>'
             .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
-            .     '<div><b>Job No:</b> ' . $jobNumber . '</div>'
-            .     '<div><b>WO No:</b> ' . $woNumber . '</div>'
+            .     ($mr->workOrder
+                    ? '<div><b>Job No:</b> ' . $jobNumber . '</div><div><b>WO No:</b> ' . $woNumber . '</div>'
+                    : '<div><b>Job:</b> None — shop use</div>')
+            .     ($mr->section ? '<div><b>For:</b> ' . $esc($mr->section->name) . '</div>' : '')
             .   '</td>'
             .   '<td width="50%" style="border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 10pt; color: #000; vertical-align: top; line-height: 1.5;">'
             .     '<div><b>Customer:</b> ' . $customer . '</div>'
@@ -645,7 +662,10 @@ HTML;
         return $request->validate([
             // The IMS number. Optional — blank is numbered here (MRN-YYYY-NNNN).
             'mrn_number'           => 'nullable|string|max:30|unique:material_requisitions,mrn_number' . ($id ? ",{$id}" : ''),
-            'work_order_id'        => 'required|exists:work_orders,id',
+            // The job is optional — material is also needed for no job (consumables,
+            // tools, a shop's upkeep). Then it must say which shop it is for.
+            'work_order_id'        => 'nullable|exists:work_orders,id',
+            'section_id'           => 'nullable|required_without:work_order_id|exists:sections,id',
             'request_date'         => 'required|date',
             'notes'                => 'nullable|string|max:1000',
             'items'                => 'required|array|min:1',
@@ -660,6 +680,7 @@ HTML;
             'items.*.material_id.required'  => 'Pick a material for every line.',
             'items.*.required_qty.gt'       => 'Enter how much is required.',
             'mrn_number.unique'             => 'Another requisition already has that MRN number.',
+            'section_id.required_without'   => 'With no job, say which shop it is for.',
         ]);
     }
 }

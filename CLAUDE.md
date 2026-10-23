@@ -494,6 +494,14 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   (`view pcd-inbox`, amber count `navBadges.material_demands_open`). The shop's job page
   (`Production/Show`) has **Request Material** in its Actions card, opening the form on that job and shop.
 - Transactional → `TABLES_TO_WIPE` + `Reset.tsx`. Status colours live in `lib/mrStatus.ts` (`DEMAND_BADGE`).
+- **The job is optional — on a demand AND on a requisition** (BITAC, 2026-10-23: *"job sarao jate
+  requisition dite pare"* — consumables, tools, a shop's upkeep). Migration `..._000081` makes both
+  `work_order_id` columns nullable and gives `material_requisitions` a **`section_id`** — the shop it is
+  for. ⚠️ An MR with no job **must** name the shop (`section_id` is `required_without:work_order_id`); with a
+  job it is optional. A demand always has its shop. A no-job demand answers only a no-job MR (`null` on both
+  sides is the same job in `linkRequisition`, which also copies the demand's shop onto the MR). Everything
+  that reads `$mr->workOrder` guards it — `tryRelease()` is only called when there is a job — and the list,
+  page and PDF say **"No job — {shop}"**. Material spent with no job is shop overhead, not a job's cost.
 
 ### Selling rate vs purchase rate on a material (2026-10-23)
 - ⚠️ **`materials.rate_per_kg` is the SELLING rate** — what a cost estimate charges the

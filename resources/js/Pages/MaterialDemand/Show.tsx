@@ -37,6 +37,9 @@ export default function MaterialDemandShow({ demand, can }: any) {
                                 {demand.requested_by && <> · {demand.requested_by}</>}
                                 {demand.needed_by && <> · needed by <b className={demand.overdue ? 'text-red-600' : 'text-surface-800'}>{demand.needed_by}</b></>}
                             </p>
+                            {!demand.work_order && (
+                                <p className="text-sm text-surface-600 mt-1">No job — for the shop's own use</p>
+                            )}
                             {demand.work_order && (
                                 <p className="text-sm text-surface-600 mt-1">
                                     For <span className="font-mono font-semibold text-surface-800">{demand.work_order.wo_number}</span>

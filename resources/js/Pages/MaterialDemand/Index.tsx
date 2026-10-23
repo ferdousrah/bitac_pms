@@ -83,6 +83,7 @@ export default function MaterialDemandIndex({ demands, filters, waitingCount, ca
                                             </td>
                                             <td className="text-surface-800">{d.shop}</td>
                                             <td>
+                                                {!d.work_order && <span className="text-xs text-surface-500">No job — shop use</span>}
                                                 <div className="font-mono text-sm">{d.work_order?.wo_number}</div>
                                                 <div className="text-[11px] text-surface-500 truncate max-w-[220px]">
                                                     {d.work_order?.job_number ? `Job ${d.work_order.job_number} · ` : ''}{d.work_order?.customer}

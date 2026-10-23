@@ -47,7 +47,7 @@ class MaterialRequisition extends Model
     public const ISSUABLE = ['approved', 'partially_issued'];
 
     protected $fillable = [
-        'mrn_number', 'work_order_id', 'request_date',
+        'mrn_number', 'work_order_id', 'section_id', 'request_date',
         'requested_by', 'approved_by', 'approved_at',
         'issued_by', 'issued_at', 'received_by', 'received_at',
         'status', 'notes',
@@ -70,6 +70,8 @@ class MaterialRequisition extends Model
     public function imsPushedBy() { return $this->belongsTo(User::class, 'ims_pushed_by'); }
 
     public function workOrder()  { return $this->belongsTo(WorkOrder::class); }
+    /** The shop it is for — what a requisition with NO job says instead (BITAC, 2026-10-23). */
+    public function section()    { return $this->belongsTo(Section::class); }
     public function items()      { return $this->hasMany(MaterialRequisitionItem::class)->orderBy('item_no'); }
     public function requestedBy(){ return $this->belongsTo(User::class, 'requested_by'); }
     public function approvedBy() { return $this->belongsTo(User::class, 'approved_by'); }

@@ -38,7 +38,8 @@ interface Props {
     materials: MaterialOption[];
     prefilled_items?: any[];
     next_mrn?: string;
-    demand?: { id: number; demand_no: string; shop?: string | null; requested_by?: string | null; needed_by?: string | null; notes?: string | null } | null;
+    shops?: { id: number; name: string }[];
+    demand?: { id: number; demand_no: string; section_id?: number; shop?: string | null; requested_by?: string | null; needed_by?: string | null; notes?: string | null } | null;
 }
 
 const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', unit: 'kg', required_qty: '', remarks: '' });
@@ -49,7 +50,7 @@ const emptyItem = (): RequisitionItem => ({ material_id: null, description: '', 
  * Materials are picked the way a cost estimate picks them (searchable master),
  * and the weight calculator works out the kilos and writes the size.
  */
-export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items = [], next_mrn, demand = null }: Props) {
+export default function MaterialRequisitionForm({ requisition, work_order, work_orders, materials, prefilled_items = [], next_mrn, demand = null, shops = [] }: Props) {
     const isEdit = !!requisition?.id;
     const isDraft = !isEdit || requisition.status === 'draft';
 
@@ -70,6 +71,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
         mrn_number: requisition?.mrn_number ?? '',
         demand_id: demand?.id ?? '',
         work_order_id: requisition?.work_order_id ?? work_order?.id ?? '',
+        section_id: requisition?.section_id ?? demand?.section_id ?? '',
         request_date: requisition?.request_date ?? new Date().toISOString().slice(0, 10),
         notes: requisition?.notes ?? '',
         items: initialItems,
@@ -160,11 +162,15 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                 {err('mrn_number') && <div className="form-error">{err('mrn_number')}</div>}
                             </div>
                             <div className="form-group md:col-span-2">
-                                <label className="form-label">Work Order</label>
-                                {work_order || isEdit ? (
+                                <label className="form-label">Job <span className="form-label-optional">optional</span></label>
+                                {work_order || isEdit || demand ? (
                                     <div className="form-input bg-surface-50 cursor-not-allowed truncate">
-                                        <span className="font-mono font-semibold text-brand-600">{selectedWorkOrder?.wo_number ?? '—'}</span>
-                                        {selectedWorkOrder?.customer && <span className="text-surface-500"> — {selectedWorkOrder.customer}</span>}
+                                        {selectedWorkOrder ? (
+                                            <>
+                                                <span className="font-mono font-semibold text-brand-600">{selectedWorkOrder.wo_number}</span>
+                                                {selectedWorkOrder.customer && <span className="text-surface-500"> — {selectedWorkOrder.customer}</span>}
+                                            </>
+                                        ) : <span className="text-surface-500">No job — shop use</span>}
                                     </div>
                                 ) : (
                                     <SearchableSelect
@@ -175,7 +181,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                             label: `${w.wo_number}${w.job_number ? ` · Job ${w.job_number}` : ''}`,
                                             sublabel: w.customer ?? undefined,
                                         }))}
-                                        placeholder="Select work order…"
+                                        placeholder="No job — consumables, tools, shop use"
                                     />
                                 )}
                                 {err('work_order_id') && <div className="form-error">{err('work_order_id')}</div>}
@@ -185,6 +191,21 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                                 <input type="date" value={data.request_date}
                                     onChange={(e) => setData('request_date', e.target.value)} className="form-input" />
                                 {err('request_date') && <div className="form-error">{err('request_date')}</div>}
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">
+                                    For shop {data.work_order_id ? <span className="form-label-optional">optional</span> : <span className="text-red-500">*</span>}
+                                </label>
+                                {demand ? (
+                                    <div className="form-input bg-surface-50 cursor-not-allowed truncate">{demand.shop}</div>
+                                ) : (
+                                    <select value={data.section_id} onChange={(e) => setData('section_id', e.target.value ? Number(e.target.value) : '')} className="form-select">
+                                        <option value="">{data.work_order_id ? '—' : 'Select shop…'}</option>
+                                        {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                )}
+                                {!data.work_order_id && <p className="form-hint">No job picked — say whose material it is.</p>}
+                                {err('section_id') && <div className="form-error">{err('section_id')}</div>}
                             </div>
                         </div>
 

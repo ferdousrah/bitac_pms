@@ -22,6 +22,7 @@ interface Requisition {
     id: number;
     mrn_number: string;
     work_order: { id: number; wo_number: string; job_number?: string; customer?: string } | null;
+    shop?: string | null;
     request_date_display: string;
     status: string;
     status_label: string;
@@ -176,8 +177,14 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                                     Material Requisition Note · requested {requisition.request_date_display}
                                     {requisition.requested_by && <> by <b className="font-semibold text-surface-800">{requisition.requested_by}</b></>}
                                 </p>
+                                {!requisition.work_order && (
+                                    <p className="text-sm text-surface-600 mt-1">
+                                        No job — for <b className="font-semibold text-surface-800">{requisition.shop ?? 'shop use'}</b>
+                                    </p>
+                                )}
                                 {requisition.work_order && (
                                     <p className="text-sm text-surface-600 mt-1">
+                                        {requisition.shop && <><b className="font-semibold text-surface-800">{requisition.shop}</b> · </>}
                                         For <Link href={`/pcd/job-planning/${requisition.work_order.id}`} className="font-mono font-semibold text-brand-600 hover:underline">
                                             {requisition.work_order.wo_number}</Link>
                                         {requisition.work_order.job_number && <> · Job <b className="font-semibold text-surface-800">{requisition.work_order.job_number}</b></>}

@@ -108,7 +108,7 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                                                         {r.work_order.job_number ?? '—'}
                                                     </Link>
                                                 ) : (
-                                                    <span className="text-surface-300">--</span>
+                                                    <span className="text-surface-500 text-xs">No job{r.shop ? ` · ${r.shop}` : ''}</span>
                                                 )}
                                                 {r.work_order?.wo_number && (
                                                     <div className="text-[11px] text-surface-400 mt-0.5 font-mono">

@@ -150,7 +150,7 @@ class MaterialDemandController extends Controller
             $d = MaterialDemand::create([
                 'demand_no'     => MaterialDemand::generateNo(),
                 'section_id'    => $data['section_id'],
-                'work_order_id' => $data['work_order_id'],
+                'work_order_id' => $data['work_order_id'] ?? null,
                 'requested_by'  => $user->id,
                 'needed_by'     => $data['needed_by'] ?? null,
                 'status'        => 'submitted',
@@ -164,7 +164,7 @@ class MaterialDemandController extends Controller
         NotifyService::toPermission(
             'view pcd-inbox', 'material_demand',
             "Material demand · {$demand->section->name}",
-            "{$demand->demand_no} for {$demand->workOrder->wo_number}" . ($demand->needed_by ? ', needed by ' . $demand->needed_by->format('d M Y') : '') . " — from {$user->name}",
+            "{$demand->demand_no} " . ($demand->workOrder ? "for {$demand->workOrder->wo_number}" : '(no job — shop use)') . ($demand->needed_by ? ', needed by ' . $demand->needed_by->format('d M Y') : '') . " — from {$user->name}",
             "/material-demands/{$demand->id}", 'fi-rr-boxes', 'amber', centerId: $demand->center_id,
         );
 
@@ -247,7 +247,7 @@ class MaterialDemandController extends Controller
         DB::transaction(function () use ($materialDemand, $data) {
             $materialDemand->update([
                 'section_id'    => $data['section_id'],
-                'work_order_id' => $data['work_order_id'],
+                'work_order_id' => $data['work_order_id'] ?? null,
                 'needed_by'     => $data['needed_by'] ?? null,
                 'notes'         => $data['notes'] ?? null,
             ]);
@@ -295,11 +295,13 @@ class MaterialDemandController extends Controller
     /**
      * Called by MaterialRequisitionController once a requisition has been saved
      * from a demand: links the two and tells the shop. Refuses (returns false)
-     * a demand already answered, or one for a different job.
+     * a demand already answered, or one for a different job ("no job" on both
+     * sides is the same job).
      */
     public static function linkRequisition(MaterialDemand $demand, MaterialRequisition $mr, User $by): bool
     {
         if (! $demand->isOpen() || (int) $demand->work_order_id !== (int) $mr->work_order_id) return false;
+        if (! $mr->section_id) $mr->update(['section_id' => $demand->section_id]);
 
         $demand->update([
             'status' => 'accepted', 'material_requisition_id' => $mr->id,
@@ -333,7 +335,8 @@ class MaterialDemandController extends Controller
         $shopIds = $this->shopIdsFor($user);
         $data = $request->validate([
             'section_id'          => ['required', 'integer', \Illuminate\Validation\Rule::in($shopIds)],
-            'work_order_id'       => 'required|integer',
+            // Optional — a shop also needs material for no job (consumables, tools, upkeep).
+            'work_order_id'       => 'nullable|integer',
             'needed_by'           => 'nullable|date',
             'notes'               => 'nullable|string|max:1000',
             'items'               => 'required|array|min:1',
@@ -348,8 +351,9 @@ class MaterialDemandController extends Controller
             'items.*.quantity.gt'           => 'Enter how much is needed.',
         ]);
 
-        // The job must actually be routed through that shop — not any job id.
-        $routed = collect($this->jobsFor([(int) $data['section_id']]))->pluck('id')->contains((int) $data['work_order_id']);
+        // A job, when given, must actually be routed through that shop — not any job id.
+        $routed = empty($data['work_order_id'])
+            || collect($this->jobsFor([(int) $data['section_id']]))->pluck('id')->contains((int) $data['work_order_id']);
         if (! $routed) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'work_order_id' => 'That job is not open at this shop.',

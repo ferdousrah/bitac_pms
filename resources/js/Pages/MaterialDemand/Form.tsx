@@ -96,7 +96,7 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                             {err('section_id') && <div className="form-error">{err('section_id')}</div>}
                         </div>
                         <div className="form-group md:col-span-2">
-                            <label className="form-label">Job</label>
+                            <label className="form-label">Job <span className="form-label-optional">optional</span></label>
                             <SearchableSelect
                                 value={data.work_order_id}
                                 onChange={(v) => setData('work_order_id', v === '' ? '' : Number(v))}
@@ -105,10 +105,13 @@ export default function MaterialDemandForm({ demand, presets, shops, jobs, mater
                                     label: `${j.job_number ? `Job ${j.job_number} · ` : ''}${j.wo_number}`,
                                     sublabel: j.customer ?? undefined,
                                 }))}
-                                placeholder={data.section_id ? (shopJobs.length ? 'Select the job…' : 'No open jobs at this shop') : 'Pick the shop first'}
+                                placeholder={data.section_id ? 'No job — consumables, tools, shop use' : 'Pick the shop first'}
                                 disabled={!data.section_id}
                             />
                             {err('work_order_id') && <div className="form-error">{err('work_order_id')}</div>}
+                            {!data.work_order_id && data.section_id && (
+                                <p className="form-hint">Leave it empty when the material is not for a particular job.</p>
+                            )}
                         </div>
                         <div className="form-group">
                             <label className="form-label">Needed by <span className="form-label-optional">optional</span></label>
