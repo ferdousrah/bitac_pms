@@ -6,6 +6,7 @@ import JobDocuments from '@/Components/Pcd/JobDocuments';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 import { mrBadge, mrLabel } from '@/lib/mrStatus';
 import ProductionPhotos, { PhotoPanel } from '@/Components/Production/ProductionPhotos';
+import DeliveryTypeBadge, { deliveryLinesText } from '@/Components/Delivery/DeliveryTypeBadge';
 
 interface ItemFile {
     id: number;
@@ -55,6 +56,8 @@ interface DeliveryRow {
     id: number;
     challan_number: string;
     quantity: number;
+    type?: 'full' | 'partial';
+    lines?: { description: string | null; quantity: number; unit: string | null }[];
     status: string;
     scheduled_date: string | null;
     delivered_at: string | null;
@@ -1253,7 +1256,13 @@ export default function JobDetail({ job, checklist }: Props) {
                                     {job.deliveries.map((d) => (
                                         <div key={d.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-surface-200 hover:border-sky-300 hover:bg-sky-50/30 transition-all">
                                             <div className="min-w-0">
-                                                <div className="font-semibold text-surface-900 text-sm truncate">{d.challan_number}</div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-semibold text-surface-900 text-sm truncate">{d.challan_number}</span>
+                                                    <DeliveryTypeBadge type={d.type} />
+                                                </div>
+                                                {(d.lines?.length ?? 0) > 1 && (
+                                                    <div className="text-[11px] text-surface-600 truncate" title={deliveryLinesText(d.lines)}>{deliveryLinesText(d.lines)}</div>
+                                                )}
                                                 <div className="text-[11px] text-surface-500">
                                                     {d.quantity} pc{d.quantity !== 1 ? 's' : ''}
                                                     {d.delivered_at ? ` · delivered ${d.delivered_at}` : d.scheduled_date ? ` · due ${d.scheduled_date}` : ''}

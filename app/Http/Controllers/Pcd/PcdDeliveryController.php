@@ -57,6 +57,11 @@ class PcdDeliveryController extends Controller
             'wo_number'      => $d->workOrder?->wo_number,
             'customer'       => $d->workOrder?->customer?->name,
             'quantity'       => (float) $d->quantity_delivered,
+            // Full (every item at once) or partial — and what went on it.
+            'type'           => $d->type,
+            'lines'          => $d->items->map(fn ($i) => [
+                'description' => $i->description, 'quantity' => (float) $i->quantity, 'unit' => $i->unit,
+            ])->values(),
             'status'         => $d->status,
             'scheduled_date' => $d->scheduled_date?->format('d M Y'),
             'delivered_at'   => $d->delivered_at?->format('d M Y, h:i A'),

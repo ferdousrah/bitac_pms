@@ -20,7 +20,7 @@ class DeliveryController extends Controller
 
     public function index(Request $request)
     {
-        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice']);
+        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice', 'items']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -54,6 +54,11 @@ class DeliveryController extends Controller
                 'wo_number'           => $d->workOrder->wo_number ?? '',
                 'customer'            => $d->workOrder->customer->name ?? '',
                 'quantity_delivered'  => $d->quantity_delivered,
+                'ordered'             => (float) ($d->workOrder->quantity ?? 0),
+                'type'                => $d->type,
+                'lines'               => $d->items->map(fn ($i) => [
+                    'description' => $i->description, 'quantity' => (float) $i->quantity, 'unit' => $i->unit,
+                ])->values(),
                 'status'              => $d->status,
                 'scheduled_date'      => $d->scheduled_date?->format('d/m/Y'),
                 'delivered_at'        => $d->delivered_at?->format('d/m/Y H:i'),
@@ -87,6 +92,9 @@ class DeliveryController extends Controller
                 'quantity'         => (float) $wo->quantity,
                 'deliverable'      => $wo->deliverableQty(),
                 'customer_address' => $wo->customer->address ?? '',
+                // Per item: ordered, already on a delivery, still to go.
+                'lines'            => \App\Services\DeliveryLines::forWorkOrder($wo),
+                'has_earlier'      => $wo->committedDeliveryQty() > 0.001,
             ])
             ->filter(fn ($w) => $w['deliverable'] > 0.001)
             ->values();
@@ -103,6 +111,8 @@ class DeliveryController extends Controller
                 'quantity'         => (float) $preselected->quantity,
                 'deliverable'      => $preselected->deliverableQty(),
                 'customer_address' => $preselected->customer->address ?? '',
+                'lines'            => \App\Services\DeliveryLines::forWorkOrder($preselected),
+                'has_earlier'      => $preselected->committedDeliveryQty() > 0.001,
             ] : null,
         ]);
     }
@@ -111,7 +121,11 @@ class DeliveryController extends Controller
     {
         $validated = $request->validate([
             'work_order_id'      => 'required|exists:work_orders,id',
-            'quantity_delivered' => 'required|integer|min:1',
+            // Full = every item at once; Partial = a quantity per item (BITAC, 2026-10-24).
+            'delivery_type'      => 'required|in:full,partial',
+            'lines'              => 'required|array|min:1',
+            'lines.*.key'        => 'required|integer',
+            'lines.*.quantity'   => 'nullable|numeric|min:0',
             'scheduled_date'     => 'nullable|date',
             'delivery_address'   => 'nullable|string',
             'vehicle_number'     => 'nullable|string|max:50',
@@ -120,25 +134,86 @@ class DeliveryController extends Controller
         ]);
 
         $workOrder = WorkOrder::findOrFail($validated['work_order_id']);
+        $fmt = fn ($q) => rtrim(rtrim(number_format((float) $q, 2, '.', ''), '0'), '.');
 
-        // Can't schedule more than what's QC-passed & not already committed.
-        $deliverable = $workOrder->deliverableQty();
-        if ((float) $validated['quantity_delivered'] > $deliverable + 0.001) {
-            return back()->withInput()->withErrors([
-                'quantity_delivered' => 'Only ' . rtrim(rtrim(number_format($deliverable, 2), '0'), '.') . ' pc(s) are QC-passed and available to deliver.',
-            ]);
+        // ⚠️ The lines are recomputed here, never trusted from the form: each
+        // quantity is checked against what that item still has to go.
+        $lines = \App\Services\DeliveryLines::forWorkOrder($workOrder)->keyBy('key');
+        $posted = collect($validated['lines'])->values();
+        $isFull = $validated['delivery_type'] === 'full';
+
+        $send = []; $errors = [];
+        foreach ($posted as $n => $row) {
+            $line = $lines->get((int) $row['key']);
+            if (! $line) continue;    // an item of another job is ignored
+            $qty = $isFull ? $line['remaining'] : round((float) ($row['quantity'] ?? 0), 2);
+            if ($qty > $line['remaining'] + 0.001) {
+                $errors["lines.{$n}.quantity"] = "Only {$fmt($line['remaining'])} {$line['unit']} of this item are left to deliver.";
+            }
+            if ($qty > 0) $send[$line['key']] = $qty;
         }
+        if ($isFull) {
+            // Full means every item, so every item must be in it.
+            foreach ($lines as $line) if ($line['remaining'] > 0) $send[$line['key']] = $line['remaining'];
+        }
+        if ($errors) {
+            return back()->withInput()->withErrors($errors);
+        }
+
+        $total = array_sum($send);
+        if ($total <= 0) {
+            return back()->withInput()->withErrors(['lines' => 'Enter a quantity for at least one item.']);
+        }
+
+        // Can't send more than what's QC-passed & not already committed.
+        $deliverable = $workOrder->deliverableQty();
+        if ($total > $deliverable + 0.001) {
+            return back()->withInput()->withErrors(['lines' => $isFull
+                ? "Only {$fmt($deliverable)} of {$fmt($total)} have passed QC — deliver the rest partially once it passes."
+                : "Only {$fmt($deliverable)} pc(s) are QC-passed and available to deliver; this delivery has {$fmt($total)}."]);
+        }
+
+        // Recorded from the figures, not the button: FULL only when this one
+        // challan carries the whole order. All that remained after earlier
+        // deliveries is still a partial delivery — the last part of one.
+        $wholeOrder = $lines->every(fn ($l) => $l['earlier'] <= 0.001 && abs(($send[$l['key']] ?? 0) - $l['ordered']) <= 0.001);
+        $type = $wholeOrder ? 'full' : 'partial';
 
         $year    = now()->year;
         $count   = DeliveryOrder::whereYear('created_at', $year)->count();
         $challan = 'CH-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
 
-        $delivery = DeliveryOrder::create([
-            ...$validated,
-            'customer_id'    => $workOrder->customer_id,
-            'challan_number' => $challan,
-            'status'         => 'scheduled',
-        ]);
+        $delivery = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $workOrder, $challan, $send, $lines, $total, $type) {
+            $delivery = DeliveryOrder::create([
+                'work_order_id'      => $workOrder->id,
+                'customer_id'        => $workOrder->customer_id,
+                'challan_number'     => $challan,
+                'quantity_delivered' => $total,
+                'delivery_type'      => $type,
+                // ⚠️ NOT NULL in the table while the form calls it optional —
+                // a blank date used to 500 the whole save. Blank means today.
+                'scheduled_date'     => $validated['scheduled_date'] ?? now()->toDateString(),
+                'delivery_address'   => $validated['delivery_address'] ?? null,
+                'vehicle_number'     => $validated['vehicle_number'] ?? null,
+                'driver_name'        => $validated['driver_name'] ?? null,
+                'notes'              => $validated['notes'] ?? null,
+                'status'             => 'scheduled',
+            ]);
+            $sort = 0;
+            foreach ($lines as $line) {
+                if (empty($send[$line['key']])) continue;
+                $delivery->items()->create([
+                    'work_order_item_id' => $line['work_order_item_id'],
+                    'description'        => $line['description'],
+                    'part_no'            => $line['part_no'],
+                    'unit'               => $line['unit'],
+                    'quantity'           => $send[$line['key']],
+                    'sort_order'         => $sort++,
+                ]);
+            }
+
+            return $delivery;
+        });
 
         // Only mark the WHOLE WO "ready for delivery" once everything is
         // committed to a delivery; a partial schedule leaves the status alone.
@@ -147,7 +222,8 @@ class DeliveryController extends Controller
             $workOrder->update(['status' => 'ready_for_delivery']);
         }
 
-        return redirect()->route('delivery.index')->with('success', "Delivery scheduled. Challan: {$challan}");
+        return redirect()->route('delivery.index')->with('success',
+            ($type === 'full' ? 'Full delivery' : 'Partial delivery') . " scheduled. Challan: {$challan}");
     }
 
     public function show(DeliveryOrder $delivery)

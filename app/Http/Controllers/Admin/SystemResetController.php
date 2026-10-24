@@ -38,6 +38,7 @@ class SystemResetController extends Controller
         // Delivery + billing + completion certificates
         'completion_certificates',
         'proof_of_deliveries',
+        'delivery_order_items',
         'delivery_orders',
         // The payment ledger goes with the bills it settled. Its TYPES are
         // master data (payment_deduction_types) and are preserved.

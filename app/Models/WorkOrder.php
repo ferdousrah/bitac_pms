@@ -119,7 +119,10 @@ class WorkOrder extends Model
     public function committedDeliveryQty(): float
     {
         $dos = $this->relationLoaded('deliveryOrders') ? $this->deliveryOrders : $this->deliveryOrders()->get();
-        return (float) $dos->whereIn('status', ['scheduled', 'delivered'])->sum('quantity_delivered');
+        // ⚠️ DeliveryOrder::COMMITTED is the one list — the per-line ledger
+        // (DeliveryLines) reads it too, so the two can never disagree. It used
+        // to leave out `dispatched`, i.e. goods on the road counted as free.
+        return (float) $dos->whereIn('status', DeliveryOrder::COMMITTED)->sum('quantity_delivered');
     }
 
     /** Quantity that has passed QC but isn't yet committed to a delivery. */

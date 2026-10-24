@@ -45,6 +45,7 @@ class BillingDeliveryChallanController extends Controller
                 'date'           => ($d->delivered_at ?? $d->scheduled_date)?->format('d M Y'),
                 'status'         => $d->status,
                 'quantity'       => (float) $d->quantity_delivered,
+                'type'           => $d->type,
                 'ordered'        => (float) ($d->workOrder?->quantity ?? 0),
                 'job'            => $d->workOrder?->job_number ? "Job {$d->workOrder->job_number}" : $d->workOrder?->wo_number,
                 'customer'       => $d->workOrder?->customer?->name ?? '—',

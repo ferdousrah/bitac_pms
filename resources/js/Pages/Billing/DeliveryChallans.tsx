@@ -2,6 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import DeliveryTypeBadge from '@/Components/Delivery/DeliveryTypeBadge';
 
 const STATUS_BADGE: Record<string, string> = { delivered: 'badge-green', scheduled: 'badge-amber', cancelled: 'badge-red' };
 const qty = (n: number) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 });
@@ -107,7 +108,10 @@ export default function DeliveryChallans({ challans, filters, customers = [] }: 
                                             <td className="px-4 py-3">
                                                 <div className="font-semibold text-surface-900">{c.challan_number}</div>
                                                 <div className="text-[11px] text-surface-500">{c.date}{c.vehicle_number ? ` · ${c.vehicle_number}` : ''}</div>
-                                                <span className={`badge ${STATUS_BADGE[c.status] ?? 'badge-slate'} capitalize mt-1`}>{c.status}</span>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <span className={`badge ${STATUS_BADGE[c.status] ?? 'badge-slate'} capitalize`}>{c.status}</span>
+                                                    <DeliveryTypeBadge type={c.type} />
+                                                </div>
                                             </td>
                                             <td className="px-3 py-3 max-w-[20rem]">
                                                 <div className="font-semibold text-surface-800">{c.job}</div>

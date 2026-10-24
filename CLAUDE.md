@@ -1243,6 +1243,43 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - The chain still reads end to end in the UI: **Delivery → Raise bill → + মূসক ৬.৩**, each step a click, each one reversible only in the ways its own rules allow.
 - Fixed while working here: **`DeliveryController@complete` 500'd whenever no note was typed** — `notes` is `nullable`, so it is simply absent from `$validated`, and reading it straight threw. The form always sends an empty string, which is why it never showed in the UI; anything posting without the key (the API, a test) hit it.
 
+## 📦 Full or partial delivery — the Partial Challan (2026-10-24)
+> BITAC: *"PCD te একত্রে সকল মালামাল ডেলিভারি অথবা আংশিক ডেলিভারি (Partial Challan) দেখানো যাবে।"*
+
+- **A delivery now records its lines**: `delivery_order_items` (per job item — `work_order_item_id`,
+  description, part no, unit, quantity; migration `..._000087`). `delivery_orders.quantity_delivered`
+  stays the **total** (Σ lines), so every ledger that reads it — `deliveredQty`, `deliverableQty`,
+  billing, Delivered vs Received — is unchanged. It was an **unsigned INT** while job items are
+  decimal; widened to decimal(12,2).
+- **`App\Services\DeliveryLines::forWorkOrder($wo, $beforeDeliveryId = null)`** is the one answer per
+  item: ordered · earlier (on committed deliveries) · remaining. The form, the save and the challan
+  all read it. ⚠️ A delivery from before lines existed carries only a total: on a single-item job it
+  counts against that item; on a multi-item job it cannot be split and stays unallocated (the
+  job-wide QC cap still holds).
+- **`DeliveryOrder::COMMITTED`** = scheduled / dispatched / delivered — the one list, read by
+  `WorkOrder::committedDeliveryQty()` too (which used to leave out `dispatched`).
+- **The form** (`Delivery/Create.tsx`): **Full delivery — all goods at once** (every item's remaining
+  quantity, read-only; offered only when all of it has passed QC; after earlier deliveries it reads
+  "Everything that is left") or **Partial delivery (Partial Challan)** (a quantity per item). ⚠️ The
+  server **recomputes every line** — never trusts the form — refusing more of an item than is left
+  (`lines.N.quantity`), nothing at all, or more than has passed QC; an item of another job is ignored.
+- ⚠️ **`delivery_type` is recorded from the FIGURES, not the button**: `full` only when this one
+  challan carries the whole order (nothing earlier, every item complete). "Everything that is left"
+  after earlier deliveries is recorded **partial** — the last part of a partial delivery. Older
+  deliveries (`delivery_type` NULL) read full/partial from their quantity (`DeliveryOrder::type`).
+- **The challan** (`DeliveryChallanService`, restructured around one `render()`): a FULL delivery keeps
+  BITAC's paper (Part No. | Description | Quantity, this challan's quantities); a PARTIAL one is
+  titled **PARTIAL DELIVERY CHALLAN (আংশিক)** and lists **every** job item with Ordered · Delivered
+  earlier · This challan · Balance, closing with "the balance is still to be delivered" or "the whole
+  order has been delivered". Older deliveries keep the old layout (titled partial when they were).
+- **PCD sees it**: a Full / Partial badge (`Components/Delivery/DeliveryTypeBadge`) and the lines on the
+  Delivery list, the PCD job page's Deliveries card (`PcdDeliveryController::pack()` gained `type` +
+  `lines`) and Billing → Delivery Challans.
+- Fixed on the way: **`delivery_orders.scheduled_date` is NOT NULL but the form calls it optional** —
+  leaving it blank 500'd the save (it did before this change too). Blank now means today.
+- ⚠️ Still open (BITAC to decide): `InvoiceService::createFromDelivery()` bills the **whole quotation**
+  on every delivery. With lines it could now bill each challan pro rata.
+
 ## 🚚 Delivery Orders belong to PCD (2026-09)
 
 - The menu **Delivery & Billing** is now **Billing & Accounts** and holds the money only — **Bills / Invoices** and **মূসক ৬.৩**. **Delivery Orders moved into the PCD group** (BITAC's instruction): the department that planned and routed the job also ships it. The module itself is unchanged and still lives at `/delivery`.

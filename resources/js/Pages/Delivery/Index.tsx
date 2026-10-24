@@ -3,6 +3,7 @@ import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import SortableHeader from '@/Components/SortableHeader';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import DeliveryTypeBadge, { deliveryLinesText } from '@/Components/Delivery/DeliveryTypeBadge';
 
 const statusBadge: Record<string, string> = {
     pending: 'badge-amber',
@@ -132,8 +133,17 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                 </Link>
                                             </td>
                                             <td className="font-semibold text-surface-900">{d.customer}</td>
-                                            <td className="font-mono text-surface-700">
-                                                {d.quantity_delivered}
+                                            <td className="text-surface-700">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-mono">{Number(d.quantity_delivered)}</span>
+                                                    {d.ordered > 0 && <span className="text-[11px] text-surface-400">of {Number(d.ordered)}</span>}
+                                                    <DeliveryTypeBadge type={d.type} />
+                                                </div>
+                                                {d.lines?.length > 1 && (
+                                                    <div className="text-[10px] text-surface-400 mt-0.5 max-w-[16rem] truncate" title={deliveryLinesText(d.lines)}>
+                                                        {deliveryLinesText(d.lines)}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td>
                                                 <span className={`badge ${statusBadge[d.status] ?? 'badge-slate'}`}>
@@ -232,7 +242,9 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                 <div className="grid grid-cols-3 gap-2 text-xs">
                                     <div>
                                         <div className="text-surface-400">Qty</div>
-                                        <div className="font-mono font-semibold text-surface-700">{d.quantity_delivered}</div>
+                                        <div className="font-mono font-semibold text-surface-700 flex items-center gap-1">
+                                            {Number(d.quantity_delivered)} <DeliveryTypeBadge type={d.type} />
+                                        </div>
                                     </div>
                                     <div>
                                         <div className="text-surface-400">Scheduled</div>

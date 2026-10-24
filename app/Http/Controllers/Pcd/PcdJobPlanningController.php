@@ -88,7 +88,7 @@ class PcdJobPlanningController extends Controller
             'files.uploadedBy',
             'items',
             'materialRequisitions.items', 'sections.section', 'sections.completedBy',
-            'deliveryOrders',
+            'deliveryOrders.items',
             'operationSheets.steps.section', 'operationSheets.steps.machine', 'operationSheets.steps.operator',
             'operationSheets.workOrderItem',
             'cancelledBy',
