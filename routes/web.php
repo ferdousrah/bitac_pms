@@ -335,6 +335,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{workOrder}', [\App\Http\Controllers\Ied\IedJobsController::class, 'show'])->name('show');
     });
 
+    // Removing a production photo — whoever added it (shop) or PCD; the
+    // controller decides which, and refuses once the job is completed.
+    Route::delete('production-photos/{file}', [\App\Http\Controllers\JobCompletionController::class, 'destroy'])
+        ->middleware('permission:view production|view pcd-inbox')->name('production-photos.destroy');
+
     Route::prefix('ied/emergency-requests')->middleware('permission:manage rfqs')->name('ied.emergency-requests.')->group(function () {
         Route::get('/',                              [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'index'])->name('index');
         Route::get('/{emergencyRequest}',            [\App\Http\Controllers\Ied\EmergencyRequestController::class, 'show'])->name('show');
@@ -625,6 +630,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/job-planning/{workOrder}', [PcdJobPlanningController::class, 'show'])->name('job-planning.show');
         Route::get('/job-planning/files/{file}', [PcdJobPlanningController::class, 'file'])->name('job-planning.files.show');
         Route::post('/job-planning/{workOrder}/cancel', [PcdJobPlanningController::class, 'cancel'])->name('job-planning.cancel');
+        // Production photos + completing a fully delivered job.
+        Route::post('/job-planning/{workOrder}/photos', [\App\Http\Controllers\JobCompletionController::class, 'storeForPcd'])->name('job-planning.photos');
+        Route::post('/job-planning/{workOrder}/complete', [\App\Http\Controllers\JobCompletionController::class, 'complete'])->name('job-planning.complete');
         Route::post('/job-planning/{workOrder}/job-number', [PcdJobPlanningController::class, 'setJobNumber'])->name('job-planning.set-job-number');
 
         // Material Requisitions
@@ -819,6 +827,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/wos/{workOrderSection}/bottleneck', [ProductionController::class, 'clearBottleneck'])->name('wos.bottleneck.clear');
         // The shop's "material received or not" step for a job.
         Route::post('/wos/{workOrderSection}/material', [ProductionController::class, 'markMaterial'])->name('wos.material');
+        // Production photos of the job, added from the shop's own job page.
+        Route::post('/wos/{workOrderSection}/photos', [ProductionController::class, 'uploadPhotos'])->name('wos.photos');
         // View the PCD operation sheet PDF from the shop floor (production-permission gated).
         Route::get('/op-sheets/{sheet}/pdf', [\App\Http\Controllers\OperationSheetController::class, 'pdf'])->name('op-sheet.pdf');
         // ⚠️ And the WORK ORDER PCD issued — a third door onto the same routing

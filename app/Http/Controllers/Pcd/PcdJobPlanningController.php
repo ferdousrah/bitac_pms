@@ -16,8 +16,11 @@ class PcdJobPlanningController extends Controller
     {
         // Cancelled jobs stay visible in PCD inbox (marked as closed) but are
         // hidden from production shops. PCD keeps the audit record on-screen.
+        // Delivered jobs come back here too: PCD completes each one with its
+        // production photos (JobCompletionController).
         $jobs = WorkOrder::with(['customer', 'quotation', 'rfq.items', 'cancelledBy'])
-            ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops', 'cancelled'])
+            ->withCount(['files as photo_count' => fn ($q) => $q->where('kind', \App\Models\WorkOrderFile::PRODUCTION_PHOTO)])
+            ->whereIn('status', ['pcd_pending', 'pcd_release_pending', 'released_to_shops', 'delivered', 'cancelled'])
             ->latest('pcd_handoff_at')
             ->get()
             ->map(function ($wo) {
@@ -40,6 +43,8 @@ class PcdJobPlanningController extends Controller
                     'cancelled_at'    => $wo->cancelled_at?->format('d M Y'),
                     'cancelled_by'    => $wo->cancelledBy?->name,
                     'cancellation_reason' => $wo->cancellation_reason,
+                    'completed_at'    => $wo->completed_at?->format('d M Y'),
+                    'photo_count'     => (int) $wo->photo_count,
                 ];
             });
 
@@ -51,9 +56,14 @@ class PcdJobPlanningController extends Controller
             'awaiting_release' => $jobs->where('status', 'pcd_release_pending')->count(),
             'released'   => $jobs->where('status', 'released_to_shops')->count(),
             'cancelled'  => $jobs->where('status', 'cancelled')->count(),
-            'mr_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['material_requisition']['done'])->count(),
-            'wo_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['section_assign']['done'])->count(),
-            'op_sheet_pending' => $jobs->filter(fn($j) => $j['status'] !== 'cancelled' && !$j['checklist']['operation_sheet']['done'])->count(),
+            // Delivered and waiting for PCD's completion (photos + Complete).
+            'to_complete' => $jobs->filter(fn($j) => $j['status'] === 'delivered' && !$j['completed_at'])->count(),
+            'completed'   => $jobs->filter(fn($j) => $j['status'] === 'delivered' && $j['completed_at'])->count(),
+            'min_photos'  => WorkOrder::MIN_COMPLETION_PHOTOS,
+            // Planning gaps only mean something for jobs still being planned.
+            'mr_pending' => $jobs->filter(fn($j) => !in_array($j['status'], ['cancelled', 'delivered']) && !$j['checklist']['material_requisition']['done'])->count(),
+            'wo_pending' => $jobs->filter(fn($j) => !in_array($j['status'], ['cancelled', 'delivered']) && !$j['checklist']['section_assign']['done'])->count(),
+            'op_sheet_pending' => $jobs->filter(fn($j) => !in_array($j['status'], ['cancelled', 'delivered']) && !$j['checklist']['operation_sheet']['done'])->count(),
         ];
 
         return Inertia::render('Pcd/JobPlanning', [
@@ -189,7 +199,8 @@ class PcdJobPlanningController extends Controller
                 // that read it. Gate passes reach the page through `documents`
                 // below — both directions, each with a PDF link PCD can actually
                 // open, which the old prop's `/ied/gate-passes/…` URL was not.
-                'attachments'         => $workOrder->files->map(fn($f) => [
+                // Production photos have their own card (`completion` below).
+                'attachments'         => $workOrder->files->where('kind', '!=', \App\Models\WorkOrderFile::PRODUCTION_PHOTO)->map(fn($f) => [
                     'id'           => $f->id,
                     'kind'         => $f->kind,
                     // Streamed through the controller so the PDF popup's base64
@@ -223,6 +234,8 @@ class PcdJobPlanningController extends Controller
                         $d->setRelation('workOrder', $workOrder)
                     )),
                 'delivered_qty' => (float) $workOrder->deliveredQty(),
+                // Production photos, and completing the job once it is delivered.
+                'completion' => \App\Http\Controllers\JobCompletionController::pack($workOrder),
                 'material_requisitions' => $workOrder->materialRequisitions->map(fn($mr) => [
                     'id'          => $mr->id,
                     'mrn_number'  => $mr->mrn_number,

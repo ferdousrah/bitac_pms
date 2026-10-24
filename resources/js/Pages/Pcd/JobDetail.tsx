@@ -5,6 +5,7 @@ import PdfPopupModal from '@/Components/PdfPopupModal';
 import JobDocuments from '@/Components/Pcd/JobDocuments';
 import JobTypeBadge from '@/Components/JobTypeBadge';
 import { mrBadge, mrLabel } from '@/lib/mrStatus';
+import ProductionPhotos, { PhotoPanel } from '@/Components/Production/ProductionPhotos';
 
 interface ItemFile {
     id: number;
@@ -78,6 +79,7 @@ interface Job {
     material_requisitions: MaterialRequisition[];
     deliveries: DeliveryRow[];
     delivered_qty: number;
+    completion?: PhotoPanel;
     sections: SectionEntry[];
     operation_sheet: OperationSheet | null;
     item_operation_sheets: Array<{
@@ -402,9 +404,13 @@ export default function JobDetail({ job, checklist }: Props) {
                                             </span>
                                         )}
                                         <JobTypeBadge type={job.job_type} />
-                                        <span className={`${statusBadgeClass(job.status)} capitalize`}>
-                                            {statusLabel(job.status)}
-                                        </span>
+                                        {job.completion?.completed ? (
+                                            <span className="badge badge-green"><i className="fi fi-rr-badge-check text-[10px]" /> Completed</span>
+                                        ) : (
+                                            <span className={`${statusBadgeClass(job.status)} capitalize`}>
+                                                {statusLabel(job.status)}
+                                            </span>
+                                        )}
                                         <span className={priorityBadgeClass(job.priority)}>
                                             {job.priority}
                                         </span>
@@ -1218,6 +1224,14 @@ export default function JobDetail({ job, checklist }: Props) {
                         {/* Everything that travelled with the job from IED — the
                             same card the নির্বাহী প্রকৌশলী reads in the PCD Inbox. */}
                         {(job as any).documents && <JobDocuments documents={(job as any).documents} />}
+
+                        {/* Production photos — the shop and PCD add them; PCD
+                            completes the job with them once it is fully delivered. */}
+                        {job.completion && job.status !== 'cancelled' && (
+                            <ProductionPhotos data={job.completion}
+                                uploadUrl={`/pcd/job-planning/${job.id}/photos`}
+                                completeUrl={`/pcd/job-planning/${job.id}/complete`} />
+                        )}
 
                         {/* Deliveries — what has actually left the gate, with its challan.
                             PCD planned and routed this job, so PCD sees the challans;

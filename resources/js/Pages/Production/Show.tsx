@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import ShopHandover from '@/Components/Production/ShopHandover';
 import MaterialReceipt, { MaterialPanel } from '@/Components/Production/MaterialReceipt';
+import ProductionPhotos, { PhotoPanel } from '@/Components/Production/ProductionPhotos';
 import { Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import JobTypeBadge from '@/Components/JobTypeBadge';
@@ -212,7 +213,7 @@ const STATUS_BADGE: Record<string, string> = {
     rework: 'badge-red', awaiting_rework: 'badge-slate',
 };
 
-export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], step_assignees = [], scoped_sub_section = null, assignment = null, material = null }: Props & { assignment?: any; material?: MaterialPanel | null }) {
+export default function ProductionShow({ wos, routing, op_items, handoffs, rework_context, earlier_sections, scoped_item, siblings_count, machines = [], operators = [], sub_sections = [], step_assignees = [], scoped_sub_section = null, assignment = null, material = null, photos = null }: Props & { assignment?: any; material?: MaterialPanel | null; photos?: PhotoPanel | null }) {
     const scopedSub = scoped_sub_section;
     const [showComplete, setShowComplete] = useState(false);
     const [showSendBack, setShowSendBack] = useState(false);
@@ -532,6 +533,9 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                 <div className="space-y-6">
                     {/* Has the material for this job arrived here? */}
                     {material && <MaterialReceipt wosId={wos.id} material={material} readOnly={wos.status === 'completed'} />}
+
+                    {/* Photos of the finished work — PCD needs them to complete the job. */}
+                    {photos && <ProductionPhotos data={photos} uploadUrl={`/production/wos/${wos.id}/photos`} />}
 
                     {/* Actions */}
                     <div className="card">

@@ -151,7 +151,7 @@ class PcdJobDocuments
     private function attachments(WorkOrder $workOrder): array
     {
         return $workOrder->files
-            ->reject(fn ($f) => $f->kind === 'cancellation')
+            ->reject(fn ($f) => in_array($f->kind, ['cancellation', \App\Models\WorkOrderFile::PRODUCTION_PHOTO], true))
             ->map(fn ($f) => [
                 'id'        => $f->id,
                 'kind'      => $f->kind,

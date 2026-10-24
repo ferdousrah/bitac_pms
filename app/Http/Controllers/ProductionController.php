@@ -1438,6 +1438,7 @@ class ProductionController extends Controller
                     ->get(['id', 'name'])->map(fn ($x) => ['id' => $x->id, 'name' => $x->name])->values(),
             ],
             'material' => $this->materialPanel($workOrderSection),
+            'photos'   => \App\Http\Controllers\JobCompletionController::pack($workOrderSection->workOrder),
         ]);
     }
 
@@ -1725,6 +1726,14 @@ class ProductionController extends Controller
         return back()->with('success', $target
             ? 'Handed back to ' . (\App\Models\User::find($target)?->name ?? 'the engineer who sent it') . '.'
             : 'Handed back to the নির্বাহী প্রকৌশলী.');
+    }
+
+    /** The shop adds production photos of the job (PCD needs them to complete it). */
+    public function uploadPhotos(Request $request, WorkOrderSection $workOrderSection)
+    {
+        $this->authorizeAccess($workOrderSection);
+
+        return \App\Http\Controllers\JobCompletionController::savePhotos($request, $workOrderSection->workOrder);
     }
 
     private function authorizeAccess(WorkOrderSection $wos): void

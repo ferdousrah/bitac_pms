@@ -22,7 +22,12 @@ class WorkOrder extends Model
         // The date on the CUSTOMER's own work order — what decides which
         // financial year this counts towards, not when it was keyed in.
         'customer_wo_date',
+        // PCD's completion of a delivered job, with production photos.
+        'completed_at', 'completed_by', 'completion_note',
     ];
+
+    /** Production photos PCD needs before a delivered job can be completed. */
+    public const MIN_COMPLETION_PHOTOS = 2;
 
     protected function casts(): array
     {
@@ -34,6 +39,7 @@ class WorkOrder extends Model
             'release_requested_at' => 'datetime',
             'released_to_shops_at' => 'datetime',
             'cancelled_at'         => 'datetime',
+            'completed_at'         => 'datetime',
         ];
     }
 
@@ -44,6 +50,11 @@ class WorkOrder extends Model
 
     public function getStatusLabelAttribute(): string
     {
+        // Completion is a stamp on a delivered job, not a status of its own.
+        if ($this->status === 'delivered' && $this->completed_at) {
+            return 'Completed';
+        }
+
         return match($this->status) {
             'draft'              => 'Draft',
             'ied_pending'        => 'Awaiting IED Acceptance',
@@ -131,6 +142,8 @@ class WorkOrder extends Model
     public function cancelledBy()  { return $this->belongsTo(User::class, 'cancelled_by'); }
 
     public function files()               { return $this->hasMany(WorkOrderFile::class)->orderBy('id'); }
+    public function productionPhotos()    { return $this->hasMany(WorkOrderFile::class)->where('kind', WorkOrderFile::PRODUCTION_PHOTO)->orderBy('id'); }
+    public function completedBy()         { return $this->belongsTo(User::class, 'completed_by'); }
     public function customerPoFile()      { return $this->hasOne(WorkOrderFile::class)->where('kind', 'customer_po')->latest('id'); }
 
     /** The acceptance chain — levels decided in order. */

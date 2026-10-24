@@ -14,6 +14,9 @@ class WorkOrderFile extends Model
 
     protected $appends = ['url', 'human_size', 'extension'];
 
+    /** A photo of the finished work, taken by the shop or PCD before it leaves. */
+    public const PRODUCTION_PHOTO = 'production_photo';
+
     public function workOrder() { return $this->belongsTo(WorkOrder::class); }
     public function uploadedBy(){ return $this->belongsTo(User::class, 'uploaded_by'); }
 

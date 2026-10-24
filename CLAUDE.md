@@ -1381,6 +1381,41 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ **`User` has no `CenterScope`**, so `NotifyService::toPermission()` reached permission-holders at *every* centre. It now takes an optional **`centerId:`** and the PCD flow passes the work order's. **Users with no centre set are always included** — not notifying someone at all is a worse failure than a little cross-centre noise, and unset centres are real here (the live Executive Engineer has none). Verified: a second centre's Executive Engineer is not told about a Dhaka work order, the Dhaka one and the centre-less one are.
 - ⚠️ **`pcd_forwarded_at/by` and `pcd_review_note` had to go into `WorkOrder::$fillable`** — mass assignment drops anything missing from it *silently*, so the forward worked while the stamp was never written. (Same trap as `CostEstimate::approval_status`.)
 
+## 📷 PCD completes a delivered job with production photos (2026-10-24)
+> BITAC: *"Production photo (multiple) mandatory to complete a job, PCD have to submit to complete
+> the job."* Their choices: completion comes **after delivery**, **shop + PCD** add photos, **≥ 2**.
+
+- ⚠️ **Completion is a STAMP, not a status.** `work_orders.completed_at` / `completed_by` /
+  `completion_note` (migration `..._000084`); the status stays **`delivered`**. ~46 references in
+  24 files treat `delivered` as the end of a job (overdue, progress = 100, the portal, billing) —
+  a new `completed` status would have had to be added to every one of them. `status_label` reads
+  **Completed** for a delivered job with the stamp.
+- **Photos are `work_order_files` rows of kind `production_photo`** (`WorkOrderFile::PRODUCTION_PHOTO`,
+  `WorkOrder::productionPhotos()`), on the public disk under `work-orders/{id}/photos`, with an
+  optional caption in `title`. JPG / PNG / WebP, ≤ 10 MB, up to 10 per upload. They are kept OUT of
+  the plain attachment lists (`PcdJobDocuments`, the JobDetail `attachments` prop).
+- **`JobCompletionController` holds the rules**: `pack()` (what both pages render),
+  `completionBlocker()` (fully delivered? already completed? photos ≥ `WorkOrder::MIN_COMPLETION_PHOTOS`
+  = 2), `savePhotos()`, `destroy()`, `complete()`. Two doors to add photos, same as the PDF doors:
+  **`POST production/wos/{wos}/photos`** (`ProductionController@uploadPhotos`, behind the shop's own
+  `authorizeAccess`) and **`POST pcd/job-planning/{wo}/photos`**. **`DELETE production-photos/{file}`**
+  (`view production|view pcd-inbox`): whoever added it, or PCD.
+- **`POST pcd/job-planning/{wo}/complete`** — refused (redirect + flash) unless fully delivered
+  (`partially_delivered` is not), not completed already, with ≥ 2 photos. Optional note. IED
+  (`view rfqs`, the job's centre) is told, linking to `/ied/jobs/{id}`, where the completion
+  certificate is collected. ⚠️ **Once completed, the photos are locked** — nothing added or removed.
+- UI: `Components/Production/ProductionPhotos.tsx` — the shop's job page (right column, under
+  Material) and PCD's job page as **Job Completion** (`completeUrl` adds the note + **Complete Job**,
+  or the blocker in plain words). Picked photos are staged with a caption each, then uploaded.
+- **Job Planning now lists delivered jobs too**: a **To Complete** tile, **To Complete / Completed**
+  tabs, and a photo count ("1 of 2 photos") in place of the planning steps. The planning-gap counts
+  (WO / Op Sheet pending) ignore delivered jobs. The "Close" button there is still **cancel**, and is
+  not offered on a delivered job.
+- ⚠️ **The migration stamps every job ALREADY delivered as completed** (as of its `updated_at`, by
+  nobody, note "Delivered before production photos were required — completed automatically."). They
+  have no photos and the goods are gone, so they could never be completed and would sit in To
+  Complete for ever. The rule applies from now on. Raw DB, no notifications on deploy.
+
 ## 📎 Issue Work Order: other documents beside the customer's WO copy (2026-10-24)
 > BITAC: *"While adding work order, beside work order doc add others doc upload (multiple) option."*
 
