@@ -1381,6 +1381,22 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ **`User` has no `CenterScope`**, so `NotifyService::toPermission()` reached permission-holders at *every* centre. It now takes an optional **`centerId:`** and the PCD flow passes the work order's. **Users with no centre set are always included** — not notifying someone at all is a worse failure than a little cross-centre noise, and unset centres are real here (the live Executive Engineer has none). Verified: a second centre's Executive Engineer is not told about a Dhaka work order, the Dhaka one and the centre-less one are.
 - ⚠️ **`pcd_forwarded_at/by` and `pcd_review_note` had to go into `WorkOrder::$fillable`** — mass assignment drops anything missing from it *silently*, so the forward worked while the stamp was never written. (Same trap as `CostEstimate::approval_status`.)
 
+## 📎 Issue Work Order: other documents beside the customer's WO copy (2026-10-24)
+> BITAC: *"While adding work order, beside work order doc add others doc upload (multiple) option."*
+
+- The **Issue Work Order** card on Quotation Show now has **Customer PO / Work Order Copy** and
+  **Other Documents** side by side. Other documents: up to **10**, each ≤ 10 MB, PDF / image /
+  Word / Excel / **DWG / DXF**, each with an optional **title** ("Drawing GA-12").
+- `QuotationController@convertToWorkOrder` takes **`other_files[]` + `other_titles[]`** (index-aligned)
+  and stores each as a `work_order_files` row with **`kind = 'other'`** (the kind the table always
+  allowed), `title` = the typed title or NULL. ⚠️ Validated with **`extensions:`**, not `mimes:` —
+  `mimes` guesses from the file's content and a DWG has no recognisable MIME type, so it would be
+  refused.
+- No new column, no new route: everything downstream already reads `$workOrder->files`. The **IED
+  review page** (`Ied/WorkOrders/Show`) now shows a **Documents** card with every file — the WO copy
+  first — instead of the PO copy alone, and **PCD's Documents card** (`PcdJobDocuments`) shows the
+  title when there is one, subtitled "other document".
+
 ## 📝 Work order acceptance goes through an approval chain (2026-09)
 
 - A work order issued from an approved quotation lands `ied_pending` in the IED inbox. Accepting it was guarded by **`permission:view rfqs` alone**, with no check on who created it — so whoever issued the WO could immediately wave it through to PCD.

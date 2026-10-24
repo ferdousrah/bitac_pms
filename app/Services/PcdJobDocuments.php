@@ -155,7 +155,7 @@ class PcdJobDocuments
             ->map(fn ($f) => [
                 'id'        => $f->id,
                 'kind'      => $f->kind,
-                'name'      => $f->original_name,
+                'name'      => $f->title ?: $f->original_name,
                 'extension' => strtolower(pathinfo((string) $f->original_name, PATHINFO_EXTENSION)),
                 'pdf_url'   => route('pcd.job-planning.files.show', $f->id) . '?preview=base64',
             ])->values()->all();

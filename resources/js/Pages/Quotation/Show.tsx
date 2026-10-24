@@ -244,7 +244,25 @@ export default function QuotationShow({
         due_date:         '',
         notes:            '',
         customer_po_file: null as File | null,
+        // Anything else that came with it (drawings, specs, a covering letter),
+        // each with an optional title — the two arrays stay index-aligned.
+        other_files:      [] as File[],
+        other_titles:     [] as string[],
     });
+    const addOtherFiles = (list: FileList | null) => {
+        const picked = Array.from(list ?? []).slice(0, Math.max(0, 10 - convertForm.data.other_files.length));
+        if (!picked.length) return;
+        convertForm.setData((d: any) => ({
+            ...d,
+            other_files:  [...d.other_files, ...picked],
+            other_titles: [...d.other_titles, ...picked.map(() => '')],
+        }));
+    };
+    const removeOtherFile = (i: number) => convertForm.setData((d: any) => ({
+        ...d,
+        other_files:  d.other_files.filter((_: File, j: number) => j !== i),
+        other_titles: d.other_titles.filter((_: string, j: number) => j !== i),
+    }));
     const responseForm = useForm<any>({
         response_type: 'accepted',
         customer_po_no: '',
@@ -891,11 +909,12 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                             </div>
                                         </div>
 
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                                         {/* Customer PO file — audit trail + legal proof */}
                                         <div className="form-group">
-                                            <label className="form-label flex items-center gap-1.5">
+                                            <label className="form-label flex flex-wrap items-center gap-x-1.5">
                                                 <i className="fi fi-rr-paperclip text-xs leading-none text-amber-600" />
-                                                Customer PO / Work Order Copy
+                                                <span className="whitespace-nowrap">Customer PO / Work Order Copy</span>
                                                 <span className="form-label-optional">(strongly recommended)</span>
                                             </label>
                                             {convertForm.data.customer_po_file ? (
@@ -930,6 +949,68 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                             {(convertForm.errors as any).customer_po_file && (
                                                 <p className="form-error">{(convertForm.errors as any).customer_po_file}</p>
                                             )}
+                                        </div>
+
+                                        {/* Other documents that came with the work order */}
+                                        <div className="form-group">
+                                            <label className="form-label flex items-center gap-1.5">
+                                                <i className="fi fi-rr-copy-alt text-xs leading-none text-sky-600" />
+                                                Other Documents
+                                                <span className="form-label-optional">(optional · up to 10)</span>
+                                            </label>
+                                            {convertForm.data.other_files.length > 0 && (
+                                                <div className="space-y-2 mb-2">
+                                                    {convertForm.data.other_files.map((f: File, i: number) => {
+                                                        const err = (convertForm.errors as any)[`other_files.${i}`];
+                                                        return (
+                                                            <div key={`${f.name}-${i}`}>
+                                                                <div className="flex items-center gap-2.5 p-2 bg-sky-50/60 rounded-lg border border-sky-200">
+                                                                    <div className="w-9 h-9 rounded-lg bg-sky-100 flex items-center justify-center text-sky-700 text-[10px] font-bold shrink-0">
+                                                                        {f.name.split('.').pop()?.toUpperCase().slice(0, 4) ?? 'FILE'}
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={convertForm.data.other_titles[i] ?? ''}
+                                                                            onChange={e => convertForm.setData('other_titles',
+                                                                                convertForm.data.other_titles.map((t: string, j: number) => j === i ? e.target.value : t))}
+                                                                            placeholder="Title (e.g. Drawing, Specification)"
+                                                                            maxLength={150}
+                                                                            className="form-input !py-1 text-xs"
+                                                                        />
+                                                                        <div className="text-[10px] text-surface-500 truncate mt-0.5">{f.name} · {(f.size / 1024).toFixed(0)} KB</div>
+                                                                    </div>
+                                                                    <button type="button" onClick={() => removeOtherFile(i)}
+                                                                        className="text-surface-400 hover:text-red-600 text-xs shrink-0" title="Remove">
+                                                                        ✕
+                                                                    </button>
+                                                                </div>
+                                                                {err && <p className="form-error">{err}</p>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                            {convertForm.data.other_files.length < 10 && (
+                                                <label className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-sky-300 bg-sky-50/40 hover:bg-sky-50 cursor-pointer transition-colors ${convertForm.data.other_files.length ? 'p-2.5' : 'p-4'}`}>
+                                                    <i className="fi fi-rr-add-document text-sky-500 text-base leading-none" />
+                                                    <span className="text-xs font-semibold text-sky-800">
+                                                        {convertForm.data.other_files.length ? 'Add more documents' : 'Click to upload other documents'}
+                                                    </span>
+                                                    <span className="text-[10px] text-sky-600">Drawings, specs, letters · PDF / image / Word / Excel / DWG · max 10 MB each</span>
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        accept=".pdf,image/*,.doc,.docx,.xls,.xlsx,.dwg,.dxf"
+                                                        className="hidden"
+                                                        onChange={(e) => { addOtherFiles(e.target.files); e.target.value = ''; }}
+                                                    />
+                                                </label>
+                                            )}
+                                            {(convertForm.errors as any).other_files && (
+                                                <p className="form-error">{(convertForm.errors as any).other_files}</p>
+                                            )}
+                                        </div>
                                         </div>
                                         <button type="submit" disabled={convertForm.processing} className="btn-primary">
                                             <i className="fi fi-rr-briefcase text-xs leading-none" />

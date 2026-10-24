@@ -221,7 +221,7 @@ export default function JobDocuments({ documents, className = '' }: { documents:
                             {d.attachments.map((f) => (
                                 <Row key={f.id} tone="slate" icon="fi-rr-clip"
                                     title={f.name || `File #${f.id}`}
-                                    subtitle={f.kind ? f.kind.replace(/_/g, ' ') : undefined}
+                                    subtitle={f.kind === 'other' ? 'other document' : f.kind ? f.kind.replace(/_/g, ' ') : undefined}
                                     onOpen={() => open(f.pdf_url, f.name || `File #${f.id}`)} />
                             ))}
                         </div>

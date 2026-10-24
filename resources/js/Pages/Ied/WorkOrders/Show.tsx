@@ -45,7 +45,20 @@ export default function IedWorkOrderShow({ workOrder }: any) {
         });
     };
 
-    const poFile = (wo.files ?? []).find((f: any) => f.kind === 'customer_po');
+    // The customer's work order copy first, then whatever else came with it.
+    const docs = (wo.files ?? [])
+        .filter((f: any) => f.kind !== 'cancellation')
+        .sort((a: any, b: any) => Number(b.kind === 'customer_po') - Number(a.kind === 'customer_po'));
+    const openDoc = (f: any) => {
+        if (!f.url) return;
+        const ext = (f.original_name?.split('.').pop() ?? '').toLowerCase();
+        const sep = f.url.includes('?') ? '&' : '?';
+        if (ext === 'pdf') {
+            setPdfPopup({ open: true, url: `${f.url}${sep}preview=base64`, title: f.title ?? f.original_name });
+        } else {
+            window.open(`${f.url}${sep}preview=1`, '_blank', 'noreferrer');
+        }
+    };
 
     return (
         <AppLayout header={`Work Order ${wo.wo_number}`}>
@@ -132,38 +145,34 @@ export default function IedWorkOrderShow({ workOrder }: any) {
                             </div>
                         )}
 
-                        {/* Customer Work Order file */}
-                        {poFile && (
+                        {/* Customer Work Order + other documents sent with it */}
+                        {docs.length > 0 && (
                             <div className="card">
-                                <div className="card-header"><h3 className="text-sm font-bold text-surface-900">{poFile.title ?? 'Customer Work Order'}</h3></div>
-                                <div className="card-body">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const ext = (poFile.original_name?.split('.').pop() ?? '').toLowerCase();
-                                            if (!poFile.url) return;
-                                            const sep = poFile.url.includes('?') ? '&' : '?';
-                                            if (ext === 'pdf') {
-                                                setPdfPopup({
-                                                    open: true,
-                                                    url: `${poFile.url}${sep}preview=base64`,
-                                                    title: poFile.title ?? poFile.original_name,
-                                                });
-                                            } else {
-                                                window.open(`${poFile.url}${sep}preview=1`, '_blank', 'noreferrer');
-                                            }
-                                        }}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-200 hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors text-left"
-                                    >
-                                        <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                                            <i className="fi fi-rr-file-pdf text-base leading-none" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-xs font-semibold text-surface-900 truncate">{poFile.title ?? 'Customer Work Order'}</div>
-                                            <div className="text-[10px] text-surface-400 truncate">{poFile.original_name}</div>
-                                        </div>
-                                        <i className="fi fi-rr-arrow-up-right-from-square text-[10px] text-surface-400" />
-                                    </button>
+                                <div className="card-header flex items-center justify-between">
+                                    <h3 className="text-sm font-bold text-surface-900">Documents</h3>
+                                    <span className="text-[10px] font-bold text-surface-500">{docs.length}</span>
+                                </div>
+                                <div className="card-body grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {docs.map((f: any) => {
+                                        const isPo = f.kind === 'customer_po';
+                                        return (
+                                            <button
+                                                key={f.id}
+                                                type="button"
+                                                onClick={() => openDoc(f)}
+                                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-surface-200 transition-colors text-left ${isPo ? 'hover:border-emerald-300 hover:bg-emerald-50/40' : 'hover:border-sky-300 hover:bg-sky-50/40'}`}
+                                            >
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isPo ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'}`}>
+                                                    <i className={`fi ${isPo ? 'fi-rr-file-pdf' : 'fi-rr-document'} text-base leading-none`} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-semibold text-surface-900 truncate">{f.title ?? (isPo ? 'Customer Work Order' : f.original_name)}</div>
+                                                    <div className="text-[10px] text-surface-400 truncate">{isPo || (f.title && f.title !== f.original_name) ? f.original_name : 'Other document'}</div>
+                                                </div>
+                                                <i className="fi fi-rr-arrow-up-right-from-square text-[10px] text-surface-400" />
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

@@ -2409,6 +2409,16 @@ HTML;
             'notes'             => 'nullable|string|max:1000',
             // Customer's PO / authorisation document — audit trail + legal proof
             'customer_po_file'  => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,doc,docx|max:10240',
+            // Anything else the customer sent with it — drawings, specs, a
+            // covering letter. Each may carry a short title for the IED/PCD lists.
+            'other_files'       => 'nullable|array|max:10',
+            'other_files.*'     => 'file|max:10240|extensions:pdf,jpg,jpeg,png,webp,doc,docx,xls,xlsx,dwg,dxf',
+            'other_titles'      => 'nullable|array',
+            'other_titles.*'    => 'nullable|string|max:150',
+        ], [
+            'other_files.max'          => 'Attach at most 10 other documents.',
+            'other_files.*.max'        => 'Each document must be under 10 MB.',
+            'other_files.*.extensions' => 'Attach PDF, image, Word, Excel or CAD (DWG/DXF) files only.',
         ]);
 
         $quotation->load('rfq.items.product', 'items');
@@ -2486,6 +2496,21 @@ HTML;
                 'mime_type'     => $file->getMimeType(),
                 'size_bytes'    => $file->getSize(),
                 'description'   => 'Customer PO / Work Order copy received with quotation acceptance',
+            ]);
+        }
+
+        $titles = $request->input('other_titles', []);
+        foreach ($request->file('other_files', []) as $i => $file) {
+            $title = trim((string) ($titles[$i] ?? ''));
+            $workOrder->files()->create([
+                'uploaded_by'   => auth()->id(),
+                'kind'          => 'other',
+                'stored_path'   => $file->store("work-orders/{$workOrder->id}", 'public'),
+                'original_name' => $file->getClientOriginalName(),
+                'title'         => $title !== '' ? $title : null,
+                'mime_type'     => $file->getMimeType(),
+                'size_bytes'    => $file->getSize(),
+                'description'   => 'Received with the customer work order',
             ]);
         }
 
