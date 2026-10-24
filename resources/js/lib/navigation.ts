@@ -141,6 +141,7 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'Bills / Invoices', href: '/invoices', icon: 'fi-rr-receipt', permission: 'view invoices' },
             { label: 'মূসক ৬.৩',          href: '/musak-challans', icon: 'fi-rr-file-invoice', permission: 'view invoices' },
+            { label: 'Gate Pass Out',    href: '/billing/gate-pass-out', icon: 'fi-rr-truck-side', permission: 'view invoices' },
             { label: 'Payments',         href: '/payments',       icon: 'fi-rr-sack-dollar',  permission: 'view payments' },
             { label: 'Receivables',      href: '/receivables',    icon: 'fi-rr-chart-pie',    permission: 'view payments' },
             { label: 'Delivered vs Received', href: '/delivered-vs-received', icon: 'fi-rr-chart-histogram', permission: 'view payments' },

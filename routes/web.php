@@ -937,6 +937,13 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 
+    // ─── Billing & Accounts → Gate Pass Out: PCD's passes, read-only + PDF ─
+    // A second door onto passes whose own screens sit behind `view pcd`.
+    Route::middleware('permission:view invoices')->group(function () {
+        Route::get('billing/gate-pass-out', [\App\Http\Controllers\BillingGatePassController::class, 'index'])->name('billing.gate-pass-out.index');
+        Route::get('billing/gate-pass-out/{gatePass}/pdf', [\App\Http\Controllers\BillingGatePassController::class, 'pdf'])->name('billing.gate-pass-out.pdf');
+    });
+
     // ─── Payments ledger: advance, part payments, deductions, security ────
     // Collections are their own desk — see App\Services\PaymentLedger for the
     // three rules every figure here obeys.

@@ -198,6 +198,7 @@ class GatePassController extends Controller
                 'rfq_id'                  => $validated['rfq_id'] ?? null,
                 'pass_no'                 => trim((string) ($validated['pass_no'] ?? '')) ?: GatePass::generatePassNo($validated['direction']),
                 'direction'               => $validated['direction'],
+                'origin'                  => $this->isPcdContext() ? 'pcd' : 'ied',
                 'pass_date'               => $validated['pass_date'],
                 'customer_id'             => $validated['customer_id'] ?? null,
                 'party_name'              => $validated['party_name'] ?? null,
@@ -569,6 +570,7 @@ class GatePassController extends Controller
                 'customer_id'            => $gatePass->customer_id,
                 'pass_no'                => trim((string) ($validated['pass_no'] ?? '')) ?: GatePass::generatePassNo('out'),
                 'direction'              => 'out',
+                'origin'                 => $this->isPcdContext() ? 'pcd' : 'ied',
                 'pass_date'              => $validated['pass_date'],
                 'party_name'             => $gatePass->party_name,
                 'customer_rep_name'      => $validated['customer_rep_name'] ?? $gatePass->customer_rep_name,
@@ -730,14 +732,16 @@ class GatePassController extends Controller
 
     public function pdf(Request $request, GatePass $gatePass)
     {
-        $gatePass->load(['rfq.customer', 'issuedBy.center', 'items']);
+        $gatePass->load(['customer', 'rfq.customer', 'issuedBy.center', 'items']);
 
         $esc = fn($v) => htmlspecialchars((string) ($v ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $fmt = fn($v) => number_format((float) ($v ?? 0), 2);
 
         $directionLabel = $gatePass->direction === 'in' ? 'GATE-IN PASS' : 'GATE-OUT PASS';
         $directionBn    = $gatePass->direction === 'in' ? 'প্রবেশ পত্র'    : 'বহির্গমন পত্র';
-        $customer       = $esc($gatePass->rfq?->customer?->name ?? '—');
+        // A pass names its client itself, or inherits it from the RFQ — the
+        // list already read both; the print read only the RFQ and said "—".
+        $customer       = $esc($gatePass->customer?->name ?? $gatePass->rfq?->customer?->name ?? '—');
         $customerRef    = $esc($gatePass->rfq?->customer_ref_no ?? '—');
         $rfqLabel       = $gatePass->rfq_id ? 'RFQ #' . $gatePass->rfq_id : '—';
         $issuerName     = $esc($gatePass->issuedBy?->name ?? '—');

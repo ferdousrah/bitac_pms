@@ -11,7 +11,8 @@ class GatePass extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'rfq_id', 'source_gate_pass_id', 'customer_id', 'pass_no', 'direction', 'party_name',
+        // `origin` = the desk that raised it: ied | pcd.
+        'center_id', 'rfq_id', 'source_gate_pass_id', 'customer_id', 'pass_no', 'direction', 'origin', 'party_name',
         'completed_at', 'completed_by', 'completion_remarks',
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
         'customer_rep_name', 'customer_rep_phone', 'customer_rep_id_number', 'vehicle_no',

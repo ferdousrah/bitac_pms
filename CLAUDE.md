@@ -1568,6 +1568,30 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - **Cost estimate PDF** (`exportSinglePdf`) now renders a **3-column signatory grid — Prepared By · Checked By · Approved By** (`$sigCell` helper): Prepared = creator (saved signature); Checked = the `Checked By` approval row (first approver); Approved = the `Approved By`/final row. Each shows the assigned person always + their signature/date once that step is approved (else "(Pending)"). Single-approver chains drop the Checked column.
 - **Quotation PDF/forwarding letter** still shows the **final approver** as the single signatory (formal customer-facing letter convention) — NOT the 3-grid.
 
+## 🚪 Billing & Accounts → Gate Pass Out (2026-10-24)
+> BITAC: *"Billing & Accounts এ Gate Pass Out অপশন থাকবে — PCD theke j gate out pass gulu ase show
+> korbe, pdf print kora jabe."*
+
+- ⚠️ **`gate_passes.origin`** (`ied` | `pcd`, migration `..._000085`) — IED and PCD share the table
+  and **nothing recorded which desk raised a pass**. `GatePassController@store` / `@storeOut` set it
+  from `isPcdContext()`; the complaint's auto Gate Pass In stays `ied` (the column default). Old
+  rows were worked out from the one difference: a PCD pass goes through approval (`pending_approval`
+  / `rejected` / `approved_by` set). Any new place that creates a pass must set `origin`.
+- `BillingGatePassController` (`/billing/gate-pass-out`, page `Billing/GatePassOut.tsx`) lists
+  **`origin = pcd`, `direction = out`** only — read-only, with status chips (counts), search (pass
+  no., client, item, vehicle, rep), date range, client, real paging, and each pass's items inline.
+  Behind **`view invoices`** (the Bills menu's gate), not `view payments`.
+- ⚠️ **`/billing/gate-pass-out/{id}/pdf` is a deliberate second door** onto the gate pass PDF
+  (whose own routes need `view pcd` / `manage gate-passes`, which accounts do not hold). It **404s
+  for any pass that is not a PCD Gate Pass Out**, so it cannot open an IED pass or a Gate Pass In by
+  guessing an id. Same generator, through `PdfPopupModal` (pad switch included).
+- Fixed on the way: the gate pass **PDF printed "Customer: —"** for any pass that names its client
+  directly (`gate_passes.customer_id`) rather than through an RFQ — it read only `rfq.customer`. The
+  list always read both; now the print does too.
+- ⚠️ Found, not fixed: **`Ied/GatePass/Index.tsx` (IED + PCD's own list) paginates 20 and renders no
+  page links**, so a pass past the first 20 cannot be reached from it — the same shape as the user
+  list had.
+
 ## 🚪 Gate Pass Out raised against a Gate Pass In (2026-09)
 
 > What comes in to IED goes back out, and that exit needs its own paper.
