@@ -948,6 +948,9 @@ Route::middleware(['auth'])->group(function () {
         // would bind "pdf" as the customer and 404 on the model.
         Route::get('receivables/pdf', [\App\Http\Controllers\ReceivablesController::class, 'pdf'])->name('receivables.pdf');
         Route::get('receivables/{customer}', [\App\Http\Controllers\ReceivablesController::class, 'show'])->name('receivables.show');
+        // Delivered value vs payment received, per job and per client.
+        Route::get('delivered-vs-received', [\App\Http\Controllers\DeliveryCollectionController::class, 'index'])->name('delivered-vs-received.index');
+        Route::get('delivered-vs-received/pdf', [\App\Http\Controllers\DeliveryCollectionController::class, 'pdf'])->name('delivered-vs-received.pdf');
 
         Route::middleware('permission:record payments')->group(function () {
             Route::post('payments', [\App\Http\Controllers\PaymentController::class, 'store'])->name('payments.store');

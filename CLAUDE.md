@@ -881,6 +881,31 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - A footnote spells out that **Security held is part of the Due, not additional to it**, that **Advance in hand is the client's money**, and that tax deducted at source is not a due. Without it the columns read as separate debts. Three signature rules: Prepared By · Accounts Officer · Director (Centre Head).
 - ⚠️ `receivables/pdf` is declared **BEFORE** `receivables/{customer}` — Laravel matches in registration order, so the other way round `pdf` binds as the customer and 404s. (Third time in this codebase; see the PCD release routes.)
 
+### Delivered vs Received (`/delivered-vs-received`, 2026-10-24)
+> BITAC: *"Billing & Accounts এ delivered amount vs payment received এর রিপোর্ট lagbe."*
+
+- `DeliveryCollectionController` (`index` + `pdf`, both through one `build()`), page
+  `Payment/DeliveryCollection.tsx`, print `App\Services\Reports\DeliveryCollectionSheet`
+  (landscape, on the shared `ReportSheetRenderer`). Menu: **Billing & Accounts → Delivered vs
+  Received**, behind `view payments`. Centre-scoped like Receivables.
+- Per job, and folded per client: **Delivered value** = quotation `total_amount` × delivered qty ÷
+  ordered qty (only `delivered` delivery orders) · **Billed** · **Received** = cash kinds' net
+  (`Payment::CASH_KINDS` — bill payments net of deductions, security released, advances; an
+  applied advance is NOT cash) · **At source** = non-recoverable deductions (AIT, VAT at source —
+  count as paid) · **Security held** = recoverable deductions not yet released · **Gap** =
+  delivered value − received − at source (includes held security; negative = advance).
+  "Not yet billed" = delivered value − billed, when positive.
+- ⚠️ **Delivered value is deliberately not the billed figure** — bills are raised when accounts get
+  to them, and that drift is half of what the report shows.
+- **Dates filter EVENTS, each by its own date**: deliveries by `delivered_at`, bills by
+  `issued_at`, receipts by `paid_on`. No dates = every job to date. A job with nothing in the
+  range is left out.
+- ⚠️ **A job billed beyond its delivered value is flagged "Billed more than delivered".** That is
+  exactly what `InvoiceService::createFromDelivery()` produces on a partial delivery today: it
+  bills the **full quotation total** on every delivery, so a 5-of-10 delivery bills 100% and a
+  second delivery bills 100% again. Found while building this report; not changed (money path —
+  BITAC to decide). There were no invoices on the local database to check against.
+
 ### Dates, rounding, access
 - ⚠️ **`invoices` has no `due_date` column** (`$fillable` lists one; the column never existed). Ageing and the displayed due date come from `PaymentLedger::dueDateFor()` = issue date + **`CREDIT_DAYS` (30)**. Change that constant, not the call sites.
 - `TOLERANCE` is 0.01 — rounding noise, not a debt. A real residue is closed with the seeded **Rounding Adjustment** deduction type, explicitly, rather than a silent threshold.
