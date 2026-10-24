@@ -13,8 +13,15 @@ use Inertia\Inertia;
 
 class MaintenanceRequestController extends Controller
 {
-    public function index(Request $request)
+    /**
+     * The list. `/maintenance/electrical` and `/maintenance/mechanical` (the two
+     * menu entries) narrow it to one category; `/maintenance-requests` shows both.
+     * Each category has its own path rather than a `?category=` so the sidebar,
+     * which matches on the start of the URL, lights the right entry.
+     */
+    public function index(Request $request, ?string $category = null)
     {
+        $category = array_key_exists((string) $category, MaintenanceRequest::CATEGORIES) ? $category : null;
         $user = $request->user();
         $canApprove = $user?->can('approve maintenance-requests') ?? false;
         $canPerform = $user?->can('perform maintenance') ?? false;
@@ -35,7 +42,8 @@ class MaintenanceRequestController extends Controller
             'section:id,name,code',
             'requester:id,name',
             'reviewer:id,name',
-        ])->latest();
+        ])->latest()
+            ->when($category, fn ($q) => $q->where('category', $category));
 
         if ($status === 'open') {
             $q->whereIn('status', ['pending', 'approved', 'in_progress']);
@@ -63,6 +71,8 @@ class MaintenanceRequestController extends Controller
                     'machine_code' => $r->machine->machine_code,
                 ] : null,
                 'section'                  => $r->section?->name,
+                'category'                 => $r->category,
+                'category_label'           => $r->category_label,
                 'requester'                => $r->requester?->name,
                 'reported_problem'         => $r->reported_problem,
                 'urgency'                  => $r->urgency,
@@ -80,13 +90,20 @@ class MaintenanceRequestController extends Controller
                 'urgency'    => $request->input('urgency', ''),
                 'section_id' => $sectionFilter,
             ],
-            'counts' => [
-                'pending'     => MaintenanceRequest::pending()->count(),
-                'approved'    => MaintenanceRequest::approved()->count(),
-                'in_progress' => MaintenanceRequest::inProgress()->count(),
-                'completed'   => MaintenanceRequest::where('status', 'completed')->count(),
-                'rejected'    => MaintenanceRequest::where('status', 'rejected')->count(),
-            ],
+            // The counts follow the category being looked at.
+            'counts' => (function () use ($category) {
+                $base = fn () => MaintenanceRequest::query()->when($category, fn ($q) => $q->where('category', $category));
+                return [
+                    'pending'     => $base()->pending()->count(),
+                    'approved'    => $base()->approved()->count(),
+                    'in_progress' => $base()->inProgress()->count(),
+                    'completed'   => $base()->where('status', 'completed')->count(),
+                    'rejected'    => $base()->where('status', 'rejected')->count(),
+                ];
+            })(),
+            'category'      => $category,
+            'categoryLabel' => $category ? MaintenanceRequest::CATEGORIES[$category] : 'Maintenance Requests',
+            'basePath'      => $category ? "/maintenance/{$category}" : '/maintenance-requests',
             'can' => [
                 'submit'  => $request->user()?->can('submit maintenance-requests'),
                 'approve' => $request->user()?->can('approve maintenance-requests'),
@@ -121,12 +138,17 @@ class MaintenanceRequestController extends Controller
             'sections'      => $sections,
             'activeSection' => $activeSection,
             'preselectedId' => $request->query('machine_id') ? (int) $request->query('machine_id') : null,
+            // Opened from one category's menu → the form starts on it.
+            'category'      => array_key_exists((string) $request->query('category'), MaintenanceRequest::CATEGORIES)
+                ? $request->query('category') : null,
+            'categories'    => MaintenanceRequest::CATEGORIES,
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'category'                => 'required|in:' . implode(',', array_keys(MaintenanceRequest::CATEGORIES)),
             'machine_id'              => 'required|exists:machines,id',
             'reported_problem'        => 'required|string|max:2000',
             'urgency'                 => 'required|in:urgent,normal,low',
@@ -148,6 +170,7 @@ class MaintenanceRequestController extends Controller
         $req = MaintenanceRequest::create([
             'machine_id'              => $machine->id,
             'section_id'              => $machine->section_id ?? $user->section_id,
+            'category'                => $validated['category'],
             'requested_by'            => $user->id,
             'reported_problem'        => $validated['reported_problem'],
             'urgency'                 => $validated['urgency'],
@@ -160,7 +183,7 @@ class MaintenanceRequestController extends Controller
         NotifyService::toPermission(
             'approve maintenance-requests',
             'maintenance_request',
-            'New maintenance request',
+            'New ' . strtolower($req->category_label) . ' request',
             "{$user->name} reported a problem on {$machine->machine_code} ({$machine->name})",
             "/maintenance-requests/{$req->id}",
             'fi-rr-wrench-simple',
@@ -187,6 +210,8 @@ class MaintenanceRequestController extends Controller
                 'status_color'            => $r->status_color,
                 'urgency'                 => $r->urgency,
                 'urgency_color'           => $r->urgency_color,
+                'category'                => $r->category,
+                'category_label'          => $r->category_label,
                 'reported_problem'        => $r->reported_problem,
                 'expected_downtime_hours' => $r->expected_downtime_hours,
                 'attachment_urls'         => $r->attachmentUrls(),

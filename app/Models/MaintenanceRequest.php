@@ -10,7 +10,7 @@ class MaintenanceRequest extends Model
     use HasCenter;
 
     protected $fillable = [
-        'center_id', 'machine_id', 'section_id', 'requested_by',
+        'center_id', 'machine_id', 'section_id', 'category', 'requested_by',
         'reported_problem', 'urgency', 'expected_downtime_hours', 'attachment_paths',
         'status',
         'reviewed_by', 'reviewed_at', 'review_notes',
@@ -19,6 +19,17 @@ class MaintenanceRequest extends Model
         'cancelled_at', 'cancelled_by', 'cancellation_reason',
         'maintenance_log_id', 'machine_state_before',
     ];
+
+    /** The two kinds of request — each has its own menu (key => label). */
+    public const CATEGORIES = [
+        'electrical' => 'Electrical Maintenance',
+        'mechanical' => 'Mechanical Maintenance',
+    ];
+
+    public function getCategoryLabelAttribute(): string
+    {
+        return self::CATEGORIES[$this->category] ?? 'Maintenance';
+    }
 
     protected function casts(): array
     {

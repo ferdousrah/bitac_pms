@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router } from '@inertiajs/react';
+import { CATEGORY_STYLE } from '@/lib/maintenance';
 
 const STATUS_BADGE: Record<string, string> = {
     pending:     'badge-amber',
@@ -16,9 +17,10 @@ const URGENCY_BADGE: Record<string, string> = {
     low:    'bg-slate-50 text-slate-700 border-slate-200',
 };
 
-export default function MaintenanceIndex({ requests, filters, counts, can, sections = [] }: any) {
-    const setStatus     = (s: string) => router.get('/maintenance-requests', { ...filters, status: s }, { preserveState: true });
-    const setSectionId  = (v: string) => router.get('/maintenance-requests', { ...filters, section_id: v }, { preserveState: true });
+export default function MaintenanceIndex({ requests, filters, counts, can, sections = [], category = null, categoryLabel = 'Maintenance Requests', basePath = '/maintenance-requests' }: any) {
+    const setStatus     = (s: string) => router.get(basePath, { ...filters, status: s }, { preserveState: true });
+    const setSectionId  = (v: string) => router.get(basePath, { ...filters, section_id: v }, { preserveState: true });
+    const style = CATEGORY_STYLE[category ?? ''] ?? { icon: 'fi-rr-wrench-simple', tile: 'from-amber-400 to-amber-600', chip: '' };
 
     const tabs = [
         { key: 'open',        label: 'Open',         count: counts.pending + counts.approved + counts.in_progress },
@@ -31,21 +33,21 @@ export default function MaintenanceIndex({ requests, filters, counts, can, secti
     ];
 
     return (
-        <AppLayout header="Maintenance Requests">
+        <AppLayout header={categoryLabel}>
             <div className="space-y-6 animate-fade-in">
                 <div className="card">
                     <div className="card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center shadow-md">
-                                <i className="fi fi-rr-wrench-simple text-base leading-none" />
+                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.tile} text-white flex items-center justify-center shadow-md`}>
+                                <i className={`fi ${style.icon} text-base leading-none`} />
                             </div>
                             <div>
-                                <h2 className="text-base font-bold text-surface-900">Maintenance Requests</h2>
+                                <h2 className="text-base font-bold text-surface-900">{categoryLabel}</h2>
                                 <p className="text-xs text-surface-400 mt-0.5">Shop floor requests → review → execute</p>
                             </div>
                         </div>
                         {can?.submit && (
-                            <Link href="/maintenance-requests/create" className="btn-primary btn-sm">
+                            <Link href={`/maintenance-requests/create${category ? `?category=${category}` : ''}`} className="btn-primary btn-sm">
                                 <i className="fi fi-rr-plus text-xs leading-none" /> New Request
                             </Link>
                         )}
@@ -108,6 +110,12 @@ export default function MaintenanceIndex({ requests, filters, counts, can, secti
                                             {r.section && <div className="text-[10px] text-surface-400 mt-0.5">{r.section}</div>}
                                         </td>
                                         <td className="max-w-[280px]">
+                                            {/* Which kind it is, when both are listed together. */}
+                                            {!category && CATEGORY_STYLE[r.category] && (
+                                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 mb-1 rounded border text-[10px] font-bold ${CATEGORY_STYLE[r.category].chip}`}>
+                                                    <i className={`fi ${CATEGORY_STYLE[r.category].icon} text-[9px] leading-none`} /> {r.category_label}
+                                                </span>
+                                            )}
                                             <div className="text-xs text-surface-700 line-clamp-2">{r.reported_problem}</div>
                                             {r.attachment_count > 0 && (
                                                 <div className="text-[10px] text-surface-400 mt-1 inline-flex items-center gap-1">
@@ -137,7 +145,7 @@ export default function MaintenanceIndex({ requests, filters, counts, can, secti
                                         <td colSpan={7}>
                                             <div className="empty-state">
                                                 <div className="empty-state-icon"><i className="fi fi-rr-wrench-simple" /></div>
-                                                <p className="empty-state-title">No maintenance requests</p>
+                                                <p className="empty-state-title">No {category ? categoryLabel.toLowerCase() : 'maintenance'} requests</p>
                                                 <p className="empty-state-text">Shop floor requests appear here when raised.</p>
                                             </div>
                                         </td>

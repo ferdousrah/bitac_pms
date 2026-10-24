@@ -8,6 +8,9 @@ export default {
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
         './resources/js/**/*.tsx',
+        // ⚠️ .ts too — class names written in a lib/*.ts helper (e.g. the
+        // maintenance category colours) were silently left out of the CSS.
+        './resources/js/**/*.ts',
     ],
 
     theme: {

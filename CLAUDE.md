@@ -1075,6 +1075,26 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - It is now its own group, **Maintenance**, placed after Production: a request comes from the shop floor, management approves it (`approve maintenance-requests`) and maintenance performs it (`perform maintenance`). It was never PCD's.
 - ⚠️ **The list and a request's page had NO permission middleware at all** — any signed-in user could open them. They are gated now on the maintenance vocabulary that already existed, as an OR: `submit maintenance-requests|approve maintenance-requests|perform maintenance|view maintenance-requests`. Each action inside keeps its own tighter gate. Verified: the shop in-charge and management open it, a QC inspector no longer does, and the in-charge still gets 403 on both PCD screens — the sidebar now says the same thing the gates do.
 
+### Electrical and Mechanical maintenance (2026-10-24)
+> BITAC: *"Maintenance এ Electrical Maintenance, Mechanical Maintenance নামে দুটি Category-তে Maintenance
+> request করা যাবে … 2ta sub menu hobe."*
+
+- **`maintenance_requests.category`** (`electrical` | `mechanical`, migration `..._000086`, default
+  `mechanical` for rows raised before), `MaintenanceRequest::CATEGORIES` (key → label) +
+  `category_label`. **Required** on the form (two cards at the top), validated `in:` the keys.
+- The **Maintenance** menu is now **Electrical Maintenance** (`/maintenance/electrical`) and
+  **Mechanical Maintenance** (`/maintenance/mechanical`) — the same `index()` narrowed to one
+  category, with its own counts, title and colour (electrical sky + bolt, mechanical amber + gears,
+  `lib/maintenance.ts`). ⚠️ **Each has its own PATH, not `?category=`**, because the sidebar lights
+  an entry by "URL starts with" and the filters would reorder a query string. `/maintenance-requests`
+  still lists both. **New Request** from either opens the form on that category.
+- Menu entries are gated on the same OR set as the route (submit / approve / perform / view), and
+  carry **`navBadges.maintenance_electrical` / `maintenance_mechanical`** — pending counts, shown to
+  approvers. The approver's notification says which kind ("New electrical maintenance request").
+- ⚠️ **`tailwind.config.js` now scans `resources/js/**/*.ts` as well as `.tsx`.** It scanned only
+  `.tsx`, so the category colours written in `lib/maintenance.ts` were silently left out of the CSS
+  (the header tile rendered white). Any class name in a `.ts` helper was exposed to the same trap.
+
 ### The section picker says which is a shop and which is a bench (2026-10-06)
 - ⚠️ **A flat list of sections is unreadable once sub-sections exist.** Nothing on the row said whether "Milling Section" was a shop or a bench inside one — and posting a person to the wrong level changes what they can do entirely: **shop** = the in-charge and his AE/SAE (the whole shop, forward/receive), **sub-section** = that bench's steps only.
 - **`Section::hierarchicalOptions()`** is the one list: active shops each immediately followed by its own sub-sections, carrying `parent_id` + **`parent_name`** so a flat `<select>` can say so. `Admin\UserController` (create + edit) and `Admin\MachineController` both call it — the ordering logic used to live only in the machine controller, so the user form never had it.

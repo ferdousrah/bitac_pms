@@ -812,6 +812,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{maintenanceRequest}/complete', [\App\Http\Controllers\MaintenanceRequestController::class, 'complete'])->name('complete');
         Route::post('/{maintenanceRequest}/cancel',   [\App\Http\Controllers\MaintenanceRequestController::class, 'cancel'])->name('cancel');
     });
+    // The two menu entries — Electrical / Mechanical Maintenance — each the list
+    // narrowed to its category, on its own path so the sidebar lights it.
+    Route::get('maintenance/{category}', [\App\Http\Controllers\MaintenanceRequestController::class, 'index'])
+        ->whereIn('category', ['electrical', 'mechanical'])
+        ->middleware('permission:submit maintenance-requests|approve maintenance-requests|perform maintenance|view maintenance-requests')
+        ->name('maintenance.category');
 
     // Production (per-section supervisor queue + section handoff routing)
     Route::prefix('production')->middleware('permission:view production')->name('production.')->group(function () {

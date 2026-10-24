@@ -123,7 +123,10 @@ export const mainGroups: NavGroup[] = [
         label: 'Maintenance',
         icon: 'fi-rr-wrench-simple',
         items: [
-            { label: 'Maintenance Requests', href: '/maintenance-requests', icon: 'fi-rr-wrench-simple', permission: 'submit maintenance-requests', badgeKey: 'maintenance_pending' },
+            // BITAC (2026-10-24): requests are raised as Electrical or Mechanical,
+            // each its own menu. Gated on the same vocabulary as the route.
+            { label: 'Electrical Maintenance', href: '/maintenance/electrical', icon: 'fi-rr-bolt', permissionAny: ['submit maintenance-requests', 'approve maintenance-requests', 'perform maintenance', 'view maintenance-requests'], badgeKey: 'maintenance_electrical' },
+            { label: 'Mechanical Maintenance', href: '/maintenance/mechanical', icon: 'fi-rr-gears', permissionAny: ['submit maintenance-requests', 'approve maintenance-requests', 'perform maintenance', 'view maintenance-requests'], badgeKey: 'maintenance_mechanical' },
         ],
     },
     {

@@ -8,7 +8,17 @@ interface Props {
     sections?: any[];
     activeSection?: { id: number; name: string; code: string } | null;
     preselectedId?: number | null;
+    category?: 'electrical' | 'mechanical' | null;
+    categories?: Record<string, string>;
 }
+
+/** Each kind of request, as a card to pick. Classes written out in full for Tailwind. */
+const CATEGORY_CARDS = [
+    { value: 'electrical', icon: 'fi-rr-bolt',  hint: 'Wiring, motor, panel, power supply, lighting',
+      on: 'bg-sky-50 border-sky-400 text-sky-900 ring-2 ring-sky-200', iconOn: 'bg-sky-500 text-white' },
+    { value: 'mechanical', icon: 'fi-rr-gears', hint: 'Spindle, gearbox, bearings, hydraulics, alignment',
+      on: 'bg-amber-50 border-amber-400 text-amber-900 ring-2 ring-amber-200', iconOn: 'bg-amber-500 text-white' },
+] as const;
 
 const URGENCY_OPTIONS = [
     { value: 'urgent', label: 'Urgent — production blocked', color: 'rose' },
@@ -16,15 +26,17 @@ const URGENCY_OPTIONS = [
     { value: 'low',    label: 'Low — minor / preventive',     color: 'slate' },
 ];
 
-export default function MaintenanceCreate({ machines, sections = [], activeSection, preselectedId }: Props) {
+export default function MaintenanceCreate({ machines, sections = [], activeSection, preselectedId, category = null, categories = {} }: Props) {
     const [previews, setPreviews] = useState<string[]>([]);
     const form = useForm<{
+        category: string;
         machine_id: string | number | '';
         reported_problem: string;
         urgency: 'urgent' | 'normal' | 'low';
         expected_downtime_hours: string;
         photos: File[];
     }>({
+        category: category ?? '',
         machine_id: preselectedId ?? '',
         reported_problem: '',
         urgency: 'normal',
@@ -59,9 +71,10 @@ export default function MaintenanceCreate({ machines, sections = [], activeSecti
     };
 
     const selectedMachine = machines.find(m => String(m.id) === String(form.data.machine_id));
+    const backTo = form.data.category ? `/maintenance/${form.data.category}` : '/maintenance-requests';
 
     return (
-        <AppLayout header="New Maintenance Request">
+        <AppLayout header={form.data.category ? `New ${categories[form.data.category] ?? 'Maintenance'} Request` : 'New Maintenance Request'}>
             <div className="max-w-2xl animate-fade-in space-y-6">
                 <form onSubmit={submit}>
                     <div className="card">
@@ -78,6 +91,29 @@ export default function MaintenanceCreate({ machines, sections = [], activeSecti
                         </div>
 
                         <div className="card-body space-y-5">
+                            {/* Electrical or mechanical — required. */}
+                            <div className="form-group">
+                                <label className="form-label">Type of maintenance <span className="text-red-500">*</span></label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {CATEGORY_CARDS.map((c) => {
+                                        const on = form.data.category === c.value;
+                                        return (
+                                            <button key={c.value} type="button" onClick={() => form.setData('category', c.value)}
+                                                className={`flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all ${on ? c.on : 'bg-white border-surface-200 text-surface-700 hover:border-surface-300'}`}>
+                                                <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${on ? c.iconOn : 'bg-surface-100 text-surface-500'}`}>
+                                                    <i className={`fi ${c.icon} text-base leading-none`} />
+                                                </span>
+                                                <span className="min-w-0">
+                                                    <span className="block text-sm font-bold">{categories[c.value] ?? c.value}</span>
+                                                    <span className="block text-[11px] opacity-75">{c.hint}</span>
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {form.errors.category && <p className="form-error">{form.errors.category}</p>}
+                            </div>
+
                             {/* Section scope banner */}
                             {(activeSection || sections.length > 0) && (
                                 <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2 flex flex-wrap items-center gap-2 text-xs">
@@ -96,8 +132,10 @@ export default function MaintenanceCreate({ machines, sections = [], activeSecti
                                     <select
                                         onChange={(e) => {
                                             const v = e.target.value;
+                                            // Keep the chosen category across the reload.
+                                            const keep = form.data.category ? { category: form.data.category } : {};
                                             router.get('/maintenance-requests/create',
-                                                v === 'all' ? { section_id: 0 } : { section_id: v },
+                                                v === 'all' ? { ...keep, section_id: 0 } : { ...keep, section_id: v },
                                                 { preserveState: false, replace: true });
                                         }}
                                         value={activeSection?.id ?? 'all'}
@@ -211,12 +249,13 @@ export default function MaintenanceCreate({ machines, sections = [], activeSecti
                         </div>
 
                         <div className="card-body border-t border-surface-100 flex items-center gap-3">
-                            <button type="submit" disabled={form.processing} className="btn-primary">
+                            <button type="submit" disabled={form.processing || !form.data.category} className="btn-primary"
+                                title={form.data.category ? '' : 'Choose Electrical or Mechanical first'}>
                                 {form.processing
                                     ? <><i className="fi fi-rr-spinner animate-spin text-sm" /> Submitting…</>
                                     : <><i className="fi fi-rr-paper-plane text-sm" /> Submit Request</>}
                             </button>
-                            <Link href="/maintenance-requests" className="btn-ghost">Cancel</Link>
+                            <Link href={backTo} className="btn-ghost">Cancel</Link>
                         </div>
                     </div>
                 </form>

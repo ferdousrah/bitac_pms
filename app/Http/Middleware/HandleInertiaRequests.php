@@ -104,6 +104,13 @@ class HandleInertiaRequests extends Middleware
                 if ($user->can('use notes')) {
                     $badges['notes_awaiting'] = count(\App\Services\NoteWorkflow::awaitingIds($user));
                 }
+                // Maintenance requests still waiting for approval, per category.
+                if ($user->can('approve maintenance-requests')) {
+                    $pending = \App\Models\MaintenanceRequest::pending()
+                        ->selectRaw('category, count(*) as n')->groupBy('category')->pluck('n', 'category');
+                    $badges['maintenance_electrical'] = (int) ($pending['electrical'] ?? 0);
+                    $badges['maintenance_mechanical'] = (int) ($pending['mechanical'] ?? 0);
+                }
                 return $badges;
             },
             'productionSections' => function () use ($user, $hasSpatieRoles, $isSuperAdmin) {

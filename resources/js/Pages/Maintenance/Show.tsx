@@ -1,6 +1,7 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
+import { CATEGORY_STYLE } from '@/lib/maintenance';
 
 const STATUS_BADGE: Record<string, string> = {
     pending:     'badge-amber',
@@ -94,12 +95,17 @@ export default function MaintenanceShow({ request: r, can }: any) {
                 <div className="card">
                     <div className="card-body flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                         <div className="flex items-start gap-4">
-                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-md text-white bg-gradient-to-br from-amber-400 to-amber-600">
-                                <i className="fi fi-rr-wrench-simple text-xl leading-none" />
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md text-white bg-gradient-to-br ${CATEGORY_STYLE[r.category]?.tile ?? 'from-amber-400 to-amber-600'}`}>
+                                <i className={`fi ${CATEGORY_STYLE[r.category]?.icon ?? 'fi-rr-wrench-simple'} text-xl leading-none`} />
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <h1 className="text-xl font-bold text-surface-900">Request #{r.id}</h1>
+                                    {CATEGORY_STYLE[r.category] && (
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-bold ${CATEGORY_STYLE[r.category].chip}`}>
+                                            <i className={`fi ${CATEGORY_STYLE[r.category].icon} text-[9px] leading-none`} /> {r.category_label}
+                                        </span>
+                                    )}
                                     <span className={`badge ${STATUS_BADGE[r.status]}`}>{r.status_label}</span>
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${URGENCY_BADGE[r.urgency]}`}>
                                         {r.urgency}
@@ -114,7 +120,7 @@ export default function MaintenanceShow({ request: r, can }: any) {
                                 </p>
                             </div>
                         </div>
-                        <Link href="/maintenance-requests" className="btn-ghost btn-sm shrink-0">
+                        <Link href={CATEGORY_STYLE[r.category] ? `/maintenance/${r.category}` : '/maintenance-requests'} className="btn-ghost btn-sm shrink-0">
                             <i className="fi fi-rr-arrow-left text-xs leading-none" /> Back to list
                         </Link>
                     </div>
