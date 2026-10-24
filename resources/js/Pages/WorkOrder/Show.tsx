@@ -369,7 +369,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                         {workOrder.qc_inspections?.length > 0 && (
                             <div className="card animate-slide-up">
                                 <div className="card-header">
-                                    <h3 className="text-sm font-bold text-surface-900">QC Inspections</h3>
+                                    <h3 className="text-sm font-bold text-surface-900">Inspections</h3>
                                 </div>
                                 <div className="card-body">
                                     {workOrder.qc_inspections.map((qc: any) => (
@@ -642,7 +642,7 @@ export default function WorkOrderShow({ workOrder, canApprove, canTransitionTo, 
                                 )}
                                 {workOrder.status === 'in_production' && (
                                     <Link href={`/qc/create?work_order_id=${workOrder.id}`} className="btn-success btn-sm w-full justify-center">
-                                        <i className="fi fi-rr-shield-check text-xs leading-none" /> QC Inspection
+                                        <i className="fi fi-rr-shield-check text-xs leading-none" /> Inspection
                                     </Link>
                                 )}
                                 <Link href="/work-orders" className="btn-ghost btn-sm w-full justify-center">

@@ -19,7 +19,7 @@ export default function QcCheckpointsIndex({ checkpoints, filters }: any) {
                         <div>
                             <h2 className="text-base font-bold text-surface-900">QC Checkpoints</h2>
                             <p className="text-xs text-surface-400 mt-0.5">
-                                {checkpoints.total ?? checkpoints.data?.length} checkpoint{(checkpoints.total ?? checkpoints.data?.length) === 1 ? '' : 's'} — drives the default checklist on every new QC inspection.
+                                {checkpoints.total ?? checkpoints.data?.length} checkpoint{(checkpoints.total ?? checkpoints.data?.length) === 1 ? '' : 's'} — drives the default checklist on every new inspection.
                             </p>
                         </div>
                         <Link href="/admin/qc-checkpoints/create" className="btn-primary btn-sm">

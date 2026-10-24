@@ -285,7 +285,7 @@ class QcController extends Controller
             ]);
         }
 
-        return redirect()->route('qc.show', $inspection)->with('success', 'QC inspection recorded.');
+        return redirect()->route('qc.show', $inspection)->with('success', 'Inspection recorded.');
     }
 
     /**

@@ -148,7 +148,7 @@ class NcrController extends Controller
             'qc_inspection_id' => $inspection->id,
             'work_order_id'    => $inspection->work_order_id,
             'ncr_number'       => $ncrNo,
-            'defect_type'      => $inspection->notes ?: 'QC inspection failure',
+            'defect_type'      => $inspection->notes ?: 'Inspection failure',
             'status'           => 'open',
         ]);
 

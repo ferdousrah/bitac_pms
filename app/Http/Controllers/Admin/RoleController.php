@@ -133,6 +133,9 @@ class RoleController extends Controller
     private const DISPLAY = [
         'view pcd-inbox'   => ['PCD Job Planning', 'Job Planning — open the planning desk (PCD → Job Planning)'],
         'review pcd-inbox' => ['PCD Inbox', 'PCD Inbox — review and forward to Job Planning (PCD → PCD Inbox)'],
+        // BITAC (2026-10-24): "QC Inspection" reads "Inspection" everywhere.
+        // The permission name stays — it is a key, not a label.
+        'create qc-inspections' => ['Inspections', 'Create inspections'],
     ];
 
     private function groupedPermissions(): array

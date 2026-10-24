@@ -165,7 +165,7 @@ export default function RejectionRateReport({ data, filters }: any) {
                                             <div className="empty-state">
                                                 <div className="empty-state-icon"><i className="fi fi-rr-shield-check" /></div>
                                                 <p className="empty-state-title">No inspection data</p>
-                                                <p className="empty-state-text">QC inspection records will appear here.</p>
+                                                <p className="empty-state-text">Inspection records will appear here.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -193,7 +193,7 @@ export default function RejectionRateReport({ data, filters }: any) {
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-shield-check" /></div>
                                 <p className="empty-state-title">No inspection data</p>
-                                <p className="empty-state-text">QC inspection records will appear here.</p>
+                                <p className="empty-state-text">Inspection records will appear here.</p>
                             </div>
                         )}
                     </div>

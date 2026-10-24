@@ -175,7 +175,7 @@ class LiveDashboardService
         // ─── Active Jobs ──────────────────────────────────────────────
         // Show every WO in an active state. For each, infer the "current step":
         //   - If a section is in_progress or rework → that section's first active op step
-        //   - Else if WO is qc_hold → "Awaiting QC inspection"
+        //   - Else if WO is qc_hold → "Awaiting inspection"
         //   - Else if WO is qc_passed / ready_for_delivery → "Ready for dispatch"
         // This keeps WOs visible even when they're parked between sections.
         $activeJobsList = WorkOrder::with([
@@ -210,7 +210,7 @@ class LiveDashboardService
             $currentStepLabel = match (true) {
                 $step !== null                  => $step->operation_name,
                 $activeSection !== null         => $activeSection->section->name ?? '',
-                $wo->status === 'qc_hold'       => 'Awaiting QC inspection',
+                $wo->status === 'qc_hold'       => 'Awaiting inspection',
                 $wo->status === 'qc_passed'     => 'Ready for dispatch',
                 $wo->status === 'ready_for_delivery' => 'Ready for dispatch',
                 default                         => '—',

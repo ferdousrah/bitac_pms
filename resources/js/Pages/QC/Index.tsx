@@ -42,13 +42,13 @@ export default function QCIndex({ inspections, filters }: any) {
     const total = inspections?.total ?? 0;
 
     return (
-        <AppLayout header="QC Inspections">
+        <AppLayout header="Inspections">
             <div className="space-y-6 animate-fade-in">
 
                 {/* Page header */}
                 <div className="page-header">
                     <div>
-                        <h1 className="page-title">Quality Control Inspections</h1>
+                        <h1 className="page-title">Inspections</h1>
                         <p className="page-subtitle">All incoming, in-process and final inspections</p>
                     </div>
                     <Link href="/qc/create" className="btn-primary">
@@ -166,7 +166,7 @@ export default function QCIndex({ inspections, filters }: any) {
                             <div className="empty-state">
                                 <div className="empty-state-icon"><i className="fi fi-rr-shield-check" /></div>
                                 <div className="empty-state-title">{hasFilters ? 'No inspections match your filters' : 'No inspections yet'}</div>
-                                <div className="empty-state-text">{hasFilters ? 'Try different search or filter criteria.' : 'Record your first QC inspection to get started.'}</div>
+                                <div className="empty-state-text">{hasFilters ? 'Try different search or filter criteria.' : 'Record your first inspection to get started.'}</div>
                             </div>
                         )}
                     </div>

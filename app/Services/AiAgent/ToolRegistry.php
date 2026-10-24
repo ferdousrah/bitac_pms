@@ -53,8 +53,9 @@ class ToolRegistry
         'shop floor'             => ['url' => '/shop-floor',                 'label' => 'Shop Floor'],
         'wip'                    => ['url' => '/wip',                        'label' => 'Work In Progress'],
         // Quality
-        'qc inspections'         => ['url' => '/qc',                         'label' => 'QC Inspections'],
-        'qc'                     => ['url' => '/qc',                         'label' => 'QC Inspections'],
+        'qc inspections'         => ['url' => '/qc',                         'label' => 'Inspections'],
+        'inspections'            => ['url' => '/qc',                         'label' => 'Inspections'],
+        'qc'                     => ['url' => '/qc',                         'label' => 'Inspections'],
         'ncrs'                   => ['url' => '/ncrs',                       'label' => 'NCRs'],
         // Delivery
         'delivery orders'        => ['url' => '/delivery',                   'label' => 'Delivery Orders'],
@@ -244,7 +245,7 @@ class ToolRegistry
             ],
             [
                 'name'        => 'navigator',
-                'description' => 'Navigator Agent — Navigate the user to any page in BITAC PMS. Use when the user asks to "go to", "open", "show me", "take me to", or "navigate to" a page. Returns a URL that the frontend will navigate to. Available pages: dashboard, live dashboard, rfqs, cost estimates, quotations, pcd inbox, material requisitions, work orders, operation sheets, schedule, shop floor, wip, qc inspections, ncrs, delivery orders, invoices, production report, oee report, lead time report, rejection rate report, users, roles, customers, approval chain, branding settings, audit log, sections, machines, operators, materials, operations, profile, notifications.',
+                'description' => 'Navigator Agent — Navigate the user to any page in BITAC PMS. Use when the user asks to "go to", "open", "show me", "take me to", or "navigate to" a page. Returns a URL that the frontend will navigate to. Available pages: dashboard, live dashboard, rfqs, cost estimates, quotations, pcd inbox, material requisitions, work orders, operation sheets, schedule, shop floor, wip, inspections, ncrs, delivery orders, invoices, production report, oee report, lead time report, rejection rate report, users, roles, customers, approval chain, branding settings, audit log, sections, machines, operators, materials, operations, profile, notifications.',
                 'parameters'  => [
                     'type'       => 'OBJECT',
                     'properties' => [

@@ -42,7 +42,7 @@ export default function QCCreate({ sheets, preselected, checkpoints }: any) {
     };
 
     return (
-        <AppLayout header="New QC Inspection">
+        <AppLayout header="New Inspection">
             <div className="max-w-4xl animate-fade-in">
                 <form onSubmit={submit} className="space-y-6">
                     {/* Inspection Details */}

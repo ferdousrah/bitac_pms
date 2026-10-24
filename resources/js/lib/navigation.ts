@@ -130,7 +130,7 @@ export const mainGroups: NavGroup[] = [
         label: 'Quality',
         icon: 'fi-rr-shield-check',
         items: [
-            { label: 'QC Inspections', href: '/qc',   icon: 'fi-rr-shield-check',    permission: 'view qc' },
+            { label: 'Inspections', href: '/qc',   icon: 'fi-rr-shield-check',    permission: 'view qc' },
             { label: 'NCRs',           href: '/ncrs', icon: 'fi-rr-triangle-warning',permission: 'view qc' },
             { label: 'Notes',          href: '/office-notes', icon: 'fi-rr-notebook', permission: 'view qc', badgeKey: 'notes_awaiting' },
         ],

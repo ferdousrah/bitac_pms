@@ -188,7 +188,7 @@ function JobCard({ wo, onPreview }: { wo: any; onPreview: (t: PdfTarget) => void
                     icon="fi-rr-shield-check"
                     color="emerald"
                     empty={wo.inspections.length === 0}
-                    emptyText="No QC inspection on record"
+                    emptyText="No inspection on record"
                 >
                     {wo.inspections.map((i: any) => (
                         <DocLink

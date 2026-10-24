@@ -140,6 +140,14 @@ holds forever, or the old colour survives the deploy.
 
 ## 🎨 UI / Styling Conventions
 
+- ⚠️ **It is "Inspection", never "QC Inspection"** (BITAC, 2026-10-24: *"sob jaigai QC Inspection
+  likhata change hoye sudu Inspection hobe"*) — menu, page headings, buttons, flashes, empty states,
+  the live dashboard ("Awaiting inspection"), the Roles screen's permission group. Only the
+  **wording** changed: the `/qc` URLs, `qc_inspections` table, `QcInspection` model and the
+  `create qc-inspections` permission name are keys and stay (Admin → Roles shows that permission as
+  "Inspections → Create inspections" via `RoleController::DISPLAY`). Oli's navigator still answers
+  to "qc inspections" as an alias.
+
 - Use existing classes: `btn-primary`, `btn-outline`, `btn-ghost`, `card`, `card-header`, `card-body`, `form-input`, `form-textarea`, `form-label`, `form-group`, `form-error`, `alert alert-info`
 - Surface colors: `bg-surface-50/100/200`, `text-surface-400/500/800/900`
 - Brand color: `text-brand-500`, `bg-brand-50`, etc. — a **violet** ramp generated from `settings.primary_color` (see the theme section above); never hardcode the hex
