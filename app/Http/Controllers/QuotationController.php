@@ -2410,7 +2410,7 @@ HTML;
             // Customer's PO / authorisation document — audit trail + legal proof
             'customer_po_file'  => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp,doc,docx|max:10240',
             // Anything else the customer sent with it — drawings, specs, a
-            // covering letter. Each may carry a short title for the IED/PCD lists.
+            // covering letter. Each must carry a title (checked below).
             'other_files'       => 'nullable|array|max:10',
             'other_files.*'     => 'file|max:10240|extensions:pdf,jpg,jpeg,png,webp,doc,docx,xls,xlsx,dwg,dxf',
             'other_titles'      => 'nullable|array',
@@ -2420,6 +2420,18 @@ HTML;
             'other_files.*.max'        => 'Each document must be under 10 MB.',
             'other_files.*.extensions' => 'Attach PDF, image, Word, Excel or CAD (DWG/DXF) files only.',
         ]);
+
+        // Every other document needs a title — a list of bare file names
+        // ("scan0012.pdf") says nothing about which paper is which.
+        $missing = [];
+        foreach (array_keys($request->file('other_files', [])) as $i) {
+            if (trim((string) $request->input("other_titles.$i", '')) === '') {
+                $missing["other_titles.$i"] = 'Give this document a title (e.g. Drawing, Specification).';
+            }
+        }
+        if ($missing) {
+            throw \Illuminate\Validation\ValidationException::withMessages($missing);
+        }
 
         $quotation->load('rfq.items.product', 'items');
         $rfq       = $quotation->rfq;
@@ -2501,13 +2513,13 @@ HTML;
 
         $titles = $request->input('other_titles', []);
         foreach ($request->file('other_files', []) as $i => $file) {
-            $title = trim((string) ($titles[$i] ?? ''));
+            $title = trim((string) $titles[$i]);
             $workOrder->files()->create([
                 'uploaded_by'   => auth()->id(),
                 'kind'          => 'other',
                 'stored_path'   => $file->store("work-orders/{$workOrder->id}", 'public'),
                 'original_name' => $file->getClientOriginalName(),
-                'title'         => $title !== '' ? $title : null,
+                'title'         => $title,
                 'mime_type'     => $file->getMimeType(),
                 'size_bytes'    => $file->getSize(),
                 'description'   => 'Received with the customer work order',

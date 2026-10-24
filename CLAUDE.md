@@ -1386,10 +1386,13 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 
 - The **Issue Work Order** card on Quotation Show now has **Customer PO / Work Order Copy** and
   **Other Documents** side by side. Other documents: up to **10**, each ≤ 10 MB, PDF / image /
-  Word / Excel / **DWG / DXF**, each with an optional **title** ("Drawing GA-12").
+  Word / Excel / **DWG / DXF**, each with a **required title** ("Drawing GA-12") — BITAC: *"title
+  soho lagbe, nahole tu buja jabena kota kiser file"*. A file with a blank title is refused per
+  row (`other_titles.N`, after the main `validate()`, before anything is created); the box is also
+  `required` in the browser.
 - `QuotationController@convertToWorkOrder` takes **`other_files[]` + `other_titles[]`** (index-aligned)
   and stores each as a `work_order_files` row with **`kind = 'other'`** (the kind the table always
-  allowed), `title` = the typed title or NULL. ⚠️ Validated with **`extensions:`**, not `mimes:` —
+  allowed), `title` = the typed title, trimmed. ⚠️ Validated with **`extensions:`**, not `mimes:` —
   `mimes` guesses from the file's content and a DWG has no recognisable MIME type, so it would be
   refused.
 - No new column, no new route: everything downstream already reads `$workOrder->files`. The **IED

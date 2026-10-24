@@ -953,18 +953,19 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
 
                                         {/* Other documents that came with the work order */}
                                         <div className="form-group">
-                                            <label className="form-label flex items-center gap-1.5">
+                                            <label className="form-label flex flex-wrap items-center gap-x-1.5">
                                                 <i className="fi fi-rr-copy-alt text-xs leading-none text-sky-600" />
-                                                Other Documents
+                                                <span className="whitespace-nowrap">Other Documents</span>
                                                 <span className="form-label-optional">(optional · up to 10)</span>
                                             </label>
                                             {convertForm.data.other_files.length > 0 && (
                                                 <div className="space-y-2 mb-2">
                                                     {convertForm.data.other_files.map((f: File, i: number) => {
                                                         const err = (convertForm.errors as any)[`other_files.${i}`];
+                                                        const titleErr = (convertForm.errors as any)[`other_titles.${i}`];
                                                         return (
                                                             <div key={`${f.name}-${i}`}>
-                                                                <div className="flex items-center gap-2.5 p-2 bg-sky-50/60 rounded-lg border border-sky-200">
+                                                                <div className={`flex items-center gap-2.5 p-2 rounded-lg border ${titleErr ? 'bg-red-50/60 border-red-300' : 'bg-sky-50/60 border-sky-200'}`}>
                                                                     <div className="w-9 h-9 rounded-lg bg-sky-100 flex items-center justify-center text-sky-700 text-[10px] font-bold shrink-0">
                                                                         {f.name.split('.').pop()?.toUpperCase().slice(0, 4) ?? 'FILE'}
                                                                     </div>
@@ -972,11 +973,15 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                                                         <input
                                                                             type="text"
                                                                             value={convertForm.data.other_titles[i] ?? ''}
-                                                                            onChange={e => convertForm.setData('other_titles',
-                                                                                convertForm.data.other_titles.map((t: string, j: number) => j === i ? e.target.value : t))}
-                                                                            placeholder="Title (e.g. Drawing, Specification)"
+                                                                            onChange={e => {
+                                                                                convertForm.setData('other_titles',
+                                                                                    convertForm.data.other_titles.map((t: string, j: number) => j === i ? e.target.value : t));
+                                                                                if (titleErr) convertForm.clearErrors(`other_titles.${i}` as any);
+                                                                            }}
+                                                                            placeholder="Title * (e.g. Drawing, Specification)"
                                                                             maxLength={150}
-                                                                            className="form-input !py-1 text-xs"
+                                                                            required
+                                                                            className={`form-input !py-1 text-xs ${titleErr ? '!border-red-400' : ''}`}
                                                                         />
                                                                         <div className="text-[10px] text-surface-500 truncate mt-0.5">{f.name} · {(f.size / 1024).toFixed(0)} KB</div>
                                                                     </div>
@@ -985,6 +990,7 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                                                         ✕
                                                                     </button>
                                                                 </div>
+                                                                {titleErr && <p className="form-error">{titleErr}</p>}
                                                                 {err && <p className="form-error">{err}</p>}
                                                             </div>
                                                         );
@@ -997,7 +1003,7 @@ It starts as a draft with this quotation's items, prices, terms and letter alrea
                                                     <span className="text-xs font-semibold text-sky-800">
                                                         {convertForm.data.other_files.length ? 'Add more documents' : 'Click to upload other documents'}
                                                     </span>
-                                                    <span className="text-[10px] text-sky-600">Drawings, specs, letters · PDF / image / Word / Excel / DWG · max 10 MB each</span>
+                                                    <span className="text-[10px] text-sky-600">Drawings, specs, letters · PDF / image / Word / Excel / DWG · max 10 MB each · give each a title</span>
                                                     <input
                                                         type="file"
                                                         multiple
