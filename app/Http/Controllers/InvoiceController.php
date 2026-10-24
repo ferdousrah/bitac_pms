@@ -246,11 +246,11 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Send the three that travel together.
+     * Send what travels together: forwarding letter, bill, delivery challan,
+     * মূসক ৬.৩ and the job's Gate Pass Out.
      *
-     * The bill always goes. The forwarding letter and the মূসক ৬.৩ go when they
-     * exist and the sender asked for them — a bill with no challan raised yet
-     * must still be sendable.
+     * The bill always goes. Everything else goes when it exists and the sender
+     * asked for it — a bill with no challan raised yet must still be sendable.
      */
     public function email(Request $request, Invoice $invoice)
     {
@@ -263,6 +263,9 @@ class InvoiceController extends Controller
             'lang'              => 'nullable|in:bn,en',
             'include_letter'    => 'nullable|boolean',
             'include_musak'     => 'nullable|boolean',
+            'include_challan'   => 'nullable|boolean',
+            'gate_pass_ids'     => 'nullable|array',
+            'gate_pass_ids.*'   => 'integer',
         ]);
 
         if (! config('mail.mailers.' . config('mail.default') . '.host') && config('mail.default') === 'smtp') {
@@ -286,11 +289,30 @@ class InvoiceController extends Controller
             'name' => "Bill-{$invoice->invoice_number}.pdf",
         ];
 
+        $delivery = $invoice->deliveryOrder;
+        if ($request->boolean('include_challan', true) && $delivery?->challan_number) {
+            $files[] = [
+                'data' => $grab(app(\App\Http\Controllers\Pcd\PcdDeliveryController::class)
+                    ->challan(new Request(['preview' => 'base64']), $delivery)),
+                'name' => "Delivery-Challan-{$delivery->challan_number}.pdf",
+            ];
+        }
+
         if ($request->boolean('include_musak', true) && ($challan = $invoice->musakChallans()->first())) {
             $files[] = [
                 'data' => $grab(app(MusakChallanController::class)
                     ->pdf(new Request(['preview' => 'base64', 'copy' => 1]), $challan)),
                 'name' => "Musak-6.3-{$challan->challan_no}.pdf",
+            ];
+        }
+
+        // Only this job's PCD Gate Pass Out — an id from anywhere else is ignored.
+        $wanted = array_map('intval', $data['gate_pass_ids'] ?? []);
+        foreach (BillingGatePassController::forWorkOrder($invoice->workOrder)->whereIn('id', $wanted) as $pass) {
+            $files[] = [
+                'data' => $grab(app(\App\Http\Controllers\Ied\GatePassController::class)
+                    ->pdf(new Request(['preview' => 'base64']), $pass)),
+                'name' => "Gate-Pass-Out-{$pass->pass_no}.pdf",
             ];
         }
 
@@ -326,7 +348,7 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy', 'musakChallans', 'customer', 'accountsSignedBy']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy', 'musakChallans', 'customer', 'accountsSignedBy', 'deliveryOrder']);
 
         return Inertia::render('Invoice/Show', [
             'invoice' => [
@@ -360,6 +382,15 @@ class InvoiceController extends Controller
                 'letter_issued_at'  => $invoice->letter_issued_at?->format('d M Y'),
                 'emailed_at'        => $invoice->emailed_at?->format('d M Y, h:i A'),
                 'musak_challan'     => $invoice->musakChallans->first()?->only(['id', 'challan_no']),
+                // The delivery this bill was raised for, and the PCD Gate Pass
+                // Out of the job — they go to the client with the bill too.
+                'delivery_challan'  => $invoice->deliveryOrder?->challan_number ? [
+                    'id'             => $invoice->deliveryOrder->id,
+                    'challan_number' => $invoice->deliveryOrder->challan_number,
+                    'quantity'       => (float) $invoice->deliveryOrder->quantity_delivered,
+                ] : null,
+                'gate_passes'       => BillingGatePassController::forWorkOrder($invoice->workOrder)
+                    ->map(fn ($g) => ['id' => $g->id, 'pass_no' => $g->pass_no, 'pass_date' => $g->pass_date?->format('d M Y')])->values(),
                 'customer_email'    => $invoice->customer?->email ?? $invoice->workOrder?->customer?->email,
                 // The accounts desk's signature on the bill itself.
                 'signed'            => $invoice->isAccountsSigned(),

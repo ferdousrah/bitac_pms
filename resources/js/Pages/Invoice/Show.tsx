@@ -42,7 +42,12 @@ export default function InvoiceShow({
         lang: 'bn',
         include_letter: true,
         include_musak: true,
+        include_challan: true,
+        // Every Gate Pass Out of the job goes unless the sender unticks it.
+        gate_pass_ids: (invoice.gate_passes ?? []).map((g: any) => g.id) as number[],
     });
+    const toggleGatePass = (id: number, on: boolean) => mail.setData('gate_pass_ids',
+        on ? [...mail.data.gate_pass_ids, id] : mail.data.gate_pass_ids.filter((x: number) => x !== id));
     const sendMail = (e: FormEvent) => {
         e.preventDefault();
         mail.post(`/invoices/${invoice.id}/email`, { onSuccess: () => setShowMail(false) });
@@ -436,7 +441,7 @@ export default function InvoiceShow({
                     <div className="card-header">
                         <h3 className="text-sm font-bold text-surface-900">Documents that travel together</h3>
                     </div>
-                    <div className="card-body grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    <div className="card-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                         <div className="p-3 rounded-xl border border-surface-200">
                             <p className="font-semibold text-surface-900">Forwarding letter</p>
                             {invoice.has_letter ? (
@@ -478,6 +483,37 @@ export default function InvoiceShow({
                                 <p className="text-xs text-surface-400 mt-0.5">Not raised yet.</p>
                             )}
                         </div>
+                        <div className="p-3 rounded-xl border border-surface-200">
+                            <p className="font-semibold text-surface-900">Delivery challan</p>
+                            {invoice.delivery_challan ? (
+                                <>
+                                    <p className="text-xs text-surface-500 mt-0.5">
+                                        {invoice.delivery_challan.challan_number} · {Number(invoice.delivery_challan.quantity).toLocaleString('en-IN')} pcs
+                                    </p>
+                                    <button type="button"
+                                        onClick={() => setPdf(`/billing/delivery-challans/${invoice.delivery_challan.id}/pdf?preview=base64`)}
+                                        className="mt-2 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">PDF</button>
+                                </>
+                            ) : (
+                                <p className="text-xs text-surface-400 mt-0.5">No delivery linked to this bill.</p>
+                            )}
+                        </div>
+                        <div className="p-3 rounded-xl border border-surface-200 sm:col-span-2 lg:col-span-2">
+                            <p className="font-semibold text-surface-900">Gate Pass Out</p>
+                            {invoice.gate_passes?.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {invoice.gate_passes.map((g: any) => (
+                                        <button key={g.id} type="button" title={g.pass_date}
+                                            onClick={() => setPdf(`/billing/gate-pass-out/${g.id}/pdf?preview=base64`)}
+                                            className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100">
+                                            <i className="fi fi-rr-file-pdf text-[10px] mr-1" />{g.pass_no}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-surface-400 mt-0.5">PCD has issued no Gate Pass Out for this job.</p>
+                            )}
+                        </div>
                     </div>
                     {invoice.emailed_at && (
                         <div className="px-5 pb-4 text-xs text-surface-400">Last sent {invoice.emailed_at}</div>
@@ -486,7 +522,7 @@ export default function InvoiceShow({
             </div>
 
             {/* Mark-as-paid modal */}
-            {/* Send the three that travel together. */}
+            {/* Send what travels together. */}
             {showMail && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMail(false)} />
@@ -542,6 +578,13 @@ export default function InvoiceShow({
                                     <input type="checkbox" checked readOnly className="rounded border-surface-300" />
                                     Bill {invoice.invoice_number} (always sent)
                                 </label>
+                                <label className={`flex items-center gap-2 text-sm ${invoice.delivery_challan ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
+                                    <input type="checkbox" disabled={!invoice.delivery_challan}
+                                        checked={!!invoice.delivery_challan && mail.data.include_challan}
+                                        onChange={(e) => mail.setData('include_challan', e.target.checked)}
+                                        className="rounded border-surface-300" />
+                                    Delivery challan {invoice.delivery_challan ? `— ${invoice.delivery_challan.challan_number}` : '— no delivery linked'}
+                                </label>
                                 <label className={`flex items-center gap-2 text-sm ${invoice.musak_challan ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
                                     <input type="checkbox" disabled={!invoice.musak_challan}
                                         checked={!!invoice.musak_challan && mail.data.include_musak}
@@ -549,6 +592,19 @@ export default function InvoiceShow({
                                         className="rounded border-surface-300" />
                                     মূসক ৬.৩ {invoice.musak_challan ? `— নং ${invoice.musak_challan.challan_no}` : '— not raised yet'}
                                 </label>
+                                {(invoice.gate_passes ?? []).length === 0 ? (
+                                    <label className="flex items-center gap-2 text-sm text-surface-400">
+                                        <input type="checkbox" disabled className="rounded border-surface-300" />
+                                        Gate Pass Out — none issued for this job
+                                    </label>
+                                ) : invoice.gate_passes.map((g: any) => (
+                                    <label key={g.id} className="flex items-center gap-2 text-sm text-surface-700 cursor-pointer">
+                                        <input type="checkbox" checked={mail.data.gate_pass_ids.includes(g.id)}
+                                            onChange={(e) => toggleGatePass(g.id, e.target.checked)}
+                                            className="rounded border-surface-300" />
+                                        Gate Pass Out — {g.pass_no} <span className="text-surface-400 text-xs">({g.pass_date})</span>
+                                    </label>
+                                ))}
                                 <div className="flex items-center gap-2 pt-1">
                                     <span className="text-xs text-surface-500">Letter language</span>
                                     <div className="flex rounded-lg border border-surface-200 overflow-hidden text-xs font-bold">

@@ -76,6 +76,23 @@ class BillingGatePassController extends Controller
         ]);
     }
 
+    /**
+     * The PCD Gate Pass Out that went with a job — what a bill's "documents
+     * that travel together" offers. Only passes that actually let goods out:
+     * not one still awaiting approval, rejected or cancelled.
+     */
+    public static function forWorkOrder(?\App\Models\WorkOrder $wo)
+    {
+        $rfqId = $wo?->rfq_id ?? $wo?->quotation?->rfq_id;
+        if (! $rfqId) {
+            return collect();
+        }
+
+        return GatePass::where('origin', 'pcd')->where('direction', 'out')->where('rfq_id', $rfqId)
+            ->whereIn('status', ['issued', 'partially_returned', 'completed'])
+            ->orderBy('pass_date')->orderBy('id')->get();
+    }
+
     /** The pass PDF — the same generator IED and PCD print from. */
     public function pdf(Request $request, GatePass $gatePass)
     {

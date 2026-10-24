@@ -1568,6 +1568,27 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - **Cost estimate PDF** (`exportSinglePdf`) now renders a **3-column signatory grid — Prepared By · Checked By · Approved By** (`$sigCell` helper): Prepared = creator (saved signature); Checked = the `Checked By` approval row (first approver); Approved = the `Approved By`/final row. Each shows the assigned person always + their signature/date once that step is approved (else "(Pending)"). Single-approver chains drop the Checked column.
 - **Quotation PDF/forwarding letter** still shows the **final approver** as the single signatory (formal customer-facing letter convention) — NOT the 3-grid.
 
+## 📎 The bill travels with its delivery challan and Gate Pass Out (2026-10-24)
+> BITAC: *"ekta client ke job er invoice er sathe delivery challan, musak, gate pass o dite hoi, tai
+> challan tao ekhane niye ashte hobe, mainly chalaner copy in pdf e."*
+
+- **Bill page → Documents that travel together** now has five: forwarding letter · bill · মূসক ৬.৩ ·
+  **delivery challan** (the bill's own `invoices.delivery_order_id`) · **Gate Pass Out** (every one
+  of the job's). Each opens as its PDF; **Send to customer** attaches them too (`include_challan`,
+  `gate_pass_ids[]`, all ticked by default), in that order after the letter and the bill.
+- ⚠️ **`BillingGatePassController::forWorkOrder()` is the one answer to "the job's Gate Pass Out"**:
+  `origin = pcd`, `direction = out`, the job's RFQ, status issued / partially returned / completed —
+  NOT one still awaiting approval, rejected or cancelled (goods have not left on it). The email takes
+  the posted ids only **within that set**, so another job's or IED's pass cannot be attached by id.
+  Gate passes link to the job only through the RFQ, so a job's every pass is offered, not one per
+  delivery.
+- **Billing & Accounts → Delivery Challans** (`/billing/delivery-challans`,
+  `BillingDeliveryChallanController`, `Billing/DeliveryChallans.tsx`, `view invoices`): every
+  delivery with a challan number — search, dates, client, status, and **Billed / Not billed yet**,
+  each row linking to its bill. ⚠️ **`/billing/delivery-challans/{id}/pdf` is a fourth door onto the
+  challan PDF** (`delivery.pdf` needs `view delivery`, `pcd.deliveries.challan` `view pcd-inbox`,
+  the customer portal its own); same generator (`PcdDeliveryController::challan`), same bytes.
+
 ## 🚪 Billing & Accounts → Gate Pass Out (2026-10-24)
 > BITAC: *"Billing & Accounts এ Gate Pass Out অপশন থাকবে — PCD theke j gate out pass gulu ase show
 > korbe, pdf print kora jabe."*

@@ -942,6 +942,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:view invoices')->group(function () {
         Route::get('billing/gate-pass-out', [\App\Http\Controllers\BillingGatePassController::class, 'index'])->name('billing.gate-pass-out.index');
         Route::get('billing/gate-pass-out/{gatePass}/pdf', [\App\Http\Controllers\BillingGatePassController::class, 'pdf'])->name('billing.gate-pass-out.pdf');
+        // …and the delivery challans, for the copy that goes with the bill.
+        Route::get('billing/delivery-challans', [\App\Http\Controllers\BillingDeliveryChallanController::class, 'index'])->name('billing.delivery-challans.index');
+        Route::get('billing/delivery-challans/{delivery}/pdf', [\App\Http\Controllers\BillingDeliveryChallanController::class, 'pdf'])->name('billing.delivery-challans.pdf');
     });
 
     // ─── Payments ledger: advance, part payments, deductions, security ────
