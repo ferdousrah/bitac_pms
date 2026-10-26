@@ -100,6 +100,7 @@ class CustomerCompletionCertificateController extends Controller
                 "/work-orders/{$workOrder->id}",
                 'fi-rr-diploma',
                 'green',
+                centerId: $workOrder->center_id,
             );
         } catch (\Throwable $e) { /* silent */ }
 

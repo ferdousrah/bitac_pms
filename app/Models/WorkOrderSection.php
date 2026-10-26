@@ -27,6 +27,12 @@ class WorkOrderSection extends Model
             ->orderBy('id');
     }
 
+    /** Belongs to a centre through its job — see WorkOrderCenterScope. */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new \App\Scopes\WorkOrderCenterScope());
+    }
+
     protected $fillable = [
         'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'status',
         'started_at', 'completed_at', 'completed_by', 'notes', 'work_hours', 'qc_notes', 'remarks',

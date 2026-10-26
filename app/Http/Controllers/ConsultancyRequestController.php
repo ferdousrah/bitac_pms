@@ -66,7 +66,7 @@ class ConsultancyRequestController extends Controller
         $consultancyRequest->load(['reviewer', 'assignedTo', 'completedBy']);
         return Inertia::render('ConsultancyRequests/Show', [
             'cr'              => $this->serialize($consultancyRequest),
-            'assignableUsers' => User::orderBy('name')->get(['id', 'name'])->all(),
+            'assignableUsers' => User::atCentre($consultancyRequest->center_id)->where('is_active', true)->orderBy('name')->get(['id', 'name'])->all(),
         ]);
     }
 

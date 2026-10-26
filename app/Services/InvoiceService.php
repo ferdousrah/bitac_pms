@@ -31,9 +31,8 @@ class InvoiceService
             $subtotal = $vatAmount = $taxAmount = $total = 0.0;
         }
 
-        $year  = now()->year;
-        $count = Invoice::whereYear('created_at', $year)->count();
-        $invoiceNumber = 'INV-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        // The job's centre's own series — `INV-DHK-2026-0009` (App\Support\DocNumber).
+        $invoiceNumber = \App\Support\DocNumber::next('invoices', 'invoice_number', 'INV', $workOrder->center_id);
 
         $invoice = Invoice::create([
             'invoice_number'    => $invoiceNumber,

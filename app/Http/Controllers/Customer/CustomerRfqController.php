@@ -172,6 +172,7 @@ class CustomerRfqController extends Controller
             "/rfqs/{$rfq->id}",
             'fi-rr-file-invoice',
             'purple',
+            centerId: $rfq->center_id,
         );
 
         return redirect()->route('customer.rfqs.show', $rfq)
@@ -367,7 +368,8 @@ class CustomerRfqController extends Controller
         $firstItem = $rfqItems->first();
 
         $workOrderService = app(\App\Services\WorkOrderService::class);
-        $woNumber  = $workOrderService->generateWoNumber();
+        // The job's own centre's series — the client portal has no centre of its own.
+        $woNumber  = $workOrderService->generateWoNumber($quotation->center_id ?? $quotation->rfq?->center_id);
         $bomId     = $firstItem?->product?->boms()->latest('id')->first()?->id;
         // Job number is assigned when PCD takes over the WO (i.e. when IED
         // forwards it). Leave null at creation so the IED stage doesn't
@@ -447,6 +449,7 @@ class CustomerRfqController extends Controller
             "/ied/work-orders/{$workOrder->id}",
             'fi-rr-paper-plane',
             'brand',
+            centerId: $workOrder->center_id,
         );
 
         return back()->with('success', "Work Order {$woNumber} submitted. BITAC's IED team will review and forward it to production shortly.");

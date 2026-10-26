@@ -2,7 +2,9 @@ import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function UsersIndex({ users, roles = [], sections = [], filters = {} }: any) {
+export default function UsersIndex({ users, roles = [], sections = [], centers = [], filters = {} }: any) {
+    // Only the super admin is sent the centre list; a centre admin sees their own centre's people only.
+    const manyCentres = centers.length > 0;
     const { post } = useForm({});
     const rows = users?.data ?? users ?? [];
 
@@ -18,6 +20,7 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
         router.get('/admin/users', {
             search,
             role: filters.role ?? '',
+            center_id: filters.center_id ?? '',
             section_id: filters.section_id ?? '',
             status: filters.status ?? '',
             sort: filters.sort ?? '',
@@ -30,7 +33,7 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
         router.get('/admin/users', {}, { preserveState: true, replace: true });
     };
 
-    const activeFilters = [filters.search, filters.role, filters.section_id, filters.status]
+    const activeFilters = [filters.search, filters.role, filters.center_id, filters.section_id, filters.status]
         .filter((v) => v !== '' && v !== undefined && v !== null).length;
 
     // ⚠️ `can_delete` is decided by the SERVER (super admin, and the account has
@@ -70,7 +73,7 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
 
                     {/* Filters: one box for anything typed, plus the two things
                         people actually narrow by — which section, which role. */}
-                    <div className="card-body border-b border-surface-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className={`card-body border-b border-surface-100 grid grid-cols-1 sm:grid-cols-2 ${manyCentres ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-3`}>
                         <div className="lg:col-span-2 relative">
                             <i className="fi fi-rr-search absolute left-3 top-1/2 -translate-y-1/2 text-[11px] leading-none text-surface-400" />
                             <input
@@ -81,6 +84,20 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
                                 onKeyDown={(e) => e.key === 'Enter' && go({ search })}
                             />
                         </div>
+
+                        {manyCentres && (
+                            <select
+                                className="form-select"
+                                value={filters.center_id ?? ''}
+                                onChange={(e) => go({ center_id: e.target.value })}
+                            >
+                                <option value="">All centres</option>
+                                <option value="none">— No centre (Head Office) —</option>
+                                {centers.map((c: any) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        )}
 
                         <select
                             className="form-select"
@@ -177,6 +194,11 @@ export default function UsersIndex({ users, roles = [], sections = [], filters =
                                                         <span className="block font-semibold text-surface-900">{user.name}</span>
                                                         {user.designation && (
                                                             <span className="text-[11px] text-surface-400">{user.designation}</span>
+                                                        )}
+                                                        {manyCentres && (
+                                                            <span className="block text-[10px] font-bold text-surface-500">
+                                                                {user.center ? user.center.name : 'All centres'}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>

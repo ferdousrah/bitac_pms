@@ -211,13 +211,112 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
 - User-uploaded **PPTX files** — parsed via PhpPresentation, all slides pushed to shared screen
 - PDFs (download card in chat)
 
-## 🔑 Multi-Tenant / Multi-Center
+## 🔑 Several centres under BITAC Head Office (2026-10-26)
 
-- All main tables have `center_id` column
-- `CenterScope` global scope auto-filters queries by active center
-- `HasCenter` trait auto-fills center_id on save
-- `super_admin` role can switch centers via session (`session('active_center_id')`)
-- Dhaka is center #1
+> BITAC: *"BITAC DHAKA diye live hobe … BITAC Dhaka, BITAC Chottogram, BITAC Khulna sob center BITAC
+> Head Office er under, BITAC Head Office sob koita center er report dekhte parbe, monitor korte
+> parbe"*, and *"prottek center er ekjon admin thakbe"*. Dhaka (centre #1, code `DHK`) is live; the
+> others are added from Admin → Centres when they are ready. BITAC's choices: **one shared shop list**,
+> **one client list**, **the centre code inside every document number**.
+
+### Who sees what — `SetActiveCenter` decides `current_center_id`
+- **Staff with `view all centres`** (the **Head Office** role; the super admin via `Gate::before`):
+  the centre picked in the top bar (`session('active_center_id')`), or **null = every centre**. Only
+  they get the switcher (`canSwitchCenter`, "All centres" option) and `/switch-center` 403s anyone
+  else. ⚠️ It used to ask `hasRole('super_admin')` — a role nobody has — and fell back to "no
+  centre" for anyone without a `center_id`, which on production was **all 43 users**: harmless with
+  one centre, a total leak with two.
+- **Everyone else: their own `users.center_id`** (else the default centre), fixed.
+- **A client (customer guard): null** — clients are national (below); their portal reads by `customer_id`.
+- `CenterScope` (via `HasCenter`) filters by it; nothing filters when it is null.
+
+### What is national and what is per centre
+- ⚠️ **Clients are ONE list** (`Customer` no longer uses `HasCenter`) — Railway works with Dhaka and
+  Chattogram alike, with one portal login, and `customers.email` is unique so a per-centre copy
+  could not exist anyway. `customers.center_id` stays as the **home** centre (set on create). Each
+  JOB still belongs to its centre. IED's Stakeholder report, filtered to a centre, lists clients
+  registered there **or** with work there.
+- ⚠️ **Shops are ONE list** (sections stay national), so a shop's queue and its people must be
+  narrowed through the JOB:
+  - **`App\Scopes\WorkOrderCenterScope`** on `WorkOrderSection`, `ProductionLog` (via
+    `work_order_id`) and `OperationStep` (via `operation_sheet_id` → `work_order_id`) — rows with no
+    centre of their own. Without it Chattogram's CNC queue listed Dhaka's jobs and
+    `/production/wos/{id}` opened another centre's job by URL. The sidebar badges read through it too.
+  - **`ShopAssignment`**: `staff()` / `xenIds()` / `assistants()` / `workforce()` / `gateActive()` /
+    `canOversee()` / `setupHint()` take an optional `$centerId` (default: the active centre), and
+    everything holding a job passes **`ShopAssignment::jobCentre($wos)`** — so Chattogram's CNC
+    in-charge is not the XEN of Dhaka's CNC jobs and is not told about them (`watchersFor`).
+    `NoteWorkflow::departmentHeadIds()` passes its centre too.
+- **Material requisitions** had no `center_id` at all — added (migration `..._000088`), `HasCenter`,
+  backfilled from the job.
+- `material_demands`, chat, notes, approval chains, gate-pass approvers were already per centre.
+
+### ⚠️ `HasCenter` takes the PARENT's centre first
+A new row with a `work_order_id`, `rfq_id` or `quotation_id` takes **that** record's centre, then
+the active centre → the signed-in staff member's → **the signed-in client's home centre** → the
+default. Head Office raising something for a Chattogram job, or a client writing in from the portal
+(whose session has no centre), must not land it in Dhaka.
+
+### Document numbers carry the centre — `App\Support\DocNumber`
+- `DocNumber::next($table, $column, 'WO', $centerId)` → **`WO-DHK-2026-0001`**, counted per centre
+  per year, continuing the old `WO-2026-NNNN` count so Dhaka's series does not restart. Used for WO,
+  GIN/GOUT, challan, INV, NCR, MRN, MD. `DocNumber::code()` = `centers.code` (uppercased).
+- ⚠️ The centre is the **document's** (the job's / quotation's), passed by the caller — never the
+  session's.
+- The code is set when the centre is added and only the super admin can change it (Admin → Centres
+  says so): a new code starts new numbers under it.
+
+### Roles (migration `..._000088`, `ROLES` const)
+- **`Head Office`** — `view all centres` + **read-only** monitoring: dashboards, reports, jobs, bills,
+  payments/receivables, deliveries, completion certificates, notes. ⚠️ **No department permission**
+  (`view rfqs`, `view pcd-inbox`, …): those would put Head Office on every centre's notification
+  fan-out and hand it actions. IED Reports' route is `view rfqs|view all centres` so it can read
+  Target vs Achievement etc. Its own sidebar group, **Head Office**. Accounts have **no centre**.
+  **`HeadOfficeUserSeeder`** makes three placeholder accounts (`ho.dg@`, `ho.director@`,
+  `ho.monitor@bitac.gov.bd`, password `password`) — BITAC renames them; idempotent by email, never
+  overwrites.
+- **`Centre Admin`** — `manage users`, `manage customers`, `view audit-log`, … for ONE centre:
+  - Admin → Users shows **only their centre's people**; a new account goes into their centre whatever
+    is posted; they cannot open, edit, deactivate or manage signatures of anyone at another centre or
+    anyone holding an admin role. **`User::canAdminister($target)`** is the rule (UserController,
+    UserSignatureController).
+  - ⚠️ They cannot grant an **admin role** — `User::privilegedRoles()` = super-admin + any role holding
+    one of `User::PRIVILEGED_PERMISSIONS` (`manage users`, `manage roles`, `manage permissions`,
+    `view all centres`). Whoever can hand those out, or reset an admin's password, can become anything.
+  - Admin → Centres: only their own centre, letterhead editable, code / active not. Adding a centre
+    (`POST admin/centers`) is `role:super-admin`.
+  - ⚠️ **Admin → Roles, Branding and Chatbot settings are now `role:super-admin`** as well as their
+    permission — branding is BITAC-wide, and whoever edits roles can give their own role anything.
+- The user form has a **Centre** field: the super admin picks it (required, except for a role holding
+  `view all centres` / super-admin, which may have none); a centre admin's is fixed. The list shows and
+  filters by centre (super admin only).
+- Migration 000088 gives **every centre-less staff account the default centre, except super-admins**
+  (production: 42 → Dhaka, the super admin stays centre-less).
+
+### People pickers are per centre — `User::atCentre($centreId = active)`
+`users` has no CenterScope (a login must find its account). `atCentre()` = that centre's people +
+anyone with no centre (Head Office, super admin). Used by the signatory pickers (bill letter, মূসক
+৬.৩, RFQ letters), complaint/consultancy assignees, quotation forward-to, the approval-chain and
+gate-pass-approver pickers (whose **store/update also validate** the person is at that centre — the
+approval-chain screen now names the centre it is configuring).
+
+### Notifications carry the centre
+Every `NotifyService::toPermission()` now passes `centerId:` (the job's / document's). Users with no
+centre still receive everything — Head Office and the super admin.
+
+### Caches
+`LiveDashboardService` caches **per centre** (`live_dashboard.{id}` / `live_dashboard.all`) — one key
+showed whichever centre asked first to the next.
+
+### ⚠️ Found on production while preparing this
+- **Nobody on production holds `assign shop-jobs`** — the live `shop-incharge` role carries only view
+  production / maintenance / notes, so no shop runs the XEN → AE chain there today. Every shop behaves
+  the old way. Granting it (Admin → Roles → shop-incharge) turns the chain on.
+- Rehearsed on a copy of the production database: second centre added, a centre admin's every
+  escalation path refused, Head Office sees and switches both, Dhaka/CTG jobs at the shared CNC shop
+  invisible to each other, numbers `WO-DHK-2026-0001` / `WO-CTG-2026-0001`; and every
+  parameter-free page opened without a 500 for super admin (all / Dhaka), Head Office (all / Dhaka),
+  finance and the IED XEN.
 
 ## 👥 Auth Setup
 
@@ -391,8 +490,8 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   shows every version; the total adds each job once).
 - Work-order figures (Target vs Achievement, Stakeholder, Sector Wise Job) need no rule: `work_orders.quotation_id` is the version the order was
   issued against, and a `converted` quotation cannot be revised.
-- ⚠️ `LiveDashboardService::getData()` caches for **8 s** (`live_dashboard`) — a test
-  that changes data and re-reads it must `Cache::forget('live_dashboard')`.
+- ⚠️ `LiveDashboardService::getData()` caches for **8 s**, per centre (`live_dashboard.{id}` /
+  `live_dashboard.all`) — a test that changes data and re-reads it must forget that key.
 
 ### Deleting a draft quotation (`QuotationController@destroy`)
 - **Only `draft`** can be deleted (anything submitted/approved/sent is revised, never deleted); refusal is a redirect + flash. Allowed for the creator, a super admin, or anyone with `edit quotations`. UI: trash icon on draft rows in the Quotation list, **Delete** in the Draft card on Show, **Delete Draft** on the edit form — all `confirm()` first.

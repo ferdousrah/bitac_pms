@@ -81,7 +81,7 @@ function NavLink({ item, isActive, collapsed }: { item: NavItem; isActive: boole
 }
 
 export default function AppLayout({ header, children }: PropsWithChildren<{ header?: ReactNode }>) {
-    const { auth, currentCenter, isSuperAdmin, availableCenters, unreadNotifications, appSettings, productionSections } = usePage().props as any;
+    const { auth, currentCenter, isSuperAdmin, canSwitchCenter, availableCenters, unreadNotifications, appSettings, productionSections } = usePage().props as any;
     const theme = (appSettings ?? {}) as Partial<AppSettings>;
     const userPermissions: string[] = auth?.user?.permissions ?? [];
     const navGroups = flatGroups(userPermissions, isSuperAdmin ?? false, productionSections ?? []);
@@ -473,36 +473,46 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                             <i className="fi fi-rr-search text-lg leading-none" />
                         </button>
 
-                        {/* Center switcher */}
-                        {currentCenter && (
+                        {/* Center switcher — Head Office and the super admin can pick a
+                            centre or look at all of them; everyone else sees their own. */}
+                        {(currentCenter || canSwitchCenter) && (
                             <div ref={centerRef} className="relative">
                                 <button
-                                    onClick={() => isSuperAdmin && setCenterOpen(!centerOpen)}
+                                    onClick={() => canSwitchCenter && setCenterOpen(!centerOpen)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
                                         bg-brand-50 text-brand-700 border border-brand-200
                                         transition-all duration-150
-                                        ${isSuperAdmin ? 'cursor-pointer hover:bg-brand-100 hover:border-brand-300' : 'cursor-default'}`}
+                                        ${canSwitchCenter ? 'cursor-pointer hover:bg-brand-100 hover:border-brand-300' : 'cursor-default'}`}
                                 >
-                                    <i className="fi fi-rr-building leading-none" />
-                                    <span className="hidden sm:inline">{currentCenter.name}</span>
-                                    <span className="sm:hidden">{currentCenter.code}</span>
-                                    {isSuperAdmin && <i className="fi fi-rr-angle-small-down leading-none text-brand-400" />}
+                                    <i className={`fi ${currentCenter ? 'fi-rr-building' : 'fi-rr-apps'} leading-none`} />
+                                    <span className="hidden sm:inline">{currentCenter?.name ?? 'All centres'}</span>
+                                    <span className="sm:hidden">{currentCenter?.code ?? 'ALL'}</span>
+                                    {canSwitchCenter && <i className="fi fi-rr-angle-small-down leading-none text-brand-400" />}
                                 </button>
 
-                                {isSuperAdmin && centerOpen && (
+                                {canSwitchCenter && centerOpen && (
                                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-premium-lg border border-surface-100 z-50 py-1 animate-scale-in origin-top-right">
                                         <div className="px-4 py-2.5 text-[10px] font-bold text-surface-400 uppercase tracking-widest border-b border-surface-50">
                                             Switch Center
                                         </div>
+                                        <button
+                                            onClick={() => { router.post('/switch-center', { center_id: '' }); setCenterOpen(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-sm hover:bg-brand-50 flex items-center gap-2.5 transition-colors border-b border-surface-50
+                                                ${!currentCenter ? 'text-brand-700 font-semibold' : 'text-surface-700'}`}
+                                        >
+                                            <i className="fi fi-rr-apps leading-none text-surface-400" />
+                                            All centres
+                                            {!currentCenter && <i className="fi fi-rr-check leading-none text-brand-500 ml-auto" />}
+                                        </button>
                                         {availableCenters?.map((c: any) => (
                                             <button key={c.id}
                                                 onClick={() => { router.post('/switch-center', { center_id: c.id }); setCenterOpen(false); }}
                                                 className={`w-full text-left px-4 py-2.5 text-sm hover:bg-brand-50 flex items-center gap-2.5 transition-colors
-                                                    ${c.id === currentCenter.id ? 'text-brand-700 font-semibold' : 'text-surface-700'}`}
+                                                    ${c.id === currentCenter?.id ? 'text-brand-700 font-semibold' : 'text-surface-700'}`}
                                             >
                                                 <i className="fi fi-rr-marker leading-none text-surface-400" />
                                                 {c.name}
-                                                {c.id === currentCenter.id && <i className="fi fi-rr-check leading-none text-brand-500 ml-auto" />}
+                                                {c.id === currentCenter?.id && <i className="fi fi-rr-check leading-none text-brand-500 ml-auto" />}
                                             </button>
                                         ))}
                                     </div>

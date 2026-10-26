@@ -6,12 +6,13 @@ use App\Models\WorkOrder;
 
 class WorkOrderService
 {
-    public function generateWoNumber(): string
+    /**
+     * `WO-DHK-2026-0042` — the job's centre's own series (App\Support\DocNumber).
+     * Pass the centre the work order will belong to; null = the current one.
+     */
+    public function generateWoNumber(?int $centerId = null): string
     {
-        $year = now()->year;
-        $lastWo = WorkOrder::whereYear('created_at', $year)->orderByDesc('id')->first();
-        $seq = $lastWo ? ((int) substr($lastWo->wo_number, -4)) + 1 : 1;
-        return 'WO-' . $year . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+        return \App\Support\DocNumber::next('work_orders', 'wo_number', 'WO', $centerId);
     }
 
     public function canTransitionTo(WorkOrder $workOrder, string $newStatus): bool

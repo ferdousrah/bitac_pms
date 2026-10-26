@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Link } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 
 interface Center {
     id: number;
@@ -8,11 +8,18 @@ interface Center {
     name_bn?: string | null;
     address_bn?: string | null;
     is_active: boolean;
+    users_count?: number;
     logo_left_url?: string | null;
     logo_right_url?: string | null;
 }
 
-export default function CentersIndex({ centers }: { centers: Center[] }) {
+export default function CentersIndex({ centers, canCreate }: { centers: Center[]; canCreate: boolean }) {
+    const { data, setData, post, processing, errors, reset } = useForm({ name: '', code: '' });
+    const add = (e: React.FormEvent) => {
+        e.preventDefault();
+        post('/admin/centers', { onSuccess: () => reset() });
+    };
+
     return (
         <AppLayout header="Centers">
             <div className="space-y-6 animate-fade-in max-w-5xl">
@@ -23,13 +30,43 @@ export default function CentersIndex({ centers }: { centers: Center[] }) {
                     </div>
                 </div>
 
-                <div className="card overflow-hidden">
+                {canCreate && (
+                    <form onSubmit={add} className="card">
+                        <div className="card-header">
+                            <h3 className="text-sm font-bold text-surface-900">Add a centre</h3>
+                            <p className="text-xs text-surface-500 mt-0.5">
+                                Every centre is under BITAC Head Office. After adding it, fill in its letterhead and give one
+                                of its people the <b>Centre Admin</b> role in Admin → Users.
+                            </p>
+                        </div>
+                        <div className="card-body grid grid-cols-1 sm:grid-cols-[1fr_10rem_auto] gap-3 items-start">
+                            <div>
+                                <input className="form-input" placeholder="BITAC Chattogram" value={data.name}
+                                    onChange={e => setData('name', e.target.value)} />
+                                {errors.name && <p className="form-error">{errors.name}</p>}
+                            </div>
+                            <div>
+                                <input className="form-input font-mono uppercase" placeholder="CTG" maxLength={10} value={data.code}
+                                    onChange={e => setData('code', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
+                                {errors.code
+                                    ? <p className="form-error">{errors.code}</p>
+                                    : <p className="form-hint">In its numbers: WO-{data.code || 'CTG'}-2026-0001</p>}
+                            </div>
+                            <button type="submit" className="btn-primary" disabled={processing || !data.name || !data.code}>
+                                <i className="fi fi-rr-plus text-xs leading-none" /> Add centre
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                <div className="card overflow-x-auto">
                     <table className="premium-table">
                         <thead>
                             <tr>
                                 <th className="w-12"></th>
                                 <th>Center</th>
                                 <th className="w-32">Code</th>
+                                <th className="w-20 text-right">Staff</th>
                                 <th>Letterhead status</th>
                                 <th className="w-24 text-center">Active</th>
                                 <th className="w-32 text-right">Actions</th>
@@ -62,6 +99,7 @@ export default function CentersIndex({ centers }: { centers: Center[] }) {
                                                 {c.code}
                                             </span>
                                         </td>
+                                        <td className="text-right tabular-nums text-surface-700">{c.users_count ?? 0}</td>
                                         <td>
                                             {hasLetterhead ? (
                                                 <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700">

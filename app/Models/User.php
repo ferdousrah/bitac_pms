@@ -137,9 +137,67 @@ class User extends Authenticatable
         return $this->hasRole('super-admin') || $this->hasRole('super_admin');
     }
 
+    /**
+     * Permissions that make a role an ADMIN role. A centre admin may neither
+     * grant a role carrying one nor touch an account that holds one — whoever
+     * can hand out `manage users` or `view all centres` can make themselves
+     * anything, and whoever can reset an admin's password can become them.
+     */
+    public const PRIVILEGED_PERMISSIONS = ['manage users', 'manage roles', 'manage permissions', 'view all centres'];
+
+    /** @return array<int,string> role names a centre admin may not grant */
+    public static function privilegedRoles(): array
+    {
+        return \Spatie\Permission\Models\Role::query()
+            ->whereIn('name', ['super-admin', 'super_admin'])
+            ->orWhereHas('permissions', fn ($q) => $q->whereIn('name', self::PRIVILEGED_PERMISSIONS))
+            ->pluck('name')->all();
+    }
+
+    public function isPrivileged(): bool
+    {
+        return $this->hasAnyRole(self::privilegedRoles());
+    }
+
+    /**
+     * May this person administer that account (edit it, reset its password,
+     * deactivate it, manage its signatures)?
+     *
+     * ⚠️ `manage users` used to mean every account at every centre and every
+     * role — including super-admin. Now: the super admin, anyone; a centre
+     * admin, only an ordinary account at their own centre.
+     */
+    public function canAdminister(User $target): bool
+    {
+        if ($this->isSuperAdmin()) return true;
+        if (! $this->can('manage users')) return false;
+
+        return $this->center_id
+            && (int) $target->center_id === (int) $this->center_id
+            && ! $target->isPrivileged();
+    }
+
     public function center()
     {
         return $this->belongsTo(Center::class);
+    }
+
+    /**
+     * People of one centre, for a picker — plus anyone with no centre (the
+     * super admin, Head Office), who may sign or act for any of them.
+     *
+     * ⚠️ `users` has no CenterScope (a login must find its account whatever
+     * centre is active), so without this a Chattogram letter offered every
+     * Dhaka officer as its signatory. Defaults to the active centre; with no
+     * centre at all (looking across BITAC) it narrows nothing.
+     */
+    public function scopeAtCentre($query, ?int $centerId = null)
+    {
+        $centerId ??= app()->bound('current_center_id') ? app('current_center_id') : null;
+
+        return $query->when($centerId, fn ($q) => $q->where(fn ($w) => $w
+            ->whereNull($this->getTable() . '.center_id')
+            ->orWhere($this->getTable() . '.center_id', $centerId)));
     }
 
     public function section()

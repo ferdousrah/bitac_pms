@@ -92,6 +92,7 @@ class ConsultancyRequestController extends Controller
                 "/ied/consultancy-requests/{$cr->id}",
                 'fi-rr-graduation-cap',
                 'indigo',
+                centerId: $cr->center_id,
             );
         } catch (\Throwable $e) { /* silent */ }
 

@@ -30,7 +30,7 @@ interface Center {
     logo_right_url?: string | null;
 }
 
-export default function CenterEdit({ center }: { center: Center }) {
+export default function CenterEdit({ center, canEditCode }: { center: Center; canEditCode: boolean }) {
     const [leftPreview,  setLeftPreview]  = useState<string | null>(center.logo_left_url  ?? null);
     const [rightPreview, setRightPreview] = useState<string | null>(center.logo_right_url ?? null);
 
@@ -108,7 +108,13 @@ export default function CenterEdit({ center }: { center: Center }) {
                             <input className="form-input" value={data.name} onChange={e => setData('name', e.target.value)} />
                         </Field>
                         <Field label="Short code *" error={errors.code}>
-                            <input className="form-input font-mono uppercase" value={data.code} onChange={e => setData('code', e.target.value.toUpperCase())} />
+                            <input className="form-input font-mono uppercase disabled:bg-surface-50 disabled:text-surface-500"
+                                value={data.code} disabled={!canEditCode}
+                                onChange={e => setData('code', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
+                            <p className="form-hint">
+                                Goes inside every number this centre issues — WO-{data.code || 'CODE'}-2026-0001.
+                                {canEditCode ? ' Changing it starts new numbers under the new code.' : ' Only the super admin can change it.'}
+                            </p>
                         </Field>
                         <Field label="BIN (VAT registration)" error={errors.bin_number}>
                             <input className="form-input font-mono" value={data.bin_number}
@@ -127,7 +133,7 @@ export default function CenterEdit({ center }: { center: Center }) {
                         </Field>
                         <Field label="Status">
                             <label className="inline-flex items-center gap-2 mt-2">
-                                <input type="checkbox" checked={!!data.is_active} onChange={e => setData('is_active', e.target.checked)} />
+                                <input type="checkbox" checked={!!data.is_active} disabled={!canEditCode} onChange={e => setData('is_active', e.target.checked)} />
                                 <span className="text-sm">Active</span>
                             </label>
                         </Field>

@@ -170,10 +170,17 @@ class MaterialRequisitionController extends Controller
         $validated = $this->validateRequisition($request);
         $submit = $request->boolean('submit');
 
-        $mr = DB::transaction(function () use ($validated, $submit) {
+        // A requisition belongs to its job's centre; with no job, the current one.
+        $centre = ! empty($validated['work_order_id'])
+            ? WorkOrder::withoutGlobalScopes()->whereKey($validated['work_order_id'])->value('center_id')
+            : null;
+        $centre = $centre ?: \App\Support\DocNumber::currentCentreId();
+
+        $mr = DB::transaction(function () use ($validated, $submit, $centre) {
             $mr = MaterialRequisition::create([
+                'center_id'     => $centre,
                 // The number IMS gave it, when PCD has one; otherwise numbered here.
-                'mrn_number'    => ($validated['mrn_number'] ?? null) ?: MaterialRequisition::generateMrnNumber(),
+                'mrn_number'    => ($validated['mrn_number'] ?? null) ?: MaterialRequisition::generateMrnNumber($centre),
                 'work_order_id' => $validated['work_order_id'] ?? null,
                 'section_id'    => $validated['section_id'] ?? null,
                 'request_date'  => $validated['request_date'],

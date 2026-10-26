@@ -3,7 +3,7 @@ import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
 import SignatureManager from '@/Components/SignatureManager';
 
-export default function UserCreateEdit({ user, roles, sections = [] }: any) {
+export default function UserCreateEdit({ user, roles, sections = [], centers = [], canPickCentre = false, crossCentreRoles = [] }: any) {
     const { data, setData, post, transform, errors, processing } = useForm<any>({
         name: user?.name ?? '',
         email: user?.email ?? '',
@@ -13,6 +13,8 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
         password_confirmation: '',
         role: user?.roles?.[0] ?? '',
         section_id: user?.section_id ?? '',
+        // A new account defaults to the only centre on offer (a centre admin's own).
+        center_id: user ? (user.center_id ?? '') : (centers.length === 1 ? centers[0].id : ''),
         is_active: user?.is_active ?? true,
         deactivation_reason: user?.deactivation_reason ?? '',
         signature: null as File | null,
@@ -242,6 +244,38 @@ export default function UserCreateEdit({ user, roles, sections = [] }: any) {
                                     ))}
                                 </select>
                                 {errors.role && <p className="form-error">{errors.role}</p>}
+                            </div>
+
+                            {/* Which centre they work at — every centre-scoped screen reads it. */}
+                            <div className="form-group">
+                                <label className="form-label">
+                                    Centre {!crossCentreRoles.includes(data.role) && <span className="text-red-500">*</span>}
+                                </label>
+                                {canPickCentre ? (
+                                    <select
+                                        value={data.center_id ?? ''}
+                                        onChange={e => setData('center_id', e.target.value ? Number(e.target.value) : '')}
+                                        className="form-select"
+                                    >
+                                        <option value="">
+                                            {crossCentreRoles.includes(data.role) ? '— None: sees every centre (Head Office) —' : 'Select centre...'}
+                                        </option>
+                                        {centers.map((c: any) => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} ({c.code}){c.is_active ? '' : ' — inactive'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <div className="form-input bg-surface-50 text-surface-700">{centers[0]?.name ?? '—'}</div>
+                                )}
+                                {errors.center_id
+                                    ? <p className="form-error">{errors.center_id}</p>
+                                    : <p className="form-hint">
+                                        {canPickCentre
+                                            ? 'They see and work on this centre’s jobs only. Head Office and the super admin may be left without one — they look across every centre.'
+                                            : 'People you add work at your centre.'}
+                                    </p>}
                             </div>
 
                             {/* Section assignment — supervisors of this section see only its production queue */}

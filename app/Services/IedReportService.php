@@ -66,12 +66,20 @@ class IedReportService
 
         return Customer::query()
             ->leftJoin('sectors', 'sectors.id', '=', 'customers.sector_id')
-            ->when($centerId, fn ($q) => $q->where('customers.center_id', $centerId))
+            // ⚠️ Clients are national (2026-10-26), so "this centre's
+            // stakeholders" means the ones registered here or with work here —
+            // and the figures count only THIS centre's work orders.
+            ->when($centerId, fn ($q) => $q->where(fn ($w) => $w->where('customers.center_id', $centerId)
+                ->orWhereExists(fn ($e) => $e->selectRaw('1')->from('work_orders as wo_c')
+                    ->whereColumn('wo_c.customer_id', 'customers.id')->where('wo_c.center_id', $centerId))))
             ->when($search, fn ($q, $s) => $q->where('customers.name', 'like', "%{$s}%"))
-            ->leftJoin('work_orders', function ($j) use ($start, $end) {
+            ->leftJoin('work_orders', function ($j) use ($start, $end, $centerId) {
                 $j->on('work_orders.customer_id', '=', 'customers.id')
                     ->whereNotIn('work_orders.status', ['cancelled'])
                     ->whereBetween(DB::raw($this->woDateExpr()), [$start->toDateString(), $end->toDateString()]);
+                if ($centerId) {
+                    $j->where('work_orders.center_id', $centerId);
+                }
             })
             ->leftJoin('quotations', 'quotations.id', '=', 'work_orders.quotation_id')
             ->groupBy('customers.id', 'customers.name', 'customers.customer_type',

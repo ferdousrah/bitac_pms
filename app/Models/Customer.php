@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Traits\HasCenter;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\RoutesNotifications;
 
@@ -12,7 +11,27 @@ class Customer extends Authenticatable
     // for Mail/Resend notifications without the database-notifications half —
     // we already expose our own `notifications()` relation pointing at the
     // CustomerNotification model, which would collide with the full trait.
-    use HasCenter, RoutesNotifications;
+    use RoutesNotifications;
+
+    /*
+     * ⚠️ A client is ONE record across BITAC (2026-10-26) — Railway works with
+     * Dhaka and Chattogram alike, with one portal login, and `customers.email`
+     * is unique, so a per-centre copy could not even be created. So no
+     * CenterScope here: every centre sees the same client list, while each JOB
+     * still belongs to its centre. `center_id` stays as the client's HOME
+     * centre (where they were first registered; where a portal RFQ goes).
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Customer $c) {
+            $c->center_id ??= \App\Support\DocNumber::currentCentreId();
+        });
+    }
+
+    public function center()
+    {
+        return $this->belongsTo(Center::class);
+    }
 
     protected $guard = 'customer';
 

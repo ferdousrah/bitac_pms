@@ -127,7 +127,7 @@ class NoteWorkflow
             try { $q = User::role($role); }
             catch (\Spatie\Permission\Exceptions\RoleDoesNotExist) { return []; }
         } else {
-            $q = User::whereIn('id', ShopAssignment::xenIds($sectionId) ?: [0]);
+            $q = User::whereIn('id', ShopAssignment::xenIds($sectionId, $centre) ?: [0]);
         }
 
         return $atCentre($q)->pluck('id')->map(fn ($id) => (int) $id)->all();

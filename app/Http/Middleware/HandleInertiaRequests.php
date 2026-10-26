@@ -84,8 +84,11 @@ class HandleInertiaRequests extends Middleware
             ],
             'currentCenter'  => $center ? ['id' => $center->id, 'name' => $center->name, 'code' => $center->code] : null,
             'isSuperAdmin'   => $isSuperAdmin,
-            'availableCenters' => $isSuperAdmin
-                ? Center::where('is_active', true)->get(['id', 'name', 'code'])
+            // Head Office and the super admin switch centres, or see all of
+            // them at once (currentCenter null).
+            'canSwitchCenter'  => $hasSpatieRoles && $user->can('view all centres'),
+            'availableCenters' => ($hasSpatieRoles && $user->can('view all centres'))
+                ? Center::where('is_active', true)->orderBy('id')->get(['id', 'name', 'code'])
                 : [],
             'unreadNotifications' => ($user && $hasSpatieRoles)
                 ? Notification::forUser($user->id)->unread()->count()

@@ -365,7 +365,7 @@ class RfqLetterController extends Controller
         // Each signatory's own signature blocks travel with them — the letter
         // may be signed by someone other than whoever is issuing it, so the
         // picker cannot read the logged-in user's shared list.
-        $signatories = User::with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
+        $signatories = User::atCentre()->where('is_active', true)->with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
             ->map(fn ($u) => [
                 'id'          => $u->id,
                 'name'        => $u->name,

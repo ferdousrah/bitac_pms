@@ -28,7 +28,7 @@ class AiUsageController extends Controller
             ? Carbon::parse($request->input('to'))->endOfDay()
             : Carbon::now()->endOfDay();
 
-        $base = AiUsageLog::whereBetween('created_at', [$from, $to]);
+        $base = AiUsageLog::whereBetween('ai_usage_logs.created_at', [$from, $to]);
 
         // ── KPI totals ───────────────────────────────────────────────
         $totals = (clone $base)

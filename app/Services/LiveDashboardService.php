@@ -20,7 +20,12 @@ class LiveDashboardService
 {
     public function getData(): array
     {
-        return Cache::remember('live_dashboard', 8, fn() => $this->buildData());
+        // ⚠️ One copy PER CENTRE (and one for "all centres"). With a single
+        // key, whichever centre asked first filled the 8-second cache and the
+        // next centre was shown its figures.
+        $centre = app()->bound('current_center_id') ? app('current_center_id') : null;
+
+        return Cache::remember('live_dashboard' . ($centre ? ".{$centre}" : '.all'), 8, fn() => $this->buildData());
     }
 
     private function buildData(): array

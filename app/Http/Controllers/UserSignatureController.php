@@ -82,26 +82,21 @@ class UserSignatureController extends Controller
             return Auth::user();
         }
 
-        return $this->canManageOthers()
+        return $this->canManageOthers($user)
             ? $user
             : 'You can only manage your own signatures.';
     }
 
     private function denyUnlessOwnerOrAdmin(UserSignature $signature): ?string
     {
-        if ($signature->user_id === Auth::id() || $this->canManageOthers()) return null;
+        if ($signature->user_id === Auth::id() || ($signature->user && $this->canManageOthers($signature->user))) return null;
 
         return 'You can only manage your own signatures.';
     }
 
-    private function canManageOthers(): bool
+    /** A centre admin manages their own centre's ordinary accounts only. */
+    private function canManageOthers(User $target): bool
     {
-        $u = Auth::user();
-
-        return $u && (
-            ($u->hasRole('super_admin') ?? false)
-            || $u->can('manage users')
-            || $u->can('edit users')
-        );
+        return (bool) Auth::user()?->canAdminister($target);
     }
 }

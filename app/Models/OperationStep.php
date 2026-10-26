@@ -6,6 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class OperationStep extends Model
 {
+    /** Belongs to a centre through its job — see WorkOrderCenterScope. */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new \App\Scopes\WorkOrderCenterScope('operation_sheet_id'));
+    }
+
     protected $fillable = [
         'operation_sheet_id', 'sequence', 'operation_name', 'operation_id',
         'section_id', 'sub_section_id', 'machine_id', 'operator_id', 'estimated_hours', 'weight_pct',

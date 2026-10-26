@@ -188,6 +188,7 @@ class MaintenanceRequestController extends Controller
             "/maintenance-requests/{$req->id}",
             'fi-rr-wrench-simple',
             $validated['urgency'] === 'urgent' ? 'red' : 'amber',
+            centerId: $req->center_id,
         );
 
         return redirect()->route('maintenance-requests.show', $req)
@@ -285,6 +286,7 @@ class MaintenanceRequestController extends Controller
             'perform maintenance', 'maintenance_ready',
             'Maintenance ready to start', $body,
             "/maintenance-requests/{$maintenanceRequest->id}", 'fi-rr-tools', 'blue',
+            centerId: $maintenanceRequest->center_id,
         );
 
         return back()->with('success', 'Request approved. Technicians have been notified.');

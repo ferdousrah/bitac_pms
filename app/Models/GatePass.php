@@ -101,18 +101,10 @@ class GatePass extends Model
         return $items->every(fn ($i) => $i->isFullyReturned()) ? 'full' : 'partial';
     }
 
-    public static function generatePassNo(string $direction): string
+    /** `GIN-DHK-2026-0007` / `GOUT-…` — the centre's own series (App\Support\DocNumber). */
+    public static function generatePassNo(string $direction, ?int $centerId = null): string
     {
-        $prefix = $direction === 'in' ? 'GIN' : 'GOUT';
-        $year = now()->format('Y');
-        $lastSeq = static::where('pass_no', 'like', "{$prefix}-{$year}-%")
-            ->orderByDesc('id')
-            ->value('pass_no');
-        $next = 1;
-        if ($lastSeq && preg_match('/-(\d+)$/', $lastSeq, $m)) {
-            $next = (int) $m[1] + 1;
-        }
-        return sprintf('%s-%s-%04d', $prefix, $year, $next);
+        return \App\Support\DocNumber::next('gate_passes', 'pass_no', $direction === 'in' ? 'GIN' : 'GOUT', $centerId);
     }
 
     public function signatureAbsolutePath(): ?string

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasCenter;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -14,6 +15,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 class MaterialRequisition extends Model
 {
+    // ⚠️ Centre-scoped since 2026-10-26 — it had no centre at all, so every
+    // centre would have seen every centre's requisitions.
+    use HasCenter;
+
     /** Status → label, in the order a requisition moves through them. */
     public const STATUSES = [
         'draft'            => 'Draft',
@@ -47,7 +52,7 @@ class MaterialRequisition extends Model
     public const ISSUABLE = ['approved', 'partially_issued'];
 
     protected $fillable = [
-        'mrn_number', 'work_order_id', 'section_id', 'request_date',
+        'center_id', 'mrn_number', 'work_order_id', 'section_id', 'request_date',
         'requested_by', 'approved_by', 'approved_at',
         'issued_by', 'issued_at', 'received_by', 'received_at',
         'status', 'notes',
@@ -100,11 +105,9 @@ class MaterialRequisition extends Model
         return $out;
     }
 
-    public static function generateMrnNumber(): string
+    /** `MRN-DHK-2026-0031` — the centre's own series (App\Support\DocNumber). IMS's own number, when typed, wins. */
+    public static function generateMrnNumber(?int $centerId = null): string
     {
-        $year = now()->format('Y');
-        $last = static::where('mrn_number', 'like', "MRN-{$year}-%")->max('mrn_number');
-        $next = $last ? ((int) substr($last, -4)) + 1 : 1;
-        return sprintf('MRN-%s-%04d', $year, $next);
+        return \App\Support\DocNumber::next('material_requisitions', 'mrn_number', 'MRN', $centerId);
     }
 }

@@ -27,9 +27,9 @@ class ShopAssignment
     public const PERMISSION = 'assign shop-jobs';
 
     /** Does this shop run the XEN → AE flow at all? */
-    public static function gateActive(?int $shopId): bool
+    public static function gateActive(?int $shopId, ?int $centerId = null): bool
     {
-        return $shopId !== null && self::xenIds($shopId) !== [];
+        return $shopId !== null && self::xenIds($shopId, $centerId) !== [];
     }
 
     /**
@@ -51,13 +51,13 @@ class ShopAssignment
      *
      * @return array{fact: string, fix: ?string}|null
      */
-    public static function setupHint(?int $shopId, bool $canManageUsers = false): ?array
+    public static function setupHint(?int $shopId, bool $canManageUsers = false, ?int $centerId = null): ?array
     {
-        if ($shopId === null || self::gateActive($shopId)) {
+        if ($shopId === null || self::gateActive($shopId, $centerId)) {
             return null;
         }
 
-        $posted = self::staff($shopId)->count();
+        $posted = self::staff($shopId, $centerId)->count();
         $shop = \App\Models\Section::withoutGlobalScopes()->find($shopId)?->name ?? 'this shop';
 
         $fact = $posted === 0
@@ -81,9 +81,9 @@ class ShopAssignment
     }
 
     /** @return array<int,int> the XENs posted to this shop */
-    public static function xenIds(int $shopId): array
+    public static function xenIds(int $shopId, ?int $centerId = null): array
     {
-        return self::staff($shopId)
+        return self::staff($shopId, $centerId)
             ->filter(fn (User $u) => $u->can(self::PERMISSION))
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
@@ -108,8 +108,10 @@ class ShopAssignment
      *
      * @return \Illuminate\Support\Collection<int, User>
      */
-    public static function workforce(int $shopId, ?int $excludeUserId = null)
+    public static function workforce(int $shopId, ?int $excludeUserId = null, ?int $centerId = null)
     {
+        $centerId = self::centre($centerId);
+
         $benchIds = \App\Models\Section::withoutGlobalScopes()
             ->where('parent_id', $shopId)->pluck('id');
 
@@ -117,6 +119,7 @@ class ShopAssignment
             ->with('section:id,name')
             ->whereIn('section_id', $benchIds->push($shopId)->all())
             ->where('is_active', true)
+            ->when($centerId, fn ($q) => $q->where('center_id', $centerId))
             // ⚠️ You do not put your own name on an operation (BITAC) — you are
             // the one handing it out. Pass the viewer to leave them off.
             ->when($excludeUserId, fn ($q) => $q->whereKeyNot($excludeUserId))
@@ -124,9 +127,9 @@ class ShopAssignment
             ->get();
     }
 
-    public static function assistants(int $shopId)
+    public static function assistants(int $shopId, ?int $centerId = null)
     {
-        return self::staff($shopId)
+        return self::staff($shopId, $centerId)
             ->reject(fn (User $u) => $u->can(self::PERMISSION))
             ->values();
     }
@@ -142,11 +145,11 @@ class ShopAssignment
     }
 
     /** May this person act for the shop as a whole (forward, transfer, flag)? */
-    public static function canOversee(?User $user, ?int $shopId): bool
+    public static function canOversee(?User $user, ?int $shopId, ?int $centerId = null): bool
     {
         if (! $user) return false;
         if (self::seesEverything($user)) return true;
-        if (! self::gateActive($shopId)) return true;   // no XEN → the old behaviour
+        if (! self::gateActive($shopId, $centerId)) return true;   // no XEN → the old behaviour
 
         return self::isXen($user, $shopId);
     }
@@ -167,7 +170,7 @@ class ShopAssignment
     public static function canForward(WorkOrderSection $wos, ?User $user): bool
     {
         if (! $user) return false;
-        if (self::canOversee($user, $wos->section_id)) return true;
+        if (self::canOversee($user, $wos->section_id, self::jobCentre($wos))) return true;
 
         return $wos->assigned_to !== null && (int) $wos->assigned_to === (int) $user->id;
     }
@@ -185,7 +188,7 @@ class ShopAssignment
         $forwarder = $wos->assigned_by;
         if (! $forwarder || (int) $forwarder === (int) $wos->assigned_to) return null;
 
-        return self::assistants((int) $wos->section_id)->contains('id', (int) $forwarder)
+        return self::assistants((int) $wos->section_id, self::jobCentre($wos))->contains('id', (int) $forwarder)
             ? (int) $forwarder
             : null;
     }
@@ -200,7 +203,7 @@ class ShopAssignment
     public static function workBlocker(WorkOrderSection $wos, ?User $user, $step = null): ?string
     {
         if (! $user || self::seesEverything($user)) return null;
-        if (! self::gateActive($wos->section_id)) return null;
+        if (! self::gateActive($wos->section_id, self::jobCentre($wos))) return null;
 
         // A sub-section supervisor works to their own steps; the shop's
         // handover is not about them.
@@ -271,7 +274,7 @@ class ShopAssignment
     public static function canOpen(WorkOrderSection $wos, ?User $user): bool
     {
         if (! $user) return false;
-        if (! self::gateActive($wos->section_id)) return true;
+        if (! self::gateActive($wos->section_id, self::jobCentre($wos))) return true;
         if (self::seesEverything($user)) return true;
         if (self::isXen($user, $wos->section_id)) return true;
         if (self::isSubSectionStaff($user, $wos->section_id)) return true;
@@ -298,7 +301,7 @@ class ShopAssignment
      */
     public static function watchersFor(WorkOrderSection $wos, ?int $actorId, $step = null): array
     {
-        $ids = self::xenIds((int) $wos->section_id);
+        $ids = self::xenIds((int) $wos->section_id, self::jobCentre($wos));
         $ids[] = (int) $wos->assigned_by;
         if ($step) {
             $ids[] = (int) $step->assigned_by;
@@ -307,9 +310,9 @@ class ShopAssignment
         return array_values(array_diff(array_unique(array_filter($ids)), [(int) $actorId]));
     }
 
-    public static function scopedToOwnWork(?User $user, ?int $shopId): bool
+    public static function scopedToOwnWork(?User $user, ?int $shopId, ?int $centerId = null): bool
     {
-        if (! $user || ! self::gateActive($shopId)) return false;
+        if (! $user || ! self::gateActive($shopId, $centerId)) return false;
         if (self::seesEverything($user)) return false;
         if (self::isXen($user, $shopId)) return false;
 
@@ -318,13 +321,38 @@ class ShopAssignment
         return (int) $user->section_id === (int) $shopId;
     }
 
-    /** The shop's people, for a picker. */
-    private static function staff(int $shopId)
+    /**
+     * The shop's people at ONE centre.
+     *
+     * ⚠️ Shops are one national list, so "posted to CNC" is every centre's CNC
+     * staff unless the centre narrows it — and Chattogram's in-charge would be
+     * the XEN of Dhaka's CNC jobs too. The centre is the job's when there is a
+     * job, else the active centre; with neither (all of BITAC) nothing narrows.
+     */
+    private static function staff(int $shopId, ?int $centerId = null)
     {
+        $centerId = self::centre($centerId);
+
         return User::withoutGlobalScopes()
             ->where('section_id', $shopId)
+            ->when($centerId, fn ($q) => $q->where('center_id', $centerId))
             ->orderBy('name')
             ->get();
+    }
+
+    /** The centre a job belongs to. */
+    public static function jobCentre(WorkOrderSection $wos): ?int
+    {
+        $id = $wos->relationLoaded('workOrder')
+            ? $wos->workOrder?->center_id
+            : \Illuminate\Support\Facades\DB::table('work_orders')->where('id', $wos->work_order_id)->value('center_id');
+
+        return $id ? (int) $id : null;
+    }
+
+    private static function centre(?int $centerId): ?int
+    {
+        return $centerId ?: (app()->bound('current_center_id') ? app('current_center_id') : null);
     }
 
     private static function isSubSectionStaff(?User $user, int $shopId): bool

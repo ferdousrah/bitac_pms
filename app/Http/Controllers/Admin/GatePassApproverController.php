@@ -31,14 +31,16 @@ class GatePassApproverController extends Controller
         return Inertia::render('Admin/GatePassApprovers/Index', [
             'approvers'   => $approvers,
             // Staff users not already in the pool — the "add" picker.
-            'candidates'  => User::whereNotIn('id', $approverIds)
+            'candidates'  => User::atCentre()->where('is_active', true)->whereNotIn('id', $approverIds)
                 ->orderBy('name')->get(['id', 'name', 'email']),
         ]);
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate(['user_id' => 'required|exists:users,id']);
+        $centre = app()->bound('current_center_id') ? app('current_center_id') : null;
+        $validated = $request->validate(['user_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')
+            ->where(fn ($q) => $q->when($centre, fn ($x) => $x->where(fn ($w) => $w->whereNull('center_id')->orWhere('center_id', $centre))))]]);
         GatePassApprover::firstOrCreate(['user_id' => $validated['user_id']]);
         return back()->with('success', 'Approver added.');
     }

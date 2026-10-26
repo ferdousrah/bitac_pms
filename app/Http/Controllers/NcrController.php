@@ -142,7 +142,9 @@ class NcrController extends Controller
             return redirect()->route('ncrs.show', $existing)->with('info', 'NCR already raised for this inspection.');
         }
 
-        $ncrNo = 'NCR-' . str_pad((int) (Ncr::max('id') + 1), 5, '0', STR_PAD_LEFT);
+        // The job's centre's own series. (It was max(id) + 1 through the centre
+        // scope, so a second centre would have reissued Dhaka's numbers.)
+        $ncrNo = \App\Support\DocNumber::next('ncrs', 'ncr_number', 'NCR', $inspection->workOrder?->center_id);
 
         $ncr = Ncr::create([
             'qc_inspection_id' => $inspection->id,

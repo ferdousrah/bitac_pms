@@ -1168,7 +1168,7 @@ class QuotationController extends Controller
             // with `approve quotations` who isn't already in the active chain
             // and isn't the current user.
             'forwardableUsers'   => $pendingApproval
-                ? \App\Models\User::permission('approve quotations')
+                ? \App\Models\User::permission('approve quotations')->atCentre($quotation->center_id)
                     ->whereNotIn('id', $quotation->approvals()->pluck('approver_id')->push($user->id)->all())
                     ->orderBy('name')
                     ->get(['id', 'name', 'designation'])
@@ -2437,7 +2437,9 @@ HTML;
         $rfq       = $quotation->rfq;
         $rfqItems  = $rfq?->items ?? collect();
         $firstItem = $rfqItems->first();
-        $woNumber  = $this->workOrderService->generateWoNumber();
+        // Numbered in the job's own centre's series (the centre set below).
+        $woNumber  = $this->workOrderService->generateWoNumber(
+            $quotation->center_id ?? $rfq?->center_id ?? $quotation->customer?->center_id);
         // Job number is provisioned by PCD when IED forwards the WO. Leaving
         // it null at creation prevents the IED stage from showing a number
         // that hasn't actually been allocated yet.
@@ -2542,6 +2544,7 @@ HTML;
             "/ied/work-orders/{$workOrder->id}",
             'fi-rr-paper-plane',
             'brand',
+            centerId: $workOrder->center_id,
         );
 
         return redirect()

@@ -137,7 +137,7 @@ class InvoiceController extends Controller
             ],
             // Each signatory carries their own blocks — a letter is routinely
             // drafted by one person and signed by another.
-            'signatories' => User::with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
+            'signatories' => User::atCentre($invoice->center_id)->where('is_active', true)->with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
                 ->map(fn ($u) => [
                     'id'          => $u->id,
                     'name'        => $u->name,

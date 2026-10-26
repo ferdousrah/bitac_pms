@@ -139,6 +139,7 @@ class EmergencyRequestController extends Controller
             "/work-orders/{$wo?->id}",
             'fi-rr-siren-on',
             'red',
+            centerId: $wo?->center_id,
         );
         NotifyService::toPermission(
             'view pcd',
@@ -147,6 +148,7 @@ class EmergencyRequestController extends Controller
             "/work-orders/{$wo?->id}",
             'fi-rr-siren-on',
             'red',
+            centerId: $wo?->center_id,
         );
 
         return redirect()->route('ied.emergency-requests.index')

@@ -179,12 +179,12 @@ class DeliveryController extends Controller
         $wholeOrder = $lines->every(fn ($l) => $l['earlier'] <= 0.001 && abs(($send[$l['key']] ?? 0) - $l['ordered']) <= 0.001);
         $type = $wholeOrder ? 'full' : 'partial';
 
-        $year    = now()->year;
-        $count   = DeliveryOrder::whereYear('created_at', $year)->count();
-        $challan = 'CH-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        // The job's centre's own series — `CH-DHK-2026-0012` (App\Support\DocNumber).
+        $challan = \App\Support\DocNumber::next('delivery_orders', 'challan_number', 'CH', $workOrder->center_id);
 
         $delivery = \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $workOrder, $challan, $send, $lines, $total, $type) {
             $delivery = DeliveryOrder::create([
+                'center_id'          => $workOrder->center_id,
                 'work_order_id'      => $workOrder->id,
                 'customer_id'        => $workOrder->customer_id,
                 'challan_number'     => $challan,

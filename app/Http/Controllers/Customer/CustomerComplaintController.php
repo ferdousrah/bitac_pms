@@ -110,6 +110,7 @@ class CustomerComplaintController extends Controller
             "/ied/complaints/{$complaint->id}",
             'fi-rr-comment-alt',
             'red',
+            centerId: $complaint->center_id,
         );
 
         return redirect()->route('customer.complaints.show', $complaint)

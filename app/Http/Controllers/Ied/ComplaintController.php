@@ -181,7 +181,7 @@ class ComplaintController extends Controller
                 ])->values(),
             ],
             'candidateSections'  => $candidateSections,
-            'assignableUsers'    => User::orderBy('name')->get(['id', 'name', 'email']),
+            'assignableUsers'    => User::atCentre($complaint->center_id)->where('is_active', true)->orderBy('name')->get(['id', 'name', 'email']),
             'currentUserId'      => auth()->id(),
         ]);
     }
@@ -438,7 +438,7 @@ class ComplaintController extends Controller
 
         DB::transaction(function () use ($complaint, $wo, $validated, $reworkService, $affectedQty, $totalQty, $partial) {
             // (1) NCR — carries the affected qty so production knows the sub-batch size
-            $ncrNo = 'NCR-' . str_pad((int) (Ncr::max('id') + 1), 5, '0', STR_PAD_LEFT);
+            $ncrNo = \App\Support\DocNumber::next('ncrs', 'ncr_number', 'NCR', $wo->center_id);
             $qtySuffix = $partial ? " ({$affectedQty} of {$totalQty} units affected)" : '';
             $ncr = Ncr::create([
                 'qc_inspection_id' => null,

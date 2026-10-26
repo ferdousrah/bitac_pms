@@ -83,6 +83,7 @@ class CustomerEmergencyRequestController extends Controller
             "/ied/emergency-requests/{$emergency->id}",
             'fi-rr-siren-on',
             'red',
+            centerId: $workOrder->center_id,
         );
 
         return back()->with('success', 'Emergency request submitted. BITAC will review it shortly.');

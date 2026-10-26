@@ -255,7 +255,7 @@ class ProductionController extends Controller
         $this->authorizeAccess($workOrderSection);
         // The shop's own acts: moving work on, sending it back, flagging it.
         // They belong to whoever oversees the shop, not to the AE holding one job.
-        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
         }
 
@@ -297,7 +297,7 @@ class ProductionController extends Controller
         $this->authorizeAccess($workOrderSection);
         // The shop's own acts: moving work on, sending it back, flagging it.
         // They belong to whoever oversees the shop, not to the AE holding one job.
-        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
         }
 
@@ -532,7 +532,7 @@ class ProductionController extends Controller
 
         // ⚠️ The person must actually work at this shop or one of its benches —
         // otherwise an operation could be pinned on anyone by guessing an id.
-        if ($userId && ! ShopAssignment::workforce((int) $step->section_id)->contains('id', (int) $userId)) {
+        if ($userId && ! ShopAssignment::workforce((int) $step->section_id, null, ShopAssignment::jobCentre($wos))->contains('id', (int) $userId)) {
             return back()->with('error', 'That person is not posted to this shop or any of its sub-sections.');
         }
 
@@ -743,7 +743,7 @@ class ProductionController extends Controller
         $this->authorizeAccess($workOrderSection);
         // The shop's own acts: moving work on, sending it back, flagging it.
         // They belong to whoever oversees the shop, not to the AE holding one job.
-        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
         }
 
@@ -832,7 +832,7 @@ class ProductionController extends Controller
         $this->authorizeAccess($workOrderSection);
         // The shop's own acts: moving work on, sending it back, flagging it.
         // They belong to whoever oversees the shop, not to the AE holding one job.
-        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id)) {
+        if (! ShopAssignment::canOversee($request->user(), $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error', 'The নির্বাহী প্রকৌশলী of this shop handles this.');
         }
         $validated = $request->validate(['reason' => 'required|string|min:3|max:500']);
@@ -1388,6 +1388,7 @@ class ProductionController extends Controller
             'step_assignees' => ShopAssignment::workforce(
                     (int) $workOrderSection->section_id,
                     $request->user()?->id,     // you are handing it out, not taking it
+                    ShopAssignment::jobCentre($workOrderSection),
                 )
                 ->map(fn ($u) => [
                     'id'          => $u->id,
@@ -1406,13 +1407,14 @@ class ProductionController extends Controller
                 ->values(),
             // ── Who holds this job at this shop ──────────────────────────
             'assignment' => [
-                'active'        => ShopAssignment::gateActive($workOrderSection->section_id),
+                'active'        => ShopAssignment::gateActive($workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection)),
                 // Why there is no Forward / no person to assign. The FACT goes
                 // to whoever is on the page — they are the one wondering where
                 // it went; only the admin step is gated.
                 'setup_hint'    => ShopAssignment::setupHint(
                     $workOrderSection->section_id,
                     (bool) $request->user()?->can('manage users'),
+                    ShopAssignment::jobCentre($workOrderSection),
                 ),
                 'assigned_to'   => $workOrderSection->assignedTo?->name,
                 'assigned_to_id'=> $workOrderSection->assigned_to,
@@ -1423,14 +1425,14 @@ class ProductionController extends Controller
                 'can_forward'   => ShopAssignment::canForward($workOrderSection, $request->user()),
                 // Sending the WHOLE job to a bench moves every open step, so it
                 // stays the XEN's call; an AE assigns sub-sections per step.
-                'can_send_to_sub' => ShopAssignment::canOversee($request->user(), $workOrderSection->section_id),
+                'can_send_to_sub' => ShopAssignment::canOversee($request->user(), $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection)),
                 'can_receive'   => $workOrderSection->awaitingReceipt()
                     && (int) $workOrderSection->assigned_to === (int) $request->user()->id,
                 'can_hand_back' => $workOrderSection->isAssigned()
                     && (int) $workOrderSection->assigned_to === (int) $request->user()->id,
                 // Why this viewer cannot work on it yet, in plain words.
                 'blocker'       => ShopAssignment::workBlocker($workOrderSection, $request->user()),
-                'assistants'    => ShopAssignment::assistants((int) $workOrderSection->section_id)
+                'assistants'    => ShopAssignment::assistants((int) $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))
                     ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'designation' => $u->designation])
                     ->values(),
                 'sub_sections'  => Section::where('parent_id', $workOrderSection->section_id)
@@ -1564,7 +1566,7 @@ class ProductionController extends Controller
         ]);
 
         if ($data['mode'] === 'engineer') {
-            $assistants = ShopAssignment::assistants((int) $workOrderSection->section_id);
+            $assistants = ShopAssignment::assistants((int) $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection));
             if (! $assistants->contains('id', (int) $data['assigned_to'])) {
                 return back()->with('error', 'That person is not posted to this shop.');
             }
@@ -1597,7 +1599,7 @@ class ProductionController extends Controller
         // Straight to a bench. ⚠️ This moves EVERY open step of the job, so it
         // stays a shop-level act — an AE assigns a sub-section step by step on
         // the job page instead.
-        if (! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+        if (! ShopAssignment::canOversee($user, $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error',
                 'Sending the whole job to a sub-section is the নির্বাহী প্রকৌশলী\'s call — '
                 . 'assign the sub-section per operation, or forward it to an engineer.');
@@ -1649,7 +1651,7 @@ class ProductionController extends Controller
             return back()->with('error', 'This job has not been forwarded to anyone yet.');
         }
         if ((int) $workOrderSection->assigned_to !== (int) $user->id
-            && ! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+            && ! ShopAssignment::canOversee($user, $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error',
                 'This job is with ' . ($workOrderSection->assignedTo?->name ?? 'another engineer') . '.');
         }
@@ -1692,7 +1694,7 @@ class ProductionController extends Controller
             return back()->with('error', 'This job is already with the নির্বাহী প্রকৌশলী.');
         }
         if ((int) $workOrderSection->assigned_to !== (int) $user->id
-            && ! ShopAssignment::canOversee($user, $workOrderSection->section_id)) {
+            && ! ShopAssignment::canOversee($user, $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection))) {
             return back()->with('error', 'This job is not yours to hand back.');
         }
 
@@ -1708,7 +1710,7 @@ class ProductionController extends Controller
 
         $tell = $target
             ? [$target]
-            : ShopAssignment::xenIds((int) $workOrderSection->section_id);
+            : ShopAssignment::xenIds((int) $workOrderSection->section_id, ShopAssignment::jobCentre($workOrderSection));
 
         if ($tell) {
             NotifyService::send(

@@ -2,7 +2,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import { router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function ApprovalChainIndex({ chain, users, documentType = 'quotation', documentTypes = {} }: any) {
+export default function ApprovalChainIndex({ chain, users, documentType = 'quotation', documentTypes = {}, centreName = '' }: any) {
     const [editingId, setEditingId] = useState<number | null>(null);
 
     // The same table drives two chains. Work orders are deliberately separate:
@@ -103,6 +103,7 @@ export default function ApprovalChainIndex({ chain, users, documentType = 'quota
                                 <h2 className="text-lg font-bold text-surface-900">Current Approval Chain</h2>
                                 <p className="text-sm text-surface-500">
                                     {chain.length} level{chain.length !== 1 && 's'} configured
+                                    {centreName && <> · <b className="text-surface-700">{centreName}</b> — each centre has its own chain</>}
                                 </p>
                             </div>
                         </div>

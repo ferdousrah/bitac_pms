@@ -276,7 +276,7 @@ class MusakChallanController extends Controller
                     'label'    => $inv->invoice_number . ' — ' . ($inv->customer?->name ?? '—'),
                     'total'    => (float) $inv->total_amount,
                 ]),
-            'signatories'      => User::with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
+            'signatories'      => User::atCentre()->where('is_active', true)->with('signatures')->orderBy('name')->get(['id', 'name', 'designation'])
                 ->map(fn ($u) => [
                     'id'          => $u->id,
                     'name'        => $u->name,

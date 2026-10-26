@@ -855,6 +855,7 @@ HTML;
             '/rfqs',
             'fi-rr-file-invoice',
             'blue',
+            centerId: $rfq->center_id,
         );
     }
 

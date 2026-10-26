@@ -40,7 +40,8 @@ class TargetController extends Controller
         $year = (string) $request->input('year', FinancialYear::current());
         if (! FinancialYear::isValid($year)) $year = FinancialYear::current();
 
-        if (! $this->isSuperAdmin() && $center->id !== $this->myCenterId()) {
+        // Head Office traces any centre's figure too (it only reads).
+        if (! auth()->user()?->can('view all centres') && $center->id !== $this->myCenterId()) {
             abort(403, 'You can only see your own centre.');
         }
 

@@ -11,6 +11,12 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ProductionLog extends Model
 {
+    /** Belongs to a centre through its job — see WorkOrderCenterScope. */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new \App\Scopes\WorkOrderCenterScope());
+    }
+
     protected $fillable = [
         'operation_step_id', 'work_order_id', 'work_order_item_id',
         'section_id', 'sub_section_id', 'machine_id', 'operator_id',

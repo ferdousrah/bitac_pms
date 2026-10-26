@@ -11,9 +11,82 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    /*
+     * ⚠️ Several centres (2026-10-26). The super admin manages every account.
+     * A **Centre Admin** (`manage users`, posted to one centre) manages only
+     * their own centre's ordinary staff: the list shows only them, a new
+     * account is put in their centre, and no admin-level role
+     * (User::privilegedRoles()) can be granted or touched — whoever can hand
+     * out `manage users` or reset an admin's password can become anything.
+     */
+    private function global(): bool
+    {
+        return (bool) auth()->user()?->isSuperAdmin();
+    }
+
+    /** Roles this viewer may put on an account. */
+    private function grantableRoles()
+    {
+        $roles = Role::orderBy('name')->pluck('name');
+
+        return $this->global() ? $roles : $roles->diff(User::privilegedRoles())->values();
+    }
+
+    private function centres()
+    {
+        return $this->global()
+            ? \App\Models\Center::orderBy('id')->get(['id', 'name', 'code', 'is_active'])
+            : \App\Models\Center::whereKey(auth()->user()->center_id ?: 0)->get(['id', 'name', 'code', 'is_active']);
+    }
+
+    /** A refusal for an account this viewer may not administer, else null. */
+    private function refuse(User $user)
+    {
+        return auth()->user()->canAdminister($user)
+            ? null
+            : redirect()->route('admin.users.index')->with('error',
+                "{$user->name} is not an account you can manage — it is at another centre or holds an admin role.");
+    }
+
+    /**
+     * The centre a saved account belongs to. A centre admin's accounts are
+     * always at their own centre. The super admin picks one — and may leave it
+     * blank only for an account that looks across centres (Head Office).
+     */
+    private function centreFor(Request $request): ?int
+    {
+        if (! $this->global()) {
+            return (int) auth()->user()->center_id;
+        }
+
+        return $request->integer('center_id') ?: null;
+    }
+
+    private function crossCentreRole(string $role): bool
+    {
+        return in_array($role, $this->crossCentreRoleNames(), true);
+    }
+
+    /** Roles whose holders look across centres, so they may have no centre. */
+    private function crossCentreRoleNames(): array
+    {
+        return Role::query()
+            ->whereIn('name', ['super-admin', 'super_admin'])
+            ->orWhereHas('permissions', fn ($q) => $q->where('name', 'view all centres'))
+            ->pluck('name')->all();
+    }
+
     public function index(Request $request)
     {
-        $query = User::with(['roles', 'section.parent']);
+        $query = User::with(['roles', 'section.parent', 'center:id,name,code']);
+
+        if (! $this->global()) {
+            $query->where('center_id', auth()->user()->center_id ?: 0);
+        } elseif ($request->input('center_id') === 'none') {
+            $query->whereNull('center_id');
+        } elseif ($c = $request->integer('center_id')) {
+            $query->where('center_id', $c);
+        }
 
         // ⚠️ One box, every obvious thing someone types: a name, an email, a
         // designation, the section they are posted to, or their role. Looking
@@ -81,6 +154,7 @@ class UserController extends Controller
                     // difference in what the person does — say which.
                     'parent_name' => $u->section->parent?->name,
                 ] : null,
+                'center'      => $u->center ? ['name' => $u->center->name, 'code' => $u->center->code] : null,
                 'is_active'   => (bool) $u->is_active,
                 'created_at'  => $u->created_at->format('d/m/Y'),
                 'can_delete'  => in_array($u->id, $canDelete, true),
@@ -90,7 +164,9 @@ class UserController extends Controller
             'users'    => $users,
             'roles'    => Role::orderBy('name')->pluck('name'),
             'sections' => \App\Models\Section::hierarchicalOptions(),
+            'centers'  => $this->global() ? $this->centres() : [],
             'filters'  => [
+                'center_id'  => $request->input('center_id', ''),
                 'search'     => $request->input('search', ''),
                 'role'       => $request->input('role', ''),
                 'section_id' => $request->input('section_id', ''),
@@ -104,8 +180,11 @@ class UserController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Users/CreateEdit', [
-            'roles'    => Role::pluck('name'),
+            'roles'    => $this->grantableRoles(),
             'sections' => \App\Models\Section::hierarchicalOptions(),
+            'centers'  => $this->centres(),
+            'canPickCentre' => $this->global(),
+            'crossCentreRoles' => $this->crossCentreRoleNames(),
         ]);
     }
 
@@ -117,11 +196,17 @@ class UserController extends Controller
             'phone'       => 'nullable|string|max:40',
             'designation' => 'nullable|string|max:120',
             'password'    => 'required|string|min:8|confirmed',
-            'role'        => 'required|exists:roles,name',
+            'role'        => ['required', \Illuminate\Validation\Rule::in($this->grantableRoles()->all())],
+            'center_id'   => 'nullable|exists:centers,id',
             'section_id'  => 'nullable|exists:sections,id',
             'is_active'   => 'nullable|boolean',
             'signature'   => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
         ]);
+
+        $centre = $this->centreFor($request);
+        if (! $centre && ! $this->crossCentreRole($validated['role'])) {
+            return back()->withErrors(['center_id' => 'Pick the centre this person works at.'])->withInput();
+        }
 
         $user = User::create([
             'name'           => $validated['name'],
@@ -131,6 +216,7 @@ class UserController extends Controller
             'password'       => $validated['password'], // cast 'hashed' auto-hashes
             'is_active'      => $validated['is_active'] ?? true,
             'section_id'     => $validated['section_id'] ?? null,
+            'center_id'      => $centre,
         ]);
         $user->assignRole($validated['role']);
 
@@ -151,6 +237,7 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
+        if ($r = $this->refuse($user)) return $r;
         $user->load('roles');
         return Inertia::render('Admin/Users/CreateEdit', [
             'user'  => [
@@ -169,27 +256,40 @@ class UserController extends Controller
                 'deactivation_reason' => $user->deactivation_reason,
                 'roles'     => $user->roles->pluck('name'),
                 'section_id'=> $user->section_id,
+                'center_id' => $user->center_id,
             ],
-            'roles'    => Role::pluck('name'),
+            'roles'    => $this->grantableRoles(),
             'sections' => \App\Models\Section::hierarchicalOptions(),
+            'centers'  => $this->centres(),
+            'canPickCentre' => $this->global(),
+            'crossCentreRoles' => $this->crossCentreRoleNames(),
         ]);
     }
 
     public function update(Request $request, User $user)
     {
+        if ($r = $this->refuse($user)) return $r;
+
         $validated = $request->validate([
             'name'                => 'required|string|max:255',
             'email'               => 'required|email|unique:users,email,' . $user->id,
             'phone'               => 'nullable|string|max:40',
             'designation'         => 'nullable|string|max:120',
-            'role'                => 'required|exists:roles,name',
+            'role'                => ['required', \Illuminate\Validation\Rule::in($this->grantableRoles()->all())],
+            'center_id'           => 'nullable|exists:centers,id',
             'section_id'          => 'nullable|exists:sections,id',
             'is_active'           => 'nullable|boolean',
             'password'            => 'nullable|string|min:8',
             'deactivation_reason' => 'nullable|string|max:500',
         ]);
 
+        $centre = $this->centreFor($request);
+        if (! $centre && ! $this->crossCentreRole($validated['role'])) {
+            return back()->withErrors(['center_id' => 'Pick the centre this person works at.']);
+        }
+
         $data = [
+            'center_id'   => $centre,
             'name'        => $validated['name'],
             'email'       => $validated['email'],
             'phone'       => $validated['phone'] ?? null,
@@ -229,6 +329,7 @@ class UserController extends Controller
 
     public function deactivate(Request $request, User $user)
     {
+        if ($r = $this->refuse($user)) return $r;
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot deactivate your own account.');
         }
@@ -242,6 +343,7 @@ class UserController extends Controller
 
     public function activate(User $user)
     {
+        if ($r = $this->refuse($user)) return $r;
         $user->update([
             'is_active'           => true,
             'deactivated_at'      => null,

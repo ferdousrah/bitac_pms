@@ -261,10 +261,9 @@ class QcController extends Controller
             $hasOpenDelivery = $workOrder->deliveryOrders()
                 ->whereIn('status', ['scheduled', 'draft'])->exists();
             if ($latestComplaint && !$hasOpenDelivery) {
-                $year    = now()->year;
-                $count   = \App\Models\DeliveryOrder::whereYear('created_at', $year)->count();
                 $dispatchQty = $latestComplaint->affected_qty ?? (int) $workOrder->quantity;
                 \App\Models\DeliveryOrder::create([
+                    'center_id'          => $workOrder->center_id,
                     'work_order_id'      => $workOrder->id,
                     'customer_id'        => $workOrder->customer_id,
                     'quantity_delivered' => $dispatchQty,
@@ -272,7 +271,7 @@ class QcController extends Controller
                     'delivery_address'   => $workOrder->customer?->address,
                     'notes'              => "Auto-drafted after complaint-driven rework ({$latestComplaint->reference_number}). "
                                             . "Dispatching {$dispatchQty} reworked unit(s). Confirm vehicle + driver before dispatch.",
-                    'challan_number'     => 'CH-' . $year . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT),
+                    'challan_number'     => \App\Support\DocNumber::next('delivery_orders', 'challan_number', 'CH', $workOrder->center_id),
                     'status'             => 'scheduled',
                 ]);
                 $previous = $workOrder->status;

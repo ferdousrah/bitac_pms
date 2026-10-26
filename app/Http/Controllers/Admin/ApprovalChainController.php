@@ -58,20 +58,24 @@ class ApprovalChainController extends Controller
                 'approver_name'=> $s->approver?->name,
             ]);
 
-        $users = User::orderBy('name')->get(['id', 'name']);
+        // ⚠️ This centre's people (plus centre-less Head Office / super
+        // admin) — a Chattogram chain must not be able to name a Dhaka officer.
+        $users = User::atCentre($this->centerId())->where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Admin/ApprovalChain/Index', [
             'chain'        => $chain,
             'users'        => $users,
             'documentType' => $docType,
             'documentTypes'=> QuotationApprovalSetting::DOC_TYPES,
+            'centreName'   => \App\Models\Center::whereKey($this->centerId())->value('name'),
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'approver_id'   => 'required|exists:users,id',
+            'approver_id'   => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->where(fn ($q) => $q
+                ->where(fn ($w) => $w->whereNull('center_id')->orWhere('center_id', $this->centerId())))],
             'label'         => 'nullable|string|max:100',
             'document_type' => 'nullable|string',
         ]);
@@ -97,8 +101,11 @@ class ApprovalChainController extends Controller
 
     public function update(Request $request, QuotationApprovalSetting $approvalChain)
     {
+        abort_unless((int) $approvalChain->center_id === (int) $this->centerId(), 404);
+
         $validated = $request->validate([
-            'approver_id' => 'required|exists:users,id',
+            'approver_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->where(fn ($q) => $q
+                ->where(fn ($w) => $w->whereNull('center_id')->orWhere('center_id', $this->centerId())))],
             'label'       => 'nullable|string|max:100',
         ]);
 

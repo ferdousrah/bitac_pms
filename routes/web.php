@@ -51,12 +51,13 @@ use App\Http\Controllers\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
 // ======================================================================
-// Center switcher (super_admin only)
+// Center switcher — Head Office and the super admin (`view all centres`).
+// No centre = every centre.
 // ======================================================================
 Route::post('/switch-center', function (\Illuminate\Http\Request $request) {
-    abort_unless(auth()->check() && (auth()->user()->hasRole('super-admin') || auth()->user()->hasRole('super_admin')), 403);
+    abort_unless(auth()->check() && auth()->user()->can('view all centres'), 403);
     $centerId = $request->input('center_id');
-    if ($centerId) {
+    if ($centerId && \App\Models\Center::whereKey($centerId)->exists()) {
         session(['active_center_id' => (int) $centerId]);
     } else {
         session()->forget('active_center_id');
@@ -395,7 +396,8 @@ Route::middleware(['auth'])->group(function () {
 
     // ─── IED commercial reports (clients, sectors, quotation value,
     //     pipeline, target vs achievement) ──────────────────────────────────
-    Route::middleware('permission:view rfqs')->group(function () {
+    // Head Office (`view all centres`) reads them for every centre.
+    Route::middleware('permission:view rfqs|view all centres')->group(function () {
         Route::get('ied/reports', [\App\Http\Controllers\Ied\IedReportController::class, 'index'])
             ->name('ied.reports');
         // The same report on the BITAC pad. ⚠️ Declared BEFORE nothing in
@@ -1046,8 +1048,12 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('gate-pass-approvers/{approver}', [\App\Http\Controllers\Admin\GatePassApproverController::class, 'destroy'])->name('admin.gate-pass-approvers.destroy');
         });
 
+        // ⚠️ Super admin only (2026-10-26). Whoever edits roles can give their
+        // own role `view all centres` or `manage users` — with several
+        // centres, `manage roles` alone would let one centre's admin make
+        // themselves everyone's.
         Route::resource('roles', RoleController::class)
-            ->middleware('permission:manage roles')
+            ->middleware(['permission:manage roles', 'role:super-admin|super_admin'])
             ->names('admin.roles')
             ->except(['show']);
 
@@ -1124,24 +1130,30 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:view ai-usage')
             ->name('admin.ai-usage');
 
+        // ⚠️ Branding and the chatbot are BITAC-wide — every centre and the
+        // public website wear the same colour — so they are the super admin's,
+        // not a centre admin's (who also holds `manage users`).
         Route::get('branding', [BrandingController::class, 'index'])
-            ->middleware('permission:manage users')
+            ->middleware(['permission:manage users', 'role:super-admin|super_admin'])
             ->name('admin.branding');
         Route::post('branding', [BrandingController::class, 'update'])
-            ->middleware('permission:manage users')
+            ->middleware(['permission:manage users', 'role:super-admin|super_admin'])
             ->name('admin.branding.update');
 
         Route::get('chatbot-settings', [\App\Http\Controllers\Admin\ChatbotSettingsController::class, 'index'])
-            ->middleware('permission:manage users')
+            ->middleware(['permission:manage users', 'role:super-admin|super_admin'])
             ->name('admin.chatbot-settings');
         Route::post('chatbot-settings', [\App\Http\Controllers\Admin\ChatbotSettingsController::class, 'update'])
-            ->middleware('permission:manage users')
+            ->middleware(['permission:manage users', 'role:super-admin|super_admin'])
             ->name('admin.chatbot-settings.update');
 
         // Centers — manage each BITAC center + its PDF letterhead config
         Route::get('centers',                [\App\Http\Controllers\Admin\CenterController::class, 'index'])
             ->middleware('permission:manage users')
             ->name('admin.centers.index');
+        Route::post('centers',               [\App\Http\Controllers\Admin\CenterController::class, 'store'])
+            ->middleware('role:super-admin|super_admin')
+            ->name('admin.centers.store');
         Route::get('centers/{center}/edit',  [\App\Http\Controllers\Admin\CenterController::class, 'edit'])
             ->middleware('permission:manage users')
             ->name('admin.centers.edit');

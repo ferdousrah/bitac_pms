@@ -44,6 +44,21 @@ export const mainGroups: NavGroup[] = [
         ],
     },
     {
+        // BITAC Head Office watches every centre (`view all centres`). It
+        // belongs to no department, so like the centre head it needs its own
+        // menu — the department menus are gated on department permissions it
+        // deliberately does not hold (it reads; the centres act).
+        label: 'Head Office',
+        icon: 'fi-rr-building',
+        items: [
+            { label: 'Target vs Achievement', href: '/ied/reports?view=target',  icon: 'fi-rr-bullseye-arrow', permission: 'view all centres' },
+            { label: 'Commercial Reports',    href: '/ied/reports',              icon: 'fi-rr-stats',          permission: 'view all centres' },
+            { label: 'Jobs',                  href: '/work-orders',              icon: 'fi-rr-briefcase',      permission: 'view all centres' },
+            { label: 'Receivables',           href: '/receivables',              icon: 'fi-rr-chart-pie',      permission: 'view all centres' },
+            { label: 'Delivered vs Received', href: '/delivered-vs-received',    icon: 'fi-rr-chart-histogram', permission: 'view all centres' },
+        ],
+    },
+    {
         label: 'IED',
         icon: 'fi-rr-pencil-ruler',
         items: [
@@ -204,7 +219,7 @@ export const adminGroup: NavGroup = {
             icon: 'fi-rr-users',
             items: [
                 { label: 'Users',          href: '/admin/users',          icon: 'fi-rr-users',          permission: 'manage users' },
-                { label: 'Roles',          href: '/admin/roles',          icon: 'fi-rr-shield',         permission: 'manage roles' },
+                { label: 'Roles',          href: '/admin/roles',          icon: 'fi-rr-shield',         permission: 'manage roles', requireSuperAdmin: true },
                 { label: 'Customers',      href: '/admin/customers',      icon: 'fi-rr-building',       permission: 'manage customers' },
                 { label: 'Approval Chain', href: '/admin/approval-chain', icon: 'fi-rr-workflow',       permission: 'manage users' },
                 { label: 'Gate Pass Approvers', href: '/admin/gate-pass-approvers', icon: 'fi-rr-shield-check', permission: 'manage users' },
@@ -214,9 +229,9 @@ export const adminGroup: NavGroup = {
             label: 'System',
             icon: 'fi-rr-settings',
             items: [
-                { label: 'Branding',         href: '/admin/branding',          icon: 'fi-rr-palette',  permission: 'manage users' },
+                { label: 'Branding',         href: '/admin/branding',          icon: 'fi-rr-palette',  permission: 'manage users', requireSuperAdmin: true },
                 { label: 'Centers',          href: '/admin/centers',           icon: 'fi-rr-building', permission: 'manage users' },
-                { label: 'Chatbot Settings', href: '/admin/chatbot-settings',  icon: 'fi-rr-robot',    permission: 'manage users' },
+                { label: 'Chatbot Settings', href: '/admin/chatbot-settings',  icon: 'fi-rr-robot',    permission: 'manage users', requireSuperAdmin: true },
                 { label: 'Audit Log',        href: '/admin/audit-log',         icon: 'fi-rr-notebook', permission: 'view audit-log' },
                 { label: 'AI Usage & Cost',  href: '/admin/ai-usage',          icon: 'fi-rr-robot',    permission: 'view ai-usage' },
                 { label: 'Reset / Wipe Data', href: '/admin/system/reset',     icon: 'fi-rr-trash-restore', requireSuperAdmin: true },

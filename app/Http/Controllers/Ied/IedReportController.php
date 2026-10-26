@@ -111,7 +111,13 @@ class IedReportController extends Controller
             : 'clients';
 
         // A super admin looks across BITAC; everyone else sees their own centre.
-        $centerId = $this->isSuperAdmin() ? $request->integer('center_id') ?: null : $this->myCenterId();
+        // May see all centres: the centre picked on the page, else the one in
+        // the top-bar switcher, else all. Everyone else: their own.
+        $centerId = $this->isSuperAdmin()
+            ? ($request->has('center_id')
+                ? ($request->integer('center_id') ?: null)
+                : (app()->bound('current_center_id') ? app('current_center_id') : null))
+            : $this->myCenterId();
 
         return [$view, $year, $centerId];
     }
@@ -179,7 +185,10 @@ class IedReportController extends Controller
      */
     private function isSuperAdmin(): bool
     {
-        return auth()->user()?->isSuperAdmin() ?? false;
+        // "May see every centre" — the super admin and, since 2026-10-26,
+        // BITAC Head Office (`view all centres`). The name is kept so the
+        // page's `isSuperAdmin` prop keeps its meaning: may pick any centre.
+        return auth()->user()?->can('view all centres') ?? false;
     }
 
     private function myCenterId(): ?int

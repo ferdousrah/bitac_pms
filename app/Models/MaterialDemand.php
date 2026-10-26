@@ -53,12 +53,9 @@ class MaterialDemand extends Model
         return $this->status === 'submitted';
     }
 
-    public static function generateNo(): string
+    /** `MD-DHK-2026-0004` — the centre's own series (App\Support\DocNumber). */
+    public static function generateNo(?int $centerId = null): string
     {
-        $year = now()->format('Y');
-        $last = static::withoutGlobalScopes()->where('demand_no', 'like', "MD-{$year}-%")->max('demand_no');
-        $next = $last ? ((int) substr($last, -4)) + 1 : 1;
-
-        return sprintf('MD-%s-%04d', $year, $next);
+        return \App\Support\DocNumber::next('material_demands', 'demand_no', 'MD', $centerId);
     }
 }
