@@ -1445,8 +1445,11 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   the reset's wipe list) or **Reject** (reason required). Routes declared before `/inbox/{workOrder}`.
   The PCD Inbox menu's `navBadges.pcd_review` is finally shared: work orders to review + jobs to
   release + challans to sign.
-- **Signed** → his signature prints **in the space above the "Executive Engineer, Production Control
-  Division" rule** (`SignatureBlock::html`, width only; the printed labels stay); the raiser is told.
+- **Signed** → his block on the challan is **his signature image ALONE** — no rule, no typed
+  "Signature / Executive Engineer / Production Control Division / Phone Number" (BITAC: *"signature
+  image er moddhei name, designation, dept info thakbe"* — the scan carries them, so the typed lines
+  printed everything twice). `SignatureBlock::html(…, 170pt)`, width only. An **unsigned** challan
+  keeps the ruled, labelled space for a pen. The raiser is told.
 - ⚠️ **Rejected → the delivery is CANCELLED** — a delivery cannot be edited, so there is nothing to
   send back to; cancelling frees its quantities (`COMMITTED` leaves it out) and PCD raises a corrected
   one. A job that had gone `ready_for_delivery` on that delivery's quantity is put back
