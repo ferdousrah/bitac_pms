@@ -12,12 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            // ⚠️ FIRST: it decides `current_center_id`, which HandleInertiaRequests
+            // reads when it shares `currentCenter`. Listed after it, the header
+            // always read "All centres" — picking BITAC Dhaka looked like it
+            // did nothing, though the session had it.
+            \App\Http\Middleware\SetActiveCenter::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             // Says which letterhead a PDF was printed on (X-Pdf-Pad), so the
             // PDF popup can offer বাংলা / English pad for every document.
             \App\Http\Middleware\AnnouncePdfPad::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
-            \App\Http\Middleware\SetActiveCenter::class,
         ]);
 
         $middleware->alias([

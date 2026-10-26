@@ -229,6 +229,12 @@ Oli is powered by **Gemini 2.5 Flash** with 20+ tools. Key files:
 - **Everyone else: their own `users.center_id`** (else the default centre), fixed.
 - **A client (customer guard): null** — clients are national (below); their portal reads by `customer_id`.
 - `CenterScope` (via `HasCenter`) filters by it; nothing filters when it is null.
+- ⚠️ **`SetActiveCenter` must run BEFORE `HandleInertiaRequests`** (`bootstrap/app.php`). Inertia
+  shares its props before the request goes on, so with the old order `currentCenter` was always
+  null: picking **BITAC Dhaka** in the switcher saved the session and filtered the data, yet the
+  header kept reading "All centres" (reported from production). A test that keeps one app instance
+  across requests cannot see this — the previous request's binding is still there; give every
+  request a fresh application.
 
 ### What is national and what is per centre
 - ⚠️ **Clients are ONE list** (`Customer` no longer uses `HasCenter`) — Railway works with Dhaka and
