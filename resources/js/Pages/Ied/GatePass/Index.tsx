@@ -15,6 +15,8 @@ interface Pass {
     status: string;
     issued_by: string | null;
     approved_by?: string | null;
+    origin?: string | null;
+    can_approve?: boolean;
     return_state?: 'none' | 'partial' | 'full';
 }
 
@@ -226,7 +228,7 @@ export default function GatePassIndex({ passes, filters, customers = [], basePat
                                                 <td className="text-xs text-surface-500">{p.issued_by ?? '—'}</td>
                                                 <td className="text-right">
                                                     <div className="inline-flex items-center gap-1">
-                                                        {canApprove && p.status === 'pending_approval' && (
+                                                        {p.can_approve && (
                                                             <>
                                                                 <button type="button" onClick={() => setApproveId(p.id)}
                                                                     className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700" title="Approve">

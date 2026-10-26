@@ -32,6 +32,56 @@ class GatePassController extends Controller
         return $this->isPcdContext() ? '/pcd/gate-passes' : '/ied/gate-passes';
     }
 
+    /** Which desk's pass this is, and so whose pool approves it. */
+    private function desk(): string
+    {
+        return $this->isPcdContext() ? 'pcd' : 'ied';
+    }
+
+    /**
+     * Does a new pass at this centre wait for an approver?
+     *
+     * BITAC (2026-10-27): IED's passes are approved by IED's নির্বাহী
+     * প্রকৌশলী, PCD's by PCD's — each desk its own pool
+     * (`GatePassApprover::desk`). ⚠️ A desk with NOBODY in its pool issues
+     * directly, as IED's passes always did: a gate with no one behind it must
+     * not hold the goods at the gate.
+     */
+    private function needsApproval(?int $centerId): bool
+    {
+        return \App\Models\GatePassApprover::approverIds($centerId, $this->desk()) !== [];
+    }
+
+    /** The centre a pass about to be written will belong to (HasCenter's rule). */
+    private function centreForNew(?int $rfqId): ?int
+    {
+        return ($rfqId ? Rfq::withoutGlobalScopes()->whereKey($rfqId)->value('center_id') : null)
+            ?: \App\Support\DocNumber::currentCentreId();
+    }
+
+    /** Tell the desk's approvers a pass is waiting — nobody was told before. */
+    private function askForApproval(GatePass $pass): void
+    {
+        $ids = array_values(array_diff(
+            \App\Models\GatePassApprover::approverIds($pass->center_id, $pass->origin ?? $this->desk()),
+            [(int) auth()->id()]
+        ));
+        if ($ids === []) return;
+
+        $kind = $pass->direction === 'in' ? 'Gate Pass In' : 'Gate Pass Out';
+        \App\Services\NotifyService::send($ids, 'gate_pass_approval',
+            "{$kind} {$pass->pass_no} — your approval needed",
+            (auth()->user()?->name ?? 'Someone') . " raised {$kind} {$pass->pass_no}"
+                . (($pass->customer?->name ?? $pass->party_name) ? ' for ' . ($pass->customer?->name ?? $pass->party_name) : '') . '.',
+            $this->basePath() . '/' . $pass->id, 'fi-rr-shield-check', 'amber');
+    }
+
+    /** May the signed-in user approve THIS pass — its own desk, its own centre? */
+    private function mayApprove(GatePass $pass): bool
+    {
+        return \App\Models\GatePassApprover::isApprover((int) auth()->id(), $pass->center_id, $pass->origin ?? 'pcd');
+    }
+
     /** Route name prefix for redirects. */
     private function routePrefix(): string
     {
@@ -88,6 +138,9 @@ class GatePassController extends Controller
                 'status'          => $p->status,
                 'issued_by'       => $p->issuedBy?->name,
                 'approved_by'     => $p->approvedBy?->name,
+                'origin'          => $p->origin,
+                // The pass's OWN desk decides — both desks' passes are listed.
+                'can_approve'     => $p->status === 'pending_approval' && $this->mayApprove($p),
             ]),
             'filters' => [
                 'search'      => $request->input('search', ''),
@@ -102,12 +155,9 @@ class GatePassController extends Controller
                 ->orderBy('name')->get(['id', 'name']),
             'basePath'        => $this->basePath(),
             'lockedDirection' => $lockedDirection,
-            // PCD gate passes need approval; only pool members see Approve/Reject.
-            'requiresApproval'=> $this->isPcdContext(),
-            // No single pass in hand here, so this only decides whether the
-            // list shows the action column at all; approve()/reject() do the
-            // real per-centre check.
-            'canApprove'      => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id()),
+            // Whether the list shows the action column at all; each row carries
+            // its own `can_approve`, and approve()/reject() check again.
+            'canApprove'      => \App\Models\GatePassApprover::isApprover((int) auth()->id()),
             'mySignatureUrl'  => auth()->user()->signature_url,
         ]);
     }
@@ -190,8 +240,8 @@ class GatePassController extends Controller
             'user_signature_id'        => 'nullable|integer|exists:user_signatures,id',
         ]);
 
-        // PCD passes need approval first; IED passes issue directly.
-        $needsApproval = $this->isPcdContext();
+        // Each desk's passes wait for that desk's approvers (none → issue now).
+        $needsApproval = $this->needsApproval($this->centreForNew($validated['rfq_id'] ?? null));
 
         $pass = DB::transaction(function () use ($validated, $request, $needsApproval) {
             $pass = GatePass::create([
@@ -231,9 +281,11 @@ class GatePassController extends Controller
             return $pass;
         });
 
-        // Only notify the customer once the pass is actually issued (IED). PCD
-        // passes wait for approval; the notification fires on approve().
-        if (!$needsApproval) {
+        // The customer hears once the pass is actually issued; a pass waiting
+        // for approval tells its approvers instead, and the customer on approve().
+        if ($needsApproval) {
+            $this->askForApproval($pass->fresh(['customer']));
+        } else {
             \App\Services\CustomerNotifyService::gatePassIssued($pass->fresh(['customer', 'rfq.customer']));
         }
 
@@ -256,6 +308,7 @@ class GatePassController extends Controller
             'pass' => [
                 'id'                     => $gatePass->id,
                 'pass_no'                => $gatePass->pass_no,
+                'origin'                 => $gatePass->origin,
                 'direction'              => $gatePass->direction,
                 // Can this In pass still send something back out?
                 'can_raise_out'          => $this->outBlocker($gatePass) === null,
@@ -320,7 +373,7 @@ class GatePassController extends Controller
                 'pdf_url'                => "{$this->basePath()}/{$gatePass->id}/pdf?preview=base64",
             ],
             'basePath'   => $this->basePath(),
-            'canApprove' => $this->isPcdContext() && \App\Models\GatePassApprover::isApprover(auth()->id(), $gatePass->center_id),
+            'canApprove' => $this->mayApprove($gatePass),
             'mySignatureUrl' => auth()->user()->signature_url,
         ]);
     }
@@ -560,8 +613,8 @@ class GatePassController extends Controller
         ]);
 
         $gatePass->load('items');
-        // PCD passes wait for an approver; IED issues on the spot.
-        $needsApproval = $this->isPcdContext();
+        // Waits for this desk's approvers at the In pass's centre (none → issue now).
+        $needsApproval = $this->needsApproval($gatePass->center_id);
 
         $out = DB::transaction(function () use ($gatePass, $validated, $request, $needsApproval) {
             $out = GatePass::create([
@@ -614,10 +667,12 @@ class GatePassController extends Controller
             return back()->with('error', 'Nothing to send back — enter a quantity against at least one item.');
         }
 
-        // The return only counts once the goods may actually leave. For PCD
-        // that is the approver's decision, so approve() books it instead.
+        // The return only counts once the goods may actually leave. When the
+        // pass waits for an approver, approve() books it instead.
         if ($out->status === 'issued') {
             $this->bookReturnsFor($out);
+        } else {
+            $this->askForApproval($out->fresh(['customer']));
         }
 
         return redirect($this->basePath() . '/' . $out->id)->with('success', $needsApproval
@@ -681,13 +736,10 @@ class GatePassController extends Controller
 
     public function approve(Request $request, GatePass $gatePass)
     {
-        abort_unless($this->isPcdContext(), 403);
-        // Against THIS pass's centre — an approver at one centre must not be
-        // able to approve another centre's pass by switching centres in the UI.
-        abort_unless(
-            \App\Models\GatePassApprover::isApprover(auth()->id(), $gatePass->center_id),
-            403, 'You are not a gate pass approver for this centre.'
-        );
+        // Against THIS pass's desk and centre — not the page it was opened
+        // from, and not the centre picked in the switcher.
+        abort_unless($this->mayApprove($gatePass), 403,
+            'You are not a gate pass approver for this desk at this centre.');
         abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be approved.');
 
         $request->validate(\App\Support\SignatureResolver::rules());
@@ -700,7 +752,7 @@ class GatePassController extends Controller
             'approver_signature_path' => $sig ?: $gatePass->approver_signature_path,
         ]);
 
-        // A PCD Out pass raised against an In pass only books its return now —
+        // An Out pass raised against an In pass only books its return now —
         // until it was approved the goods had not left.
         $this->bookReturnsFor($gatePass->fresh());
 
@@ -709,14 +761,13 @@ class GatePassController extends Controller
         return back()->with('success', "Gate Pass {$gatePass->pass_no} approved & issued.");
     }
 
-    /** Reject a pending PCD gate pass with a reason. */
+    /** Reject a pending gate pass with a reason. */
     public function reject(Request $request, GatePass $gatePass)
     {
-        abort_unless($this->isPcdContext(), 403);
-        abort_unless(
-            \App\Models\GatePassApprover::isApprover(auth()->id(), $gatePass->center_id),
-            403, 'You are not a gate pass approver for this centre.'
-        );
+        // Against THIS pass's desk and centre — not the page it was opened
+        // from, and not the centre picked in the switcher.
+        abort_unless($this->mayApprove($gatePass), 403,
+            'You are not a gate pass approver for this desk at this centre.');
         abort_unless($gatePass->status === 'pending_approval', 422, 'Only passes pending approval can be rejected.');
 
         $validated = $request->validate(['rejection_reason' => 'required|string|max:1000']);

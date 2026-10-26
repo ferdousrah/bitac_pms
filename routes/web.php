@@ -362,6 +362,10 @@ Route::middleware(['auth'])->group(function () {
         // …or as a proper Gate Pass Out raised against this In pass.
         Route::get('/{gatePass}/out',       [GatePassController::class, 'createOut'])->name('out.create');
         Route::post('/{gatePass}/out',      [GatePassController::class, 'storeOut'])->name('out.store');
+        // IED's passes are approved by IED's own approvers (2026-10-27); the
+        // controller checks the pass's desk, not the route it came through.
+        Route::post('/{gatePass}/approve',  [GatePassController::class, 'approve'])->name('approve');
+        Route::post('/{gatePass}/reject',   [GatePassController::class, 'reject'])->name('reject');
     });
 
     // ─── Notes — every department, plain legal paper, signed in order ────

@@ -1844,6 +1844,35 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - **Index filters:** search + direction + status as before, plus **date range** (`date_from`/`date_to` over `pass_date`) and **company** (`customer_id`, matching the pass's own `customer_id` OR its RFQ's customer, since a pass can get its customer either way). Pagination uses `withQueryString()` so filters survive paging.
 - **Labels are "Gate Pass In" / "Gate Pass Out" everywhere** — the IED/PCD gate pass screens, the customer portal (documents, work orders, complaints), the RFQ Show shortcuts, the `CustomerNotifyService` notification title, and the complaint rework flash. `Gate-In`/`Gate-Out` no longer appears anywhere in `app/` or `resources/js`, comments included; keep it that way.
 
+## 🚪 Each desk approves its own gate passes (2026-10-27)
+> BITAC: *"Gate Pass approver IED and PCD'r jonne alada hobe, practically IED theke j pass gulu issue
+> hoi ogulu approve koren IED er XEN, r PCD theke j pass gulu issue hoi ta approve koren PCD er XEN."*
+
+- **`gate_pass_approvers.desk`** (`ied` | `pcd`, migration `..._000089`) — one pool per desk per
+  centre, matched against the pass's **`origin`**. Every approver from before was approving PCD
+  passes, so they all became **`pcd`**; moving one to IED is an admin act. The unique is now
+  `(user_id, center_id, desk)` — one person may sit on both — with `user_id` leftmost so it still
+  carries the user foreign key (created before the old one is dropped).
+- ⚠️ **IED passes now wait for approval too — but only when IED's pool has someone in it.** A desk
+  with an empty pool **issues directly**, as IED always did (a gate with nobody behind it must not
+  hold the goods at the gate). The same now holds for PCD: an empty PCD pool used to leave every
+  PCD pass stuck at `pending_approval` for ever.
+- **`GatePassApprover::approverIds($centreId, $desk)`** (active accounts only) decides both whether
+  a pass waits and who is told. **They are told now** (`gate_pass_approval`, linking to the pass on
+  the desk's own page) — before, a pass sat pending and nobody knew.
+- **Approving follows the PASS, not the page**: `mayApprove()` = an approver of the pass's own desk
+  at the pass's own centre. Both desks' lists show every pass, so each list row carries its own
+  `can_approve`; a PCD XEN posting to an IED pass gets 403 whichever URL he uses. IED gained
+  `ied.gate-passes.approve` / `.reject`.
+- **Admin → Gate Pass Approvers** is two cards, **IED** and **PCD**, each with its own picker. ⚠️ An
+  approver who **cannot open** that desk's gate pass pages (IED: `manage gate-passes`, PCD:
+  `view pcd`) is flagged in amber on the card — he would be notified and then refused at the door.
+  For that reason migration 000089 (and `BitacDepartmentRolesSeeder`) give **`view pcd`** to
+  **Executive Engineer (PCD)**; `Executive Engineer (IED)` already held `manage gate-passes`.
+- Verified on a copy, 19 checks: each desk's XEN is told about and can approve only his desk's
+  passes, from either URL; an empty pool issues directly; the migration carries an old approver
+  across as PCD and rolls back to the old index.
+
 ## 🚪 PCD Gate Passes + Approval (2026-07)
 
 - **Gate passes** (`GatePass`, `Ied\GatePassController` — shared by IED & PCD via `isPcdContext()` = route `pcd.gate-passes.*`) support **both directions** (`in`/`out`; GIN-/GOUT- pass no). PCD is no longer out-only.

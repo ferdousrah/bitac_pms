@@ -120,7 +120,9 @@ class BitacDepartmentRolesSeeder extends Seeder
             ->syncPermissions($iedPermissions);
 
         Role::firstOrCreate(['name' => 'Executive Engineer (PCD)'])
-            ->syncPermissions(['view dashboard', 'view work-orders', 'access pcd', 'review pcd-inbox']);
+            ->syncPermissions(['view dashboard', 'view work-orders', 'access pcd', 'review pcd-inbox',
+                // He approves PCD's gate passes, which all sit behind `view pcd` (2026-10-27).
+                'view pcd']);
 
         Role::firstOrCreate(['name' => 'Assistant Engineer (PCD)'])
             ->syncPermissions($pcdPermissions);

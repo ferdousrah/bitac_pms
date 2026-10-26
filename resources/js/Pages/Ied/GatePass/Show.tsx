@@ -471,7 +471,9 @@ export default function GatePassShow({ pass, basePath = '/ied/gate-passes', canA
                             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0"><i className="fi fi-rr-hourglass-end text-base" /></div>
                             <div className="flex-1">
                                 <h4 className="text-sm font-bold text-amber-800">Waiting for approval</h4>
-                                <p className="text-xs text-amber-700/80 mt-0.5">Any one gate-pass approver can approve or reject this pass.</p>
+                                <p className="text-xs text-amber-700/80 mt-0.5">
+                                    Any one of {pass.origin === 'ied' ? "IED's" : "PCD's"} gate-pass approvers can approve or reject this pass — they have been notified.
+                                </p>
                             </div>
                         </div>
                     </div>
