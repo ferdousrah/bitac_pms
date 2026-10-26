@@ -1109,6 +1109,23 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - **Production Show** carries `Components/Production/ShopHandover.tsx` — the band saying who holds it, with Forward / Receive / Hand back, and the blocker spelled out in plain words. ⚠️ It renders **nothing** when the shop does not work this way, and is hidden in a sub-section view (the bench works to its steps; the handover is not about it).
 - ⚠️ Found while building: the stylesheet defines only `badge-amber|blue|green|purple|red|slate`. `badge-indigo` and `badge-emerald` render as unstyled spans — grep the built CSS after adding one.
 
+#### The shop is told when work reaches it (2026-10-27)
+> Reported from production: *"PCD theke jokhon shop er xen er kase job jai tokhon kono notification jassena xen er account e."*
+
+- ⚠️ **The release notice went to the permission `view shop-inbox`** — every holder at the centre,
+  whichever shop the job was for — and **production's `shop-incharge` does not hold it**, so the
+  XEN whose shop the job had reached was never told. And **a transfer to the next shop told
+  nobody at all.**
+- **`ShopAssignment::announceArrival($wos, $title, $body)`** is the one notice, called by
+  `PcdReleaseService::approveRelease()` (the first routing section) and `ProductionController@transfer`
+  (the next section, "Job #… — 4 pcs from CNC"). It goes to **that shop's XEN(s) at the job's
+  centre**; a shop with no XEN → **everyone posted to it at that centre**. Never the sender. Not for
+  a QC / non-production stop. Links to **`/production/wos/{id}`** (`production.show`).
+- `ShopAssignment::staff()` now counts **active accounts only** — a deactivated XEN kept the gate
+  live with nobody behind it, and deactivated people were offered in the Forward dialog.
+- Verified on a copy: the Dhaka CNC XEN is told on release; another centre's CNC XEN, a deactivated
+  XEN and the AE are not; the transfer tells Casting's people (no XEN there) at Dhaka only.
+
 #### AE and SAE are the same thing to the system (2026-10-06)
 > BITAC: *"AE r SAE eder alada kono layer nai"* — a job reaches the in-charge, who sends it to an AE for sub-section assignment **or assigns the sub-section himself**; the AE assigns the sub-section and logs the output, **or passes it to his SAE** to do either.
 

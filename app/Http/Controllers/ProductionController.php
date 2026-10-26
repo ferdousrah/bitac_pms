@@ -765,7 +765,8 @@ class ProductionController extends Controller
         $wo  = $workOrderSection->workOrder;
         $now = now();
 
-        \DB::transaction(function () use ($workOrderSection, $wo, $qty, $validated, $now) {
+        $next = null;
+        \DB::transaction(function () use ($workOrderSection, $wo, $qty, $validated, $now, &$next) {
             // The immediate next stop in the routing — production shop OR QC.
             // (We no longer skip QC; if PCD routed to it, it receives the pieces.)
             $next = WorkOrderSection::where('work_order_id', $wo->id)
@@ -818,6 +819,14 @@ class ProductionController extends Controller
         });
 
         $this->syncMachineStates($workOrderSection->workOrder);
+
+        // The next shop is told the pieces are on their way to it.
+        if ($next) {
+            $from = $workOrderSection->section?->name ?? 'the previous shop';
+            ShopAssignment::announceArrival($next,
+                "Job #{$wo->job_number} — {$qty} pcs from {$from}",
+                "{$from} transferred {$qty} pcs of job #{$wo->job_number} ({$wo->wo_number}) to your shop.");
+        }
 
         return back()->with('success', "Transferred {$qty} pcs to the next section.");
     }

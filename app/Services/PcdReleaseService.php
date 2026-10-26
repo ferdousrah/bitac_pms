@@ -149,17 +149,10 @@ class PcdReleaseService
             'released_by'          => auth()->id(),
         ]);
 
-        if ($first && $first->section) {
-            NotifyService::toPermission(
-                'view shop-inbox',
-                'job_released_to_shop',
-                'New Job for ' . $first->section->name,
-                "Job #{$workOrder->job_number} ({$workOrder->wo_number}) is ready for production.",
-                "/work-orders/{$workOrder->id}",
-                'fi-rr-tools',
-                'green',
-                centerId: $workOrder->center_id,
-            );
+        if ($first) {
+            ShopAssignment::announceArrival($first,
+                'New job for ' . ($first->section?->name ?? 'your shop'),
+                "Job #{$workOrder->job_number} ({$workOrder->wo_number}) has been released to your shop and is ready for production.");
         }
 
         return true;

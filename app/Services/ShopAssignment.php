@@ -310,6 +310,35 @@ class ShopAssignment
         return array_values(array_diff(array_unique(array_filter($ids)), [(int) $actorId]));
     }
 
+    /**
+     * Tell a shop that work has reached it — released by PCD, or transferred
+     * on from the shop before it.
+     *
+     * The shop's XEN(s) at the JOB's centre; a shop with no XEN works as it
+     * always did, so then everyone posted to it there. ⚠️ This used to go to
+     * the permission `view shop-inbox` — every holder at every shop, and not
+     * held by production's `shop-incharge` at all, so the in-charge whose shop
+     * the job had reached was never told (reported from production). And a
+     * transfer to the next shop told nobody.
+     */
+    public static function announceArrival(WorkOrderSection $wos, string $title, string $body): void
+    {
+        $wos->loadMissing('section');
+        if (! $wos->section || $wos->section->type !== 'production_shop') {
+            return;     // QC and other stops have their own notices
+        }
+
+        $centre = self::jobCentre($wos);
+        $ids = self::xenIds((int) $wos->section_id, $centre)
+            ?: self::staff((int) $wos->section_id, $centre)->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $ids = array_values(array_diff($ids, [(int) auth()->id()]));
+        if ($ids) {
+            NotifyService::send($ids, 'job_arrived_at_shop', $title, $body,
+                "/production/wos/{$wos->id}", 'fi-rr-tools', 'green');
+        }
+    }
+
     public static function scopedToOwnWork(?User $user, ?int $shopId, ?int $centerId = null): bool
     {
         if (! $user || ! self::gateActive($shopId, $centerId)) return false;
@@ -335,6 +364,7 @@ class ShopAssignment
 
         return User::withoutGlobalScopes()
             ->where('section_id', $shopId)
+            ->where('is_active', true)      // a deactivated XEN is no XEN
             ->when($centerId, fn ($q) => $q->where('center_id', $centerId))
             ->orderBy('name')
             ->get();
