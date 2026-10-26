@@ -594,6 +594,12 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('pcd')->middleware('permission:review pcd-inbox')->name('pcd.')->group(function () {
         Route::get('/inbox', [PcdReviewController::class, 'index'])->name('inbox.index');
 
+        // Delivery challans waiting for his signature (2026-10-27). ⚠️ Before
+        // `/inbox/{workOrder}` for the same reason as the release routes.
+        Route::get('/inbox/challans/{delivery}/pdf', [\App\Http\Controllers\Pcd\ChallanSignController::class, 'pdf'])->name('inbox.challans.pdf');
+        Route::post('/inbox/challans/{delivery}/approve', [\App\Http\Controllers\Pcd\ChallanSignController::class, 'approve'])->name('inbox.challans.approve');
+        Route::post('/inbox/challans/{delivery}/reject', [\App\Http\Controllers\Pcd\ChallanSignController::class, 'reject'])->name('inbox.challans.reject');
+
         // Releasing a planned job to the shops — the second half of this
         // officer's job.
         //

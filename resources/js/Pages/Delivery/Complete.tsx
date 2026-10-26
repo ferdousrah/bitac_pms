@@ -94,6 +94,25 @@ export default function DeliveryComplete({ delivery }: any) {
                     onClose={() => setChallanOpen(false)}
                 />
 
+                {/* The XEN signs the challan before the goods go (2026-10-27). */}
+                {delivery.challan_status === 'pending' && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        <b>Waiting for the নির্বাহী প্রকৌশলী (PCD) to sign this challan.</b> The delivery can be confirmed once he
+                        has — he has been notified.
+                    </div>
+                )}
+                {delivery.challan_status === 'rejected' && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                        <b>The challan was rejected and this delivery cancelled.</b>
+                        {delivery.challan_rejection && <> Reason: {delivery.challan_rejection}</>} Raise a new delivery with the corrections.
+                    </div>
+                )}
+                {delivery.challan_status === 'approved' && delivery.challan_signed_by && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+                        <i className="fi fi-rr-badge-check mr-1.5" />Challan signed by <b>{delivery.challan_signed_by}</b> on {delivery.challan_signed_at}.
+                    </div>
+                )}
+
                 <form onSubmit={submit} className="space-y-6">
                     <div className="card">
                         <div className="card-header">
@@ -178,7 +197,8 @@ export default function DeliveryComplete({ delivery }: any) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <button type="submit" disabled={processing} className="btn-success">
+                        <button type="submit" disabled={processing || delivery.challan_status !== 'approved' || delivery.status === 'delivered'}
+                            className="btn-success disabled:opacity-50 disabled:cursor-not-allowed">
                             <i className="fi fi-rr-check text-xs leading-none" />
                             {processing ? 'Completing...' : 'Confirm Delivery'}
                         </button>

@@ -12,7 +12,24 @@ const statusBadge: Record<string, string> = {
     in_transit: 'badge-blue',
     delivered: 'badge-green',
     returned: 'badge-red',
+    cancelled: 'badge-slate',
 };
+
+/** Where the challan stands with PCD's নির্বাহী প্রকৌশলী (2026-10-27). */
+function ChallanSignature({ d }: { d: any }) {
+    if (d.challan_status === 'pending') {
+        return <div className="text-[10px] font-semibold text-amber-700 mt-1">Awaiting XEN signature</div>;
+    }
+    if (d.challan_status === 'rejected') {
+        return <div className="text-[10px] font-semibold text-rose-700 mt-1" title={d.challan_rejection ?? ''}>Challan rejected</div>;
+    }
+    return d.challan_signed_by
+        ? <div className="text-[10px] text-emerald-700 mt-1">Signed · {d.challan_signed_by}</div>
+        : null;
+}
+
+/** Confirmable: still on its way, and the challan signed. */
+const canComplete = (d: any) => ['scheduled', 'dispatched'].includes(d.status) && d.challan_status === 'approved';
 
 export default function DeliveryIndex({ deliveries, filters }: any) {
     const list = deliveries?.data ?? [];
@@ -149,6 +166,7 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                 <span className={`badge ${statusBadge[d.status] ?? 'badge-slate'}`}>
                                                     {d.status}
                                                 </span>
+                                                <ChallanSignature d={d} />
                                             </td>
                                             <td className="text-surface-600 text-xs">
                                                 {d.scheduled_date ?? <span className="text-surface-300">--</span>}
@@ -175,7 +193,7 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
                                                         <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
                                                     </button>
-                                                    {d.status !== 'delivered' && (
+                                                    {canComplete(d) && (
                                                         <Link href={`/delivery/${d.id}`} title="Mark delivery as complete"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
                                                             <i className="fi fi-rr-check text-sm leading-none" /> Complete
@@ -234,9 +252,12 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                             </Link>
                                         </div>
                                     </div>
-                                    <span className={`badge ${statusBadge[d.status] ?? 'badge-slate'}`}>
-                                        {d.status}
-                                    </span>
+                                    <div className="text-right">
+                                        <span className={`badge ${statusBadge[d.status] ?? 'badge-slate'}`}>
+                                            {d.status}
+                                        </span>
+                                        <ChallanSignature d={d} />
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2 text-xs">

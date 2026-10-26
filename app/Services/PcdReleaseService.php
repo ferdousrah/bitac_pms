@@ -109,12 +109,25 @@ class PcdReleaseService
      */
     private static function reviewerIds(WorkOrder $workOrder): array
     {
+        return static::xenIdsAt($workOrder->center_id);
+    }
+
+    /**
+     * PCD's নির্বাহী প্রকৌশলী at a centre — whoever holds `review pcd-inbox`
+     * there, plus anyone with no centre. The one lookup for the officer who
+     * releases a job AND signs its delivery challan (ChallanApproval).
+     *
+     * @return array<int>
+     */
+    public static function xenIdsAt(?int $centerId): array
+    {
         try {
             return \App\Models\User::permission('review pcd-inbox')
-                ->when($workOrder->center_id !== null, fn ($q) => $q->where(
-                    fn ($w) => $w->where('center_id', $workOrder->center_id)->orWhereNull('center_id')
+                ->where('is_active', true)
+                ->when($centerId !== null, fn ($q) => $q->where(
+                    fn ($w) => $w->where('center_id', $centerId)->orWhereNull('center_id')
                 ))
-                ->pluck('id')->all();
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
         } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
             // A deploy without the seeder. No gate rather than a stuck job.
             \Log::warning("PcdReleaseService — permission 'review pcd-inbox' does not exist; "

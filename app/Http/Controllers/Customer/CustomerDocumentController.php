@@ -30,7 +30,9 @@ class CustomerDocumentController extends Controller
             ->with([
                 'quotation:id,version,total_amount',
                 'product:id,name',
-                'deliveryOrders:id,work_order_id,challan_number,scheduled_date,delivered_at,status',
+                // Only a challan PCD's XEN has signed is the client's paper.
+                'deliveryOrders' => fn ($q) => $q->challanSigned()
+                    ->select('id', 'work_order_id', 'challan_number', 'scheduled_date', 'delivered_at', 'status'),
                 // Only show inspections BITAC has explicitly shared with the customer
                 'qcInspections' => fn($q) => $q
                     ->where('shared_with_customer', true)
@@ -192,6 +194,7 @@ class CustomerDocumentController extends Controller
     {
         $customer = auth('customer')->user();
         abort_unless($delivery->workOrder?->customer_id === $customer->id, 403);
+        abort_unless($delivery->isChallanSigned(), 404);
 
         $bytes = app(DeliveryChallanService::class)->generatePdf($delivery);
 

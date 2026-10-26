@@ -71,10 +71,16 @@ class PcdReviewController extends Controller
                 'waiting_days'  => $wo->release_requested_at?->diffInDays(now()),
             ]);
 
+        // Delivery challans waiting for his signature — the third thing this
+        // officer signs off, on the same screen.
+        $challans = ChallanSignController::waiting();
+
         return Inertia::render('Pcd/Inbox', [
             'jobs'     => $jobs,
             'releases' => $releases,
+            'challans' => $challans,
             'stats' => [
+                'challans' => $challans->count(),
                 'waiting'  => $jobs->count(),
                 'overdue'  => $jobs->where('waiting_days', '>=', 2)->count(),
                 'releases' => $releases->count(),

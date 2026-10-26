@@ -1,5 +1,6 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Head, Link } from '@inertiajs/react';
+import ChallansToSign, { ChallanToSign } from '@/Components/Pcd/ChallansToSign';
 
 interface Job {
     id: number;
@@ -19,7 +20,7 @@ interface Job {
 const money = (n: number) =>
     n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PcdInbox({ jobs = [], releases = [], stats }: { jobs: Job[]; releases: any[]; stats: any }) {
+export default function PcdInbox({ jobs = [], releases = [], challans = [], stats }: { jobs: Job[]; releases: any[]; challans?: ChallanToSign[]; stats: any }) {
     return (
         <AppLayout header="PCD Inbox">
             <Head title="PCD Inbox" />
@@ -34,7 +35,7 @@ export default function PcdInbox({ jobs = [], releases = [], stats }: { jobs: Jo
                     </p>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="card"><div className="card-body">
                         <p className="text-[11px] uppercase tracking-wider font-bold text-surface-400">To review</p>
                         <p className="text-2xl font-bold text-surface-900 mt-1">{stats?.waiting ?? 0}</p>
@@ -46,12 +47,21 @@ export default function PcdInbox({ jobs = [], releases = [], stats }: { jobs: Jo
                         </p>
                     </div></div>
                     <div className="card"><div className="card-body">
+                        <p className="text-[11px] uppercase tracking-wider font-bold text-surface-400">Challans to sign</p>
+                        <p className={`text-2xl font-bold mt-1 ${stats?.challans ? 'text-emerald-600' : 'text-surface-900'}`}>
+                            {stats?.challans ?? 0}
+                        </p>
+                    </div></div>
+                    <div className="card"><div className="card-body">
                         <p className="text-[11px] uppercase tracking-wider font-bold text-surface-400">Waiting 2+ days</p>
                         <p className={`text-2xl font-bold mt-1 ${stats?.overdue ? 'text-amber-600' : 'text-surface-900'}`}>
                             {stats?.overdue ?? 0}
                         </p>
                     </div></div>
                 </div>
+
+                {/* Delivery challans waiting for his signature (2026-10-27). */}
+                <ChallansToSign challans={challans} />
 
                 {/* Planned and waiting to be let onto the shop floor — the second
                     half of this officer's job, on the same screen because it is

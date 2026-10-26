@@ -20,7 +20,7 @@ class DeliveryController extends Controller
 
     public function index(Request $request)
     {
-        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice', 'items']);
+        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice', 'items', 'challanApprovedBy:id,name']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -65,6 +65,11 @@ class DeliveryController extends Controller
                 // Billing is a separate act now, so the list has to show which
                 // deliveries are still waiting for one.
                 'invoice'             => $d->invoice?->only(['id', 'invoice_number']),
+                // Signed by PCD's নির্বাহী প্রকৌশলী before it may go (ChallanApproval).
+                'challan_status'      => $d->challan_status ?? 'approved',
+                'challan_signed_by'   => $d->challanApprovedBy?->name,
+                'challan_signed_at'   => $d->challan_approved_at?->format('d/m/Y H:i'),
+                'challan_rejection'   => $d->challan_rejection_reason,
             ]);
 
         return Inertia::render('Delivery/Index', [
@@ -198,6 +203,7 @@ class DeliveryController extends Controller
                 'driver_name'        => $validated['driver_name'] ?? null,
                 'notes'              => $validated['notes'] ?? null,
                 'status'             => 'scheduled',
+                'created_by'         => auth()->id(),
             ]);
             $sort = 0;
             foreach ($lines as $line) {
@@ -222,13 +228,19 @@ class DeliveryController extends Controller
             $workOrder->update(['status' => 'ready_for_delivery']);
         }
 
+        // The challan goes to PCD's নির্বাহী প্রকৌশলী for his signature
+        // (none at this centre → it is approved on the spot).
+        $waits = \App\Services\ChallanApproval::request($delivery);
+
         return redirect()->route('delivery.index')->with('success',
-            ($type === 'full' ? 'Full delivery' : 'Partial delivery') . " scheduled. Challan: {$challan}");
+            ($type === 'full' ? 'Full delivery' : 'Partial delivery') . " scheduled. Challan: {$challan}"
+            . ($waits ? ' — sent to the নির্বাহী প্রকৌশলী (PCD) for his signature.' : '.'));
     }
 
     public function show(DeliveryOrder $delivery)
     {
-        $delivery->load(['workOrder.product', 'workOrder.customer']);
+        $delivery->load(['workOrder.product', 'workOrder.customer', 'challanApprovedBy:id,name']);
+        $d = $delivery;
 
         return Inertia::render('Delivery/Complete', [
             'delivery' => [
@@ -240,6 +252,11 @@ class DeliveryController extends Controller
                 'quantity_delivered' => $delivery->quantity_delivered,
                 'status'             => $delivery->status,
                 'work_order_id'      => $delivery->work_order_id,
+                // Signed by PCD's নির্বাহী প্রকৌশলী before it may go (ChallanApproval).
+                'challan_status'      => $d->challan_status ?? 'approved',
+                'challan_signed_by'   => $d->challanApprovedBy?->name,
+                'challan_signed_at'   => $d->challan_approved_at?->format('d/m/Y H:i'),
+                'challan_rejection'   => $d->challan_rejection_reason,
             ],
         ]);
     }
@@ -273,6 +290,17 @@ class DeliveryController extends Controller
 
     public function complete(Request $request, DeliveryOrder $delivery)
     {
+        // ⚠️ Not before the XEN has signed the challan (BITAC, 2026-10-27) —
+        // the signed paper is what travels with the goods.
+        if (! $delivery->isChallanSigned()) {
+            return redirect()->route('delivery.index')->with('error', $delivery->challan_status === 'rejected'
+                ? "Challan {$delivery->challan_number} was rejected — raise a new delivery."
+                : "Challan {$delivery->challan_number} is waiting for the নির্বাহী প্রকৌশলী (PCD) to sign it.");
+        }
+        if ($delivery->status === 'delivered') {
+            return redirect()->route('delivery.index')->with('error', "Challan {$delivery->challan_number} is already delivered.");
+        }
+
         $validated = $request->validate([
             'received_by' => 'required|string|max:255',
             'received_at' => 'required|date',

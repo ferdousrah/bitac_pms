@@ -1423,6 +1423,45 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - ⚠️ Still open (BITAC to decide): `InvoiceService::createFromDelivery()` bills the **whole quotation**
   on every delivery. With lines it could now bill each challan pro rata.
 
+## ✍️ The delivery challan is signed by PCD's নির্বাহী প্রকৌশলী (2026-10-27)
+> BITAC: *"Delivery Challan create/initiate hoar por ata PCD'r XEN er kase jabe signature or approve er
+> jonne, xen ata approve korle sign boshe jabe, approve korar por billing and accounts e visible hobe."*
+> And: the delivery **cannot be confirmed** before he signs — the signed paper goes with the goods.
+
+- **`App\Services\ChallanApproval`** holds the rules; `delivery_orders.challan_status` = `pending` ·
+  `approved` · `rejected`, plus `challan_approved_by/_at`, **`challan_signature_path`**,
+  `challan_rejected_by/_at`, `challan_rejection_reason` and **`created_by`** (nothing recorded who
+  raised a delivery before) — migration `..._000090`. `DeliveryOrder::isChallanSigned()` /
+  `scopeChallanSigned()` (null counts as signed).
+- **Raised** (`DeliveryController@store`) → `pending`, and PCD's XEN at the job's centre is told
+  (`challan_awaiting_signature` → `/pcd/inbox#challans`). The XEN pool is **`PcdReleaseService::xenIdsAt()`**
+  — the same officer who releases jobs (`review pcd-inbox`, active, at the centre or centre-less); it
+  replaced `reviewerIds`'s private query. ⚠️ **No XEN at the centre → approved on the spot, unsigned**
+  (a gate with nobody behind it must not hold the goods).
+- **He signs from his PCD Inbox** — a **Delivery challans to sign** card (`Components/Pcd/ChallansToSign`,
+  `Pcd\ChallanSignController`): the challan PDF (`/pcd/inbox/challans/{id}/pdf` — his own door, since
+  the PCD challan route needs `view pcd-inbox`, which he does not hold), **Sign** (SignaturePicker:
+  his blocks, else drawn, else his default; stored as a PATH under `signatures/challans`, which is in
+  the reset's wipe list) or **Reject** (reason required). Routes declared before `/inbox/{workOrder}`.
+  The PCD Inbox menu's `navBadges.pcd_review` is finally shared: work orders to review + jobs to
+  release + challans to sign.
+- **Signed** → his signature prints **in the space above the "Executive Engineer, Production Control
+  Division" rule** (`SignatureBlock::html`, width only; the printed labels stay); the raiser is told.
+- ⚠️ **Rejected → the delivery is CANCELLED** — a delivery cannot be edited, so there is nothing to
+  send back to; cancelling frees its quantities (`COMMITTED` leaves it out) and PCD raises a corrected
+  one. A job that had gone `ready_for_delivery` on that delivery's quantity is put back
+  (partially delivered / QC passed / QC hold). ⚠️ **`delivery_orders.status` was an ENUM without
+  `cancelled`** — MySQL refused the write; it is `varchar(30)` now.
+- **Gated on the signature:** `complete()` refuses (redirect + flash) and the list offers **Complete**
+  only for a signed, still-scheduled delivery; **Billing → Delivery Challans** lists and opens signed
+  ones only; the **customer portal** shows / opens signed ones only. The bill's own challan is
+  necessarily signed (bills come from delivered deliveries). The Delivery list, the Complete page and
+  the PCD job page's Deliveries card all say where the challan stands.
+- ⚠️ **Every challan from before is `approved`** (unsigned) — already on the road or delivered.
+- Verified on a copy, 24 checks: the whole raise → wait → sign → confirm → bill path, a planner refused,
+  a second click is a flash, the PDF gains exactly one image when signed, reject frees the quantity,
+  no XEN goes straight through; and the migration both ways.
+
 ## 🚚 Delivery Orders belong to PCD (2026-09)
 
 - The menu **Delivery & Billing** is now **Billing & Accounts** and holds the money only — **Bills / Invoices** and **মূসক ৬.৩**. **Delivery Orders moved into the PCD group** (BITAC's instruction): the department that planned and routed the job also ships it. The module itself is unchanged and still lives at `/delivery`.

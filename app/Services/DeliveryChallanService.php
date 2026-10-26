@@ -206,9 +206,18 @@ class DeliveryChallanService
         // the pen, and the rule is the top border of the cell under it. mPDF
         // draws cell borders reliably; borders on a <div> in a table cell come
         // out the width of the text, or under every <br> line.
-        $sig = fn (string $inner) => '<td width="38%" style="vertical-align: bottom;">'
+        // The XEN's block carries his signature once he has signed the
+        // challan (ChallanApproval) — image alone, width-sized, in the space
+        // for the pen; the printed labels under the rule stay.
+        $xenSig = $delivery->challan_signature_path
+            ? \Illuminate\Support\Facades\Storage::disk('public')->path($delivery->challan_signature_path) : null;
+        $xenSig = ($xenSig && is_file($xenSig)) ? $xenSig : null;
+
+        $sig = fn (string $inner, ?string $image = null) => '<td width="38%" style="vertical-align: bottom;">'
             . '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">'
-            .   '<tr><td style="height: 40pt;">&nbsp;</td></tr>'
+            .   ($image
+                    ? '<tr><td style="vertical-align: bottom;">' . \App\Support\SignatureBlock::html($image, [], 40, 150, 'left') . '</td></tr>'
+                    : '<tr><td style="height: 40pt;">&nbsp;</td></tr>')
             .   '<tr><td style="border-top: 0.75pt solid #000; padding-top: 3pt; font-size: 11pt; font-weight: bold; line-height: 1.45;">' . $inner . '</td></tr>'
             . '</table>'
             . '</td>';
@@ -217,7 +226,7 @@ class DeliveryChallanService
             . '<tr>'
             .   $sig('Signature of receiver<br>Name:<br>Designation:<br>Phone Number:')
             .   '<td width="24%">&nbsp;</td>'
-            .   $sig('Signature<br>Executive Engineer<br>Production Control Division<br>Phone Number:')
+            .   $sig('Signature<br>Executive Engineer<br>Production Control Division<br>Phone Number:', $xenSig)
             . '</tr>'
             . '</table>';
 

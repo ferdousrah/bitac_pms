@@ -104,6 +104,12 @@ class HandleInertiaRequests extends Middleware
                 if ($user->can('view pcd-inbox')) {
                     $badges['material_demands_open'] = \App\Models\MaterialDemand::where('status', 'submitted')->count();
                 }
+                // Everything waiting on PCD's নির্বাহী প্রকৌশলী: work orders to
+                // read, jobs to release, delivery challans to sign.
+                if ($user->can('review pcd-inbox')) {
+                    $badges['pcd_review'] = \App\Models\WorkOrder::whereIn('status', ['pcd_review', 'pcd_release_pending'])->count()
+                        + \App\Models\DeliveryOrder::where('challan_status', 'pending')->count();
+                }
                 if ($user->can('use notes')) {
                     $badges['notes_awaiting'] = count(\App\Services\NoteWorkflow::awaitingIds($user));
                 }

@@ -19,11 +19,37 @@ class DeliveryOrder extends Model
         'center_id', 'work_order_id', 'customer_id', 'challan_number', 'quantity_delivered', 'delivery_type',
         'scheduled_date', 'delivery_address', 'vehicle_number', 'driver_name', 'notes',
         'status', 'delivered_at',
+        // Signed by PCD's নির্বাহী প্রকৌশলী before the goods go — ChallanApproval.
+        'created_by', 'challan_status', 'challan_approved_by', 'challan_approved_at', 'challan_signature_path',
+        'challan_rejected_by', 'challan_rejected_at', 'challan_rejection_reason',
     ];
+
+    public const CHALLAN_STATUSES = [
+        'pending'  => 'Awaiting XEN signature',
+        'approved' => 'Signed',
+        'rejected' => 'Rejected',
+    ];
+
+    /** Signed (or from before signing was asked for) — may go out, be confirmed and be billed. */
+    public function isChallanSigned(): bool
+    {
+        return $this->challan_status === null || $this->challan_status === 'approved';
+    }
+
+    /** Scope: challans accounts may see — signed ones only. */
+    public function scopeChallanSigned($q)
+    {
+        return $q->where(fn ($w) => $w->whereNull('challan_status')->orWhere('challan_status', 'approved'));
+    }
+
+    public function createdBy()        { return $this->belongsTo(User::class, 'created_by'); }
+    public function challanApprovedBy() { return $this->belongsTo(User::class, 'challan_approved_by'); }
+    public function challanRejectedBy() { return $this->belongsTo(User::class, 'challan_rejected_by'); }
 
     protected function casts(): array
     {
-        return ['scheduled_date' => 'date', 'delivered_at' => 'datetime', 'quantity_delivered' => 'float'];
+        return ['scheduled_date' => 'date', 'delivered_at' => 'datetime', 'quantity_delivered' => 'float',
+            'challan_approved_at' => 'datetime', 'challan_rejected_at' => 'datetime'];
     }
 
     public function workOrder() { return $this->belongsTo(WorkOrder::class); }

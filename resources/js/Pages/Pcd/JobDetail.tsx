@@ -62,6 +62,7 @@ interface DeliveryRow {
     scheduled_date: string | null;
     delivered_at: string | null;
     vehicle_number: string | null;
+    challan_status?: 'pending' | 'approved' | 'rejected';
 }
 
 interface Job {
@@ -1271,6 +1272,12 @@ export default function JobDetail({ job, checklist }: Props) {
                                             </div>
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 <span className={statusBadgeClass(d.status)}>{d.status}</span>
+                                                {d.challan_status === 'pending' && (
+                                                    <span className="ml-1 text-[10px] font-semibold text-amber-700">· awaiting XEN signature</span>
+                                                )}
+                                                {d.challan_status === 'rejected' && (
+                                                    <span className="ml-1 text-[10px] font-semibold text-rose-700">· challan rejected</span>
+                                                )}
                                                 <button
                                                     onClick={() => openPdf(`/pcd/deliveries/${d.id}/challan`, 'Delivery Challan', d.challan_number)}
                                                     className="btn-ghost btn-xs" title="Delivery challan">

@@ -66,6 +66,8 @@ class PcdDeliveryController extends Controller
             'scheduled_date' => $d->scheduled_date?->format('d M Y'),
             'delivered_at'   => $d->delivered_at?->format('d M Y, h:i A'),
             'vehicle_number' => $d->vehicle_number,
+            // Signed by PCD's নির্বাহী প্রকৌশলী? (ChallanApproval)
+            'challan_status' => $d->challan_status ?? 'approved',
         ];
     }
 }

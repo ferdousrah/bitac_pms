@@ -23,6 +23,9 @@ class BillingDeliveryChallanController extends Controller
     {
         $query = DeliveryOrder::with(['workOrder:id,wo_number,job_number,quantity,customer_id', 'workOrder.customer:id,name', 'invoice:id,delivery_order_id,invoice_number'])
             ->whereNotNull('challan_number')
+            // Accounts see a challan once PCD's নির্বাহী প্রকৌশলী has signed it
+            // (BITAC, 2026-10-27) — not while it waits, nor one he rejected.
+            ->challanSigned()
             ->latest('scheduled_date')->latest('id');
 
         if ($search = trim((string) $request->input('search'))) {
@@ -66,7 +69,7 @@ class BillingDeliveryChallanController extends Controller
 
     public function pdf(Request $request, DeliveryOrder $delivery)
     {
-        abort_unless($delivery->challan_number, 404);
+        abort_unless($delivery->challan_number && $delivery->isChallanSigned(), 404);
 
         return app(PcdDeliveryController::class)->challan($request, $delivery);
     }

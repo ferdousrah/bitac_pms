@@ -167,7 +167,7 @@ class SystemResetController extends Controller
         // and must survive.
         'signatures/approvals', 'signatures/estimate-approvals', 'signatures/gate-passes',
         'signatures/work-orders', 'signatures/letters', 'signatures/notes',
-        'signatures/invoices', 'signatures/invoice-letters', 'signatures/musak',
+        'signatures/invoices', 'signatures/invoice-letters', 'signatures/musak', 'signatures/challans',
         'pod',                 // delivery receivers' signatures
         'payments',
         'meeting-uploads', 'ai-reports',
