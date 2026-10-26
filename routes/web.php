@@ -403,6 +403,11 @@ Route::middleware(['auth'])->group(function () {
             ->except(['show']);
         Route::get('musak-challans/{musakChallan}/pdf', [\App\Http\Controllers\MusakChallanController::class, 'pdf'])
             ->name('musak-challans.pdf');
+        // Sign Document — as on the bill, by the desk that raises bills.
+        Route::post('musak-challans/{musakChallan}/sign', [\App\Http\Controllers\MusakChallanController::class, 'sign'])
+            ->middleware('permission:create invoices')->name('musak-challans.sign');
+        Route::delete('musak-challans/{musakChallan}/sign', [\App\Http\Controllers\MusakChallanController::class, 'unsign'])
+            ->middleware('permission:create invoices')->name('musak-challans.unsign');
     });
 
     // ─── IED commercial reports (clients, sectors, quotation value,

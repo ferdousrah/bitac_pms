@@ -22,7 +22,7 @@ class MusakChallan extends Model
         'buyer_name', 'buyer_bin', 'buyer_address',
         'destination', 'vehicle',
         'total_value', 'total_sd', 'total_vat', 'total_inclusive',
-        'signatory_user_id', 'signature_path', 'note',
+        'signatory_user_id', 'signature_path', 'signed_by', 'signed_at', 'note',
         'status', 'issued_at', 'created_by',
     ];
 
@@ -31,6 +31,7 @@ class MusakChallan extends Model
         return [
             'issue_date' => 'date',
             'issued_at'  => 'datetime',
+            'signed_at'  => 'datetime',
         ];
     }
 
@@ -40,6 +41,7 @@ class MusakChallan extends Model
     public function workOrder() { return $this->belongsTo(WorkOrder::class); }
     public function signatory() { return $this->belongsTo(User::class, 'signatory_user_id'); }
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
+    public function signedBy()  { return $this->belongsTo(User::class, 'signed_by'); }
 
     /** The next number for this centre's register — editable, like a gate pass. */
     public static function generateChallanNo(?int $centerId): string

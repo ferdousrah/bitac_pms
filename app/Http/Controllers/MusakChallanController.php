@@ -33,7 +33,7 @@ class MusakChallanController extends Controller
 {
     public function index(Request $request)
     {
-        $query = MusakChallan::with(['customer', 'signatory'])->latest();
+        $query = MusakChallan::with(['customer', 'signatory', 'signedBy:id,name'])->latest();
 
         if ($search = trim((string) $request->input('search'))) {
             $query->where(fn ($w) => $w
@@ -56,7 +56,11 @@ class MusakChallanController extends Controller
                 'total'      => (float) $c->total_inclusive,
                 'status'     => $c->status,
                 'signatory'  => $c->signatory?->name,
+                'signed_by'  => $c->signature_path ? ($c->signedBy?->name ?? $c->signatory?->name) : null,
+                'signed_at'  => $c->signed_at?->format('d M Y, h:i A'),
             ]),
+            // Signed by the desk that raises the bill — the bill's own rule.
+            'canSign'  => (bool) auth()->user()?->can('create invoices'),
             'filters' => ['search' => $search, 'status' => $request->input('status', '')],
         ]);
     }
@@ -71,7 +75,8 @@ class MusakChallanController extends Controller
         $data = $this->validateChallan($request);
 
         DB::transaction(function () use ($data, $request) {
-            $challan = MusakChallan::create($this->headerAttributes($data, $request) + [
+            $attrs = $this->headerAttributes($data, $request);
+            $challan = MusakChallan::create($attrs + $this->signedStamp($attrs) + [
                 'created_by' => auth()->id(),
             ]);
             $this->syncItems($challan, $data['items'] ?? []);
@@ -92,6 +97,18 @@ class MusakChallanController extends Controller
 
         DB::transaction(function () use ($data, $request, $musakChallan) {
             $attrs = $this->headerAttributes($data, $request);
+            // ⚠️ Saving the form must not un-sign it. No block picked → keep the
+            // signature that is there (put on with Sign Document, or earlier) —
+            // unless the signatory changed, which is somebody else's to sign.
+            if (! $attrs['signature_path']) {
+                if ((int) $attrs['signatory_user_id'] === (int) $musakChallan->signatory_user_id) {
+                    unset($attrs['signature_path']);
+                } else {
+                    $attrs += ['signed_by' => null, 'signed_at' => null];
+                }
+            } else {
+                $attrs += $this->signedStamp($attrs);
+            }
             // Once issued, the stamp stays put — re-saving must not re-date it.
             if ($musakChallan->issued_at) {
                 unset($attrs['issued_at']);
@@ -115,6 +132,51 @@ class MusakChallanController extends Controller
         $musakChallan->delete();
 
         return back()->with('success', 'Draft deleted.');
+    }
+
+    /**
+     * Sign Document — the bill's own act, on the মূসক ৬.৩ (BITAC, 2026-10-27).
+     * The signed-in officer signs with one of HIS saved blocks (default
+     * preselected), or a drawn one; another officer's block is refused by
+     * SignatureResolver. He becomes the challan's দায়িত্বপ্রাপ্ত ব্যক্তি, whose
+     * name and designation print beside the signature. The PATH is stored, so
+     * deleting the block later cannot blank a challan that went out.
+     */
+    public function sign(Request $request, MusakChallan $musakChallan)
+    {
+        $data = $request->validate(SignatureResolver::rules());
+        $me   = (int) auth()->id();
+
+        $path = SignatureResolver::resolve($data['user_signature_id'] ?? null, $data['signature'] ?? null, 'signatures/musak', $me)
+            ?? SignatureResolver::defaultPathFor($me);
+        if (! $path) {
+            return back()->with('error', 'You have no saved signature — draw one, or add one under Profile → Signatures.');
+        }
+
+        $musakChallan->update([
+            'signatory_user_id' => $me,
+            'signature_path'    => $path,
+            'signed_by'         => $me,
+            'signed_at'         => now(),
+        ]);
+
+        return back()->with('success', 'চালানপত্র ' . ($musakChallan->challan_no ?: "#{$musakChallan->id}") . ' signed.');
+    }
+
+    /** Take the signature off — signing the wrong challan must not be a dead end. */
+    public function unsign(MusakChallan $musakChallan)
+    {
+        $musakChallan->update(['signature_path' => null, 'signed_by' => null, 'signed_at' => null]);
+
+        return back()->with('success', 'Signature removed.');
+    }
+
+    /** A signature picked on the form is signed by its signatory, now. */
+    private function signedStamp(array $attrs): array
+    {
+        return ! empty($attrs['signature_path'])
+            ? ['signed_by' => $attrs['signatory_user_id'] ?? null, 'signed_at' => now()]
+            : [];
     }
 
     /** The form, printed. `?copy=` picks প্রথম / দ্বিতীয় / তৃতীয় কপি. */

@@ -1,7 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { Head, Link, router } from '@inertiajs/react';
-import { FormEvent, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { FormEvent, useRef, useState } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 
 const COPIES = [
     { n: 1, label: 'প্রথম' },
@@ -9,9 +10,29 @@ const COPIES = [
     { n: 3, label: 'তৃতীয়' },
 ];
 
-export default function MusakChallanIndex({ challans, filters = {} }: any) {
+export default function MusakChallanIndex({ challans, filters = {}, canSign = false }: any) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [pdf, setPdf] = useState<{ url: string; title: string } | null>(null);
+
+    // Sign Document — as on the bill: the officer's own saved blocks, default
+    // preselected, or one drawn now.
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
+    const sigRef = useRef<SignaturePickerHandle>(null);
+    const [signing, setSigning] = useState<any | null>(null);
+    const [busy, setBusy] = useState(false);
+    const doSign = () => {
+        if (!signing) return;
+        const choice = sigRef.current?.value();
+        setBusy(true);
+        router.post(`/musak-challans/${signing.id}/sign`, {
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }, { preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setSigning(null) });
+    };
+    const unsign = (c: any) => {
+        if (!confirm(`Remove the signature from চালানপত্র ${c.challan_no ?? c.id}?`)) return;
+        router.delete(`/musak-challans/${c.id}/sign`, { preserveScroll: true });
+    };
 
     const go = (patch: Record<string, any>) =>
         router.get('/musak-challans', { search, status: filters.status ?? '', ...patch },
@@ -96,6 +117,11 @@ export default function MusakChallanIndex({ challans, filters = {} }: any) {
                                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                                         : 'bg-surface-100 text-surface-500 border-surface-200'
                                                 }`}>{c.status}</span>
+                                                {c.signed_by
+                                                    ? <div className="text-[10px] text-emerald-700 mt-1" title={c.signed_at ?? ''}>
+                                                        <i className="fi fi-rr-signature mr-0.5" />Signed · {c.signed_by}
+                                                      </div>
+                                                    : <div className="text-[10px] text-surface-400 mt-1">Not signed</div>}
                                             </td>
                                             <td className="px-4 py-2.5">
                                                 <div className="flex items-center justify-end gap-1.5">
@@ -108,6 +134,17 @@ export default function MusakChallanIndex({ challans, filters = {} }: any) {
                                                             title={`${copy.label} কপি`}
                                                             className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
                                                             {copy.label}
+                                                        </button>
+                                                    ))}
+                                                    {canSign && (c.signed_by ? (
+                                                        <button onClick={() => unsign(c)} title="Remove signature"
+                                                            className="px-2 py-1 rounded-lg text-[11px] font-semibold text-surface-500 hover:bg-surface-100">
+                                                            Unsign
+                                                        </button>
+                                                    ) : (
+                                                        <button onClick={() => setSigning(c)} title="Sign Document"
+                                                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-white bg-brand-600 hover:bg-brand-500">
+                                                            <i className="fi fi-rr-signature text-[10px] leading-none" /> Sign
                                                         </button>
                                                     ))}
                                                     <Link href={`/musak-challans/${c.id}/edit`} title="Edit"
@@ -130,6 +167,36 @@ export default function MusakChallanIndex({ challans, filters = {} }: any) {
             <PdfPopupModal open={pdf !== null} pdfUrl={pdf?.url ?? null}
                 title="মূসক ৬.৩ — কর চালানপত্র" subtitle={pdf?.title}
                 onClose={() => setPdf(null)} />
+
+            {signing && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !busy && setSigning(null)} />
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+                        <div className="px-5 py-3 border-b border-surface-100 flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                                <i className="fi fi-rr-signature text-sm leading-none" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-surface-900">Sign চালানপত্র {signing.challan_no ?? `#${signing.id}`}</h3>
+                                <p className="text-[11px] text-surface-500 leading-tight mt-0.5">
+                                    Your signature prints at স্বাক্ষর, with your name and designation as the দায়িত্বপ্রাপ্ত ব্যক্তি.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-5">
+                            <SignaturePicker ref={sigRef} signatures={mySignatures} padHeight={110} />
+                        </div>
+                        <div className="px-5 py-3 border-t border-surface-100 flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => setSigning(null)} disabled={busy} className="btn-ghost">Cancel</button>
+                            <button type="button" onClick={doSign} disabled={busy} className="btn-primary">
+                                {busy
+                                    ? <><i className="fi fi-rr-spinner animate-spin text-xs leading-none" /> Signing…</>
+                                    : <><i className="fi fi-rr-check text-xs leading-none" /> Sign Document</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

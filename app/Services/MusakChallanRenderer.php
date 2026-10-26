@@ -184,9 +184,12 @@ class MusakChallanRenderer
     private function footer(MusakChallan $challan, callable $esc): string
     {
         $signer = $challan->signatory;
+        // ⚠️ Only a signature someone actually put on it (Sign Document, or the
+        // form's picker). It used to fall back to the signatory's default
+        // signature, so naming someone on the form signed for them.
         $sigPath = $challan->signature_path
             ? \Storage::disk('public')->path($challan->signature_path)
-            : $signer?->signatureAbsolutePath();
+            : null;
         $sigPath = ($sigPath && is_file($sigPath)) ? $sigPath : null;
 
         $image = $sigPath

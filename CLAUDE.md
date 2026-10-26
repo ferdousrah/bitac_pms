@@ -1372,6 +1372,18 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 - ⚠️ **The VAT rate comes from the document, never a constant** — the sample challan is at **10%**, not the 15% the quotation form defaults to.
 - New columns: **`centers.bin_number`** (নিবন্ধিত ব্যক্তির বিআইএন, on Admin → Centers) and **`customers.bin_number`** (ক্রেতার বিআইএন, on the customer form). `InvoiceService` had been reading `customers.bin_number` all along — **the column simply never existed**, so the tax invoice has always printed a blank there. It works now.
 - An **issued** challan cannot be deleted (redirect + flash) — it records something that left the premises. Only a draft goes.
+- **Sign Document, as on the bill** (BITAC, 2026-10-27): **Sign** / **Unsign** on each row of the
+  মূসক ৬.৩ list (it has no page of its own), `POST|DELETE musak-challans/{id}/sign`, gated
+  **`create invoices`** (the bill's rule). The officer signs with **his own** saved blocks (default
+  preselected) or a drawn one — another officer's block is refused by `SignatureResolver` — and
+  **becomes the দায়িত্বপ্রাপ্ত ব্যক্তি** whose name and designation print beside it. `signed_by` /
+  `signed_at` (migration `..._000092`); the list says *Signed · name* / *Not signed*.
+- ⚠️ **The PDF used to print the named signatory's DEFAULT signature whenever none was stored** —
+  naming someone on the form signed for them. That fallback is gone: only a signature someone put on
+  it prints. Migration 000092 **fixed the signature an issued challan was printing onto it**, so a
+  reprint is unchanged (drafts left unsigned).
+- ⚠️ **Saving the form no longer un-signs it**: no block picked + same signatory keeps the signature;
+  a **different** signatory clears it (his to sign).
 - ⚠️ **Asserting on decoded PDF text: never match a Bangla fragment containing a conjunct.** Shaping turns যুক্তাক্ষর into private-use ligatures, so `মূসক-৬.৩` can never appear in the decoded stream — it comes out as `{lig}সক-৬.৩`. Match on conjunct-free fragments. (Related: mPDF writes letter-spaced runs as `TJ`, not `Tj`.)
 
 ## 🧾💰 Delivery → Bill → মূসক ৬.৩ are three separate acts (2026-09-29)
