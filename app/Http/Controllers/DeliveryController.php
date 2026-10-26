@@ -258,6 +258,10 @@ class DeliveryController extends Controller
                 'challan_signed_at'   => $d->challan_approved_at?->format('d/m/Y H:i'),
                 'challan_rejection'   => $d->challan_rejection_reason,
             ],
+            // The receiver's signature: the link / QR to sign on, and what has
+            // come back from it (App\Services\DeliveryReceipt).
+            'receipt' => \App\Services\DeliveryReceipt::packForStaff($delivery->load('pod')),
+            'receiptBlocker' => \App\Services\DeliveryReceipt::blocker($delivery),
         ]);
     }
 
@@ -288,6 +292,17 @@ class DeliveryController extends Controller
         ]);
     }
 
+    /** A one-time link (and its QR code) for the receiver to sign on. */
+    public function receiptLink(DeliveryOrder $delivery)
+    {
+        if ($why = \App\Services\DeliveryReceipt::blocker($delivery)) {
+            return back()->with('error', $why);
+        }
+        \App\Services\DeliveryReceipt::issue($delivery);
+
+        return back()->with('success', 'Signing link ready — let the receiver scan the QR code, or send him the link.');
+    }
+
     public function complete(Request $request, DeliveryOrder $delivery)
     {
         // ⚠️ Not before the XEN has signed the challan (BITAC, 2026-10-27) —
@@ -301,30 +316,48 @@ class DeliveryController extends Controller
             return redirect()->route('delivery.index')->with('error', "Challan {$delivery->challan_number} is already delivered.");
         }
 
-        $validated = $request->validate([
-            'received_by' => 'required|string|max:255',
-            'received_at' => 'required|date',
-            'signature'   => 'nullable|string',
-            'notes'       => 'nullable|string',
-        ]);
+        // The receiver signs for the goods one of two ways (BITAC, 2026-10-27):
+        //  - `link`: on his phone / BITAC's tablet — the signature is already
+        //    here, from the public page (App\Services\DeliveryReceipt);
+        //  - `photo`: by pen on the paper challan, which PCD photographs.
+        $mode = $request->input('mode') === 'photo' ? 'photo' : 'link';
+        $pod  = $delivery->pod()->first();
 
-        $signaturePath = null;
-        if (!empty($validated['signature'])) {
-            $imgData = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $validated['signature']));
-            $filename = 'pod/sig-' . $delivery->id . '-' . time() . '.png';
-            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imgData);
-            $signaturePath = $filename;
+        if ($mode === 'link') {
+            if (! $pod || ! $pod->isSignature()) {
+                return back()->with('error', 'The receiver has not signed yet — let him open the link, or upload a photo of the signed challan.');
+            }
+            $request->validate(['notes' => 'nullable|string|max:1000']);
+            $pod->update(['notes' => $request->input('notes') ?: null]);
+        } else {
+            $validated = $request->validate([
+                'received_by'          => 'required|string|max:120',
+                'receiver_designation' => 'nullable|string|max:120',
+                'receiver_phone'       => 'nullable|string|max:40',
+                'received_at'          => 'required|date',
+                'photo'                => 'required|file|mimes:jpg,jpeg,png,webp,pdf|max:10240',
+                'notes'                => 'nullable|string|max:1000',
+            ], ['photo.required' => 'Upload a photo of the challan the receiver signed.']);
+
+            // A link signature nobody confirmed gives way to the paper one.
+            \App\Services\DeliveryReceipt::discardUnconfirmed($delivery);
+
+            ProofOfDelivery::create([
+                'delivery_order_id'    => $delivery->id,
+                'received_by'          => $validated['received_by'],
+                'receiver_designation' => $validated['receiver_designation'] ?? null,
+                'receiver_phone'       => $validated['receiver_phone'] ?? null,
+                'proof_type'           => 'photo',
+                'proof_path'           => $request->file('photo')->store('pod/photos', 'public'),
+                'delivered_at'         => $validated['received_at'],
+                // `notes` is nullable, so it is simply absent when nothing was
+                // typed — reading it straight threw and the whole confirmation 500'd.
+                'notes'                => $validated['notes'] ?? null,
+            ]);
         }
 
-        ProofOfDelivery::create([
-            'delivery_order_id' => $delivery->id,
-            'received_by'       => $validated['received_by'],
-            'received_at'       => $validated['received_at'],
-            'signature_path'    => $signaturePath,
-            // `notes` is nullable, so it is simply absent when nothing was
-            // typed — reading it straight threw and the whole confirmation 500'd.
-            'notes'             => $validated['notes'] ?? null,
-        ]);
+        // The link has done its job.
+        $delivery->update(['receipt_token_expires_at' => now()]);
 
         $delivery->update(['status' => 'delivered', 'delivered_at' => now()]);
         $workOrder = $delivery->workOrder;

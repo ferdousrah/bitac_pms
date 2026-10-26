@@ -22,6 +22,7 @@ class DeliveryOrder extends Model
         // Signed by PCD's নির্বাহী প্রকৌশলী before the goods go — ChallanApproval.
         'created_by', 'challan_status', 'challan_approved_by', 'challan_approved_at', 'challan_signature_path',
         'challan_rejected_by', 'challan_rejected_at', 'challan_rejection_reason',
+        'receipt_token', 'receipt_token_expires_at',
     ];
 
     public const CHALLAN_STATUSES = [
@@ -49,7 +50,8 @@ class DeliveryOrder extends Model
     protected function casts(): array
     {
         return ['scheduled_date' => 'date', 'delivered_at' => 'datetime', 'quantity_delivered' => 'float',
-            'challan_approved_at' => 'datetime', 'challan_rejected_at' => 'datetime'];
+            'challan_approved_at' => 'datetime', 'challan_rejected_at' => 'datetime',
+            'receipt_token_expires_at' => 'datetime'];
     }
 
     public function workOrder() { return $this->belongsTo(WorkOrder::class); }

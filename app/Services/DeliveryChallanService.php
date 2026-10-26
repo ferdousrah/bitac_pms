@@ -30,7 +30,7 @@ class DeliveryChallanService
      */
     public function generatePdf(DeliveryOrder $delivery): string
     {
-        $delivery->load(['workOrder.product', 'workOrder.customer', 'workOrder.items.product', 'workOrder.quotation.items', 'items']);
+        $delivery->load(['workOrder.product', 'workOrder.customer', 'workOrder.items.product', 'workOrder.quotation.items', 'items', 'pod']);
 
         $table = $delivery->items->isNotEmpty()
             ? ($delivery->type === 'partial' ? $this->partialTable($delivery) : $this->fullTable($delivery))
@@ -225,9 +225,32 @@ class DeliveryChallanService
                     . '</table>')
             . '</td>';
 
+        // The receiver (DeliveryReceipt): his drawn signature sits over the
+        // rule and his details fill the lines — unlike the XEN's uploaded
+        // block, a drawn signature is only a squiggle and names nobody. A
+        // pen-signed paper copy (photo) fills the lines; the photo is on file.
+        $pod = $delivery->pod;
+        $podSig = ($pod && $pod->isSignature() && $pod->proof_path)
+            ? \Illuminate\Support\Facades\Storage::disk('public')->path($pod->proof_path) : null;
+        $podSig = ($podSig && is_file($podSig)) ? $podSig : null;
+        $who = fn (string $label, ?string $v) => $label . ($v ? ' <span style="font-weight: normal;">' . self::esc($v) . '</span>' : '');
+        $receiver = '<td width="38%" style="vertical-align: bottom;">'
+            . '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">'
+            .   ($podSig
+                    ? '<tr><td style="vertical-align: bottom;"><img src="' . $podSig . '" style="width: 120pt;" /></td></tr>'
+                    : '<tr><td style="height: 40pt;">&nbsp;</td></tr>')
+            .   '<tr><td style="border-top: 0.75pt solid #000; padding-top: 3pt; font-size: 11pt; font-weight: bold; line-height: 1.45;">'
+            .     'Signature of receiver'
+            .     '<br>' . $who('Name:', $pod?->received_by)
+            .     '<br>' . $who('Designation:', $pod?->receiver_designation)
+            .     '<br>' . $who('Phone Number:', $pod?->receiver_phone)
+            .   '</td></tr>'
+            . '</table>'
+            . '</td>';
+
         $signatures = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
             . '<tr>'
-            .   $sig('Signature of receiver<br>Name:<br>Designation:<br>Phone Number:')
+            .   $receiver
             .   '<td width="24%">&nbsp;</td>'
             .   $sig('Signature<br>Executive Engineer<br>Production Control Division<br>Phone Number:', $xenSig)
             . '</tr>'

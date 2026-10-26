@@ -131,6 +131,13 @@ Route::post('/portfolio/request-quotation', [\App\Http\Controllers\Portfolio\Quo
     ->middleware('throttle:20,1')->name('portfolio.public.quote.store');
 Route::get('/portfolio/{slug}',       [PortfolioPublicController::class, 'show'])->name('portfolio.public.show');
 
+// The client's man signs for the goods on his own phone or BITAC's tablet —
+// no login, the one-time token is the key (App\Services\DeliveryReceipt).
+Route::get('/receive/{token}',  [\App\Http\Controllers\DeliveryReceiptController::class, 'show'])
+    ->middleware('throttle:60,1')->name('delivery.receipt.show');
+Route::post('/receive/{token}', [\App\Http\Controllers\DeliveryReceiptController::class, 'store'])
+    ->middleware('throttle:10,1')->name('delivery.receipt.store');
+
 // Public stakeholder form fill — no auth, identified by token.
 Route::get('/stakeholder-form/{token}',             [\App\Http\Controllers\Public\StakeholderFormFillController::class, 'show'])->name('public.stakeholder-form.show');
 Route::post('/stakeholder-form/{token}',            [\App\Http\Controllers\Public\StakeholderFormFillController::class, 'store'])->name('public.stakeholder-form.store');
@@ -924,6 +931,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{delivery}', [DeliveryController::class, 'show'])->name('delivery.show');
         Route::get('{delivery}/pdf', [DeliveryController::class, 'pdf'])->name('delivery.pdf');
         Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->name('delivery.complete');
+        // A one-time link / QR code for the receiver to sign on his phone.
+        Route::post('{delivery}/receipt-link', [DeliveryController::class, 'receiptLink'])->name('delivery.receipt-link');
         // Billing is its own act, done whenever accounts get to it — it is
         // deliberately NOT a side effect of confirming the delivery.
         Route::post('{delivery}/bill', [\App\Http\Controllers\InvoiceController::class, 'storeFromDelivery'])

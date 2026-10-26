@@ -1465,6 +1465,43 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   a second click is a flash, the PDF gains exactly one image when signed, reject frees the quantity,
   no XEN goes straight through; and the migration both ways.
 
+## 🖊 The receiver signs for the goods — on his phone, or on paper (2026-10-27)
+> BITAC: the client sends a man to collect the goods; *"signature pad … ekta public link create hobe,
+> oita j receiver asse tar sathe share korbe, she tar mobile e open kore sign kore dite parbe? …
+> bitac atr jonne ekta tablet nite parbe."* Two ways, on the **Confirm Delivery** page:
+
+1. **Sign on phone / tablet** — **Create signing link** shows a **QR code** (+ Copy, **Send on
+   WhatsApp**, Open on this device). The receiver scans it, and on **`/receive/{token}`**
+   (`DeliveryReceiptController`, `Pages/Public/ReceiveDelivery.tsx`, **no login**) types his
+   **name, designation, mobile**, signs with his finger (`Components/SignaturePad`, touch) and ticks
+   "I have received the goods listed above". PCD's page polls every 4 s and shows his signature;
+   PCD then **Confirm Delivery**. A BITAC tablet simply opens the same link.
+2. **Photo of signed challan** — he signs the printed challan with a pen; PCD types his name /
+   designation / mobile and uploads a photo or scan (`pod/photos`).
+
+- **`App\Services\DeliveryReceipt`** holds the rules. ⚠️ The link is a **bearer token on a public
+  page**: 48 random characters (`delivery_orders.receipt_token`, unique), **24 hours**, **used once**
+  (signing expires it; the page then only says "thank you"), and it only opens a challan the XEN has
+  signed that is not yet delivered (`blocker()`). It shows **the challan, job, vehicle and the items
+  with quantities — no prices, no contacts**. Routes throttled (60/min view, 10/min sign).
+- ⚠️ **Anyone holding the link can POST**, so the "signature" must decode to a **real PNG** of sane
+  dimensions before anything is written (`SignatureResolver::storeDrawn()` would save any bytes as
+  `.png`).
+- **New link** (e.g. the wrong person signed) **discards a signature PCD has not confirmed**, file
+  included, and kills the old link. Choosing the photo way does the same.
+- Stored on **`proof_of_deliveries`**: `proof_type` (`signature` | `photo`), `proof_path`,
+  `received_by`, **`receiver_designation`**, **`receiver_phone`**, `delivered_at` (= when he signed /
+  received), **`notes`**, **`signed_ip`** (migration `..._000091`). The creator of the delivery is
+  told when he signs.
+- ⚠️ **Fixed on the way: the old pad's signature never survived.** `complete()` wrote
+  `signature_path`, `received_at` and `notes` — not columns and not fillable — so the drawn image was
+  saved to disk and its path silently dropped; and the pad listened to **mouse events only**, so it
+  never worked by touch.
+- **The challan prints him** in "Signature of receiver": his drawn signature above the rule (a squiggle
+  names nobody, so his **Name / Designation / Phone** are typed into the lines — unlike the XEN's
+  uploaded block). A photo-signed delivery prints the typed lines; the photo is on file.
+- Verified on a copy, 28 checks, and the public page looked at on a 390 px phone width.
+
 ## 🚚 Delivery Orders belong to PCD (2026-09)
 
 - The menu **Delivery & Billing** is now **Billing & Accounts** and holds the money only — **Bills / Invoices** and **মূসক ৬.৩**. **Delivery Orders moved into the PCD group** (BITAC's instruction): the department that planned and routed the job also ships it. The module itself is unchanged and still lives at `/delivery`.
