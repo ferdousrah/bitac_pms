@@ -22,6 +22,11 @@ class SystemResetController extends Controller
     /**
      * Tables wiped, in FK-safe order (children first). Any table not present
      * on this DB is silently skipped, so the list is safe to extend over time.
+     *
+     * ⚠️ FOREIGN_KEY_CHECKS is switched off for the wipe, which also switches
+     * off ON DELETE CASCADE. A child table that is not listed here is NOT
+     * cleared with its parent — it is left behind pointing at nothing. Every
+     * transactional table has to be named.
      */
     private const TABLES_TO_WIPE = [
         // Notifications / audit / comments — touch many entities, wipe first
@@ -34,6 +39,21 @@ class SystemResetController extends Controller
         'chat_messages',
         'entity_comments',
         'entity_revisions',
+        // Who-did-what — it would only point at rows wiped below.
+        'audit_logs',
+        'ims_integration_logs',
+
+        // Meetings and the conversations with Oli are activity, not setup.
+        // The AI usage/cost log (ai_usage_logs) is KEPT — it records real
+        // API spending.
+        'meeting_action_items',
+        'meeting_decisions',
+        'meeting_messages',
+        'meeting_topics',
+        'meeting_participants',
+        'meetings',
+        'ai_messages',
+        'ai_conversations',
 
         // Delivery + billing + completion certificates
         'completion_certificates',
@@ -61,6 +81,10 @@ class SystemResetController extends Controller
         'downtime_events',
         'job_executions',
         'production_schedules',
+        // ⚠️ The daily output logged against every operation. It was missing,
+        // and FK checks are OFF below, so its ON DELETE CASCADE never fired:
+        // the logs outlived their jobs and kept feeding the production reports.
+        'production_logs',
         'operator_assignments',
         'operation_steps',
         'operation_sheets',
@@ -72,6 +96,8 @@ class SystemResetController extends Controller
         'work_order_files',
         'work_order_items',
         'work_order_sections',
+        // The IED acceptance chain — missing too, for the same reason.
+        'work_order_approvals',
         'work_orders',
 
         // Gate passes (IED)
@@ -118,6 +144,7 @@ class SystemResetController extends Controller
         'factory_visits',
         'service_demand_logs',
         'maintenance_requests',
+        'machine_maintenance_logs',
 
         // Stakeholder form submissions (form/section/question TEMPLATES are kept)
         'stakeholder_form_answers',
@@ -135,8 +162,15 @@ class SystemResetController extends Controller
         'section-handoffs', 'production-messages',
         'customer-responses', 'completion-certificates',
         'consultancy-requests', 'maintenance-requests',
-        'signatures/approvals',
+        // Signatures DRAWN on a document. ⚠️ Only these sub-folders — the
+        // people's own saved signature blocks live directly in `signatures/`
+        // and must survive.
+        'signatures/approvals', 'signatures/estimate-approvals', 'signatures/gate-passes',
+        'signatures/work-orders', 'signatures/letters', 'signatures/notes',
+        'signatures/invoices', 'signatures/invoice-letters', 'signatures/musak',
+        'pod',                 // delivery receivers' signatures
         'payments',
+        'meeting-uploads', 'ai-reports',
     ];
 
     /**
@@ -181,6 +215,14 @@ class SystemResetController extends Controller
         }
 
         DB::transaction(function () {
+            // A machine in the middle of a maintenance request was put into
+            // `maintenance` by it, and only completing or cancelling the request
+            // takes it out — so read where each one was BEFORE the requests go.
+            $inMaintenance = \Schema::hasTable('maintenance_requests')
+                ? DB::table('maintenance_requests')->where('status', 'in_progress')->whereNotNull('machine_id')
+                    ->pluck('machine_state_before', 'machine_id')
+                : collect();
+
             // Disable FK checks so we don't have to hand-order EVERY child table.
             // Re-enabled at the end. Wrapped in transaction so a mid-wipe failure
             // rolls back the whole thing.
@@ -193,6 +235,19 @@ class SystemResetController extends Controller
                 }
             } finally {
                 DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            }
+
+            // The machines are kept; the work that set their state is gone.
+            // `running` means "has an operation in progress" — there are none
+            // now. A machine held in maintenance by a request just wiped goes
+            // back to where it was. Breakdown / offline / setup set by hand stay.
+            if (\Schema::hasTable('machines')) {
+                DB::table('machines')->where('current_state', 'running')
+                    ->update(['current_state' => 'idle', 'state_changed_at' => now()]);
+                foreach ($inMaintenance as $machineId => $before) {
+                    DB::table('machines')->where('id', $machineId)->where('current_state', 'maintenance')
+                        ->update(['current_state' => $before ?: 'idle', 'state_changed_at' => now()]);
+                }
             }
         });
 

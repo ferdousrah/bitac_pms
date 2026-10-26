@@ -942,6 +942,27 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 
 ### Transactional-data wipe
 - `Admin/SystemResetController` (super-admin, "DELETE ALL"). When adding any new transactional table, ALSO add it to `TABLES_TO_WIPE` + the `Reset.tsx` GROUPS display, and any upload dir to `STORAGE_DIRS_TO_WIPE`. Master/config (incl. `qc_checkpoints`, stakeholder form templates) is preserved.
+- ⚠️ **The wipe runs with `FOREIGN_KEY_CHECKS=0`, which also switches OFF `ON DELETE CASCADE`.** A child
+  table that is not in the list is NOT cleared with its parent — it is left pointing at nothing.
+  Audited before BITAC's live reset (2026-10-26) and **two were missing**: **`production_logs`** (every
+  output logged would have survived its job and kept feeding the production reports) and
+  **`work_order_approvals`**. Both added. Also added at BITAC's request: **meetings** (6 tables),
+  **Oli's chats** (`ai_conversations`, `ai_messages`), **`audit_logs`**, **`machine_maintenance_logs`**,
+  **`ims_integration_logs`**. Kept on purpose: **`ai_usage_logs`** (real API spending),
+  **`center_targets`**, approval chains, gate-pass approvers, `user_files`, `user_signatures`.
+- **Machines are put right after the wipe**: any left `running` → `idle`; a machine held in
+  `maintenance` by an **in-progress** request being wiped → its `machine_state_before` (read before the
+  delete). Breakdown / offline / setup set by hand stay.
+- **Files**: the drawn signatures on documents live in **sub-folders** (`signatures/approvals`,
+  `estimate-approvals`, `gate-passes`, `work-orders`, `letters`, `notes`, `invoices`,
+  `invoice-letters`, `musak`) and are cleared; ⚠️ **people's saved signature blocks live directly in
+  `signatures/` and must never be** — so never add `signatures` itself to the list. Also cleared:
+  `pod/` (delivery receivers' signatures), `meeting-uploads/`, `ai-reports/`.
+- **How it was verified**: the real controller run against a **copy** of the database
+  (`mysqldump bitac_pms | mysql bitac_reset_test`) with **faked disks** — every listed table empty,
+  every kept table's count unchanged, **no row anywhere pointing at a deleted row** (checked over
+  every foreign key in `information_schema`), the machine states, which files survive, and 14 pages
+  answering 200 on the empty data. Do it that way again; never on the real database.
 
 ### Deployment (Coolify)
 - Dockerfile-based; `docker/entrypoint.sh` auto-runs `migrate --force` + `storage:link` + caches on boot, and Dockerfile builds Vite assets. `git push` → Coolify rebuilds/redeploys (migrations apply automatically). App is a **PWA** — hard-refresh (Ctrl+Shift+R) after deploy to bust the cached bundle. See `docs/DEPLOYMENT.md`.

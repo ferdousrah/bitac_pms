@@ -28,11 +28,11 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Jobs / Work Orders',
-        tables: ['work_orders', 'work_order_items', 'work_order_sections', 'work_order_files', 'material_requisitions', 'material_requisition_items', 'material_requisition_notes'],
+        tables: ['work_orders', 'work_order_items', 'work_order_sections', 'work_order_files', 'work_order_approvals', 'material_requisitions', 'material_requisition_items', 'material_demands', 'material_demand_items'],
     },
     {
         label: 'Operation Sheets & Production',
-        tables: ['operation_sheets', 'operation_steps', 'operator_assignments', 'production_schedules', 'job_executions', 'section_handoffs', 'section_handoff_files', 'production_messages', 'production_message_files', 'downtime_events'],
+        tables: ['operation_sheets', 'operation_steps', 'production_logs', 'operator_assignments', 'production_schedules', 'job_executions', 'section_handoffs', 'section_handoff_files', 'production_messages', 'production_message_files', 'downtime_events'],
     },
     {
         label: 'QC, NCR & Rework',
@@ -53,25 +53,34 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Feedback & Service Requests',
-        tables: ['customer_complaints', 'complaint_discussions', 'complaint_decision_makers', 'emergency_requests', 'consultancy_requests', 'quotation_requests', 'quotation_request_files', 'factory_visits', 'service_demand_logs', 'maintenance_requests'],
+        tables: ['customer_complaints', 'complaint_discussions', 'complaint_decision_makers', 'emergency_requests', 'consultancy_requests', 'quotation_requests', 'quotation_request_files', 'factory_visits', 'service_demand_logs'],
+    },
+    {
+        label: 'Maintenance',
+        tables: ['maintenance_requests', 'machine_maintenance_logs'],
     },
     {
         label: 'Stakeholder Form Responses',
-        tables: ['stakeholder_form_responses', 'stakeholder_form_answers', 'stakeholder_form_invitations', 'stakeholders'],
+        tables: ['stakeholder_form_responses', 'stakeholder_form_answers', 'stakeholder_form_invitations'],
     },
     {
-        label: 'Notifications & Audit Trail',
-        tables: ['notifications', 'customer_notifications', 'entity_comments', 'entity_revisions', 'chat_messages', 'chat_message_files', 'chat_reads', 'material_demands', 'material_demand_items'],
+        label: 'Meetings & Oli Chats',
+        tables: ['meetings', 'meeting_participants', 'meeting_topics', 'meeting_messages', 'meeting_decisions', 'meeting_action_items', 'ai_conversations', 'ai_messages'],
+    },
+    {
+        label: 'Chat, Notifications & Audit Trail',
+        tables: ['notifications', 'customer_notifications', 'entity_comments', 'entity_revisions', 'audit_logs', 'ims_integration_logs', 'chat_messages', 'chat_message_files', 'chat_reads'],
     },
 ];
 
 const PRESERVED = [
-    { label: 'Users / Roles / Permissions', icon: 'fi-rr-users' },
+    { label: 'Users / Roles / Permissions + their saved signatures', icon: 'fi-rr-users' },
     { label: 'Customers', icon: 'fi-rr-building' },
     { label: 'Products / BOMs', icon: 'fi-rr-cube' },
     { label: 'Master Data — Sections, Machines, Operators, Materials, Operations', icon: 'fi-rr-sitemap' },
-    { label: 'Portfolio projects + photos', icon: 'fi-rr-images' },
-    { label: 'System settings — Branding, Centers, Chatbot', icon: 'fi-rr-settings' },
+    { label: 'Approval chains, Gate Pass approvers, Centre targets', icon: 'fi-rr-list-check' },
+    { label: 'Public website + Portfolio projects', icon: 'fi-rr-images' },
+    { label: 'System settings — Branding, Centers, Chatbot, AI usage log', icon: 'fi-rr-settings' },
 ];
 
 export default function SystemReset({ counts }: Props) {
