@@ -863,6 +863,18 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
   a letter (or the super admin) deletes it**.
 - Transactional → `TABLES_TO_WIPE` + `Reset.tsx`, and `letter-registers` in
   `PRIVATE_STORAGE_DIRS_TO_WIPE`. Verified on a copy, 17 checks.
+- **A letter issued from IED → Letters enters IED's প্রেরিত register by itself** (BITAC,
+  2026-10-31). `letter_registers.rfq_letter_id` (unique, **cascade** — deleting the letter
+  removes its entry; migration `..._000094`, which also enters every letter already issued).
+  An `RfqLetter` **`saved`** hook calls `LetterRegister::syncFromRfqLetter()` whenever the
+  letter is not a draft, so issuing (create, update, email) and every later edit follow; a
+  draft is not entered. Mapping: memo = `letter_no`, date = `letter_date` (else `issued_at`),
+  recipient = `recipient_block` on one line (else the customer), sender = signatory + designation
+  (else "IED, BITAC"), remarks = subject, `created_by` = the letter's.
+  - ⚠️ **Such a row is the letter's, not the register's**: `update` / `destroy` refuse it
+    (redirect + flash, even for the super admin); the list badges it **From Letters**, its clip
+    opens the letter PDF (`/rfq-letters/{id}/pdf?preview=1`) and the pencil becomes a link to the
+    letter. Hand-kept rows are unaffected. Verified on a copy, 19 checks + the migration both ways.
 
 ### Notes — every department, signed in order (2026-09, reworked 2026-10-20)
 > An **internal** note on plain legal paper. BITAC (2026-10-20): every department writes them,

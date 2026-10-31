@@ -31,4 +31,18 @@ class RfqLetter extends Model
     public function customer()  { return $this->belongsTo(Customer::class); }
     public function signatory() { return $this->belongsTo(User::class, 'signatory_user_id'); }
     public function createdBy() { return $this->belongsTo(User::class, 'created_by'); }
+
+    /**
+     * An issued letter is entered in IED's প্রেরিত চিঠির রেকর্ড by itself, and
+     * its entry follows later edits. Deleting the letter removes the entry
+     * (foreign key cascade).
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (RfqLetter $letter) {
+            if ($letter->status !== 'draft') {
+                LetterRegister::syncFromRfqLetter($letter->load(['signatory', 'customer']));
+            }
+        });
+    }
 }

@@ -13,6 +13,9 @@ interface Entry {
     file_name: string | null;
     file_url: string | null;
     entered_by: string | null;
+    /** Issued from IED → Letters; the letter keeps this row in step. */
+    from_letters: boolean;
+    letter_url: string | null;
     can_delete: boolean;
 }
 
@@ -161,7 +164,10 @@ export default function LetterRegisterIndex({ desk, deskLabel, direction, title,
                                                 ))}
                                                 <td className="px-3 py-2.5 font-mono text-xs text-surface-700 break-all">{e.memo_no || '—'}</td>
                                                 <td className="px-3 py-2.5 text-xs text-surface-600 whitespace-nowrap">{e.date_label}</td>
-                                                <td className="px-3 py-2.5 text-xs text-surface-600 whitespace-pre-line">{e.remarks || '—'}</td>
+                                                <td className="px-3 py-2.5 text-xs text-surface-600 whitespace-pre-line">
+                                                    {e.remarks || '—'}
+                                                    {e.from_letters && <FromLetters />}
+                                                </td>
                                                 <td className="px-4 py-2.5">
                                                     <Actions e={e} onEdit={() => openEdit(e)} onRemove={() => remove(e)} />
                                                 </td>
@@ -187,6 +193,7 @@ export default function LetterRegisterIndex({ desk, deskLabel, direction, title,
                                         ))}
                                         {e.memo_no && <div className="text-xs"><span className="font-bangla text-surface-500 mr-1.5">স্মারক:</span><span className="font-mono">{e.memo_no}</span></div>}
                                         {e.remarks && <div className="text-xs text-surface-600 whitespace-pre-line">{e.remarks}</div>}
+                                        {e.from_letters && <FromLetters />}
                                     </div>
                                 ))}
                             </div>
@@ -283,19 +290,37 @@ export default function LetterRegisterIndex({ desk, deskLabel, direction, title,
     );
 }
 
+function FromLetters() {
+    return (
+        <div className="mt-1">
+            <span className="badge-blue text-[10px]" title="Entered when the letter was issued from IED → Letters">
+                <i className="fi fi-rr-envelope text-[9px] mr-1 leading-none" />From Letters
+            </span>
+        </div>
+    );
+}
+
 function Actions({ e, onEdit, onRemove }: { e: Entry; onEdit: () => void; onRemove: () => void }) {
     return (
         <div className="flex items-center justify-end gap-1">
             {e.file_url && (
-                <a href={e.file_url} target="_blank" rel="noopener" title={e.file_name ?? 'Scanned letter'}
+                <a href={e.file_url} target="_blank" rel="noopener" title={e.from_letters ? 'Letter PDF' : (e.file_name ?? 'Scanned letter')}
                     className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-brand-600 hover:bg-brand-50">
                     <i className="fi fi-rr-clip text-xs leading-none" />
                 </a>
             )}
-            <button type="button" onClick={onEdit} title="Edit"
-                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-surface-500 hover:bg-surface-100">
-                <i className="fi fi-rr-pencil text-xs leading-none" />
-            </button>
+            {/* A letter issued from IED → Letters is changed there, and this row follows. */}
+            {e.from_letters ? (
+                <Link href={e.letter_url!} title="Open in Letters"
+                    className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-surface-500 hover:bg-surface-100">
+                    <i className="fi fi-rr-arrow-up-right-from-square text-xs leading-none" />
+                </Link>
+            ) : (
+                <button type="button" onClick={onEdit} title="Edit"
+                    className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-surface-500 hover:bg-surface-100">
+                    <i className="fi fi-rr-pencil text-xs leading-none" />
+                </button>
+            )}
             {e.can_delete && (
                 <button type="button" onClick={onRemove} title="Remove"
                     className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50">

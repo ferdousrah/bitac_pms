@@ -56,10 +56,15 @@ class LetterRegisterController extends Controller
                 'letter_date' => $e->letter_date?->format('Y-m-d'),
                 'date_label'  => $e->letter_date?->format('d M Y'),
                 'remarks'     => $e->remarks,
-                'file_name'   => $e->file_name,
-                'file_url'    => $e->file_path ? "{$base}/{$e->id}/file" : null,
+                'file_name'   => $e->isFromLetters() ? 'Letter PDF' : $e->file_name,
+                'file_url'    => $e->isFromLetters()
+                    ? "/rfq-letters/{$e->rfq_letter_id}/pdf?preview=1"
+                    : ($e->file_path ? "{$base}/{$e->id}/file" : null),
                 'entered_by'  => $e->createdBy?->name,
-                'can_delete'  => $me && ($me->isSuperAdmin() || (int) $e->created_by === (int) $me->id),
+                // Issued from IED → Letters: the letter keeps this row in step.
+                'from_letters' => $e->isFromLetters(),
+                'letter_url'   => $e->isFromLetters() ? "/rfq-letters/{$e->rfq_letter_id}/edit" : null,
+                'can_delete'  => ! $e->isFromLetters() && $me && ($me->isSuperAdmin() || (int) $e->created_by === (int) $me->id),
             ]),
             'filters' => [
                 'search'    => $request->input('search', ''),
@@ -85,6 +90,9 @@ class LetterRegisterController extends Controller
     public function update(Request $request, string $direction, LetterRegister $entry)
     {
         $this->own($request, $direction, $entry);
+        if ($entry->isFromLetters()) {
+            return back()->with('error', 'This letter was issued from IED → Letters — change it there and the register follows.');
+        }
         $entry->update($this->validated($request));
 
         if ($request->boolean('remove_file') && $entry->file_path) {
@@ -100,6 +108,9 @@ class LetterRegisterController extends Controller
     {
         $this->own($request, $direction, $entry);
 
+        if ($entry->isFromLetters()) {
+            return back()->with('error', 'This letter was issued from IED → Letters — it stays on the register while the letter exists.');
+        }
         $me = $request->user();
         if (! $me->isSuperAdmin() && (int) $entry->created_by !== (int) $me->id) {
             return back()->with('error', 'Only whoever recorded this letter can delete it.');
