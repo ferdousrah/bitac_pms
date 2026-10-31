@@ -947,13 +947,15 @@ Route::middleware(['auth'])->group(function () {
     // Delivery
     Route::prefix('delivery')->middleware('permission:view delivery')->group(function () {
         Route::get('/', [DeliveryController::class, 'index'])->name('delivery.index');
-        Route::get('create', [DeliveryController::class, 'create'])->name('delivery.create');
-        Route::post('/', [DeliveryController::class, 'store'])->name('delivery.store');
+        // ⚠️ Reading the deliveries is `view delivery`; raising and confirming
+        // one are their own permissions (they used to ride on `view delivery`).
+        Route::get('create', [DeliveryController::class, 'create'])->middleware('permission:create delivery')->name('delivery.create');
+        Route::post('/', [DeliveryController::class, 'store'])->middleware('permission:create delivery')->name('delivery.store');
         Route::get('{delivery}', [DeliveryController::class, 'show'])->name('delivery.show');
         Route::get('{delivery}/pdf', [DeliveryController::class, 'pdf'])->name('delivery.pdf');
-        Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->name('delivery.complete');
+        Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->middleware('permission:complete delivery')->name('delivery.complete');
         // A one-time link / QR code for the receiver to sign on his phone.
-        Route::post('{delivery}/receipt-link', [DeliveryController::class, 'receiptLink'])->name('delivery.receipt-link');
+        Route::post('{delivery}/receipt-link', [DeliveryController::class, 'receiptLink'])->middleware('permission:complete delivery')->name('delivery.receipt-link');
         // Billing is its own act, done whenever accounts get to it — it is
         // deliberately NOT a side effect of confirming the delivery.
         Route::post('{delivery}/bill', [\App\Http\Controllers\InvoiceController::class, 'storeFromDelivery'])

@@ -74,6 +74,11 @@ class DeliveryController extends Controller
 
         return Inertia::render('Delivery/Index', [
             'deliveries' => $deliveries,
+            // Reading is `view delivery`; these are their own acts.
+            'can' => [
+                'create'   => (bool) $request->user()?->can('create delivery'),
+                'complete' => (bool) $request->user()?->can('complete delivery'),
+            ],
             'filters' => [
                 'search' => $request->input('search', ''),
                 'status' => $request->input('status', ''),
@@ -261,7 +266,9 @@ class DeliveryController extends Controller
             // The receiver's signature: the link / QR to sign on, and what has
             // come back from it (App\Services\DeliveryReceipt).
             'receipt' => \App\Services\DeliveryReceipt::packForStaff($delivery->load('pod')),
-            'receiptBlocker' => \App\Services\DeliveryReceipt::blocker($delivery),
+            'receiptBlocker' => \App\Services\DeliveryReceipt::blocker($delivery)
+                ?? (! auth()->user()?->can('complete delivery') && $delivery->status !== 'delivered'
+                    ? 'Confirming a delivery is done by PCD\'s planning desk.' : null),
         ]);
     }
 

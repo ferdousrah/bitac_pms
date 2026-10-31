@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
 
 export interface JobDocumentSet {
@@ -8,6 +9,8 @@ export interface JobDocumentSet {
         id: number; pass_no: string | null; direction: 'in' | 'out'; status: string;
         pass_date: string | null; party_name: string | null; item_count: number;
         items: string[]; pdf_url: string;
+        /** Raise a Gate Pass Out against this In pass (null = nothing left, or no access). */
+        out_url?: string | null; outstanding?: number | null;
     }>;
     cost_estimates: Array<{
         id: number; estimate_no: string | null; job_name: string | null; part_no: string | null;
@@ -99,8 +102,8 @@ export default function JobDocuments({ documents, className = '' }: { documents:
         </div>
     );
 
-    const Row = ({ tone, icon, title, subtitle, onOpen, badge }: {
-        tone: Tone; icon: string; title: string; subtitle?: string; onOpen: () => void; badge?: any;
+    const Row = ({ tone, icon, title, subtitle, onOpen, badge, action }: {
+        tone: Tone; icon: string; title: string; subtitle?: string; onOpen: () => void; badge?: any; action?: any;
     }) => (
         <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${TONES[tone].row}`}>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${TONES[tone].tile}`}>
@@ -112,6 +115,7 @@ export default function JobDocuments({ documents, className = '' }: { documents:
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
                 {badge}
+                {action}
                 <button type="button" onClick={onOpen} title="Open PDF"
                     className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-sm transition-colors ${TONES[tone].btn}`}>
                     <i className="fi fi-rr-file-pdf text-[10px] leading-none" /> PDF
@@ -208,6 +212,12 @@ export default function JobDocuments({ documents, className = '' }: { documents:
                                             gp.items.slice(0, 2).join(', '),
                                         ].filter(Boolean).join(' · ')}
                                         badge={<span className={statusChip(gp.status, 'slate')}>{gp.status.replace(/_/g, ' ')}</span>}
+                                        action={gp.out_url ? (
+                                            <Link href={gp.out_url} title={`Send ${gp.outstanding ?? ''} back out on a Gate Pass Out`}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors">
+                                                <i className="fi fi-rr-sign-out-alt text-[10px] leading-none" /> Gate Pass Out
+                                            </Link>
+                                        ) : null}
                                         onOpen={() => open(gp.pdf_url, gp.pass_no || `${label} #${gp.id}`)} />
                                 ))}
                             </div>

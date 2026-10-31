@@ -107,6 +107,12 @@ class PcdJobDocuments
                 'item_count' => $gp->items->count(),
                 'items'      => $gp->items->take(4)->map(fn ($i) => $i->description)->filter()->values()->all(),
                 'pdf_url'    => "/pcd/job/{$workOrder->id}/gate-passes/{$gp->id}/pdf?preview=base64",
+                // What came in goes back out on a Gate Pass Out — before the
+                // delivery, or recorded later. Offered while anything is still
+                // outstanding, to whoever can open PCD's Gate Passes.
+                'out_url'    => $gp->direction === 'in' && $gp->canAcceptReturns() && auth()->user()?->can('view pcd')
+                    ? "/pcd/gate-passes/{$gp->id}/out" : null,
+                'outstanding' => $gp->direction === 'in' ? (float) $gp->outstandingQty() : null,
             ])->values()->all();
     }
 

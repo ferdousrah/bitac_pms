@@ -31,7 +31,7 @@ function ChallanSignature({ d }: { d: any }) {
 /** Confirmable: still on its way, and the challan signed. */
 const canComplete = (d: any) => ['scheduled', 'dispatched'].includes(d.status) && d.challan_status === 'approved';
 
-export default function DeliveryIndex({ deliveries, filters }: any) {
+export default function DeliveryIndex({ deliveries, filters, can = { create: true, complete: true } }: any) {
     const list = deliveries?.data ?? [];
     const [search, setSearch] = useState(filters?.search ?? '');
     const [pdfPopup, setPdfPopup] = useState<{ open: boolean; url: string | null; title: string; subtitle?: string }>({
@@ -57,9 +57,11 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                         <h1 className="page-title">Delivery Orders</h1>
                         <p className="page-subtitle">Track shipments and delivery status across work orders</p>
                     </div>
-                    <Link href="/delivery/create" className="btn-primary">
-                        <i className="fi fi-rr-plus text-xs leading-none" /> New Delivery
-                    </Link>
+                    {can.create && (
+                        <Link href="/delivery/create" className="btn-primary">
+                            <i className="fi fi-rr-plus text-xs leading-none" /> New Delivery
+                        </Link>
+                    )}
                 </div>
 
                 {/* Quick stat chips */}
@@ -193,7 +195,7 @@ export default function DeliveryIndex({ deliveries, filters }: any) {
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors">
                                                         <i className="fi fi-rr-file-pdf text-sm leading-none" /> PDF
                                                     </button>
-                                                    {canComplete(d) && (
+                                                    {can.complete && canComplete(d) && (
                                                         <Link href={`/delivery/${d.id}`} title="Mark delivery as complete"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors">
                                                             <i className="fi fi-rr-check text-sm leading-none" /> Complete

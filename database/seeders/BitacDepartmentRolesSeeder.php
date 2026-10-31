@@ -87,6 +87,8 @@ class BitacDepartmentRolesSeeder extends Seeder
             'view dashboard',
             'view work-orders',
             'access pcd', 'view pcd-inbox',
+            // PCD's Gate Passes — clearing a job's Gate Pass In before delivery.
+            'view pcd',
             'view mrp', 'run mrp', 'create requisitions', 'create material-requisitions',
             'assign sections', 'assign machines-operators',
             'view operation-sheets', 'create operation-sheets',
@@ -122,7 +124,9 @@ class BitacDepartmentRolesSeeder extends Seeder
         Role::firstOrCreate(['name' => 'Executive Engineer (PCD)'])
             ->syncPermissions(['view dashboard', 'view work-orders', 'access pcd', 'review pcd-inbox',
                 // He approves PCD's gate passes, which all sit behind `view pcd` (2026-10-27).
-                'view pcd']);
+                'view pcd',
+                // He signs every challan; he reads the Delivery Orders (2026-10-31).
+                'view delivery']);
 
         Role::firstOrCreate(['name' => 'Assistant Engineer (PCD)'])
             ->syncPermissions($pcdPermissions);
