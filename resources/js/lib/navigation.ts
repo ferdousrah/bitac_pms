@@ -68,6 +68,9 @@ export const mainGroups: NavGroup[] = [
             { label: 'Cost Estimates', href: '/cost-estimates',    icon: 'fi-rr-calculator',   permission: 'view cost-estimates' },
             { label: 'Quotations',     href: '/quotations',        icon: 'fi-rr-coins',        permission: 'view quotations' },
             { label: 'Letters',        href: '/rfq-letters',       icon: 'fi-rr-envelope',     permission: 'view rfqs' },
+            // Production-letter registers — আগত / প্রেরিত চিঠির রেকর্ড (2026-10-31).
+            { label: 'Incoming Letters', href: '/ied/letters/incoming', icon: 'fi-rr-inbox-in',    permission: 'view rfqs' },
+            { label: 'Outgoing Letters', href: '/ied/letters/outgoing', icon: 'fi-rr-paper-plane', permission: 'view rfqs' },
             { label: 'Approvals',      href: '/approvals',         icon: 'fi-rr-stamp',        permission: 'approve quotations' },
             { label: 'Work Order Inbox', href: '/ied/work-orders', icon: 'fi-rr-paper-plane',  permission: 'view rfqs', badgeKey: 'pending_ied_work_orders' },
             { label: 'Jobs',             href: '/ied/jobs',         icon: 'fi-rr-briefcase',    permission: 'view rfqs' },
@@ -103,6 +106,9 @@ export const mainGroups: NavGroup[] = [
             { label: 'Gate Passes',          href: '/pcd/gate-passes',           icon: 'fi-rr-shield-check',    permission: 'view pcd' },
             { label: 'Delivery Orders',      href: '/delivery',                  icon: 'fi-rr-truck-side',      permission: 'view delivery' },
             { label: 'Material Demands',     href: '/material-demands',          icon: 'fi-rr-boxes',           permission: 'view pcd-inbox', badgeKey: 'material_demands_open' },
+            // Production-letter registers — আগত / প্রেরিত চিঠির রেকর্ড (2026-10-31).
+            { label: 'Incoming Letters',     href: '/pcd/letters/incoming',      icon: 'fi-rr-inbox-in',        permissionAny: ['view pcd-inbox', 'review pcd-inbox'] },
+            { label: 'Outgoing Letters',     href: '/pcd/letters/outgoing',      icon: 'fi-rr-paper-plane',     permissionAny: ['view pcd-inbox', 'review pcd-inbox'] },
             { label: 'Notes',                href: '/office-notes',              icon: 'fi-rr-notebook',        permissionAny: ['view pcd-inbox', 'review pcd-inbox'], badgeKey: 'notes_awaiting' },
         ],
     },

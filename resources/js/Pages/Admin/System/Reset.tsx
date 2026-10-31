@@ -53,7 +53,7 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Feedback & Service Requests',
-        tables: ['customer_complaints', 'complaint_discussions', 'complaint_decision_makers', 'emergency_requests', 'consultancy_requests', 'quotation_requests', 'quotation_request_files', 'factory_visits', 'service_demand_logs'],
+        tables: ['customer_complaints', 'complaint_discussions', 'complaint_decision_makers', 'emergency_requests', 'consultancy_requests', 'quotation_requests', 'quotation_request_files', 'factory_visits', 'letter_registers', 'service_demand_logs'],
     },
     {
         label: 'Maintenance',

@@ -839,6 +839,31 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **Deli
 - Table `rfq_letters`, `RfqLetterController`, `Pages/RfqLetter/{Index,Create}.tsx`. Issue an official letter against an RFQ (RFQ optional — selecting it auto-fills customer ref + recipient). **Direct issue, no approval. Signatory is selectable.** PDF in BN & EN. Entry: "Issue Letter" button on RFQ show + Letters index.
 - **Duplicate** (`POST rfq-letters/{rfqLetter}/duplicate`, copy icon on the Letters list) copies a letter into a fresh draft and opens it — the same letter goes out repeatedly with a different recipient or a line changed. It carries the subject, body, recipient block, customer ref, signatory and customer. ⚠️ It deliberately does **not** carry the letter's identity: `letter_no` is left blank (every letter takes its own number from the register — reusing one would put two letters on the same reference), the date is today, status is `draft`, `issued_at`/`emailed_at` are null, and **`signature_path` is null** — carrying the snapshot across would put the signatory's signature on a letter they have not seen. The source is never touched.
 
+### Production-letter registers — আগত / প্রেরিত চিঠির রেকর্ড (2026-10-31)
+> BITAC: *"IED ও PCD বিভাগে উৎপাদন সংক্রান্ত চিঠির জন্য বিভাগে দুটি নতুন ট্যাব এড করতে হবে। ১. আগত চিঠির
+> রেকর্ড ২. প্রেরিত চিঠির রেকর্ড।"* — ক্রমিক নং · প্রেরক · প্রাপক · স্মারক নম্বর · তারিখ · মন্তব্য, and for
+> the sent register ক্রমিক নং · প্রাপক · প্রেরক · স্মারক নম্বর · তারিখ · মন্তব্য.
+
+- A **register kept by hand** — not generated from the RFQ letters (those are BITAC's own issued
+  letters, a different thing). **One table, `letter_registers`** (`desk` ied|pcd, `direction`
+  in|out, `sender`, `recipient`, `memo_no`, `letter_date`, `remarks`, optional scanned letter
+  `file_path`/`file_name`, `created_by`; `HasCenter`; migration `..._000093`), `LetterRegister`,
+  **one controller** `LetterRegisterController`, page `LetterRegister/Index.tsx`.
+- Routes **`/{ied|pcd}/letters/{incoming|outgoing}`** (+ store / update / destroy / `{entry}/file`):
+  the desk is a **route default**, each desk's pair behind its own permission — IED `view rfqs`,
+  PCD `view pcd-inbox|review pcd-inbox`. ⚠️ An entry is reached only through its **own** desk and
+  register (`own()` → 404), so neither desk can read or change the other's by id.
+- **Column order follows BITAC** — the received register leads with প্রেরক, the sent one with প্রাপক
+  (table, phone cards and the form all read `cols`). The **Sl is the row's place in the list**
+  (paginator `from`), not stored. Search (sender / recipient / memo / remarks), date range, 20 a page
+  with page links, and an আগত | প্রেরিত switch on the page as well as the two menu items in each desk
+  (**Incoming Letters / Outgoing Letters** — IED beside Letters, PCD before Notes).
+- The scan goes on the **private `local` disk** (`letter-registers/{id}`), served only through the
+  desk's own `file` route with `nosniff`. Anyone at the desk records or edits; **only whoever recorded
+  a letter (or the super admin) deletes it**.
+- Transactional → `TABLES_TO_WIPE` + `Reset.tsx`, and `letter-registers` in
+  `PRIVATE_STORAGE_DIRS_TO_WIPE`. Verified on a copy, 17 checks.
+
 ### Notes — every department, signed in order (2026-09, reworked 2026-10-20)
 > An **internal** note on plain legal paper. BITAC (2026-10-20): every department writes them,
 > each is signed by its chain, the centre head passes it, and it comes back to print.

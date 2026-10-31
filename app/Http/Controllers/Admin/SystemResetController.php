@@ -142,6 +142,7 @@ class SystemResetController extends Controller
         'quotation_request_files',
         'quotation_requests',
         'factory_visits',
+        'letter_registers',
         'service_demand_logs',
         'maintenance_requests',
         'machine_maintenance_logs',
@@ -180,6 +181,7 @@ class SystemResetController extends Controller
     private const PRIVATE_STORAGE_DIRS_TO_WIPE = [
         'quotation-requests',
         'chat',
+        'letter-registers',
     ];
 
     public function index(Request $request)

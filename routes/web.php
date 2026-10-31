@@ -356,6 +356,22 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ─── IED Gate Passes (Gate-In / Gate-Out for customer reference samples) ───
+    // ─── Production-letter registers — আগত / প্রেরিত চিঠির রেকর্ড (2026-10-31).
+    // One controller for both desks; the desk is fixed by the route's default
+    // and each desk's pair sits behind that desk's own permission.
+    foreach (['ied' => 'permission:view rfqs', 'pcd' => 'permission:view pcd-inbox|review pcd-inbox'] as $desk => $gate) {
+        Route::prefix("{$desk}/letters/{direction}")->middleware($gate)->name("{$desk}.letter-register.")
+            ->where(['direction' => 'incoming|outgoing'])
+            ->group(function () use ($desk) {
+                $c = \App\Http\Controllers\LetterRegisterController::class;
+                Route::get('/', [$c, 'index'])->name('index')->defaults('desk', $desk);
+                Route::post('/', [$c, 'store'])->name('store')->defaults('desk', $desk);
+                Route::post('/{entry}', [$c, 'update'])->name('update')->defaults('desk', $desk);
+                Route::delete('/{entry}', [$c, 'destroy'])->name('destroy')->defaults('desk', $desk);
+                Route::get('/{entry}/file', [$c, 'file'])->name('file')->defaults('desk', $desk);
+            });
+    }
+
     Route::prefix('ied/gate-passes')->middleware('permission:manage gate-passes')->name('ied.gate-passes.')->group(function () {
         Route::get('/',                [GatePassController::class, 'index'])->name('index');
         Route::get('/create',          [GatePassController::class, 'create'])->name('create');
