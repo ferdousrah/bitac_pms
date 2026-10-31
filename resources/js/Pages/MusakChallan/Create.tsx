@@ -8,12 +8,14 @@ interface Line {
     unit: string;
     quantity: number | string;
     unit_price: number | string;
+    /** How much of the unit price is tax (AIT). VAT is worked out without it. */
+    tax_rate: number | string;
     sd_rate: number | string;
     vat_rate: number | string;
 }
 
-const blankLine = (vatRate: number = 15): Line => ({
-    description: '', unit: '', quantity: 1, unit_price: 0, sd_rate: 0, vat_rate: vatRate,
+const blankLine = (vatRate: number = 15, taxRate: number = 0): Line => ({
+    description: '', unit: '', quantity: 1, unit_price: 0, tax_rate: taxRate, sd_rate: 0, vat_rate: vatRate,
 });
 
 const money = (n: number) =>
@@ -29,8 +31,10 @@ const taka = (n: number) => Math.round(n).toLocaleString('en-IN');
  */
 const compute = (l: Line) => {
     const value = Math.round((Number(l.quantity) || 0) * (Number(l.unit_price) || 0));
-    const sd    = Math.round(value * (Number(l.sd_rate) || 0) / 100);
-    const vat   = Math.round((value + sd) * (Number(l.vat_rate) || 0) / 100);
+    // The unit price carries the tax; SD and VAT sit on the price without it.
+    const base  = value / (1 + (Number(l.tax_rate) || 0) / 100);
+    const sd    = Math.round(base * (Number(l.sd_rate) || 0) / 100);
+    const vat   = Math.round((base + sd) * (Number(l.vat_rate) || 0) / 100);
     return { value, sd, vat, incl: value + sd + vat };
 };
 
@@ -69,7 +73,7 @@ export default function MusakChallanCreate({
         setData('items', data.items.map((l: Line, n: number) => (n === i ? { ...l, [key]: value } : l)));
 
     const addLine = () =>
-        setData('items', [...data.items, blankLine(Number(data.items.at(-1)?.vat_rate) || 15)]);
+        setData('items', [...data.items, blankLine(Number(data.items.at(-1)?.vat_rate) || 15, Number(data.items.at(-1)?.tax_rate) || 0)]);
 
     const removeLine = (i: number) =>
         setData('items', data.items.filter((_: Line, n: number) => n !== i));
@@ -122,17 +126,10 @@ export default function MusakChallanCreate({
                         </div>
                     )}
 
-    {/* Why the challan total differs from the bill total. Stated, not hidden. */}
-                    {prefill?.excluded_tax > 0 && (
-                        <div className="rounded-2xl border border-surface-200 bg-surface-50/60 p-4 text-sm text-surface-600">
-                            <p className="font-semibold text-surface-800">
-                                মূসক ৬.৩ carries VAT only — ৳ {money(prefill.excluded_tax)} of income tax is not on this form.
-                            </p>
-                            <p className="mt-1">
-                                The form has columns for সম্পূরক শুল্ক and মূসক and nothing else. The AIT
-                                ({prefill.tax_rate}%) embedded in invoice {prefill.invoice_number} is left out because
-                                the buyer deducts it at source, so it never belongs on our challan.
-                            </p>
+                    {/* The challan should come to the bill; say so when it does not. */}
+                    {prefill?.invoice_total > 0 && Math.abs(totals.incl - prefill.invoice_total) >= 1 && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-800">
+                            This challan comes to ৳ {money(totals.incl)}; invoice {prefill.invoice_number} is ৳ {money(prefill.invoice_total)}.
                         </div>
                     )}
 
@@ -243,6 +240,7 @@ export default function MusakChallanCreate({
                                         <th className="text-left px-2 py-2 w-20">একক</th>
                                         <th className="text-right px-2 py-2 w-24">পরিমাণ</th>
                                         <th className="text-right px-2 py-2 w-28">একক মূল্য</th>
+                                        <th className="text-right px-2 py-2 w-20" title="Share of the unit price that is tax (AIT)">কর % (একক মূল্যে)</th>
                                         <th className="text-right px-2 py-2 w-28">মোট মূল্য</th>
                                         <th className="text-right px-2 py-2 w-20">সম্পূরক %</th>
                                         <th className="text-right px-2 py-2 w-20">মূসক %</th>
@@ -273,6 +271,10 @@ export default function MusakChallanCreate({
                                                     <input type="number" step="0.01" className="form-input text-sm py-1.5 text-right"
                                                         value={l.unit_price} onChange={(e) => setLine(i, 'unit_price', e.target.value)} />
                                                 </td>
+                                                <td className="px-2 py-2">
+                                                    <input type="number" step="0.01" className="form-input text-sm py-1.5 text-right"
+                                                        value={l.tax_rate ?? 0} onChange={(e) => setLine(i, 'tax_rate', e.target.value)} />
+                                                </td>
                                                 <td className="px-2 py-2 text-right tabular-nums text-surface-700">{taka(c.value)}</td>
                                                 <td className="px-2 py-2">
                                                     <input type="number" step="0.01" className="form-input text-sm py-1.5 text-right"
@@ -298,7 +300,7 @@ export default function MusakChallanCreate({
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-surface-50 font-bold text-surface-900">
-                                        <td colSpan={4} className="px-3 py-2.5 text-right">সর্বমোট</td>
+                                        <td colSpan={5} className="px-3 py-2.5 text-right">সর্বমোট</td>
                                         <td className="px-2 py-2.5 text-right tabular-nums">{taka(totals.value)}</td>
                                         <td />
                                         <td />
@@ -311,7 +313,8 @@ export default function MusakChallanCreate({
                         </div>
                         {typeof errors.items === 'string' && <p className="form-error px-4 pb-3">{errors.items}</p>}
                         <div className="px-4 pb-4 text-[11px] text-surface-400">
-                            একক মূল্য is <strong>সকল প্রকার কর ব্যতীত</strong> — the price before any duty or tax.
+                            একক মূল্য includes the tax (AIT) at the কর % beside it, and excludes VAT. মূসক is worked out on the
+                            price without the tax, so করসহ মূল্য = একক মূল্য + কর + মূসক — the bill's figure.
                             The columns are rounded to whole taka, as on the printed form.
                         </div>
                     </div>

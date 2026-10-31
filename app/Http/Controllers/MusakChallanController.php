@@ -19,13 +19,11 @@ use Inertia\Inertia;
  * The NBR VAT challan. Every field on the form is typed and stored — see
  * `MusakChallan` for why nothing is derived at print time.
  *
- * ⚠️ **The challan carries VAT only, and that is correct.** মূসক ৬.৩ has
- * columns for সম্পূরক শুল্ক and মূসক and nothing else. Our invoices embed
- * VAT *and* Tax (AIT), so a challan raised from one leaves the AIT out — **the
- * buyer deducts income tax at source** (confirmed by BITAC, 2026-09-29), so it
- * never belongs on the supplier's challan. The form still states the amount
- * excluded, so the gap between the challan total and the bill total is never a
- * mystery.
+ * ⚠️ **The unit price carries the tax (AIT); VAT has its own column** (BITAC,
+ * 2026-10-31). Our invoices embed VAT *and* Tax, and the challan used to leave
+ * the AIT out altogether. Now a line's `tax_rate` says how much of its unit
+ * price is tax, VAT is worked out on the price without it, and the challan's
+ * total equals the bill — see `MusakChallanService::computeLine()`.
  *
  * ⚠️ **Money is whole taka** — see `MusakChallanService::computeLine()`.
  */
@@ -258,8 +256,9 @@ class MusakChallanController extends Controller
             $price = (float) ($row['unit_price'] ?? 0);
             $sdPct = (float) ($row['sd_rate'] ?? 0);
             $vatPct= (float) ($row['vat_rate'] ?? 0);
+            $taxPct= (float) ($row['tax_rate'] ?? 0);
 
-            $figures = MusakChallanService::computeLine($qty, $price, $sdPct, $vatPct);
+            $figures = MusakChallanService::computeLine($qty, $price, $sdPct, $vatPct, $taxPct);
 
             $challan->items()->create([
                 'sort_order'  => $i,
@@ -267,6 +266,7 @@ class MusakChallanController extends Controller
                 'unit'        => $row['unit'] ?? null,
                 'quantity'    => $qty,
                 'unit_price'  => $price,
+                'tax_rate'    => $taxPct,
                 'sd_rate'     => $sdPct,
                 'vat_rate'    => $vatPct,
                 ...$figures,
@@ -316,6 +316,7 @@ class MusakChallanController extends Controller
                     'unit'        => $i->unit,
                     'quantity'    => (float) $i->quantity,
                     'unit_price'  => (float) $i->unit_price,
+                    'tax_rate'    => (float) $i->tax_rate,
                     'sd_rate'     => (float) $i->sd_rate,
                     'vat_rate'    => (float) $i->vat_rate,
                 ])->values(),
@@ -379,8 +380,6 @@ class MusakChallanController extends Controller
             'destination'       => $invoice->deliveryOrder?->delivery_address ?: $invoice->customer?->address,
             'vehicle'           => $invoice->deliveryOrder?->vehicle_number,
             'items'             => $items,
-            // Stated, not hidden — see the class docblock.
-            'excluded_tax'      => round((float) ($invoice->tax_amount ?? 0), 2),
             'tax_rate'          => (float) ($invoice->tax_rate ?? 0),
             'invoice_total'     => (float) $invoice->total_amount,
         ];
@@ -414,6 +413,7 @@ class MusakChallanController extends Controller
             'items.*.unit_price'    => 'required|numeric|min:0',
             'items.*.sd_rate'       => 'nullable|numeric|min:0|max:100',
             'items.*.vat_rate'      => 'nullable|numeric|min:0|max:100',
+            'items.*.tax_rate'      => 'nullable|numeric|min:0|max:100',
         ]);
     }
 }

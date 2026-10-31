@@ -219,7 +219,13 @@ class MusakChallanRenderer
             .   '<td width="70%" style="vertical-align: top;">' . $block . '</td>'
             .   '<td width="30%" align="right" style="vertical-align: top;">' . $seal . '</td>'
             . '</tr></table>'
-            . '<div style="margin-top: 8pt; font-family: nikosh; font-size: 8.5pt;">সকল প্রকার কর ব্যতীত মূল্য</div>'
+            // A unit price that carries the tax (AIT) must not be footnoted as
+            // "without any tax" — say what it is.
+            . '<div style="margin-top: 8pt; font-family: nikosh; font-size: 8.5pt;">'
+            .   ($challan->items->contains(fn ($i) => (float) $i->tax_rate > 0)
+                    ? 'একক মূল্য আয়কর (AIT) সহ, মূসক ব্যতীত; মূসক আলাদাভাবে দেখানো হয়েছে'
+                    : 'সকল প্রকার কর ব্যতীত মূল্য')
+            . '</div>'
             . (trim((string) $challan->note) !== ''
                 ? '<div style="margin-top: 4pt; font-family: nikosh; font-size: 8.5pt;">' . nl2br($esc($challan->note)) . '</div>'
                 : '');

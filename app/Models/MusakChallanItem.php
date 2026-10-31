@@ -9,7 +9,7 @@ class MusakChallanItem extends Model
 {
     protected $fillable = [
         'musak_challan_id', 'sort_order',
-        'description', 'unit', 'quantity', 'unit_price',
+        'description', 'unit', 'quantity', 'unit_price', 'tax_rate', 'tax_rate',
         'total_value', 'sd_rate', 'sd_amount', 'vat_rate', 'vat_amount', 'total_inclusive',
     ];
 
