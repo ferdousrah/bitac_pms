@@ -977,6 +977,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{invoice}/letter', [InvoiceController::class, 'editLetter'])->name('invoices.letter.edit');
         Route::put('{invoice}/letter', [InvoiceController::class, 'updateLetter'])->name('invoices.letter.update');
         Route::get('{invoice}/letter/pdf', [InvoiceController::class, 'letterPdf'])->name('invoices.letter.pdf');
+        // Letter · bill · Gate Pass Out · challan · মূসক ৬.৩ as one PDF, to view and print together.
+        Route::get('{invoice}/documents/pdf', [InvoiceController::class, 'documentsPdf'])->name('invoices.documents.pdf');
         Route::post('{invoice}/email', [InvoiceController::class, 'email'])->name('invoices.email');
 
         // The Accounts Officer signs the bill itself. Same desk that raises

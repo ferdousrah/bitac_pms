@@ -1916,6 +1916,7 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
   **delivery challan** (the bill's own `invoices.delivery_order_id`) · **Gate Pass Out** (every one
   of the job's). Each opens as its PDF; **Send to customer** attaches them too (`include_challan`,
   `gate_pass_ids[]`, all ticked by default), in that order after the letter and the bill.
+- **View & print all together** (2026-10-31, BITAC's run-through): `GET invoices/{invoice}/documents/pdf` (`?preview=base64`, `&lang=en` for the English letter) — the documents as ONE PDF, in BITAC's order **forwarding letter · bill · Gate Pass Out · delivery challan · মূসক ৬.৩**, whatever exists. `InvoiceController::travellingDocuments()` is the one list behind it AND the email (so the email attaches in that order too); each document is its own generator's file, merged page for page by **`App\Support\PdfMerge`** (mPDF's FPDI import — each page keeps its size and orientation). Verified: the merged pages match the five documents on their own, page for page.
 - ⚠️ **`BillingGatePassController::forWorkOrder()` is the one answer to "the job's Gate Pass Out"**:
   `origin = pcd`, `direction = out`, the job's RFQ, status issued / partially returned / completed —
   NOT one still awaiting approval, rejected or cancelled (goods have not left on it). The email takes

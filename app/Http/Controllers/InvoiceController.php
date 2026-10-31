@@ -246,6 +246,92 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Everything that travels with the bill, as ONE PDF to look at and print
+     * (BITAC, from the 2026-10-10 run-through): forwarding letter · bill · Gate
+     * Pass Out · delivery challan · মূসক ৬.৩. Each is the same file it is on
+     * its own; whatever does not exist yet is simply not in it.
+     */
+    public function documentsPdf(Request $request, Invoice $invoice)
+    {
+        $files = $this->travellingDocuments($invoice, $request->input('lang') === 'en' ? 'en' : 'bn');
+        $bytes = \App\Support\PdfMerge::merge(array_column($files, 'data'));
+        $name  = "Bill-documents-{$invoice->invoice_number}.pdf";
+
+        if ($request->input('preview') === 'base64') {
+            return response()->json(['filename' => $name, 'size' => strlen($bytes), 'data' => base64_encode($bytes)]);
+        }
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline') . '; filename="' . $name . '"',
+            'Content-Length'      => strlen($bytes),
+        ]);
+    }
+
+    /**
+     * The documents that travel with a bill, in BITAC's order: forwarding
+     * letter · bill · Gate Pass Out · delivery challan · মূসক ৬.৩. The one list
+     * behind both the email and the combined PDF.
+     *
+     * The bill is always there; the rest when it exists (and, for the email,
+     * when the sender asked). `$gatePassIds` null = every Gate Pass Out of the
+     * job; an id that is not one of them is ignored.
+     *
+     * @return array<int, array{data: string, name: string}>
+     */
+    private function travellingDocuments(Invoice $invoice, string $lang, bool $letter = true, bool $challan = true,
+                                         bool $musak = true, ?array $gatePassIds = null): array
+    {
+        $grab  = fn ($resp) => base64_decode(json_decode($resp->getContent(), true)['data'] ?? '');
+        $files = [];
+
+        // The letter goes first — it is the covering document.
+        if ($letter && trim((string) $invoice->forwarding_letter) !== '') {
+            $pdf = $this->letterPdf(new Request(['preview' => 'base64', 'lang' => $lang]), $invoice);
+            if ($pdf instanceof \Illuminate\Http\JsonResponse) {
+                $files[] = ['data' => $grab($pdf), 'name' => "Forwarding-Letter-{$invoice->invoice_number}.pdf"];
+            }
+        }
+
+        $files[] = [
+            'data' => $grab($this->downloadPdf(new Request(['preview' => 'base64']), $invoice)),
+            'name' => "Bill-{$invoice->invoice_number}.pdf",
+        ];
+
+        // Only this job's PCD Gate Pass Out — an id from anywhere else is ignored.
+        $passes = BillingGatePassController::forWorkOrder($invoice->workOrder);
+        if ($gatePassIds !== null) {
+            $passes = $passes->whereIn('id', $gatePassIds);
+        }
+        foreach ($passes as $pass) {
+            $files[] = [
+                'data' => $grab(app(\App\Http\Controllers\Ied\GatePassController::class)
+                    ->pdf(new Request(['preview' => 'base64']), $pass)),
+                'name' => "Gate-Pass-Out-{$pass->pass_no}.pdf",
+            ];
+        }
+
+        $delivery = $invoice->deliveryOrder;
+        if ($challan && $delivery?->challan_number) {
+            $files[] = [
+                'data' => $grab(app(\App\Http\Controllers\Pcd\PcdDeliveryController::class)
+                    ->challan(new Request(['preview' => 'base64']), $delivery)),
+                'name' => "Delivery-Challan-{$delivery->challan_number}.pdf",
+            ];
+        }
+
+        if ($musak && ($tax = $invoice->musakChallans()->first())) {
+            $files[] = [
+                'data' => $grab(app(MusakChallanController::class)
+                    ->pdf(new Request(['preview' => 'base64', 'copy' => 1]), $tax)),
+                'name' => "Musak-6.3-{$tax->challan_no}.pdf",
+            ];
+        }
+
+        return $files;
+    }
+
+    /**
      * Send what travels together: forwarding letter, bill, delivery challan,
      * মূসক ৬.৩ and the job's Gate Pass Out.
      *
@@ -272,49 +358,14 @@ class InvoiceController extends Controller
             return back()->with('error', 'No SMTP server is configured — set the MAIL_* settings first.');
         }
 
-        $lang  = ($data['lang'] ?? 'bn') === 'en' ? 'en' : 'bn';
-        $grab  = fn ($resp) => base64_decode(json_decode($resp->getContent(), true)['data'] ?? '');
-        $files = [];
-
-        // The letter goes first — it is the covering document.
-        if ($request->boolean('include_letter', true) && trim((string) $invoice->forwarding_letter) !== '') {
-            $letter = $this->letterPdf(new Request(['preview' => 'base64', 'lang' => $lang]), $invoice);
-            if ($letter instanceof \Illuminate\Http\JsonResponse) {
-                $files[] = ['data' => $grab($letter), 'name' => "Forwarding-Letter-{$invoice->invoice_number}.pdf"];
-            }
-        }
-
-        $files[] = [
-            'data' => $grab($this->downloadPdf(new Request(['preview' => 'base64']), $invoice)),
-            'name' => "Bill-{$invoice->invoice_number}.pdf",
-        ];
-
-        $delivery = $invoice->deliveryOrder;
-        if ($request->boolean('include_challan', true) && $delivery?->challan_number) {
-            $files[] = [
-                'data' => $grab(app(\App\Http\Controllers\Pcd\PcdDeliveryController::class)
-                    ->challan(new Request(['preview' => 'base64']), $delivery)),
-                'name' => "Delivery-Challan-{$delivery->challan_number}.pdf",
-            ];
-        }
-
-        if ($request->boolean('include_musak', true) && ($challan = $invoice->musakChallans()->first())) {
-            $files[] = [
-                'data' => $grab(app(MusakChallanController::class)
-                    ->pdf(new Request(['preview' => 'base64', 'copy' => 1]), $challan)),
-                'name' => "Musak-6.3-{$challan->challan_no}.pdf",
-            ];
-        }
-
-        // Only this job's PCD Gate Pass Out — an id from anywhere else is ignored.
-        $wanted = array_map('intval', $data['gate_pass_ids'] ?? []);
-        foreach (BillingGatePassController::forWorkOrder($invoice->workOrder)->whereIn('id', $wanted) as $pass) {
-            $files[] = [
-                'data' => $grab(app(\App\Http\Controllers\Ied\GatePassController::class)
-                    ->pdf(new Request(['preview' => 'base64']), $pass)),
-                'name' => "Gate-Pass-Out-{$pass->pass_no}.pdf",
-            ];
-        }
+        $files = $this->travellingDocuments(
+            $invoice,
+            ($data['lang'] ?? 'bn') === 'en' ? 'en' : 'bn',
+            $request->boolean('include_letter', true),
+            $request->boolean('include_challan', true),
+            $request->boolean('include_musak', true),
+            array_map('intval', $data['gate_pass_ids'] ?? []),
+        );
 
         $ccList = collect(preg_split('/[,;]+/', (string) ($data['cc'] ?? '')))
             ->map(fn ($e) => trim($e))

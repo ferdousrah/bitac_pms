@@ -438,8 +438,21 @@ export default function InvoiceShow({
 
                 {/* What travels with this bill. */}
                 <div className="card">
-                    <div className="card-header">
+                    <div className="card-header flex flex-wrap items-center justify-between gap-2">
                         <h3 className="text-sm font-bold text-surface-900">Documents that travel together</h3>
+                        {/* One PDF of everything below, in order, to view and print at once. */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-surface-500">All together:</span>
+                            <button type="button"
+                                onClick={() => setPdf(`/invoices/${invoice.id}/documents/pdf?preview=base64&lang=bn`)}
+                                className="btn-primary btn-sm">
+                                <i className="fi fi-rr-print text-xs leading-none" /> View &amp; print all
+                            </button>
+                            <button type="button"
+                                onClick={() => setPdf(`/invoices/${invoice.id}/documents/pdf?preview=base64&lang=en`)}
+                                title="Forwarding letter in English"
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">EN letter</button>
+                        </div>
                     </div>
                     <div className="card-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                         <div className="p-3 rounded-xl border border-surface-200">
