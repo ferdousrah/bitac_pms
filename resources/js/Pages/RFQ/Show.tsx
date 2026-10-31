@@ -619,6 +619,7 @@ export default function RFQShow({ rfq }: any) {
                                         {rfq.customer_ref_no && (
                                             <div className="text-[11px] text-surface-500 mt-0.5">
                                                 Ref <span className="font-mono font-semibold text-surface-700">{rfq.customer_ref_no}</span>
+                                                {rfq.customer_ref_date && <> · dated {rfq.customer_ref_date}</>}
                                             </div>
                                         )}
                                     </div>

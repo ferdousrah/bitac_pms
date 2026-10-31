@@ -12,6 +12,7 @@ export default function RfqLetterCreate({
     defaultRecipient = '',
     defaultLetterNo = '',
     defaultCustomerRefNo = '',
+    defaultCustomerRefDate = '',
     defaultSignatoryId = null,
     existing = null,
 }: any) {
@@ -25,7 +26,7 @@ export default function RfqLetterCreate({
         body:              existing?.body ?? '',
         recipient_block:   existing?.recipient_block ?? defaultRecipient ?? '',
         customer_ref_no:   existing?.customer_ref_no ?? defaultCustomerRefNo ?? '',
-        customer_ref_date: existing?.customer_ref_date ?? '',
+        customer_ref_date: existing?.customer_ref_date ?? defaultCustomerRefDate ?? '',
         signatory_user_id: existing?.signatory_user_id ?? defaultSignatoryId ?? '',
         issue:             false,
     });
@@ -42,6 +43,7 @@ export default function RfqLetterCreate({
         if (picked) {
             // Auto-fill the customer reference; fill recipient too when still empty.
             setData('customer_ref_no', picked.customer_ref_no ?? '');
+            setData('customer_ref_date', picked.customer_ref_date ?? '');
             if (!data.recipient_block?.trim() && picked.recipient) {
                 setData('recipient_block', picked.recipient);
             }

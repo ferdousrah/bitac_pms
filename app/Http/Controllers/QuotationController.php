@@ -190,7 +190,9 @@ class QuotationController extends Controller
             // Pre-fill the customer reference + date from the source RFQ — the IED
             // preparer can override either field on the quotation form if needed.
             'defaultCustomerRefNo'   => $rfq?->customer_ref_no ?? '',
-            'defaultCustomerRefDate' => $rfq?->created_at?->format('Y-m-d') ?? '',
+            // The date on the customer's RFQ letter; the RFQ's entry date only
+            // when nobody typed one.
+            'defaultCustomerRefDate' => ($rfq?->customer_ref_date ?? $rfq?->created_at)?->format('Y-m-d') ?? '',
             // Jobs whose parts are only partly costed — quoting these as-is
             // would under-charge, so the form warns before the preparer sends.
             'uncostedJobs'           => $uncosted,

@@ -12,7 +12,7 @@ class WorkOrder extends Model
     protected $fillable = [
         'center_id', 'wo_number', 'job_number', 'rfq_id', 'quotation_id', 'customer_id', 'product_id',
         'job_category_id',
-        'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'notes', 'department', 'customer_po_no', 'created_by', 'prepared_by',
+        'section_id', 'bom_id', 'quantity', 'priority', 'status', 'due_date', 'pcd_wo_date', 'notes', 'department', 'customer_po_no', 'created_by', 'prepared_by',
         'pcd_handoff_at', 'pcd_handoff_by', 'released_to_shops_at', 'released_by',
         // The নির্বাহী প্রকৌশলী passing it from the PCD Inbox to the
         // planning desk. ⚠️ Mass assignment drops anything missing here
@@ -33,6 +33,7 @@ class WorkOrder extends Model
     {
         return [
             'due_date'             => 'date',
+            'pcd_wo_date'          => 'date',
             'customer_wo_date'     => 'date',
             'pcd_handoff_at'       => 'datetime',
             'pcd_forwarded_at'     => 'datetime',
@@ -132,6 +133,15 @@ class WorkOrder extends Model
     }
 
     public function section()      { return $this->belongsTo(Section::class); }
+    /**
+     * The date PCD's work order (routing sheet) is issued on: what PCD typed,
+     * which may be back-dated to the paper, else the day the job reached PCD.
+     */
+    public function pcdWorkOrderDate(): ?\Carbon\CarbonInterface
+    {
+        return $this->pcd_wo_date ?? $this->pcd_handoff_at ?? $this->created_at;
+    }
+
     public function customer()     { return $this->belongsTo(Customer::class); }
     public function jobCategory()  { return $this->belongsTo(JobCategory::class); }
     public function product()      { return $this->belongsTo(Product::class); }

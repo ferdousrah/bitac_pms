@@ -381,6 +381,7 @@ class RfqLetterController extends Controller
                 'id'              => $r->id,
                 'label'           => '#' . $r->id . ($r->customer ? ' — ' . $r->customer->name : ''),
                 'customer_ref_no' => $r->customer_ref_no,
+                'customer_ref_date' => $r->customer_ref_date?->format('Y-m-d'),
                 'recipient'       => $r->customer
                     ? implode("\n", array_filter([$r->customer->contact_person, $r->customer->name, $r->customer->address]))
                     : '',
@@ -397,6 +398,7 @@ class RfqLetterController extends Controller
             'defaultRecipient'       => $defaultRecipient,
             'defaultLetterNo'        => '36.06.2692.028.51.',
             'defaultCustomerRefNo'   => $rfq?->customer_ref_no ?? '',
+            'defaultCustomerRefDate' => $rfq?->customer_ref_date?->format('Y-m-d') ?? '',
             'defaultSignatoryId'     => auth()->id(),
             'existing' => $letter ? [
                 'id'                => $letter->id,

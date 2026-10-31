@@ -57,6 +57,7 @@ interface WorkOrder {
     customer_po_no: string | null;
     status: string;
     created_at: string;
+    wo_date: string | null;
     due_date: string | null;
     prepared_by: string;
 }
@@ -218,6 +219,7 @@ export default function SectionAssign({
         job_number: string;
         department: string;
         due_date: string;
+        wo_date: string;
         items: Array<{ id: number | null; description: string; part_no: string; quantity: string; pcd_note: string }>;
     }>({
         sections: assigned_sections.map((s) => ({
@@ -237,6 +239,8 @@ export default function SectionAssign({
         department: work_order.department ?? '',
         // Delivery date — PCD editable (Y-m-d).
         due_date: work_order.due_date ?? '',
+        // The work order's date — PCD may back-date it to the paper (Y-m-d).
+        wo_date: work_order.wo_date ?? '',
         // PCD-editable copy of the job items (description, part no, qty, note).
         items: job_items.map((it) => ({
             id: it.id,
@@ -363,7 +367,15 @@ export default function SectionAssign({
                         </div>
                         <div className="px-6 py-3 sm:text-right">
                             <div className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Date</div>
-                            <div className="text-xl font-bold text-surface-900 mt-0.5">{work_order.created_at}</div>
+                            <input
+                                type="date"
+                                value={data.wo_date}
+                                max={new Date().toISOString().slice(0, 10)}
+                                onChange={e => setData('wo_date', e.target.value)}
+                                title="The date the work order is issued on — it may be earlier than today"
+                                className="text-xl font-bold text-surface-900 mt-0.5 bg-transparent border-b border-dashed border-surface-300 focus:border-brand-500 focus:outline-none py-0.5 sm:text-right"
+                            />
+                            {(errors as any).wo_date && <p className="form-error">{(errors as any).wo_date}</p>}
                             <div className="mt-2 flex items-center gap-2 sm:justify-end">
                                 <span className="text-[11px] uppercase tracking-wider text-surface-500 font-semibold">Delivery</span>
                                 <input

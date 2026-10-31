@@ -158,6 +158,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
         customer_id:        rfq?.customer_id ?? '',
         job_category_id:    rfq?.job_category_id ?? '',
         customer_ref_no:    rfq?.customer_ref_no ?? '',
+        customer_ref_date:  rfq?.customer_ref_date ?? '',
         job_type:           (rfq?.job_type ?? 'regular') as 'regular' | 'rnd',
         required_by:        rfq?.required_by ?? '',
         notes:              rfq?.notes ?? '',
@@ -187,6 +188,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
         customer_id:     data.customer_id,
         job_category_id: data.job_category_id,
         customer_ref_no: data.customer_ref_no,
+        customer_ref_date: data.customer_ref_date,
         job_type:        data.job_type,
         required_by:     data.required_by,
         notes:           data.notes,
@@ -393,7 +395,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                             </div>
                         </div>
                         <div className="card-body space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div className="form-group">
                                     <label className="form-label">Customer *</label>
                                     <SearchableSelect
@@ -414,6 +416,16 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                         onChange={e => setData('customer_ref_no', e.target.value)}
                                         placeholder="e.g. Ref-2024-123"
                                         className="form-input" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        RFQ Letter Date <span className="form-label-optional">(optional)</span>
+                                    </label>
+                                    <input type="date" value={data.customer_ref_date}
+                                        onChange={e => setData('customer_ref_date', e.target.value)}
+                                        className="form-input" />
+                                    <p className="form-hint">The date on the customer's letter. It may be earlier than today.</p>
+                                    {(errors as any).customer_ref_date && <p className="form-error">{(errors as any).customer_ref_date}</p>}
                                 </div>
                             </div>
 

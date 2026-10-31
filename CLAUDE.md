@@ -429,12 +429,14 @@ Top→bottom: header band → **Production Routing hero** (live shop stepper: "X
 - `openPdf(baseUrl, title, subtitle?)` helper: fetch `?preview=base64` → popup (new-tab fallback); reused for WO + op-sheet PDFs.
 
 ### 7. PCD Work Order section-assign (`Pages/Pcd/SectionAssign.tsx`)
-BITAC paper-form layout for routing a job through shops. Editable by PCD: **Delivery date** (`due_date`), per-item **Quantity** + **Part No.** (`work_order_items.part_no`, added 2026-06) + description + PCD note, the section routing (drag-to-reorder), job number, department. The "Save Work Order" action card is `sticky bottom-4`. The routing card heading is just "Section". `WorkOrderSectionController@update` persists due_date + per-item qty/part_no; `@pdf` shows `part_no` (positional `n/total` fallback).
+BITAC paper-form layout for routing a job through shops. Editable by PCD: **the work order's Date** (`work_orders.pcd_wo_date`, migration `..._000096`, back-datable, not in the future; blank = the day the job reached PCD — `WorkOrder::pcdWorkOrderDate()` is what the routing PDF prints), **Delivery date** (`due_date`), per-item **Quantity** + **Part No.** (`work_order_items.part_no`, added 2026-06) + description + PCD note, the section routing (drag-to-reorder), job number, department. The "Save Work Order" action card is `sticky bottom-4`. The routing card heading is just "Section". `WorkOrderSectionController@update` persists due_date + per-item qty/part_no; `@pdf` shows `part_no` (positional `n/total` fallback).
 
 ### 8. IED inbox is `ied_pending`-only — never `abort()` on a stale state (2026-08)
 `IedWorkOrderInboxController@show/accept/reject` all guard `status === 'ied_pending'`. They used to `abort_unless(..., 422)`, which threw a raw Symfony exception page ("Only IED-pending work orders can be forwarded to PCD.") whenever someone re-submitted from a stale tab / back button / double-click, or opened an already-forwarded WO by URL — the action had actually succeeded the first time, but it *looked* like a crash. All three now `redirect()->route('ied.work-orders.index')->with('error', …)` naming the current `status_label`, so a duplicate submit reads as a normal flash toast (AppLayout renders shared `flash.error`). **Rule for any single-shot state transition: guard with a redirect + flash, not `abort()`.** The Show page renders only for `ied_pending` now, so no status gating is needed in `Ied/WorkOrders/Show.tsx` (it's the sole render site of that component).
 
 ## 📦 RFQ Parts & Drafts (2026-08)
+
+- **RFQ Letter Date** (`rfqs.customer_ref_date`, migration `..._000096`, 2026-10-31): the date on the customer's own RFQ letter, beside Customer Ref., back-datable. It prefills the customer-reference date of the RFQ's **quotation** (which used to take the RFQ's entry date) and of an **RFQ letter** against it.
 
 ### Job item → Parts (positional part numbers)
 - A job item can be broken into the **parts** it covers. Table `rfq_item_parts` (`rfq_item_id`, `name`, `sort_order`), model `RfqItemPart`, relation `RfqItem::parts()`.

@@ -72,6 +72,9 @@ class WorkOrderSectionController extends Controller
                 'customer_po_no' => $workOrder->customer_po_no,
                 'status'         => $workOrder->status,
                 'created_at'     => $workOrder->created_at->format('d/m/Y'),
+                // The work order's own date (Y-m-d) — PCD may back-date it to the
+                // paper. Until set it is the day the job reached PCD.
+                'wo_date'        => $workOrder->pcdWorkOrderDate()?->format('Y-m-d'),
                 // Y-m-d for the editable date input on the form.
                 'due_date'       => $workOrder->due_date?->format('Y-m-d'),
                 // Prepared By is the PCD officer who fills this form, not whoever
@@ -118,6 +121,7 @@ class WorkOrderSectionController extends Controller
             ],
             'department'            => 'nullable|string|max:200',
             'due_date'              => 'nullable|date',
+            'wo_date'               => 'nullable|date|before_or_equal:today',
             'sections'              => 'required|array|min:1',
             'sections.*.section_id' => 'required|exists:sections,id',
             'sections.*.weight_pct' => 'nullable|numeric|min:0|max:100',
@@ -146,6 +150,7 @@ class WorkOrderSectionController extends Controller
                 'job_number'  => $jobNumber,
                 'department'  => $validated['department'] ?? null,
                 'due_date'    => $validated['due_date'] ?? null,
+                'pcd_wo_date' => $validated['wo_date'] ?? null,
                 // Whoever submits the PCD Work Order form is the "Prepared By"
                 // on the printed sheet — stamped once, then preserved.
                 'prepared_by' => $workOrder->prepared_by ?? auth()->id(),
@@ -311,7 +316,7 @@ class WorkOrderSectionController extends Controller
         $fmt = fn ($v) => $v === null || $v === '' ? '—' : (is_numeric($v) ? rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.') : $esc($v));
 
         $jobNumber  = $esc($workOrder->job_number ?: '—');
-        $date       = $workOrder->pcd_handoff_at?->format('d-m-Y') ?? $workOrder->created_at?->format('d-m-Y') ?? '—';
+        $date       = $workOrder->pcdWorkOrderDate()?->format('d-m-Y') ?? '—';
         $delivery   = $workOrder->due_date?->format('d-m-Y') ?? '—';
         $department = $workOrder->department ?: 'Production Control Department (PCD)';
         $customer   = $esc($workOrder->customer?->name ?? '—');

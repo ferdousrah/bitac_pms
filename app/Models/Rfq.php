@@ -11,13 +11,13 @@ class Rfq extends Model
 
     protected $fillable = [
         'center_id', 'customer_id', 'job_category_id', 'required_by', 'notes', 'rfq_letter_path', 'rfq_letter_title',
-        'customer_ref_no', 'job_type',
+        'customer_ref_no', 'customer_ref_date', 'job_type',
         'status', 'source', 'created_by', 'reference_type', 'drawing_path', 'sample_received', 'sample_description',
     ];
 
     protected function casts(): array
     {
-        return ['required_by' => 'date', 'sample_received' => 'boolean'];
+        return ['required_by' => 'date', 'customer_ref_date' => 'date', 'sample_received' => 'boolean'];
     }
 
     public function customer()        { return $this->belongsTo(Customer::class); }
