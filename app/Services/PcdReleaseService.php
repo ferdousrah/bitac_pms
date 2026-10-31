@@ -151,9 +151,14 @@ class PcdReleaseService
             return true;    // already on the floor
         }
 
-        $first = $workOrder->sections()->orderBy('sequence')->first();
-        if ($first) {
-            $first->update(['status' => 'ready']);
+        $sections = $workOrder->sections()->with(['section', 'workOrder.operationSheets.steps', 'workOrder.sections'])
+            ->orderBy('sequence')->get();
+        // The first shop opens — and so does any later shop where an item STARTS
+        // (it has no work before it), since items move on their own (2026-10-31).
+        $opening = $sections->filter(fn ($s, $i) => $i === 0
+            || $s->lanes()->keys()->contains(fn ($id) => $s->itemReceivedQty((int) $id) === null))->values();
+        foreach ($opening as $s) {
+            $s->update(['status' => 'ready']);
         }
 
         $workOrder->update([
@@ -162,9 +167,9 @@ class PcdReleaseService
             'released_by'          => auth()->id(),
         ]);
 
-        if ($first) {
-            ShopAssignment::announceArrival($first,
-                'New job for ' . ($first->section?->name ?? 'your shop'),
+        foreach ($opening as $s) {
+            ShopAssignment::announceArrival($s,
+                'New job for ' . ($s->section?->name ?? 'your shop'),
                 "Job #{$workOrder->job_number} ({$workOrder->wo_number}) has been released to your shop and is ready for production.");
         }
 

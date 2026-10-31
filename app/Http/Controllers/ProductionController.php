@@ -619,13 +619,13 @@ class ProductionController extends Controller
         $shopSteps = $sheet->steps->where('section_id', $step->section_id)->sortBy('sequence')->values();
         $idx = $shopSteps->search(fn ($s) => $s->id === $step->id);
         $prev = $idx > 0 ? $shopSteps[$idx - 1] : null;
-        $inputCap = $prev ? (float) $prev->completed_qty : $wos->effectiveReceivedQty(); // null = ungated
+        $inputCap = $prev ? (float) $prev->completed_qty : $wos->itemReceivedQty($sheet->id); // null = ungated
         if ($inputCap !== null) {
             $capByInput = max(0.0, $inputCap - (float) $step->completed_qty);
             if ($capByInput <= 0) {
                 return back()->with('error', $prev
                     ? "Waiting on the previous operation ({$prev->operation_name}) — it has only completed " . rtrim(rtrim(number_format($inputCap, 2), '0'), '.') . " pc(s) so far."
-                    : 'This section has not received enough quantity yet. Ask the previous section to transfer more.');
+                    : 'This section has not received enough of this item yet. Ask the previous section to transfer more.');
             }
             $remaining = min($remaining, $capByInput);
         }
@@ -751,84 +751,162 @@ class ProductionController extends Controller
             return back()->with('error', 'This section is not in a state that can transfer work.');
         }
 
-        $workOrderSection->loadMissing(['workOrder.operationSheets.steps', 'section']);
-        $forwardable = $workOrderSection->forwardableQty();
-        if ($forwardable <= 0) {
+        $workOrderSection->loadMissing(['workOrder.operationSheets.steps', 'workOrder.sections.section', 'workOrder.items', 'section']);
+        if ($workOrderSection->forwardableQty() <= 0) {
             return back()->with('error', 'Nothing to transfer yet — complete some pieces at this section first.');
         }
 
+        // ⚠️ ITEM BY ITEM (BITAC, 2026-10-31): `items` = {sheet_id: qty}, each
+        // capped at what that item has finished here — so a finished item goes
+        // on while another is still being worked. A one-item job may still post
+        // a plain `qty`.
+        $lanes = $workOrderSection->lanes()->keys()->map(fn ($id) => (int) $id);
         $validated = $request->validate([
-            'qty'  => ['required', 'numeric', 'min:0.01', 'max:' . $forwardable],
-            'note' => 'nullable|string|max:1000',
+            'items'   => 'nullable|array',
+            'items.*' => 'nullable|numeric|min:0',
+            'qty'     => 'nullable|numeric|min:0.01',
+            'note'    => 'nullable|string|max:1000',
         ]);
-        $qty = (float) $validated['qty'];
-        $wo  = $workOrderSection->workOrder;
-        $now = now();
+        $asked = collect($validated['items'] ?? [])->mapWithKeys(fn ($q, $id) => [(int) $id => (float) $q])
+            ->filter(fn ($q) => $q > 0);
+        if ($asked->isEmpty() && isset($validated['qty'])) {
+            if ($lanes->count() !== 1) {
+                return back()->with('error', 'This job has more than one item here — enter how much of each to transfer.');
+            }
+            $asked = collect([$lanes->first() => (float) $validated['qty']]);
+        }
+        if ($asked->isEmpty()) {
+            return back()->withErrors(['qty' => 'Enter how much to transfer.']);
+        }
+        foreach ($asked as $sheetId => $q) {
+            if (! $lanes->contains($sheetId)) {
+                return back()->with('error', 'That item has no work at this section.');
+            }
+            $max = $workOrderSection->itemForwardableQty($sheetId);
+            if ($q > $max + 0.001) {
+                return back()->withErrors(["items.{$sheetId}" => 'Only ' . rtrim(rtrim(number_format($max, 2), '0'), '.') . ' of this item is ready to transfer.']);
+            }
+        }
 
-        $next = null;
-        \DB::transaction(function () use ($workOrderSection, $wo, $qty, $validated, $now, &$next) {
-            // The immediate next stop in the routing — production shop OR QC.
-            // (We no longer skip QC; if PCD routed to it, it receives the pieces.)
-            $next = WorkOrderSection::where('work_order_id', $wo->id)
-                ->where('sequence', '>', $workOrderSection->sequence)
-                ->orderBy('sequence')->first();
-            $next?->loadMissing('section');
+        $wo    = $workOrderSection->workOrder;
+        $now   = now();
+        $total = (float) $asked->sum();
+        $label = $this->itemLabels($wo);
+        $later = $wo->sections->where('sequence', '>', $workOrderSection->sequence)->sortBy('sequence')->values();
+        // Where each item goes: the next stop that has work on it, or the next
+        // stop that is not a shop (QC). An item that skips a shop skips it.
+        $destFor = function (int $sheetId) use ($wo, $later) {
+            $sheetSections = $wo->operationSheets->firstWhere('id', $sheetId)?->steps->pluck('section_id')->all() ?? [];
+            return $later->first(fn ($s) => $s->section?->type !== 'production_shop' || in_array($s->section_id, $sheetSections));
+        };
 
-            // Ledger: this section forwarded more; downstream received more.
-            $newForwarded = (float) $workOrderSection->forwarded_qty + $qty;
-            $target = $workOrderSection->sectionTargetQty();
-            $fullyForwarded = $target > 0 && $newForwarded >= $target - 0.001;
+        $arrivals = [];   // wos id => [wos, qty, [labels]]
+        \DB::transaction(function () use ($workOrderSection, $wo, $asked, $total, $validated, $now, $later, $destFor, $label, &$arrivals) {
+            $ledger = $workOrderSection->item_ledger ?? [];
+            foreach ($asked as $sheetId => $q) {
+                $ledger[$sheetId]['f'] = (float) ($ledger[$sheetId]['f'] ?? 0) + $q;
+            }
+            $workOrderSection->item_ledger = $ledger;
+            $fullyForwarded = $workOrderSection->allItemsForwarded();
 
             $workOrderSection->update([
-                'forwarded_qty' => $newForwarded,
+                'item_ledger'   => $ledger,
+                // The job-level figure is the lanes' sum; kept for whatever reads it.
+                'forwarded_qty' => (float) $workOrderSection->forwarded_qty + $total,
                 'status'        => $fullyForwarded ? 'completed' : 'in_progress',
                 'started_at'    => $workOrderSection->started_at ?? $now,
                 'completed_at'  => $fullyForwarded ? ($workOrderSection->completed_at ?? $now) : null,
                 'completed_by'  => $fullyForwarded ? auth()->id() : $workOrderSection->completed_by,
             ]);
 
-            if ($next) {
-                $next->update([
-                    'received_qty' => (float) ($next->received_qty ?? 0) + $qty,
+            foreach ($asked as $sheetId => $q) {
+                $dest = $destFor($sheetId);
+                if (! $dest) continue;
+                $arrivals[$dest->id] ??= ['wos' => $dest, 'qty' => 0.0, 'items' => []];
+                $arrivals[$dest->id]['qty'] += $q;
+                $arrivals[$dest->id]['items'][] = ($label[$sheetId] ?? 'Item') . ': ' . rtrim(rtrim(number_format($q, 2), '0'), '.');
+                // A shop keeps each item's arrival; a QC stop has no items of its own.
+                if ($dest->section?->type === 'production_shop') {
+                    $dl = $dest->item_ledger ?? [];
+                    $dl[$sheetId]['r'] = (float) ($dl[$sheetId]['r'] ?? 0) + $q;
+                    $dest->item_ledger = $dl;
+                }
+            }
+
+            foreach ($arrivals as $a) {
+                $dest = $a['wos'];
+                $dest->update([
+                    'item_ledger'  => $dest->item_ledger,
+                    'received_qty' => (float) ($dest->received_qty ?? 0) + $a['qty'],
                     // Receiving a transfer (re)activates a pending — or previously
-                    // wrongly-skipped — next section.
-                    'status'       => in_array($next->status, ['pending', 'skipped']) ? 'ready' : $next->status,
-                    'started_at'   => $next->started_at,
+                    // wrongly-skipped — section.
+                    'status'       => in_array($dest->status, ['pending', 'skipped']) ? 'ready' : $dest->status,
                 ]);
-                // If the next stop is a QC / non-production inspection section,
-                // engage the QC module (partial — it inspects what it received).
-                if ($next->section && $next->section->type !== 'production_shop'
+                // A QC / non-production stop engages the QC module (partial — it
+                // inspects what it received).
+                if ($dest->section && $dest->section->type !== 'production_shop'
                     && !in_array($wo->status, ['qc_passed', 'ready_for_delivery', 'delivered'], true)) {
                     $wo->update(['status' => 'qc_hold']);
                 }
-            } elseif ($fullyForwarded) {
-                // No next section at all → straight to QC.
-                $wo->update(['status' => 'qc_hold']);
+                SectionHandoff::create([
+                    'work_order_id'   => $wo->id,
+                    'from_section_id' => $workOrderSection->section_id,
+                    'to_section_id'   => $dest->section_id,
+                    'direction'       => 'forward',
+                    'qty'             => $a['qty'],
+                    'note'            => trim(implode(', ', $a['items']) . (($validated['note'] ?? '') !== '' ? ' — ' . $validated['note'] : '')),
+                    'transferred_by'  => auth()->id(),
+                    'transferred_at'  => $now,
+                ]);
             }
 
-            SectionHandoff::create([
-                'work_order_id'   => $wo->id,
-                'from_section_id' => $workOrderSection->section_id,
-                'to_section_id'   => $next?->section_id ?? $workOrderSection->section_id,
-                'direction'       => 'forward',
-                'qty'             => $qty,
-                'note'            => $validated['note'] ?? null,
-                'transferred_by'  => auth()->id(),
-                'transferred_at'  => $now,
-            ]);
+            // Nothing after this section at all → straight to QC once it is done.
+            if ($later->isEmpty() && $fullyForwarded) {
+                $wo->update(['status' => 'qc_hold']);
+            }
+            // Pieces that leave the routing (no stop after takes them) still get
+            // a record of having gone.
+            if ($arrivals === [] && $later->isEmpty()) {
+                SectionHandoff::create([
+                    'work_order_id'   => $wo->id,
+                    'from_section_id' => $workOrderSection->section_id,
+                    'to_section_id'   => $workOrderSection->section_id,
+                    'direction'       => 'forward',
+                    'qty'             => $total,
+                    'note'            => $validated['note'] ?? null,
+                    'transferred_by'  => auth()->id(),
+                    'transferred_at'  => $now,
+                ]);
+            }
         });
 
         $this->syncMachineStates($workOrderSection->workOrder);
 
-        // The next shop is told the pieces are on their way to it.
-        if ($next) {
-            $from = $workOrderSection->section?->name ?? 'the previous shop';
-            ShopAssignment::announceArrival($next,
-                "Job #{$wo->job_number} — {$qty} pcs from {$from}",
-                "{$from} transferred {$qty} pcs of job #{$wo->job_number} ({$wo->wo_number}) to your shop.");
+        // Each shop is told what is on its way to it.
+        $from = $workOrderSection->section?->name ?? 'the previous shop';
+        foreach ($arrivals as $a) {
+            $n = rtrim(rtrim(number_format($a['qty'], 2), '0'), '.');
+            ShopAssignment::announceArrival($a['wos'],
+                "Job #{$wo->job_number} — {$n} pcs from {$from}",
+                "{$from} transferred job #{$wo->job_number} ({$wo->wo_number}) to your shop: " . implode(', ', $a['items']) . '.');
         }
 
-        return back()->with('success', "Transferred {$qty} pcs to the next section.");
+        $n = rtrim(rtrim(number_format($total, 2), '0'), '.');
+        return back()->with('success', "Transferred {$n} pcs to the next section.");
+    }
+
+    /** sheet_id => "Item 2 — Piston", for transfers and their records. */
+    private function itemLabels(WorkOrder $wo): array
+    {
+        $out = [];
+        foreach ($wo->operationSheets as $sheet) {
+            $idx  = $sheet->work_order_item_id ? $wo->items->search(fn ($i) => $i->id === $sheet->work_order_item_id) : false;
+            $item = $idx !== false ? $wo->items[$idx] : null;
+            $out[$sheet->id] = $item
+                ? 'Item ' . ($idx + 1) . ' — ' . \Illuminate\Support\Str::limit((string) $item->description, 40)
+                : ($sheet->sheet_number ?: 'The job');
+        }
+        return $out;
     }
 
     /**
@@ -942,7 +1020,7 @@ class ProductionController extends Controller
                 'progress'      => (int) round($wos->progressFraction() * 100),
                 'received_qty'  => $wos->effectiveReceivedQty(),
                 'output_qty'    => $wos->sectionOutputQty(),
-                'forwarded_qty' => $nf($wos->forwarded_qty),
+                'forwarded_qty' => $nf($wos->forwardedQtyTotal()),
                 'target_qty'    => $wos->sectionTargetQty(),
                 'started_at'    => $wos->started_at?->format('d M Y, h:i A'),
                 'completed_at'  => $wos->completed_at?->format('d M Y, h:i A'),
@@ -1186,10 +1264,23 @@ class ProductionController extends Controller
                 'section_progress' => (int) round($workOrderSection->progressFraction() * 100),
                 // Partial-forward ledger.
                 'received_qty'     => $workOrderSection->effectiveReceivedQty(), // null = ungated (first section)
-                'forwarded_qty'    => (float) $workOrderSection->forwarded_qty,
+                'forwarded_qty'    => $workOrderSection->forwardedQtyTotal(),
                 'output_qty'       => $workOrderSection->sectionOutputQty(),
                 'forwardable_qty'  => $workOrderSection->forwardableQty(),
                 'target_qty'       => $workOrderSection->sectionTargetQty(),
+                // Each item on its own — what the Transfer dialog moves.
+                'transfer_lanes'   => (function () use ($workOrderSection) {
+                    $labels = $this->itemLabels($workOrderSection->workOrder);
+                    return $workOrderSection->lanes()->keys()->map(fn ($id) => [
+                        'sheet_id'    => (int) $id,
+                        'label'       => $labels[(int) $id] ?? 'Item',
+                        'received'    => $workOrderSection->itemReceivedQty((int) $id),
+                        'output'      => $workOrderSection->itemOutputQty((int) $id),
+                        'forwarded'   => $workOrderSection->itemForwardedQty((int) $id),
+                        'forwardable' => $workOrderSection->itemForwardableQty((int) $id),
+                        'target'      => $workOrderSection->itemTargetQty((int) $id),
+                    ])->values()->all();
+                })(),
                 'is_last'          => !WorkOrderSection::where('work_order_id', $workOrderSection->work_order_id)
                                         ->where('sequence', '>', $workOrderSection->sequence)
                                         ->whereHas('section', fn ($q) => $q->where('type', 'production_shop'))
@@ -1277,8 +1368,8 @@ class ProductionController extends Controller
                 // Intra-shop sequential gating: a step can only work as much as
                 // the PREVIOUS operation at this shop has completed. The first
                 // step's input is the shop's received qty (null = ungated).
-                $firstInput = $workOrderSection->effectiveReceivedQty();
-                $capForSheet = fn ($sheet) => self::inputCapsFor($sheet, $sectionId, $firstInput);
+                // Each item's first operation starts from what of THAT item arrived.
+                $capForSheet = fn ($sheet) => self::inputCapsFor($sheet, $sectionId, $workOrderSection->itemReceivedQty($sheet->id));
 
                 $packStep = fn ($s, $cap = null) => [
                     'input_cap'         => $cap,
@@ -1806,7 +1897,6 @@ class ProductionController extends Controller
         // in-charge must still see the job to forward it, even after every op
         // is marked completed. (Sub-section queues don't need this — transfer is
         // the shop's job, not the sub-section's.)
-        $pendingTransfer = $wos->forwardableQty() > 0.0001;
 
         $rows = collect();
         $hasAnyItemSheet = false;
@@ -1817,6 +1907,7 @@ class ProductionController extends Controller
             $sectionSteps = $sheet->steps->where('section_id', $sectionId);
             if ($sectionSteps->isEmpty()) continue;
             $openHere = $sectionSteps->first(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
+            $pendingTransfer = $wos->itemForwardableQty($sheet->id) > 0.0001;
             if (!$openHere && !$pendingTransfer) continue;
             $rows->push($this->serializeWosForQueue($wos, [
                 'item' => [
@@ -1830,6 +1921,8 @@ class ProductionController extends Controller
                 'steps_total'    => $sectionSteps->count(),
                 'steps_done'     => $sectionSteps->whereIn('status', ['completed', 'skipped'])->count(),
                 'ready_to_transfer' => !$openHere && $pendingTransfer,
+                // What of THIS item has arrived here (null = ungated).
+                'received_qty'   => $wos->itemReceivedQty($sheet->id),
                 // Open operations here named on the viewer — this is what makes
                 // "assign a person" land on that person's own screen.
                 'my_steps'       => $sectionSteps
@@ -1899,7 +1992,6 @@ class ProductionController extends Controller
     {
         $wo = $wos->workOrder;
         $sectionId = $wos->section_id;
-        $firstInput = $wos->effectiveReceivedQty();
         $rows = collect();
         foreach ($wo->items as $idx => $item) {
             $sheet = $wo->operationSheets->firstWhere('work_order_item_id', $item->id);
@@ -1916,7 +2008,7 @@ class ProductionController extends Controller
             // A bench's three tabs, all about ITS own steps: what it can work
             // on, what is waiting on the operation before it, and what it has
             // finished.
-            $caps = self::inputCapsFor($sheet, $sectionId, $firstInput);
+            $caps = self::inputCapsFor($sheet, $sectionId, $wos->itemReceivedQty($sheet->id));
             $open = $subSteps->filter(fn ($s) => !in_array($s->status, ['completed', 'skipped']));
             $want = match ($bucket) {
                 'completed' => $subSteps->filter(fn ($s) => in_array($s->status, ['completed', 'skipped'])),

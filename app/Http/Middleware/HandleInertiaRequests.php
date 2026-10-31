@@ -151,7 +151,7 @@ class HandleInertiaRequests extends Middleware
                 $activeStatuses = ['ready', 'in_progress', 'rework', 'awaiting_rework'];
                 $activeWoSections = \App\Models\WorkOrderSection::query()
                     ->whereIn('status', $activeStatuses)
-                    ->with(['workOrder.items', 'workOrder.operationSheets.steps'])
+                    ->with(['workOrder.items', 'workOrder.operationSheets.steps', 'workOrder.sections'])
                     ->get();
 
                 // Count only ACTIONABLE work — an item with an open step that
@@ -163,7 +163,6 @@ class HandleInertiaRequests extends Middleware
                 $subCount  = [];
                 foreach ($activeWoSections as $wos) {
                     $wo = $wos->workOrder; $sectionId = $wos->section_id;
-                    $received = $wos->effectiveReceivedQty(); // null = ungated
                     $sheets = $wo->operationSheets;
                     $buckets = $wo->items->map(fn ($it) => $sheets->firstWhere('work_order_item_id', $it->id))
                         ->filter()
@@ -171,7 +170,7 @@ class HandleInertiaRequests extends Middleware
                     foreach ($buckets as $sheet) {
                         $ordered = $sheet->steps->where('section_id', $sectionId)->sortBy('sequence')->values();
                         if ($ordered->isEmpty()) continue;
-                        $prev = $received; // input available to the first op (null = ungated)
+                        $prev = $wos->itemReceivedQty($sheet->id); // this item's arrival (null = ungated)
                         $itemActionable = false;
                         $actionableSubs = [];
                         foreach ($ordered as $s) {

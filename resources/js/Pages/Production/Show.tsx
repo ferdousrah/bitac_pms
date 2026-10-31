@@ -58,6 +58,16 @@ interface Handoff {
     files: HandoffFile[];
 }
 
+interface TransferLane {
+    sheet_id: number;
+    label: string;
+    received: number | null;
+    output: number;
+    forwarded: number;
+    forwardable: number;
+    target: number;
+}
+
 interface Wos {
     id: number;
     sequence: number;
@@ -73,6 +83,8 @@ interface Wos {
     output_qty: number;
     forwardable_qty: number;
     target_qty: number;
+    /** Each item at this section on its own — items move on separately. */
+    transfer_lanes: TransferLane[];
     is_last: boolean;
     bottleneck: { reason: string; at: string } | null;
     work_order: {
@@ -468,9 +480,19 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
                                                     {block.item.description ?? '—'}
                                                 </span>
                                                 <span className="text-[11px] text-surface-500">
-                                                    {wos.received_qty !== null
-                                                        ? `Received ${nf(wos.received_qty)} / ${block.item.quantity} ${block.item.unit}`
-                                                        : `Qty ${block.item.quantity} ${block.item.unit}`}
+                                                    {(() => {
+                                                        const lane = wos.transfer_lanes.find((l) => l.sheet_id === block.sheet_id);
+                                                        const got = lane ? lane.received : wos.received_qty;
+                                                        return got !== null && got !== undefined
+                                                            ? `Received ${nf(got)} / ${block.item.quantity} ${block.item.unit}`
+                                                            : `Qty ${block.item.quantity} ${block.item.unit}`;
+                                                    })()}
+                                                    {(() => {
+                                                        const lane = wos.transfer_lanes.find((l) => l.sheet_id === block.sheet_id);
+                                                        return lane && lane.forwardable > 0
+                                                            ? <span className="ml-1.5 text-amber-700 font-semibold">· {nf(lane.forwardable)} ready to transfer</span>
+                                                            : null;
+                                                    })()}
                                                 </span>
                                             </>
                                         ) : (
@@ -678,6 +700,7 @@ export default function ProductionShow({ wos, routing, op_items, handoffs, rewor
             {showTransfer && (
                 <TransferModal
                     wosId={wos.id}
+                    lanes={wos.transfer_lanes}
                     forwardable={wos.forwardable_qty}
                     isLast={wos.is_last}
                     onClose={() => setShowTransfer(false)}
@@ -1162,18 +1185,27 @@ function CompleteModal({ wosId, isRework, onClose }: { wosId: number; isRework: 
     );
 }
 
-function TransferModal({ wosId, forwardable, isLast, onClose }: { wosId: number; forwardable: number; isLast: boolean; onClose: () => void }) {
+/**
+ * Items move on one by one (BITAC, 2026-10-31): a quantity per item, each
+ * capped at what that item has finished here, so a finished item can go while
+ * another is still being worked.
+ */
+function TransferModal({ wosId, lanes, forwardable, isLast, onClose }: { wosId: number; lanes: TransferLane[]; forwardable: number; isLast: boolean; onClose: () => void }) {
     const nf = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-    const [qty, setQty] = useState(String(forwardable));
+    const [qty, setQty] = useState<Record<number, string>>(
+        () => Object.fromEntries(lanes.map((l) => [l.sheet_id, l.forwardable > 0 ? String(l.forwardable) : ''])));
     const [note, setNote] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    const q = parseFloat(qty);
-    const valid = q > 0 && q <= forwardable + 0.001;
+    const val = (l: TransferLane) => parseFloat(qty[l.sheet_id] ?? '') || 0;
+    const over = (l: TransferLane) => val(l) > l.forwardable + 0.001 || val(l) < 0;
+    const total = lanes.reduce((a, l) => a + val(l), 0);
+    const valid = total > 0 && !lanes.some(over);
 
     const submit = () => {
         if (!valid) return;
         setSubmitting(true);
-        router.post(`/production/wos/${wosId}/transfer`, { qty, note: note || undefined }, {
+        const items = Object.fromEntries(lanes.filter((l) => val(l) > 0).map((l) => [l.sheet_id, val(l)]));
+        router.post(`/production/wos/${wosId}/transfer`, { items, note: note || undefined }, {
             preserveScroll: true,
             onFinish: () => setSubmitting(false),
             onSuccess: onClose,
@@ -1190,13 +1222,30 @@ function TransferModal({ wosId, forwardable, isLast, onClose }: { wosId: number;
                 </div>
                 <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-800">
                     <i className="fi fi-rr-box-check text-xs" /> Ready to transfer: <span className="font-bold">{nf(forwardable)}</span> pcs
+                    {lanes.length > 1 && <span className="text-amber-700"> — each item goes on by itself</span>}
                 </div>
-                <div className="form-group">
-                    <label className="form-label">Quantity to transfer <span className="text-red-500">*</span></label>
-                    <input type="number" min="0" step="any" max={forwardable} value={qty}
-                        onChange={(e) => setQty(e.target.value)} className="form-input"
-                        placeholder={`max ${nf(forwardable)}`} />
-                    {!valid && qty !== '' && <p className="form-error">Enter a quantity between 0 and {nf(forwardable)}.</p>}
+                <div className="space-y-2">
+                    {lanes.map((l) => (
+                        <div key={l.sheet_id} className={`rounded-xl border px-3 py-2.5 ${l.forwardable > 0 ? 'border-surface-200' : 'border-surface-100 bg-surface-50/60'}`}>
+                            <div className="flex items-center gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-semibold text-surface-900 truncate">{l.label}</div>
+                                    <div className="text-[11px] text-surface-500">
+                                        {l.forwardable > 0
+                                            ? <>{nf(l.forwardable)} ready · {nf(l.forwarded)} of {nf(l.target)} already transferred</>
+                                            : l.forwarded >= l.target && l.target > 0
+                                                ? <>All {nf(l.target)} transferred</>
+                                                : <>Nothing finished to transfer yet · {nf(l.output)} of {nf(l.target)} done here</>}
+                                    </div>
+                                </div>
+                                <input type="number" min="0" step="any" max={l.forwardable} disabled={l.forwardable <= 0}
+                                    value={qty[l.sheet_id] ?? ''} aria-label={`Quantity of ${l.label}`}
+                                    onChange={(e) => setQty((p) => ({ ...p, [l.sheet_id]: e.target.value }))}
+                                    className="form-input w-28 text-right disabled:opacity-50" placeholder="0" />
+                            </div>
+                            {over(l) && <p className="form-error mt-1">At most {nf(l.forwardable)} of this item.</p>}
+                        </div>
+                    ))}
                 </div>
                 <div className="form-group">
                     <label className="form-label">Handoff Note <span className="form-label-optional">optional</span></label>

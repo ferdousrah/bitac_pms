@@ -34,7 +34,7 @@ class WorkOrderSection extends Model
     }
 
     protected $fillable = [
-        'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'status',
+        'work_order_id', 'section_id', 'sequence', 'weight_pct', 'received_qty', 'forwarded_qty', 'item_ledger', 'status',
         'started_at', 'completed_at', 'completed_by', 'notes', 'work_hours', 'qc_notes', 'remarks',
         'bottleneck_at', 'bottleneck_reason', 'bottleneck_by',
         // WARNING: mass assignment drops anything missing from this list
@@ -53,6 +53,7 @@ class WorkOrderSection extends Model
             'weight_pct'    => 'decimal:2',
             'received_qty'  => 'decimal:2',
             'forwarded_qty' => 'decimal:2',
+            'item_ledger'   => 'array',
             'bottleneck_at' => 'datetime',
             'assigned_at'   => 'datetime',
             'received_at'   => 'datetime',
@@ -114,30 +115,128 @@ class WorkOrderSection extends Model
             ->values();
     }
 
-    /**
-     * Finished output of this section, by quantity — the number of pieces that
-     * have cleared EVERY operation here (min completed_qty across the section's
-     * steps). Those are the pieces eligible to be transferred downstream.
+    /*
+     * ── Item by item (BITAC, 2026-10-31) ─────────────────────────────────────
+     * Each item of a job moves through the shops ON ITS OWN. An item is its
+     * operation sheet (one per job item), and its "lane" at this section is
+     * that sheet's steps here. `item_ledger` = {sheet_id: {r: received, f:
+     * forwarded}} records each lane's quantities, so a finished item can go on
+     * while another is still being worked. The job-level figures below are the
+     * SUM of the lanes — for a one-item job, exactly what they always were.
+     *
+     * ⚠️ They used to be one figure for the whole job: the output was the MIN
+     * completed across every step of every item, so one unfinished item held
+     * every other item at the shop.
      */
+
+    /** sheet_id => that item's steps at this section. */
+    public function lanes(): \Illuminate\Support\Collection
+    {
+        return $this->sectionSteps()->groupBy('operation_sheet_id');
+    }
+
+    private function laneSteps(int $sheetId): \Illuminate\Support\Collection
+    {
+        return $this->sectionSteps()->where('operation_sheet_id', $sheetId);
+    }
+
+    private function ledgerValue(int $sheetId, string $key): ?float
+    {
+        $v = ($this->item_ledger ?? [])[$sheetId][$key] ?? ($this->item_ledger ?? [])[(string) $sheetId][$key] ?? null;
+        return $v === null ? null : (float) $v;
+    }
+
+    /** Pieces of this item that have cleared EVERY operation of it here. */
+    public function itemOutputQty(int $sheetId): float
+    {
+        $steps = $this->laneSteps($sheetId);
+        return $steps->isEmpty() ? 0.0 : (float) $steps->min(fn ($s) => (float) $s->completed_qty);
+    }
+
+    /** How much of this item the section has to do (min target of its steps here). */
+    public function itemTargetQty(int $sheetId): float
+    {
+        $steps = $this->laneSteps($sheetId);
+        return $steps->isEmpty() ? 0.0 : (float) $steps->min(fn ($s) => (float) ($s->target_qty ?? 0));
+    }
+
+    public function itemForwardedQty(int $sheetId): float
+    {
+        return $this->ledgerValue($sheetId, 'f') ?? 0.0;
+    }
+
+    /** Done here, not yet transferred on. */
+    public function itemForwardableQty(int $sheetId): float
+    {
+        return max(0.0, $this->itemOutputQty($sheetId) - $this->itemForwardedQty($sheetId));
+    }
+
+    /**
+     * How much of this item has arrived here. **null = ungated**: no section
+     * before this one has work on the item, so it starts here from the raw
+     * material — including an item that skips the shops before this one.
+     */
+    public function itemReceivedQty(int $sheetId): ?float
+    {
+        if (($r = $this->ledgerValue($sheetId, 'r')) !== null) return $r;
+        // A row moved before the ledger existed (and not backfilled): the job's figure.
+        if (empty($this->item_ledger) && $this->received_qty !== null) return (float) $this->received_qty;
+        return $this->hasWorkUpstream($sheetId) ? 0.0 : null;
+    }
+
+    private ?array $upstreamSectionIds = null;
+
+    /** Does any section BEFORE this one in the routing have work on this item? */
+    public function hasWorkUpstream(int $sheetId): bool
+    {
+        if ($this->upstreamSectionIds === null) {
+            $wo = $this->relationLoaded('workOrder') ? $this->workOrder : $this->workOrder()->first();
+            $all = $wo && $wo->relationLoaded('sections') ? $wo->sections : static::where('work_order_id', $this->work_order_id)->get();
+            $this->upstreamSectionIds = $all->where('sequence', '<', $this->sequence)->pluck('section_id')->all();
+        }
+        if ($this->upstreamSectionIds === []) return false;
+
+        $wo = $this->relationLoaded('workOrder') ? $this->workOrder : $this->workOrder()->first();
+        $sheet = $wo?->operationSheets->firstWhere('id', $sheetId);
+        return (bool) $sheet?->steps->whereIn('section_id', $this->upstreamSectionIds)->isNotEmpty();
+    }
+
+    /** Has every item here been passed on in full? */
+    public function allItemsForwarded(): bool
+    {
+        $lanes = $this->lanes();
+        if ($lanes->isEmpty()) return false;
+        foreach ($lanes->keys() as $sheetId) {
+            $t = $this->itemTargetQty((int) $sheetId);
+            if ($t <= 0 || $this->itemForwardedQty((int) $sheetId) < $t - 0.001) return false;
+        }
+        return true;
+    }
+
+    /** Finished output of this section — every item's, added up. */
     public function sectionOutputQty(): float
     {
-        $steps = $this->sectionSteps();
-        if ($steps->isEmpty()) return 0.0;
-        return (float) $steps->min(fn ($s) => (float) $s->completed_qty);
+        return (float) $this->lanes()->keys()->sum(fn ($id) => $this->itemOutputQty((int) $id));
     }
 
-    /** Throughput target of this section (min target across its steps). */
+    /** What this section has to do — every item's target, added up. */
     public function sectionTargetQty(): float
     {
-        $steps = $this->sectionSteps();
-        if ($steps->isEmpty()) return 0.0;
-        return (float) $steps->min(fn ($s) => (float) ($s->target_qty ?? 0));
+        return (float) $this->lanes()->keys()->sum(fn ($id) => $this->itemTargetQty((int) $id));
     }
 
-    /** Pieces done here but not yet transferred downstream. */
+    /** Passed on so far — every item's, added up. */
+    public function forwardedQtyTotal(): float
+    {
+        $lanes = $this->lanes();
+        if ($lanes->isEmpty()) return (float) $this->forwarded_qty;
+        return (float) $lanes->keys()->sum(fn ($id) => $this->itemForwardedQty((int) $id));
+    }
+
+    /** Pieces done here but not yet transferred downstream (all items). */
     public function forwardableQty(): float
     {
-        return max(0.0, $this->sectionOutputQty() - (float) $this->forwarded_qty);
+        return (float) $this->lanes()->keys()->sum(fn ($id) => $this->itemForwardableQty((int) $id));
     }
 
     /** Is this the first section in the WO's routing? (raw material — ungated). */
@@ -155,8 +254,20 @@ class WorkOrderSection extends Model
      */
     public function effectiveReceivedQty(): ?float
     {
-        if ($this->received_qty !== null) return (float) $this->received_qty;
-        return $this->isFirstInRouting() ? null : 0.0; // null = unlimited
+        // A stop with no operations (QC): the job-level figure, as always.
+        $lanes = $this->lanes();
+        if ($lanes->isEmpty()) {
+            if ($this->received_qty !== null) return (float) $this->received_qty;
+            return $this->isFirstInRouting() ? null : 0.0; // null = unlimited
+        }
+        // Every item's arrival added up; null only when no item is gated here.
+        $gated = false; $sum = 0.0;
+        foreach ($lanes->keys() as $id) {
+            $r = $this->itemReceivedQty((int) $id);
+            if ($r === null) { $sum += $this->itemTargetQty((int) $id); continue; }
+            $gated = true; $sum += $r;
+        }
+        return $gated ? $sum : null;
     }
 
     public function workOrder()   { return $this->belongsTo(WorkOrder::class); }
