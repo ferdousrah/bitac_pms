@@ -39,6 +39,7 @@ class User extends Authenticatable
             'password'            => 'hashed',
             'is_active'           => 'boolean',
             'deactivated_at'      => 'datetime',
+            'handed_over_at'      => 'datetime',
         ];
     }
 

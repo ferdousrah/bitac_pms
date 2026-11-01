@@ -3,7 +3,15 @@ import { Link, useForm } from '@inertiajs/react';
 import { FormEvent, useState } from 'react';
 import SignatureManager from '@/Components/SignatureManager';
 
-export default function UserCreateEdit({ user, roles, sections = [], centers = [], canPickCentre = false, crossCentreRoles = [] }: any) {
+export default function UserCreateEdit({ user, roles, sections = [], centers = [], canPickCentre = false, crossCentreRoles = [], handover = null }: any) {
+    // Handing the post to the next person (PostHandover) — its own small form.
+    const [handingOver, setHandingOver] = useState(false);
+    const ho = useForm({ new_name: '', new_designation: user?.designation ?? '', new_phone: '', new_password: '' });
+    const submitHandover = (e: FormEvent) => {
+        e.preventDefault();
+        if (!confirm(`Hand ${user.name}'s post to ${ho.data.new_name}? ${user.name}'s account will be retired with everything done on it, under their own name.`)) return;
+        ho.post(`/admin/users/${user.id}/hand-over`, { preserveScroll: true, onSuccess: () => setHandingOver(false) });
+    };
     const { data, setData, post, transform, errors, processing } = useForm<any>({
         name: user?.name ?? '',
         email: user?.email ?? '',
@@ -71,6 +79,21 @@ export default function UserCreateEdit({ user, roles, sections = [], centers = [
                     </div>
 
                     <div className="card-body">
+                        {user?.handed_over_to && (
+                            <div className="mb-5 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                                <b>Retired account.</b> The post was handed over to{' '}
+                                <Link href={`/admin/users/${user.handed_over_to.id}/edit`} className="font-semibold text-brand-600 hover:underline">{user.handed_over_to.name}</Link>
+                                {user.handed_over_to.at && <> on {user.handed_over_to.at}</>}. Everything {user.name} signed and approved stays
+                                under their name — leave this account as it is.
+                            </div>
+                        )}
+                        {user?.took_over_from && (
+                            <div className="mb-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                                Took over this post from{' '}
+                                <Link href={`/admin/users/${user.took_over_from.id}/edit`} className="font-semibold hover:underline">{user.took_over_from.name}</Link>
+                                {user.took_over_from.at && <> on {user.took_over_from.at}</>}. Work done before that stays under {user.took_over_from.name}'s name.
+                            </div>
+                        )}
                         <form onSubmit={submit} className="space-y-5">
                             <div className="form-group">
                                 <label className="form-label">
@@ -85,6 +108,13 @@ export default function UserCreateEdit({ user, roles, sections = [], centers = [
                                     required
                                 />
                                 {errors.name && <p className="form-error">{errors.name}</p>}
+                                {user?.has_history && data.name.trim() !== user.name && (
+                                    <p className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                                        ⚠️ Renaming puts the new name on everything this account has already signed and approved.
+                                        Correct a spelling here — but if a <b>different person</b> has taken the post, use
+                                        <b> Hand over to the next person</b> below instead.
+                                    </p>
+                                )}
                             </div>
 
                             <div className="form-group">
@@ -393,7 +423,81 @@ export default function UserCreateEdit({ user, roles, sections = [], centers = [
                         </form>
                     </div>
                 </div>
+
+                {/* The post goes to the next person — the account is not renamed (PostHandover). */}
+                {user && handover !== null && (
+                    <div className="card mt-6 border-violet-200">
+                        <div className="card-body">
+                            <div className="flex flex-col sm:flex-row sm:items-start gap-4 justify-between">
+                                <div className="min-w-0">
+                                    <h3 className="text-sm font-bold text-surface-900">Hand over to the next person</h3>
+                                    <p className="text-xs text-surface-600 mt-1 leading-relaxed">
+                                        When someone else takes this post. <b>{user.name}</b>'s account is retired with everything they signed and
+                                        approved — it stays under their name and their signature. A new account opens on <b>{user.email}</b> with the
+                                        same role, centre and posting, and only what is still waiting moves to it.
+                                    </p>
+                                </div>
+                                <button type="button" onClick={() => setHandingOver(true)} className="btn-outline shrink-0">
+                                    <i className="fi fi-rr-exchange text-xs leading-none" /> Hand over
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {handingOver && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !ho.processing && setHandingOver(false)} />
+                    <form onSubmit={submitHandover} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+                        <div className="px-5 py-3 border-b border-surface-100">
+                            <h3 className="text-sm font-bold text-surface-900">Hand over {user.name}'s post</h3>
+                            <p className="text-[11px] text-surface-500 mt-0.5">The new person signs in with <b>{user.email}</b> and the password you set here.</p>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="form-label">New person's name *</label>
+                                <input className="form-input" value={ho.data.new_name} required autoFocus
+                                    onChange={(e) => ho.setData('new_name', e.target.value)} placeholder="e.g. Abdul Karim" />
+                                {ho.errors.new_name && <p className="form-error">{ho.errors.new_name}</p>}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="form-label">Designation</label>
+                                    <input className="form-input" value={ho.data.new_designation}
+                                        onChange={(e) => ho.setData('new_designation', e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="form-label">Phone / Mobile</label>
+                                    <input className="form-input" value={ho.data.new_phone}
+                                        onChange={(e) => ho.setData('new_phone', e.target.value)} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="form-label">Password for the new person *</label>
+                                <input type="text" className="form-input font-mono" value={ho.data.new_password} required minLength={8}
+                                    onChange={(e) => ho.setData('new_password', e.target.value)} placeholder="At least 8 characters" />
+                                {ho.errors.new_password && <p className="form-error">{ho.errors.new_password}</p>}
+                            </div>
+                            <div className="rounded-xl bg-surface-50 border border-surface-200 px-4 py-3 text-xs text-surface-700">
+                                <div className="font-semibold text-surface-900 mb-1">Moves to the new person — still waiting on the post:</div>
+                                {Object.keys(handover).length === 0
+                                    ? <div className="text-surface-500">Nothing is waiting.</div>
+                                    : <ul className="list-disc pl-4 space-y-0.5">
+                                        {Object.entries(handover).map(([label, n]: any) => <li key={label}>{n} {label}</li>)}
+                                      </ul>}
+                                <div className="mt-2 text-surface-500">
+                                    Stays with {user.name}: everything already signed, approved, raised or done — and their signatures.
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-5 py-3 border-t border-surface-100 flex justify-end gap-2">
+                            <button type="button" onClick={() => setHandingOver(false)} disabled={ho.processing} className="btn-ghost">Cancel</button>
+                            <button type="submit" disabled={ho.processing} className="btn-primary">{ho.processing ? 'Handing over…' : 'Hand over'}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </AppLayout>
     );
 }

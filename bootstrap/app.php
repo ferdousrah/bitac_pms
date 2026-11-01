@@ -12,6 +12,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            // A deactivated (or handed-over) staff account is signed out at once.
+            \App\Http\Middleware\SignOutInactiveStaff::class,
             // ⚠️ FIRST: it decides `current_center_id`, which HandleInertiaRequests
             // reads when it shares `currentCenter`. Listed after it, the header
             // always read "All centres" — picking BITAC Dhaka looked like it

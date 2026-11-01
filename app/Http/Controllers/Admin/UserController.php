@@ -157,6 +157,8 @@ class UserController extends Controller
                 'center'      => $u->center ? ['name' => $u->center->name, 'code' => $u->center->code] : null,
                 'is_active'   => (bool) $u->is_active,
                 'created_at'  => $u->created_at->format('d/m/Y'),
+                // A post handed over to the next person — to whom (PostHandover).
+                'retired_to'  => $u->handed_over_to_id ? User::whereKey($u->handed_over_to_id)->value('name') : null,
                 'can_delete'  => in_array($u->id, $canDelete, true),
             ]);
 
@@ -257,7 +259,22 @@ class UserController extends Controller
                 'roles'     => $user->roles->pluck('name'),
                 'section_id'=> $user->section_id,
                 'center_id' => $user->center_id,
+                // Has this account done anything? Then renaming it would put a
+                // new name on all of it — the page says to hand over instead.
+                'has_history'   => ! in_array($user->id, User::hardDeletableIds([$user->id]), true)
+                    || \App\Services\PostHandover::preview($user) !== [],
+                'handed_over_to' => $user->handed_over_to_id
+                    ? ['id' => $user->handed_over_to_id, 'name' => User::whereKey($user->handed_over_to_id)->value('name'),
+                       'at' => $user->handed_over_at?->format('d M Y')]
+                    : null,
+                'took_over_from' => ($prev = User::where('handed_over_to_id', $user->id)->first(['id', 'name', 'handed_over_at']))
+                    ? ['id' => $prev->id, 'name' => $prev->name, 'at' => $prev->handed_over_at?->format('d M Y')]
+                    : null,
             ],
+            // What would move to the next person if the post were handed over.
+            'handover' => $user->is_active && ! $user->handed_over_to_id && $user->id !== auth()->id()
+                ? \App\Services\PostHandover::preview($user)
+                : null,
             'roles'    => $this->grantableRoles(),
             'sections' => \App\Models\Section::hierarchicalOptions(),
             'centers'  => $this->centres(),
@@ -309,6 +326,9 @@ class UserController extends Controller
         // Active status handling
         $wasActive = (bool) $user->is_active;
         $willBeActive = $request->has('is_active') ? (bool) $validated['is_active'] : $wasActive;
+        if ($user->handed_over_to_id && $willBeActive) {
+            return back()->with('error', "{$user->name}'s post was handed over — the account stays retired so that record stays theirs.");
+        }
         $data['is_active'] = $willBeActive;
 
         if ($wasActive && !$willBeActive) {
@@ -341,8 +361,54 @@ class UserController extends Controller
         return back()->with('success', 'User deactivated.');
     }
 
+    /**
+     * The post goes to the next person (BITAC, 2026-11-01). The account is NOT
+     * renamed — everything the outgoing officer signed and approved must keep
+     * their name and their signature. App\Services\PostHandover retires that
+     * account, opens a new one on the post's email with the same role(s),
+     * centre and posting, and moves only what was still waiting on the post.
+     */
+    public function handOver(Request $request, User $user)
+    {
+        if ($r = $this->refuse($user)) return $r;
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'You cannot hand over your own account — ask another admin.');
+        }
+        if ($user->handed_over_to_id) {
+            return back()->with('error', "{$user->name}'s post has already been handed over.");
+        }
+        if (! $user->is_active) {
+            return back()->with('error', "{$user->name}'s account is deactivated — activate it first, or create the new person's account directly.");
+        }
+
+        $data = $request->validate([
+            'new_name'        => 'required|string|max:255',
+            'new_phone'       => 'nullable|string|max:40',
+            'new_designation' => 'nullable|string|max:120',
+            'new_password'    => 'required|string|min:8',
+        ], [], ['new_name' => 'name', 'new_password' => 'password']);
+
+        if (mb_strtolower(trim($data['new_name'])) === mb_strtolower(trim($user->name))) {
+            return back()->withErrors(['new_name' => 'That is the same name — hand over is for a different person taking the post.']);
+        }
+
+        [$to, $moved] = \App\Services\PostHandover::handOver($user, [
+            'name' => trim($data['new_name']), 'password' => $data['new_password'],
+            'phone' => $data['new_phone'] ?? null, 'designation' => $data['new_designation'] ?? null,
+        ], auth()->user());
+
+        $what = $moved ? ' Moved to them: ' . collect($moved)->map(fn ($n, $l) => "{$n} {$l}")->implode(', ') . '.' : '';
+
+        return redirect()->route('admin.users.edit', $to)->with('success',
+            "The post is now {$to->name}'s ({$to->email}). {$user->name}'s account is retired with everything done on it, under their name."
+            . $what . ' Add the new person\'s signature below.');
+    }
+
     public function activate(User $user)
     {
+        if ($user->handed_over_to_id) {
+            return back()->with('error', "{$user->name}'s post was handed over — the account stays retired so that record stays theirs.");
+        }
         if ($r = $this->refuse($user)) return $r;
         $user->update([
             'is_active'           => true,

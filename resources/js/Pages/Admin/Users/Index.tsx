@@ -232,8 +232,9 @@ export default function UsersIndex({ users, roles = [], sections = [], centers =
                                             <td>
                                                 <span className={user.is_active ? 'badge badge-green' : 'badge badge-red'}>
                                                     <i className={`fi fi-sr-${user.is_active ? 'check-circle' : 'cross-circle'} mr-1 text-[10px]`} />
-                                                    {user.is_active ? 'Active' : 'Inactive'}
+                                                    {user.is_active ? 'Active' : user.retired_to ? 'Handed over' : 'Inactive'}
                                                 </span>
+                                                {user.retired_to && <div className="text-[11px] text-surface-500 mt-1">to {user.retired_to}</div>}
                                             </td>
                                             <td>
                                                 <div className="flex items-center justify-end gap-2">
@@ -253,7 +254,7 @@ export default function UsersIndex({ users, roles = [], sections = [], centers =
                                                             <i className="fi fi-rr-ban mr-1" />
                                                             Deactivate
                                                         </button>
-                                                    ) : (
+                                                    ) : user.retired_to ? null : (
                                                         <button
                                                             onClick={() => post(`/admin/users/${user.id}/activate`)}
                                                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors"
@@ -312,7 +313,7 @@ export default function UsersIndex({ users, roles = [], sections = [], centers =
                                             )}
                                         </div>
                                         <span className={user.is_active ? 'badge badge-green' : 'badge badge-red'}>
-                                            {user.is_active ? 'Active' : 'Inactive'}
+                                            {user.is_active ? 'Active' : user.retired_to ? 'Handed over' : 'Inactive'}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap gap-1">
@@ -337,7 +338,7 @@ export default function UsersIndex({ users, roles = [], sections = [], centers =
                                                 <i className="fi fi-rr-ban mr-1" />
                                                 Deactivate
                                             </button>
-                                        ) : (
+                                        ) : user.retired_to ? null : (
                                             <button
                                                 onClick={() => post(`/admin/users/${user.id}/activate`)}
                                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors"

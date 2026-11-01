@@ -1932,6 +1932,41 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ Testing a `role:` middleware: **Spatie's `RoleMiddleware` reads `Auth::guard()->user()`, not the request's user resolver.** Without an `Auth::login()` every call throws `notLoggedIn` — which looks exactly like the gate working, so the test tells the two refusals apart by message.
 - ⚠️ The test **proves the cascade from `information_schema`** rather than assuming it, so if someone later changes a foreign key to `SET NULL` the guard's reason is re-checked rather than quietly outliving its cause.
 
+## 🔁 A post changes hands — Hand over, never rename (2026-11-01)
+> BITAC: accounts are made on the POST's email (xen.ied@…). *"Mr. Mir Md. Anisuzzaman j kaj gulu kore
+> gese, ja approve kore gese, j sign kore gese sob e tar name, tar sign onujayi record thakbe. notun j
+> asse she ja krbe sudu tai tar name record thakbe."*
+
+- ⚠️ **Renaming the account is the wrong tool.** Every record points at an account id and shows that
+  account's CURRENT name, and ~15 PDFs print the account's CURRENT default signature
+  (`signatureAbsolutePath()` — cost estimate, gate pass, op sheet, QC, WO sheet, MR prepared-by, …).
+  Renamed, every past approval reads the new name and old papers reprint with the new signature.
+- **Admin → Users → edit → Hand over** (`POST admin/users/{user}/hand-over`, `manage users`,
+  `UserController@handOver`, rules in **`App\Services\PostHandover`**):
+  - the outgoing account is **retired** — name, signatures, history untouched; `is_active` false,
+    `deactivation_reason` "Post handed over to …", email moved to `local.handed-over-YYYYMMDD-His@domain`,
+    `users.handed_over_to_id` / `handed_over_at` (migration `..._000103`);
+  - a **new account takes the post's email** — the new person's name, password (set by the admin),
+    phone, designation (defaults to the old one), the same **roles, centre and section**; no signature
+    (they upload their own);
+  - **only what was waiting moves** — `PostHandover::TRANSFERS`: approval-chain places, gate pass and
+    complaint decision-maker places, pending quotation / cost estimate / work order approvals (incl.
+    forwarded), shop jobs held (`work_order_sections.assigned_to`, not completed), open operations,
+    draft RFQ letters / মূসক ৬.৩ / unissued bill letters naming them as signatory, their draft or returned
+    notes, open consultancy requests. Raw DB, no centre scope. The dialog previews the counts
+    (`handover` prop) and the flash lists what moved. **Add a transfer there when a new "waiting on a
+    person" column appears.**
+- Refused (flash): your own account, an already handed-over or deactivated one, the same name. A
+  retired account **cannot be re-activated** (Activate, or the form's toggle) — its record stays theirs.
+  The edit pages link the two ("Retired account — handed over to …" / "Took over from …"); the list
+  badges it **Handed over** "to X". Renaming an account with history shows an amber warning
+  (`has_history`) pointing at Hand over — renaming is for spelling.
+- ⚠️ **`SignOutInactiveStaff`** (web middleware, first) signs a deactivated staff account out on its
+  next request. Before, `LoginRequest` only refused a NEW sign-in, so an open session kept working —
+  after a hand over the outgoing officer could still have approved as the post. Applies to every
+  deactivation, not just hand overs.
+- Verified on a copy, 23 checks + the migration both ways.
+
 ## 📜 IED uploads a job's completion certificate (2026-10-20)
 > BITAC: *"IED te job er কমপ্লেশন সার্টিফিকেট আপলোডের ব্যবস্থা থাকতে হবে, atar ekta submenu hobe Completion Certificates."*
 

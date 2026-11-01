@@ -1123,6 +1123,11 @@ Route::middleware(['auth'])->group(function () {
         Route::post('users/{user}/activate', [UserController::class, 'activate'])
             ->middleware('permission:manage users')
             ->name('admin.users.activate');
+        // The post goes to the next person: a new account on the post's email,
+        // the old one retired with its history (App\Services\PostHandover).
+        Route::post('users/{user}/hand-over', [UserController::class, 'handOver'])
+            ->middleware('permission:manage users')
+            ->name('admin.users.hand-over');
 
         // Managing another user's signature blocks (same controller as the
         // profile routes; it decides whose signatures you may touch).
