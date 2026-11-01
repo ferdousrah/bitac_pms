@@ -75,12 +75,30 @@ class PcdReviewController extends Controller
         // officer signs off, on the same screen.
         $challans = ChallanSignController::waiting();
 
+        // Material requisitions the AE (PCD) has checked, waiting for his approval.
+        $requisitions = \App\Services\RequisitionApproval::waitingFor(request()->user())
+            ->map(fn ($mr) => [
+                'id'          => $mr->id,
+                'mrn_number'  => $mr->mrn_number,
+                'status'      => $mr->status,
+                'job_number'  => $mr->workOrder?->job_number,
+                'wo_number'   => $mr->workOrder?->wo_number,
+                'customer'    => $mr->workOrder?->customer?->name,
+                'shop'        => $mr->section?->name,
+                'item_count'  => $mr->items->count(),
+                'prepared_by' => $mr->requestedBy?->name,
+                'checked_by'  => $mr->checkedBy?->name,
+                'since'       => $mr->updated_at?->format('d M Y, h:i A'),
+            ])->values();
+
         return Inertia::render('Pcd/Inbox', [
             'jobs'     => $jobs,
             'releases' => $releases,
             'challans' => $challans,
+            'requisitions' => $requisitions,
             'stats' => [
                 'challans' => $challans->count(),
+                'requisitions' => $requisitions->count(),
                 'waiting'  => $jobs->count(),
                 'overdue'  => $jobs->where('waiting_days', '>=', 2)->count(),
                 'releases' => $releases->count(),

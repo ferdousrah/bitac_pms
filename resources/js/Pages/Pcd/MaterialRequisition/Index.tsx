@@ -7,14 +7,14 @@ import { MR_STATUS_BADGE, MR_STATUS_LABEL } from '@/lib/mrStatus';
 const statusBadge = MR_STATUS_BADGE;
 const statusLabel = MR_STATUS_LABEL;
 
-export default function MaterialRequisitionIndex({ requisitions, filters }: any) {
+export default function MaterialRequisitionIndex({ requisitions, filters, waitingCount = 0 }: any) {
     const rows = requisitions?.data ?? [];
     const [search, setSearch] = useState(filters?.search ?? '');
 
     const baseUrl = '/pcd/material-requisitions';
 
     const applyFilters = (ov: Record<string, string> = {}) => {
-        router.get(baseUrl, { search: ov.search ?? search, status: ov.status ?? filters?.status ?? '' }, { preserveState: true, replace: true });
+        router.get(baseUrl, { search: ov.search ?? search, status: ov.status ?? filters?.status ?? '', tab: ov.tab ?? filters?.tab ?? 'all' }, { preserveState: true, replace: true });
     };
     const handleSearch = (e: React.FormEvent) => { e.preventDefault(); applyFilters(); };
     const clearFilters = () => { setSearch(''); router.get(baseUrl, {}, { preserveState: true, replace: true }); };
@@ -35,6 +35,20 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                     <Link href={`${baseUrl}/create`} className="btn-primary">
                         <i className="fi fi-rr-plus text-xs leading-none" /> New Requisition
                     </Link>
+                </div>
+
+                {/* All / waiting for my signature — the AE checks, the XEN approves. */}
+                <div className="inline-flex rounded-xl bg-surface-100 p-1">
+                    {([['all', 'All requisitions'], ['mine', 'Waiting for my signature']] as const).map(([k, l]) => (
+                        <button key={k} type="button" onClick={() => applyFilters({ tab: k })}
+                            className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 ${
+                                (filters?.tab ?? 'all') === k ? 'bg-white shadow-sm text-surface-900' : 'text-surface-500 hover:text-surface-800'}`}>
+                            {l}
+                            {k === 'mine' && waitingCount > 0 && (
+                                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-bold grid place-items-center">{waitingCount}</span>
+                            )}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Quick stat chips */}
@@ -127,6 +141,7 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                                                 <span className={`badge ${statusBadge[r.status] ?? 'badge-slate'}`}>
                                                     {statusLabel[r.status] ?? r.status}
                                                 </span>
+                                                {r.mine && <div className="text-[11px] font-semibold text-amber-600 mt-1">Your signature</div>}
                                             </td>
                                             <td className="text-surface-600 text-xs">{r.request_date}</td>
                                             <td>
@@ -135,7 +150,7 @@ export default function MaterialRequisitionIndex({ requisitions, filters }: any)
                                                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                         <i className="fi fi-rr-eye text-sm leading-none" /> View
                                                     </Link>
-                                                    {['draft', 'pending_approval'].includes(r.status) && (
+                                                    {r.can_edit && (
                                                         <Link href={`${baseUrl}/${r.id}/edit`} title="Edit requisition"
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 hover:text-surface-800 transition-colors">
                                                             <i className="fi fi-rr-edit text-sm leading-none" /> Edit

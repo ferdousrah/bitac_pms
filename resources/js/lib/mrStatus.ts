@@ -5,18 +5,20 @@
  */
 export const MR_STATUS_LABEL: Record<string, string> = {
     draft:            'Draft',
-    pending_approval: 'Submitted',
+    pending_approval: 'Awaiting check',     // the Assistant Engineer (PCD) checks it
+    checked:          'Awaiting approval',  // the Executive Engineer (PCD) approves it
     approved:         'Approved',
     partially_issued: 'Partially Issued',
     issued:           'Issued',
     received:         'Received',
     cancelled:        'Cancelled',
-    sent_to_ims:      'Submitted',   // legacy rows, migrated — kept so nothing reads blank
+    sent_to_ims:      'Awaiting check',   // legacy rows, migrated — kept so nothing reads blank
 };
 
 export const MR_STATUS_BADGE: Record<string, string> = {
     draft:            'badge-slate',
     pending_approval: 'badge-amber',
+    checked:          'badge-purple',
     approved:         'badge-blue',
     partially_issued: 'badge-amber',
     issued:           'badge-green',
@@ -29,6 +31,7 @@ export const MR_STATUS_BADGE: Record<string, string> = {
 export const MR_STEPS: { key: string; label: string; covers: string[] }[] = [
     { key: 'draft',            label: 'Draft',     covers: ['draft'] },
     { key: 'pending_approval', label: 'Submitted', covers: ['pending_approval'] },
+    { key: 'checked',          label: 'Checked',   covers: ['checked'] },
     { key: 'approved',         label: 'Approved',  covers: ['approved'] },
     { key: 'issued',           label: 'Issued',    covers: ['partially_issued', 'issued'] },
     { key: 'received',         label: 'Received',  covers: ['received'] },

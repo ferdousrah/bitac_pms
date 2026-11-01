@@ -20,7 +20,7 @@ interface Job {
 const money = (n: number) =>
     n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PcdInbox({ jobs = [], releases = [], challans = [], stats }: { jobs: Job[]; releases: any[]; challans?: ChallanToSign[]; stats: any }) {
+export default function PcdInbox({ jobs = [], releases = [], challans = [], requisitions = [], stats }: { jobs: Job[]; releases: any[]; challans?: ChallanToSign[]; requisitions?: any[]; stats: any }) {
     return (
         <AppLayout header="PCD Inbox">
             <Head title="PCD Inbox" />
@@ -62,6 +62,50 @@ export default function PcdInbox({ jobs = [], releases = [], challans = [], stat
 
                 {/* Delivery challans waiting for his signature (2026-10-27). */}
                 <ChallansToSign challans={challans} />
+
+                {/* Material requisitions the Assistant Engineer (PCD) has checked (2026-11-01). */}
+                {requisitions.length > 0 && (
+                    <div id="requisitions" className="rounded-2xl border border-purple-200 bg-white shadow-sm overflow-hidden scroll-mt-24">
+                        <div className="px-4 py-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                                    <i className="fi fi-rr-clipboard-list text-sm leading-none" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-purple-900 leading-tight">Material requisitions to approve</h3>
+                                    <p className="text-[11px] text-purple-700/70 leading-tight mt-0.5">
+                                        Checked by the Assistant Engineer — your signature goes on as Approved By, then the store can issue.
+                                    </p>
+                                </div>
+                            </div>
+                            <span className="min-w-[28px] h-7 px-2 rounded-lg bg-purple-100 text-purple-700 text-sm font-extrabold flex items-center justify-center">
+                                {requisitions.length}
+                            </span>
+                        </div>
+                        <div className="divide-y divide-surface-100">
+                            {requisitions.map((r: any) => (
+                                <div key={r.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-mono font-bold text-brand-600">{r.mrn_number}</span>
+                                            <span className="text-sm text-surface-700">
+                                                {r.job_number ? <>Job #{r.job_number}{r.customer ? ` · ${r.customer}` : ''}</> : <>No job — {r.shop ?? 'shop use'}</>}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-surface-500 mt-0.5">
+                                            {r.item_count} line{r.item_count === 1 ? '' : 's'} · prepared by {r.prepared_by ?? '—'}
+                                            {r.checked_by ? ` · checked by ${r.checked_by}` : ' · no Assistant Engineer to check'}
+                                            {r.since ? ` · ${r.since}` : ''}
+                                        </p>
+                                    </div>
+                                    <Link href={`/pcd/material-requisitions/${r.id}`} className="btn-primary btn-sm shrink-0">
+                                        <i className="fi fi-rr-eye text-xs leading-none" /> Open &amp; approve
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Planned and waiting to be let onto the shop floor — the second
                     half of this officer's job, on the same screen because it is

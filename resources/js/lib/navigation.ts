@@ -93,7 +93,7 @@ export const mainGroups: NavGroup[] = [
         items: [
             { label: 'PCD Inbox',            href: '/pcd/inbox',                 icon: 'fi-rr-inbox',           permission: 'review pcd-inbox', badgeKey: 'pcd_review' },
             { label: 'Job Planning',         href: '/pcd/job-planning',          icon: 'fi-rr-clipboard-list',  permission: 'view pcd-inbox', badgeKey: 'pcd_pending' },
-            { label: 'Material Requisitions',href: '/pcd/material-requisitions', icon: 'fi-rr-clipboard-list',  permission: 'create material-requisitions' },
+            { label: 'Material Requisitions',href: '/pcd/material-requisitions', icon: 'fi-rr-clipboard-list',  permission: 'create material-requisitions', badgeKey: 'mr_waiting' },
             // ⚠️ Gated on PCD MEMBERSHIP, not on `view work-orders`.
             // `view work-orders` is held by nearly every role — the shop
             // engineers, QC, sales, procurement — so this one entry made a

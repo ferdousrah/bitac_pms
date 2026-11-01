@@ -104,11 +104,19 @@ class HandleInertiaRequests extends Middleware
                 if ($user->can('view pcd-inbox')) {
                     $badges['material_demands_open'] = \App\Models\MaterialDemand::where('status', 'submitted')->count();
                 }
+                // Material requisitions at this person's step — the AE (PCD) to
+                // check, the XEN (PCD) to approve (RequisitionApproval).
+                $mrWaiting = ($user->can('view pcd-inbox') || $user->can('review pcd-inbox'))
+                    ? \App\Services\RequisitionApproval::waitingFor($user)->count() : 0;
+                if ($user->can('create material-requisitions')) {
+                    $badges['mr_waiting'] = $mrWaiting;
+                }
                 // Everything waiting on PCD's নির্বাহী প্রকৌশলী: work orders to
-                // read, jobs to release, delivery challans to sign.
+                // read, jobs to release, delivery challans and requisitions to sign.
                 if ($user->can('review pcd-inbox')) {
                     $badges['pcd_review'] = \App\Models\WorkOrder::whereIn('status', ['pcd_review', 'pcd_release_pending'])->count()
-                        + \App\Models\DeliveryOrder::where('challan_status', 'pending')->count();
+                        + \App\Models\DeliveryOrder::where('challan_status', 'pending')->count()
+                        + ($user->can('create material-requisitions') ? 0 : $mrWaiting);
                 }
                 if ($user->can('use notes')) {
                     $badges['notes_awaiting'] = count(\App\Services\NoteWorkflow::awaitingIds($user));

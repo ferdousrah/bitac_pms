@@ -8,7 +8,9 @@ use App\Models\Material;
 use App\Models\MaterialRequisition;
 use App\Models\WorkOrder;
 use App\Services\PcdReleaseService;
+use App\Services\RequisitionApproval;
 use App\Support\SignatureBlock;
+use App\Support\SignatureResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -16,8 +18,10 @@ use Inertia\Inertia;
 /**
  * Material requisitions (MRN). ⚠️ Not connected to IMS (BITAC, 2026-10-23):
  * PCD raises the requisition here and moves its status along by hand —
- * Draft → Submitted → Approved → (Partially) Issued → Received, or Cancelled.
- * The rules — which step follows which — live on MaterialRequisition.
+ * Draft → Awaiting check → Awaiting approval → Approved → (Partially) Issued →
+ * Received, or Cancelled. The rules — which step follows which — live on
+ * MaterialRequisition; who checks (Assistant Engineer (PCD)) and who approves
+ * (Executive Engineer (PCD)) on App\Services\RequisitionApproval.
  *
  * Recording an issue is the one step that carries data: what the store handed
  * over, line by line. The status follows those quantities (every line covered
@@ -29,7 +33,11 @@ class MaterialRequisitionController extends Controller
     public function index(Request $request)
     {
         $status = $request->query('status');
+        // "Waiting for me" — the requisitions at this person's step.
+        $mine = RequisitionApproval::waitingFor($request->user())->pluck('id')->all();
+        $tab  = $request->query('tab') === 'mine' ? 'mine' : 'all';
         $requisitions = MaterialRequisition::with('workOrder.customer', 'section:id,name', 'requestedBy', 'items')
+            ->when($tab === 'mine', fn ($q) => $q->whereIn('id', $mine ?: [0]))
             ->when($status && isset(MaterialRequisition::STATUSES[$status]), fn ($q) => $q->where('status', $status))
             ->when(trim((string) $request->query('search')), function ($q, $term) {
                 $q->where(fn ($w) => $w->where('mrn_number', 'like', "%{$term}%")
@@ -54,11 +62,14 @@ class MaterialRequisitionController extends Controller
                 'status'       => $mr->status,
                 'item_count'   => $mr->items->count(),
                 'requested_by' => $mr->requestedBy?->name,
+                'mine'         => in_array($mr->id, $mine, true),
+                'can_edit'     => $mr->isEditable(),
             ]);
 
         return Inertia::render('Pcd/MaterialRequisition/Index', [
             'requisitions' => $requisitions,
-            'filters'      => ['status' => $status, 'search' => $request->query('search')],
+            'filters'      => ['status' => $status, 'search' => $request->query('search'), 'tab' => $tab],
+            'waitingCount' => count($mine),
         ]);
     }
 
@@ -192,6 +203,7 @@ class MaterialRequisitionController extends Controller
             return $mr;
         });
 
+        $next = $submit ? RequisitionApproval::submitted($mr) : '';
         $sentUp = $submit && $mr->workOrder && PcdReleaseService::tryRelease($mr->workOrder);
 
         // Raised from a shop's demand → the demand now follows this requisition.
@@ -204,16 +216,31 @@ class MaterialRequisitionController extends Controller
         }
 
         return redirect()->route('pcd.material-requisitions.show', $mr)
-            ->with('success', "Material Requisition {$mr->mrn_number} " . ($submit ? 'created and submitted.' : 'saved as a draft.') . $answered
+            ->with('success', "Material Requisition {$mr->mrn_number} " . ($submit ? 'created and submitted.' : 'saved as a draft.') . $next . $answered
                 . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
     public function show(MaterialRequisition $materialRequisition)
     {
-        $materialRequisition->load(['workOrder.customer', 'section', 'items.material', 'requestedBy', 'approvedBy', 'issuedBy', 'receivedBy']);
+        $materialRequisition->load(['workOrder.customer', 'section', 'items.material', 'requestedBy', 'checkedBy', 'approvedBy', 'issuedBy', 'receivedBy']);
+
+        $me = request()->user();
+        $mr = $materialRequisition;
+        // The planning desk moves it along; the Executive Engineer (PCD) — who
+        // does not hold `view pcd-inbox` — only reads it and signs his step.
+        $desk = (bool) $me?->can('view pcd-inbox');
+        $actions = array_values(array_filter($mr->availableActions(), fn ($a) => match ($a) {
+            'check'   => RequisitionApproval::mayCheck($mr, $me),
+            'approve' => RequisitionApproval::mayApprove($mr, $me),
+            'revert'  => RequisitionApproval::maySendBack($mr, $me),
+            default   => $desk,
+        }));
 
         return Inertia::render('Pcd/MaterialRequisition/Show', [
-            'requisition' => $this->serializeRequisition($materialRequisition),
+            'requisition' => ['actions' => $actions, 'can_edit' => $desk && $mr->isEditable(),
+                'can_delete' => $desk && $mr->status === 'draft', 'is_preparer' => (int) $mr->requested_by === (int) $me?->id]
+                + $this->serializeRequisition($mr),
+            'desk'        => $desk,
         ]);
     }
 
@@ -253,10 +280,11 @@ class MaterialRequisitionController extends Controller
             $this->saveItems($materialRequisition, $validated['items']);
         });
 
+        $next = $submit ? RequisitionApproval::submitted($materialRequisition) : '';
         $sentUp = $submit && $materialRequisition->workOrder && PcdReleaseService::tryRelease($materialRequisition->workOrder);
 
         return redirect()->route('pcd.material-requisitions.show', $materialRequisition)
-            ->with('success', 'Material Requisition ' . ($submit ? 'updated and submitted.' : 'updated.')
+            ->with('success', 'Material Requisition ' . ($submit ? 'updated and submitted.' : 'updated.') . $next
                 . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
@@ -295,9 +323,79 @@ class MaterialRequisitionController extends Controller
     // ── Moving the status along (no IMS) ────────────────────────────────
 
     public function submit(MaterialRequisition $materialRequisition)  { return $this->transition($materialRequisition, 'submit'); }
-    public function revert(MaterialRequisition $materialRequisition)  { return $this->transition($materialRequisition, 'revert'); }
-    public function approve(MaterialRequisition $materialRequisition) { return $this->transition($materialRequisition, 'approve'); }
     public function receive(MaterialRequisition $materialRequisition) { return $this->transition($materialRequisition, 'receive'); }
+
+    /** The Assistant Engineer (PCD) checks it, with his signature. */
+    public function check(Request $request, MaterialRequisition $materialRequisition)
+    {
+        return $this->signedStep($request, $materialRequisition, 'check');
+    }
+
+    /** The Executive Engineer (PCD) approves it, with his signature. */
+    public function approve(Request $request, MaterialRequisition $materialRequisition)
+    {
+        return $this->signedStep($request, $materialRequisition, 'approve');
+    }
+
+    /**
+     * Back to draft: the preparer withdraws it, or the officer whose turn it
+     * is sends it back — and then a reason is required.
+     */
+    public function revert(Request $request, MaterialRequisition $materialRequisition)
+    {
+        $mr = $materialRequisition;
+        $user = $request->user();
+        if (! in_array($mr->status, ['pending_approval', 'checked'], true)) {
+            return back()->with('error', "{$mr->mrn_number} is {$mr->status_label} — it cannot be sent back from there.");
+        }
+        if (! RequisitionApproval::maySendBack($mr, $user)) {
+            return back()->with('error', "Only whoever prepared {$mr->mrn_number}, or the officer it is waiting on, can send it back.");
+        }
+        $reason = trim((string) $request->input('reason', ''));
+        $byPreparer = (int) $mr->requested_by === (int) $user->id;
+        if (! $byPreparer && mb_strlen($reason) < 3) {
+            return back()->with('error', 'Say why it is being sent back.');
+        }
+
+        RequisitionApproval::sendBack($mr, $user, $reason);
+
+        return back()->with('success', $byPreparer
+            ? "{$mr->mrn_number} is back in draft."
+            : "{$mr->mrn_number} was sent back to {$mr->requestedBy?->name} — it is a draft again.");
+    }
+
+    private function signedStep(Request $request, MaterialRequisition $mr, string $step)
+    {
+        $user = $request->user();
+        $want = $step === 'check' ? 'pending_approval' : 'checked';
+        if ($mr->status !== $want) {
+            return back()->with('error', "{$mr->mrn_number} is {$mr->status_label} — it is not waiting to be " . ($step === 'check' ? 'checked' : 'approved') . '.');
+        }
+        $may = $step === 'check' ? RequisitionApproval::mayCheck($mr, $user) : RequisitionApproval::mayApprove($mr, $user);
+        if (! $may) {
+            return back()->with('error', $step === 'check'
+                ? "{$mr->mrn_number} is checked by an Assistant Engineer (PCD) of this centre — not by whoever prepared it."
+                : "{$mr->mrn_number} is approved by the Executive Engineer (PCD) of this centre.");
+        }
+
+        $request->validate(SignatureResolver::rules());
+        // His chosen block, else a drawn one, else his default — never anyone else's.
+        $path = SignatureResolver::resolve(
+            $request->integer('user_signature_id') ?: null, $request->input('signature'),
+            'signatures/requisitions', (int) $user->id
+        ) ?? SignatureResolver::defaultPathFor((int) $user->id);
+
+        if ($step === 'check') {
+            $next = RequisitionApproval::check($mr, $user, $path);
+            return back()->with('success', "{$mr->mrn_number} checked." . $next);
+        }
+
+        RequisitionApproval::approve($mr, $user, $path);
+        $sentUp = $mr->workOrder && PcdReleaseService::tryRelease($mr->workOrder);
+
+        return back()->with('success', "{$mr->mrn_number} approved — the store can issue against it."
+            . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
+    }
 
     public function cancel(Request $request, MaterialRequisition $materialRequisition)
     {
@@ -323,18 +421,17 @@ class MaterialRequisitionController extends Controller
 
         $user = auth()->user();
         $patch = ['status' => $to];
-        if ($action === 'approve') $patch += ['approved_by' => $user->id, 'approved_at' => now()];
         if ($action === 'receive') $patch += ['received_by' => $user->id, 'received_at' => now()];
-        if ($action === 'revert')  $patch += ['approved_by' => null, 'approved_at' => null];
         if ($action === 'cancel') {
             $patch['notes'] = trim(($mr->notes ? $mr->notes . "\n" : '')
                 . '[Cancelled · ' . $user->name . ', ' . now()->format('d M Y') . ']' . ($reason !== '' ? ' ' . $reason : ''));
         }
         $mr->update($patch);
+        $next = $action === 'submit' ? RequisitionApproval::submitted($mr) : '';
 
         $sentUp = in_array($to, MaterialRequisition::RAISED, true) && $mr->workOrder && PcdReleaseService::tryRelease($mr->workOrder);
 
-        return back()->with('success', "{$mr->mrn_number} is now " . MaterialRequisition::STATUSES[$to] . '.'
+        return back()->with('success', "{$mr->mrn_number} is now " . $mr->fresh()->status_label . '.' . $next
             . ($sentUp ? PcdReleaseService::SENT_FOR_APPROVAL : ''));
     }
 
@@ -482,6 +579,11 @@ class MaterialRequisitionController extends Controller
             'actions'      => $mr->availableActions(),
             'notes'        => $mr->notes,
             'requested_by' => $mr->requestedBy?->name,
+            'waiting_on'   => RequisitionApproval::waitingOn($mr),
+            'checked_by'   => $mr->checkedBy?->name,
+            'checked_at'   => $mr->checked_at?->format('d M Y'),
+            // Went on to approval with nobody to check it.
+            'check_skipped' => $mr->checked_at && ! $mr->checked_by,
             'approved_by'  => $mr->approvedBy?->name,
             'approved_at'  => $mr->approved_at?->format('d M Y'),
             'issued_by'    => $mr->issuedBy?->name,
@@ -601,40 +703,44 @@ class MaterialRequisitionController extends Controller
             ? '<div style="margin-top: 12pt; font-size: 10pt; color: #000; line-height: 1.4;"><b>Notes:</b> ' . nl2br($esc($mr->notes), false) . '</div>'
             : '';
 
-        // ─── Preparer signature block (full info, BITAC letter convention) ───
-        $preparer       = $mr->requestedBy;
-        $preparerSig    = $preparer?->signatureAbsolutePath();
-        $preparerName   = $esc($preparer?->name ?? '—');
-        $preparerTitle  = $esc($preparer?->designation ?? '');
-        $preparerCenter = $esc($preparer?->center?->name ?? '');
-        $preparerPhone  = $esc($preparer?->phone ?? '');
-        $preparerEmail  = $esc($preparer?->email ?? '');
+        // ─── Signatures: Prepared · Checked · Approved · Issued (2026-11-01) ───
+        // Each step prints the signature stored when it was signed — the image
+        // alone, as every signed block does. A step not signed yet keeps a
+        // blank space for a pen, with the person's name if one is recorded.
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        $abs  = fn (?string $p) => $p && $disk->exists($p) ? $disk->path($p) : null;
+        // ⚠️ The rule is a table-cell border in its own row, with narrow gap
+        // columns — a border on a <div> in a cell is drawn the width of its text.
+        $cols = [];
+        $cell = function (string $label, ?string $image, ?\App\Models\User $who, ?string $note = null) use ($esc, &$cols) {
+            $lines = $who ? array_filter([$esc($who->name), $esc($who->designation ?? '')]) : [];
+            $cols[] = [
+                SignatureBlock::html($image, $image ? [] : $lines, blankHeightPt: 40, imageMaxWidthPt: 110),
+                '<div style="font-size: 10pt; font-weight: bold; color: #000;">' . $label . '</div>'
+                    . ($note ? '<div style="font-size: 8pt; color: #6b7280; margin-top: 1pt;">' . $note . '</div>' : ''),
+            ];
+        };
 
-        // The signature image is the whole block (the scan carries the name,
-        // designation and contacts), so a signed sheet prints the image and its
-        // role label only. Unsigned keeps the typed lines.
-        $hasSig = $preparerSig && is_file($preparerSig);
-        $sigImg = SignatureBlock::html($hasSig ? $preparerSig : null, [], blankHeightPt: 40, imageMaxWidthPt: 160, align: 'left');
+        // A requisition prepared before the chain stored signatures prints the
+        // preparer's default, as it always did.
+        $preparedSig = $abs($mr->prepared_signature_path) ?? $mr->requestedBy?->signatureAbsolutePath();
+        $checkNote = $mr->checked_at && ! $mr->checked_by ? 'No Assistant Engineer to check' : null;
 
-        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt;">'
-            . '<tr>'
-            .   '<td width="55%" style="vertical-align: bottom; text-align: left;">'
-            .     '<div style="margin-bottom: 4pt;">' . $sigImg . '</div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Prepared By</div>'
-            .     ($hasSig ? '' :
-                      '<div style="font-size: 10pt; color: #000; margin-top: 2pt;">' . $preparerName . '</div>'
-                      . ($preparerTitle !== '' ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;">' . $preparerTitle . '</div>' : '')
-                      . ($preparerCenter !== '' ? '<div style="font-size: 9pt; color: #4b5563;">' . $preparerCenter . '</div>' : '')
-                      . ($preparerPhone !== ''  ? '<div style="font-size: 9pt; color: #4b5563; margin-top: 1pt;"><span class="bn" style="font-family: nikosh;">ফোনঃ</span> ' . $preparerPhone . '</div>' : '')
-                      . ($preparerEmail !== ''  ? '<div style="font-size: 9pt; color: #4b5563;"><span class="bn" style="font-family: nikosh;">ই-মেইলঃ</span> ' . $preparerEmail . '</div>' : ''))
-            .   '</td>'
-            .   '<td width="10%"></td>'
-            .   '<td width="35%" style="vertical-align: bottom; text-align: right;">'
-            .     '<div style="height: 40pt;"></div>'
-            .     '<div style="border-top: 0.75pt solid #000; padding-top: 4pt; font-size: 10pt; font-weight: bold; color: #000; display: inline-block; min-width: 160pt;">Issued By (Stores)</div>'
-            .     '<div style="font-size: 9pt; color: #94a3b8; margin-top: 2pt; font-style: italic;">Signature &amp; date</div>'
-            .   '</td>'
-            . '</tr>'
+        $cell('Prepared By', $preparedSig && is_file($preparedSig) ? $preparedSig : null, $mr->requestedBy);
+        $cell('Checked By', $abs($mr->checked_signature_path), $mr->checkedBy, $checkNote);
+        $cell('Approved By', $abs($mr->approved_signature_path), $mr->approvedBy);
+        $cell('Issued By (Stores)', null, null);
+
+        $gap = '<td width="2%"></td>';
+        $top = $bottom = [];
+        foreach ($cols as [$sig, $label]) {
+            $top[]    = '<td width="23%" style="vertical-align: bottom; text-align: center;">' . $sig . '</td>';
+            $bottom[] = '<td width="23%" style="border-top: 0.75pt solid #000; padding-top: 3pt; vertical-align: top; text-align: center;">' . $label . '</td>';
+        }
+        $signatureBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 30pt; border-collapse: collapse;">'
+            . '<tr>' . implode($gap, $top) . '</tr>'
+            . '<tr><td colspan="7" style="height: 4pt;"></td></tr>'
+            . '<tr>' . implode($gap, $bottom) . '</tr>'
             . '</table>';
 
         $bodyHtml = <<<HTML

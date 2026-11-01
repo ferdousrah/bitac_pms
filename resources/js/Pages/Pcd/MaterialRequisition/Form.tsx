@@ -369,7 +369,7 @@ export default function MaterialRequisitionForm({ requisition, work_order, work_
                         </button>
                         {isDraft && (
                             <button type="button" onClick={(e) => save(e, true)} disabled={processing} className="btn-primary btn-sm">
-                                <i className="fi fi-rr-paper-plane text-xs leading-none" /> Save &amp; submit to store
+                                <i className="fi fi-rr-paper-plane text-xs leading-none" /> Save &amp; submit for check
                             </button>
                         )}
                     </div>

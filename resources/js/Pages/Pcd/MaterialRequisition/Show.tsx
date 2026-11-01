@@ -1,7 +1,8 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import PdfPopupModal from '@/Components/PdfPopupModal';
+import SignaturePicker, { SignaturePickerHandle } from '@/Components/SignaturePicker';
 import { MR_STEPS, mrBadge } from '@/lib/mrStatus';
 
 interface RequisitionItem {
@@ -31,6 +32,11 @@ interface Requisition {
     actions: string[];
     notes?: string | null;
     requested_by?: string | null;
+    is_preparer?: boolean;
+    waiting_on?: string | null;
+    checked_by?: string | null;
+    checked_at?: string | null;
+    check_skipped?: boolean;
     approved_by?: string | null;
     approved_at?: string | null;
     issued_by?: string | null;
@@ -45,15 +51,17 @@ const qty = (v: any) => (v == null || v === '' ? '—' : Number(v).toLocaleStrin
 
 /** What each hand-moved step says on its button, and what it means. */
 const ACTIONS: Record<string, { label: string; hint: string; icon: string; tone: string; confirm?: string }> = {
-    submit:  { label: 'Submit to store', hint: 'Send the requisition to the store. Its lines can still be corrected until it is approved.',
+    submit:  { label: 'Submit', hint: 'Send it to the Assistant Engineer (PCD) to check, then to the Executive Engineer (PCD) to approve. Your signature goes on as the preparer.',
                icon: 'fi-rr-paper-plane', tone: 'btn-primary' },
-    approve: { label: 'Mark approved', hint: 'The requisition has been approved. Its lines are locked from here on.',
-               icon: 'fi-rr-check', tone: 'btn-primary', confirm: 'Mark this requisition approved? Its lines can no longer be edited after this.' },
+    check:   { label: 'Check & sign', hint: 'You are the Assistant Engineer (PCD) checking it. Your signature goes on as Checked By, and it goes to the Executive Engineer (PCD).',
+               icon: 'fi-rr-list-check', tone: 'btn-primary' },
+    approve: { label: 'Approve & sign', hint: 'Your signature goes on as Approved By. Its lines are locked from here on and the store can issue against it.',
+               icon: 'fi-rr-check', tone: 'btn-primary' },
     issue:   { label: 'Record issue', hint: 'Enter what the store handed over, line by line. A part issue leaves the rest pending.',
                icon: 'fi-rr-box-open', tone: 'btn-success' },
     receive: { label: 'Mark received', hint: 'The shop has the material. This closes the requisition.',
                icon: 'fi-rr-hand-holding-box', tone: 'btn-primary', confirm: 'Mark this requisition received by the shop?' },
-    revert:  { label: 'Back to draft', hint: 'Take it back to fix the lines.',
+    revert:  { label: 'Send back', hint: 'Back to draft, to fix the lines.',
                icon: 'fi-rr-undo', tone: 'btn-outline' },
     cancel:  { label: 'Cancel requisition', hint: 'It stays on the register as cancelled.',
                icon: 'fi-rr-cross-circle', tone: 'btn-outline text-red-600 hover:bg-red-50' },
@@ -107,7 +115,10 @@ function Stepper({ status }: { status: string }) {
     );
 }
 
-export default function MaterialRequisitionShow({ requisition }: { requisition: Requisition }) {
+export default function MaterialRequisitionShow({ requisition, desk = true }: { requisition: Requisition; desk?: boolean }) {
+    const mySignatures = (usePage().props as any)?.auth?.user?.signatures ?? [];
+    const sigRef = useRef<SignaturePickerHandle>(null);
+    const [signing, setSigning] = useState<'check' | 'approve' | null>(null);
     const [pdfOpen, setPdfOpen] = useState(false);
     const [issueOpen, setIssueOpen] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -121,9 +132,18 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
 
     const run = (action: string) => {
         if (action === 'issue') { setIssueOpen(true); return; }
+        if (action === 'check' || action === 'approve') { setSigning(action); return; }
         const a = ACTIONS[action];
         let payload: Record<string, string> = {};
-        if (action === 'cancel') {
+        if (action === 'revert') {
+            // The preparer withdraws it; anyone else sends it back, and says why.
+            const reason = prompt(requisition.is_preparer
+                ? 'Take it back to draft? (A note is optional.)'
+                : 'Send it back to the preparer? Say what needs fixing:');
+            if (reason === null) return;
+            if (!requisition.is_preparer && reason.trim().length < 3) { alert('Say why it is being sent back.'); return; }
+            payload = { reason };
+        } else if (action === 'cancel') {
             const reason = prompt('Cancel this requisition? Give a reason (optional):');
             if (reason === null) return;
             payload = { reason };
@@ -132,6 +152,16 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
         }
         setBusy(true);
         router.post(`${base}/${action}`, payload, { preserveScroll: true, onFinish: () => setBusy(false) });
+    };
+
+    const sign = () => {
+        if (!signing) return;
+        const choice = sigRef.current?.value();
+        setBusy(true);
+        router.post(`${base}/${signing}`, {
+            signature: choice?.drawn ?? null,
+            user_signature_id: choice?.userSignatureId ?? null,
+        }, { preserveScroll: true, onFinish: () => setBusy(false), onSuccess: () => setSigning(null) });
     };
 
     const remove = () => {
@@ -164,10 +194,12 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                                     ) : (
                                         <span className="flex items-center gap-1">
                                             <h2 className="font-mono font-bold text-brand-600 text-xl">{requisition.mrn_number}</h2>
-                                            <button type="button" onClick={() => setEditingNo(true)} title="Change the MRN number (e.g. the IMS number)"
-                                                className="btn-ghost btn-icon text-surface-400 hover:text-brand-600">
-                                                <i className="fi fi-rr-pencil text-xs leading-none" />
-                                            </button>
+                                            {desk && (
+                                                <button type="button" onClick={() => setEditingNo(true)} title="Change the MRN number (e.g. the IMS number)"
+                                                    className="btn-ghost btn-icon text-surface-400 hover:text-brand-600">
+                                                    <i className="fi fi-rr-pencil text-xs leading-none" />
+                                                </button>
+                                            )}
                                         </span>
                                     )}
                                     <span className={`badge ${mrBadge(requisition.status)}`}>{requisition.status_label}</span>
@@ -185,7 +217,7 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                                 {requisition.work_order && (
                                     <p className="text-sm text-surface-600 mt-1">
                                         {requisition.shop && <><b className="font-semibold text-surface-800">{requisition.shop}</b> · </>}
-                                        For <Link href={`/pcd/job-planning/${requisition.work_order.id}`} className="font-mono font-semibold text-brand-600 hover:underline">
+                                        For <Link href={desk ? `/pcd/job-planning/${requisition.work_order.id}` : `/work-orders/${requisition.work_order.id}`} className="font-mono font-semibold text-brand-600 hover:underline">
                                             {requisition.work_order.wo_number}</Link>
                                         {requisition.work_order.job_number && <> · Job <b className="font-semibold text-surface-800">{requisition.work_order.job_number}</b></>}
                                         {requisition.work_order.customer && <> · {requisition.work_order.customer}</>}
@@ -217,6 +249,13 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                     </div>
                 </div>
 
+                {/* Whose turn it is — so a requisition waiting on someone else never reads as stuck. */}
+                {requisition.waiting_on && !requisition.actions.some((a) => a === 'check' || a === 'approve') && (
+                    <div className="rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-800 flex items-center gap-2">
+                        <i className="fi fi-rr-hourglass-end text-xs leading-none" /> {requisition.waiting_on}
+                    </div>
+                )}
+
                 {/* Next step */}
                 {requisition.actions.length > 0 && (
                     <div className="card border-l-4 border-brand-500">
@@ -224,14 +263,15 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                             <div className="min-w-0 flex-1">
                                 <h3 className="text-sm font-bold text-surface-900">Next step</h3>
                                 <p className="text-xs text-surface-600 mt-0.5">
-                                    {primary.length ? ACTIONS[primary[0]].hint : 'Nothing further is due.'}
-                                    {' '}There is no IMS link — move the status here as the paper moves through the store.
+                                    {primary.length ? ACTIONS[primary[0]].hint : (requisition.waiting_on ?? 'Nothing further is due.')}
+                                    {primary.length > 0 && !['check', 'approve'].includes(primary[0]) &&
+                                        ' There is no IMS link — move the status here as the paper moves through the store.'}
                                 </p>
                             </div>
                             <div className="flex flex-wrap gap-2 shrink-0">
                                 {secondary.map((a) => (
                                     <button key={a} type="button" disabled={busy} onClick={() => run(a)} className={`${ACTIONS[a].tone} btn-sm`}>
-                                        <i className={`fi ${ACTIONS[a].icon} text-xs leading-none`} /> {ACTIONS[a].label}
+                                        <i className={`fi ${ACTIONS[a].icon} text-xs leading-none`} /> {a === 'revert' && requisition.is_preparer ? 'Back to draft' : ACTIONS[a].label}
                                     </button>
                                 ))}
                                 {primary.map((a) => (
@@ -312,20 +352,50 @@ export default function MaterialRequisitionShow({ requisition }: { requisition: 
                         <h3 className="text-sm font-bold text-surface-900">Record</h3>
                         <p className="text-xs text-surface-500 mt-0.5">Stamped as each step is marked</p>
                     </div>
-                    <div className="card-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <SignatureBox role="Requested by" roleBn="চাহিদাকারী" name={requisition.requested_by} date={requisition.request_date_display} />
-                        <SignatureBox role="Approved by" roleBn="অনুমোদনকারী অফিসার" name={requisition.approved_by} date={requisition.approved_at} />
+                    <div className="card-body grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <SignatureBox role="Prepared by" roleBn="প্রস্তুতকারী" name={requisition.requested_by} date={requisition.request_date_display} />
+                        <SignatureBox role="Checked by" roleBn="সহকারী প্রকৌশলী (পিসিডি)"
+                            name={requisition.checked_by ?? (requisition.check_skipped ? 'No Assistant Engineer to check' : null)}
+                            date={requisition.checked_at} />
+                        <SignatureBox role="Approved by" roleBn="নির্বাহী প্রকৌশলী (পিসিডি)" name={requisition.approved_by} date={requisition.approved_at} />
                         <SignatureBox role="Issue recorded by" roleBn="দ্রব্য রক্ষক" name={requisition.issued_by} date={requisition.issued_at} />
                         <SignatureBox role="Received by" roleBn="দ্রব্য গ্রহিতা" name={requisition.received_by} date={requisition.received_at} />
                     </div>
                 </div>
 
-                <Link href="/pcd/material-requisitions" className="btn-ghost btn-sm">
-                    <i className="fi fi-rr-arrow-left text-xs leading-none" /> Back to list
+                <Link href={desk ? '/pcd/material-requisitions' : '/pcd/inbox'} className="btn-ghost btn-sm">
+                    <i className="fi fi-rr-arrow-left text-xs leading-none" /> {desk ? 'Back to list' : 'Back to PCD Inbox'}
                 </Link>
             </div>
 
             {issueOpen && <IssueDialog requisition={requisition} onClose={() => setIssueOpen(false)} />}
+
+            {signing && (
+                <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4" onClick={() => !busy && setSigning(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-5 py-4 border-b border-surface-200 flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="font-bold text-surface-900">
+                                    {signing === 'check' ? 'Check' : 'Approve'} {requisition.mrn_number}
+                                </h3>
+                                <p className="text-xs text-surface-500 mt-0.5">
+                                    Your signature goes on the requisition as <b>{signing === 'check' ? 'Checked By' : 'Approved By'}</b>.
+                                </p>
+                            </div>
+                            <button onClick={() => setSigning(null)} className="btn-ghost btn-icon"><i className="fi fi-rr-cross-small" /></button>
+                        </div>
+                        <div className="p-5">
+                            <SignaturePicker ref={sigRef} signatures={mySignatures} padHeight={120} />
+                        </div>
+                        <div className="px-5 py-4 border-t border-surface-200 flex justify-end gap-2">
+                            <button type="button" onClick={() => setSigning(null)} className="btn-outline btn-sm">Cancel</button>
+                            <button type="button" onClick={sign} disabled={busy} className="btn-primary btn-sm">
+                                <i className={`fi ${ACTIONS[signing].icon} text-xs leading-none`} /> {ACTIONS[signing].label}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <PdfPopupModal
                 open={pdfOpen}

@@ -542,7 +542,7 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **the 
 > BITAC: *"jehetu ata IMS er sathe integrate hobena tai ekhane material requisition create hoar por just status update hobe… material selection IED er cost estimate e jemon… ekhaneo Metal Weight Calculator lagbe."*
 
 - ⚠️ **Nothing pushes to IMS any more.** `submit()` used to call `IMSService::submitMaterialRequisition`;
-  every MR now just moves through **Draft → Submitted → Approved → (Partially) Issued → Received**, or
+  every MR now just moves through **Draft → Awaiting check → Awaiting approval → Approved → (Partially) Issued → Received** (the check/approve chain: next section), or
   **Cancelled**. The `ims_*` columns are a read-only legacy snapshot; `sent_to_ims` rows were migrated
   to `pending_approval` (labelled **Submitted**). `IMSService` itself stays — MRP still reads stock from it.
 - **`MaterialRequisition` holds the rules**: `STATUSES` (key → label), `EDITABLE` (draft, submitted),
@@ -584,6 +584,38 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **the 
   raw key). The list's search box now actually searches (MRN, WO, job number, customer).
 - ⚠️ Testing it: `RfqItem` and `RfqItemPart` are **centre-scoped** — fixtures inserted with `DB::table`
   need a `center_id`, or the request's scope hides them and the prefill reads as broken.
+
+### A requisition is Checked by the AE (PCD) and Approved by the XEN (PCD) (2026-11-01)
+> BITAC: *"PCD er Material Requisition jei toiri koruk, Checked by AE, approved by XEN PCD."*
+
+- **`App\Services\RequisitionApproval` holds the rules.** Status `pending_approval` (label **Awaiting
+  check**) → new **`checked`** (**Awaiting approval**) → `approved`. Columns (migration `..._000100`):
+  `prepared_signature_path` (the preparer's default, stamped at submit), `checked_by/_at`,
+  `checked_signature_path`, `approved_signature_path` — PATHS, per the signature convention.
+- **Checker pool** = active **`Assistant Engineer (PCD)`** role holders at the MR's centre (or
+  centre-less), **minus the preparer** — an AE never checks his own. **Approver pool** =
+  `PcdReleaseService::xenIdsAt()` (the XEN who releases jobs and signs challans). Pools are worked
+  out at that step's turn. Super admin may take any step.
+- ⚠️ **Nobody to check** (no AE, or the only AE prepared it) → submit goes straight to `checked`
+  with `checked_at` set and `checked_by` NULL — that pair **is** "check skipped", shown on the page
+  and the PDF. **No XEN at the centre** → anyone with `view pcd-inbox` approves, as before the chain.
+- Each signed step uses `SignaturePicker` (own blocks / drawn / default; `signatures/requisitions`,
+  in the reset's wipe list). **Send back** (`revert`, from Awaiting check / approval → draft):
+  the preparer withdraws freely; the AE / XEN whose turn it is must give a reason (appended to the
+  notes). Every signature comes off and the chain starts afresh on resubmit. Notified: AEs on
+  submit (`mr_to_check`), XENs on check (`mr_to_approve`), preparer + checker on approval, preparer
+  on send-back — all linking to `/pcd/material-requisitions/{id}`.
+- ⚠️ **The XEN holds `review pcd-inbox`, not `view pcd-inbox`**, so `show` / `pdf` / `check` /
+  `approve` / `revert` moved out of the resource into a group behind `view pcd-inbox|review
+  pcd-inbox`, **registered after** the resource (or `/create` binds as a requisition). The page gets
+  `desk` and per-viewer `actions` — the XEN sees only Approve / Send back, no edit, number, issue.
+  He finds them on his **PCD Inbox** (*Material requisitions to approve*, counted in
+  `navBadges.pcd_review`); the AE on the list's **Waiting for my signature** tab
+  (`navBadges.mr_waiting` on the menu item). `RequisitionApproval::waitingFor()` is both.
+- Lines stay editable while Awaiting check, locked from Awaiting approval. `checked` is in
+  `RAISED` (PCD's optional MR gate). PDF: **Prepared By · Checked By · Approved By · Issued By
+  (Stores)**, rules as table-cell borders in their own row. Verified on a copy, 26 checks + the
+  migration both ways.
 
 ### Material demand — the shop asks PCD (2026-10-23)
 > BITAC: *"Material Demand from every shop to PCD, ata lagbe."*

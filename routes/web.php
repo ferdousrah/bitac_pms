@@ -679,23 +679,19 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/job-planning/{workOrder}/job-number', [PcdJobPlanningController::class, 'setJobNumber'])->name('job-planning.set-job-number');
 
         // Material Requisitions
-        Route::resource('material-requisitions', PcdMaterialRequisitionController::class);
+        // show / pdf / check / approve / revert are below, where the
+        // Executive Engineer (PCD) can reach them too.
+        Route::resource('material-requisitions', PcdMaterialRequisitionController::class)->except('show');
         Route::post('material-requisitions/{materialRequisition}/submit', [PcdMaterialRequisitionController::class, 'submit'])
             ->name('material-requisitions.submit');
-        Route::post('material-requisitions/{materialRequisition}/approve', [PcdMaterialRequisitionController::class, 'approve'])
-            ->name('material-requisitions.approve');
         Route::post('material-requisitions/{materialRequisition}/issue', [PcdMaterialRequisitionController::class, 'issue'])
             ->name('material-requisitions.issue');
         Route::patch('material-requisitions/{materialRequisition}/number', [PcdMaterialRequisitionController::class, 'setNumber'])
             ->name('material-requisitions.number');
-        Route::post('material-requisitions/{materialRequisition}/revert', [PcdMaterialRequisitionController::class, 'revert'])
-            ->name('material-requisitions.revert');
         Route::post('material-requisitions/{materialRequisition}/receive', [PcdMaterialRequisitionController::class, 'receive'])
             ->name('material-requisitions.receive');
         Route::post('material-requisitions/{materialRequisition}/cancel', [PcdMaterialRequisitionController::class, 'cancel'])
             ->name('material-requisitions.cancel');
-        Route::get('material-requisitions/{materialRequisition}/pdf', [PcdMaterialRequisitionController::class, 'pdf'])
-            ->name('material-requisitions.pdf');
 
         // The delivery challan for a job, for anyone who can see the PCD job
         // detail — `delivery.pdf` is gated by `view delivery`, which a viewer
@@ -710,6 +706,20 @@ Route::middleware(['auth'])->group(function () {
         Route::get('work-orders/{workOrder}/reroute',   [WorkOrderSectionController::class, 'rerouteForm'])->name('reroute.form');
         Route::put('work-orders/{workOrder}/reroute',   [WorkOrderSectionController::class, 'reroute'])->name('reroute');
         Route::get('work-orders/{workOrder}/pdf',       [WorkOrderSectionController::class, 'pdf'])->name('work-orders.pdf');
+    });
+
+    // A material requisition is Checked by the Assistant Engineer (PCD) and
+    // Approved by the Executive Engineer (PCD), who holds `review pcd-inbox`
+    // and not `view pcd-inbox` — so reading it and signing a step are open to
+    // both; RequisitionApproval decides who may sign. ⚠️ Registered AFTER the
+    // resource above, or `material-requisitions/create` binds as a requisition.
+    Route::prefix('pcd')->middleware('permission:view pcd-inbox|review pcd-inbox')->name('pcd.')->group(function () {
+        $c = PcdMaterialRequisitionController::class;
+        Route::get('material-requisitions/{materialRequisition}', [$c, 'show'])->name('material-requisitions.show');
+        Route::get('material-requisitions/{materialRequisition}/pdf', [$c, 'pdf'])->name('material-requisitions.pdf');
+        Route::post('material-requisitions/{materialRequisition}/check', [$c, 'check'])->name('material-requisitions.check');
+        Route::post('material-requisitions/{materialRequisition}/approve', [$c, 'approve'])->name('material-requisitions.approve');
+        Route::post('material-requisitions/{materialRequisition}/revert', [$c, 'revert'])->name('material-requisitions.revert');
     });
 
     // Quotations

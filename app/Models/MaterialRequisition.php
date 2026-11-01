@@ -22,7 +22,10 @@ class MaterialRequisition extends Model
     /** Status → label, in the order a requisition moves through them. */
     public const STATUSES = [
         'draft'            => 'Draft',
-        'pending_approval' => 'Submitted',
+        // Prepared → Checked by the AE (PCD) → Approved by the XEN (PCD), 2026-11-01.
+        // Each label says what the requisition is waiting for.
+        'pending_approval' => 'Awaiting check',
+        'checked'          => 'Awaiting approval',
         'approved'         => 'Approved',
         'partially_issued' => 'Partially Issued',
         'issued'           => 'Issued',
@@ -34,18 +37,21 @@ class MaterialRequisition extends Model
     public const EDITABLE = ['draft', 'pending_approval'];
 
     /** A requisition that has gone to the store counts for PCD's (optional) MR gate. */
-    public const RAISED = ['pending_approval', 'approved', 'partially_issued', 'issued', 'received'];
+    public const RAISED = ['pending_approval', 'checked', 'approved', 'partially_issued', 'issued', 'received'];
 
     /**
      * The hand-moved steps: action → [from statuses, to status]. Recording an
      * issue is NOT here — it carries quantities, and the status follows them.
+     * Check / approve / send back are the signed steps — WHO may take them is
+     * App\Services\RequisitionApproval's to say.
      */
     public const TRANSITIONS = [
         'submit'  => [['draft'], 'pending_approval'],
-        'revert'  => [['pending_approval'], 'draft'],
-        'approve' => [['pending_approval'], 'approved'],
+        'check'   => [['pending_approval'], 'checked'],
+        'approve' => [['checked'], 'approved'],
+        'revert'  => [['pending_approval', 'checked'], 'draft'],
         'receive' => [['partially_issued', 'issued'], 'received'],
-        'cancel'  => [['draft', 'pending_approval', 'approved'], 'cancelled'],
+        'cancel'  => [['draft', 'pending_approval', 'checked', 'approved'], 'cancelled'],
     ];
 
     /** Statuses at which the store may record what it handed over. */
@@ -53,7 +59,9 @@ class MaterialRequisition extends Model
 
     protected $fillable = [
         'center_id', 'mrn_number', 'work_order_id', 'section_id', 'request_date',
-        'requested_by', 'approved_by', 'approved_at',
+        'requested_by', 'prepared_signature_path',
+        'checked_by', 'checked_at', 'checked_signature_path',
+        'approved_by', 'approved_at', 'approved_signature_path',
         'issued_by', 'issued_at', 'received_by', 'received_at',
         'status', 'notes',
         // Legacy IMS push tracking — read-only, see the class doc.
@@ -65,6 +73,7 @@ class MaterialRequisition extends Model
         return [
             'request_date'  => 'date',
             'approved_at'   => 'datetime',
+            'checked_at'    => 'datetime',
             'issued_at'     => 'datetime',
             'received_at'   => 'datetime',
             'ims_pushed_at' => 'datetime',
@@ -79,6 +88,7 @@ class MaterialRequisition extends Model
     public function section()    { return $this->belongsTo(Section::class); }
     public function items()      { return $this->hasMany(MaterialRequisitionItem::class)->orderBy('item_no'); }
     public function requestedBy(){ return $this->belongsTo(User::class, 'requested_by'); }
+    public function checkedBy()  { return $this->belongsTo(User::class, 'checked_by'); }
     public function approvedBy() { return $this->belongsTo(User::class, 'approved_by'); }
     public function issuedBy()   { return $this->belongsTo(User::class, 'issued_by'); }
     public function receivedBy() { return $this->belongsTo(User::class, 'received_by'); }
