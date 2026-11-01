@@ -353,6 +353,26 @@ export function PartnerWall({ partners, columns = 'lg:grid-cols-6' }: {
 }
 
 /** Nothing here yet — said plainly, rather than an empty strip of page. */
+/**
+ * A client's mark on the public pages: its logo when one has been uploaded
+ * (Admin → Customers), else the first letter of its name (BITAC, 2026-11-01).
+ * ⚠️ object-contain, never cover — logos come in every shape, and cover crops
+ * somebody's emblem. The box is white so a logo on white sits naturally.
+ */
+export function ClientMark({ name, logo, className = 'w-12 h-12 rounded-xl text-base' }: {
+    name: string; logo?: string | null; className?: string;
+}) {
+    return logo ? (
+        <span className={`${className} bg-white border border-surface-200 flex items-center justify-center overflow-hidden shrink-0`}>
+            <img src={logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain p-1" />
+        </span>
+    ) : (
+        <span className={`${className} bg-brand-50 text-brand-700 flex items-center justify-center font-bold shrink-0`}>
+            {name.charAt(0)}
+        </span>
+    );
+}
+
 export function Empty({ icon = 'fi-rr-inbox', title, text }: { icon?: string; title: string; text?: string }) {
     return (
         <div className="text-center py-16 rounded-2xl border border-dashed border-surface-300 bg-surface-50/60">

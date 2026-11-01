@@ -466,7 +466,9 @@ class PortfolioPublicController extends Controller
     {
         return Customer::where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'customer_type'])
+            ->get(['id', 'name', 'customer_type', 'logo_path'])
+            // Of two records of one organisation, keep the one with a logo.
+            ->sortBy(fn ($c) => [mb_strtolower(trim($c->name)), $c->logo_path ? 0 : 1])
             // ⚠️ One name once. Customers are records, not organisations —
             // the same company can sit in the table twice (two contacts, two
             // centres), and on the public page it read "ACI Motors, ACI
@@ -476,6 +478,7 @@ class PortfolioPublicController extends Controller
             ->take($limit ?: self::CLIENT_WALL * 4)
             ->map(fn ($c) => [
                 'name' => trim($c->name),
+                'logo' => $c->logo_url,
                 'type' => $c->customer_type === 'government' ? 'Government'
                     : ($c->customer_type === 'private' ? 'Private' : null),
             ])->values();

@@ -2236,9 +2236,19 @@ three new tables (migration `..._000064`):
   website, so a stored `<script>` would be the worst possible place for one.
   (The letter bodies go through `LetterHtml::sanitize()` because they need
   rich text; these do not.)
-- ⚠️ **The client wall is names and type ONLY** — no contact details, no job
+- ⚠️ **The client wall is names, type and logo ONLY** — no contact details, no job
   figures. A client list that leaks what each one spent is a different document
   entirely. The test asserts no customer email appears in the payload.
+- **Client logos** (BITAC, 2026-11-01: a logo looks better than the first letter):
+  `customers.logo_path` (migration `..._000102`, `Customer::logo_url`), uploaded on
+  **Admin → Customers → edit / new** (PNG / JPG / WebP ≤ 2 MB, preview, Remove; public
+  disk `customer-logos/`, the old file deleted on replace). ⚠️ **No SVG** — it is served
+  to the public and an SVG can carry script. The customer form now posts multipart
+  (`_method: put` + `forceFormData`). `ClientMark` in `parts.tsx` renders the logo
+  (`object-contain` in a white box, wider than tall so a wide logo is not shrunk to a
+  dot) or the initial, on the Clients page and the home marquee. Of two records of one
+  organisation, `clientNames()` keeps the one **with** a logo. Logos are master data —
+  not in the reset's wipe list.
 - ⚠️ **Every LITERAL section is registered BEFORE `/portfolio/{slug}`**, or
   `/portfolio/about` binds "about" as a project slug and 404s. (Fifth time in
   this codebase; see the receivables PDF, the PCD release routes and

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import PublicLayout from '@/Layouts/PublicLayout';
-import { Empty, PageHead, PartnerRow, PartnerWall, Section, SectionHead, Stat } from './parts';
+import { ClientMark, Empty, PageHead, PartnerRow, PartnerWall, Section, SectionHead, Stat } from './parts';
 
 interface Props {
-    clients: { name: string; type: string | null }[];
+    clients: { name: string; logo?: string | null; type: string | null }[];
     partners: PartnerRow[];
     stats: { years: number; projects: number; clients: number; centres: number };
     bitac: any; site: any; links: any;
@@ -67,10 +67,8 @@ export default function Clients({ clients, partners, bitac, links }: Props) {
                 {shown.length ? (
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {shown.map((c) => (
-                            <div key={c.name} className="flex items-center gap-3 p-4 rounded-xl bg-white border border-surface-200">
-                                <span className="w-10 h-10 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center font-bold shrink-0">
-                                    {c.name.charAt(0)}
-                                </span>
+                            <div key={c.name} className="flex items-center gap-3.5 p-4 rounded-xl bg-white border border-surface-200" title={c.name}>
+                                <ClientMark name={c.name} logo={c.logo} className="w-20 h-14 rounded-xl text-lg" />
                                 <div className="min-w-0">
                                     <div className="text-sm font-semibold text-surface-900 truncate">{c.name}</div>
                                     {c.type && <div className="text-[11px] text-surface-500">{c.type}</div>}

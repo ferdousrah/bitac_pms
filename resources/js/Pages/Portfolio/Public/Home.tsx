@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import PublicLayout from '@/Layouts/PublicLayout';
 import {
-    GalleryRow, KindBadge, NewsRow, PartnerRow, PartnerWall, PostCover, Project, ProjectCard, Prose, Section, SectionHead,
+    ClientMark, GalleryRow, KindBadge, NewsRow, PartnerRow, PartnerWall, PostCover, Project, ProjectCard, Prose, Section, SectionHead,
 } from './parts';
 import HeroSlider, { HeroSlide } from '@/Components/Public/HeroSlider';
 import { gearPath } from '@/Components/Public/Gear';
@@ -16,7 +16,7 @@ interface Props {
     news: NewsRow[];
     events: NewsRow[];
     photos: GalleryRow[];
-    clients: { name: string; type: string | null }[];
+    clients: { name: string; logo?: string | null; type: string | null }[];
     partners: PartnerRow[];
     stats: Stats;
     bitac: any;
@@ -428,7 +428,7 @@ function Process() {
  * half its own width (`.marquee-track`), so the wrap never shows a seam.
  * Paused on hover so a name can be read; stopped for reduced motion.
  */
-function ClientMarquee({ clients }: { clients: { name: string; type: string | null }[] }) {
+function ClientMarquee({ clients }: { clients: { name: string; logo?: string | null; type: string | null }[] }) {
     const half = Math.ceil(clients.length / 2);
     const rows = clients.length > 8 ? [clients.slice(0, half), clients.slice(half)] : [clients];
 
@@ -441,9 +441,7 @@ function ClientMarquee({ clients }: { clients: { name: string; type: string | nu
                             <span key={`${c.name}-${i}`}
                                   aria-hidden={i >= row.length}
                                   className="shrink-0 inline-flex items-center gap-3 pl-2 pr-5 py-2 rounded-2xl bg-surface-50 border border-surface-200 hover:border-brand-300 hover:bg-white transition-colors">
-                                <span className="w-9 h-9 rounded-xl bg-white border border-surface-200 text-brand-700 font-extrabold text-sm flex items-center justify-center">
-                                    {c.name.charAt(0)}
-                                </span>
+                                <ClientMark name={c.name} logo={c.logo} className="w-14 h-10 rounded-xl text-sm" />
                                 <span className="text-sm font-semibold text-surface-700 whitespace-nowrap">{c.name}</span>
                                 {c.type && (
                                     <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${

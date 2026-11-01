@@ -26,6 +26,21 @@ class CustomerManagementController extends Controller
         return Inertia::render('Admin/Customers/Index', ['customers' => $customers]);
     }
 
+    /**
+     * The logo shown on the public website's client list. ⚠️ No SVG — it is
+     * served from the public disk to anyone, and an SVG can carry script.
+     */
+    private const LOGO_RULE = 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048';
+
+    private function saveLogo(Request $request, Customer $customer): void
+    {
+        if (! $request->hasFile('logo')) return;
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if ($customer->logo_path) $disk->delete($customer->logo_path);
+        $customer->update(['logo_path' => $request->file('logo')->store('customer-logos', 'public')]);
+    }
+
     public function create()
     {
         return Inertia::render('Admin/Customers/CreateEdit', [
@@ -60,7 +75,9 @@ class CustomerManagementController extends Controller
             'address'        => 'nullable|string',
             // ক্রেতার বিআইএন on মূসক ৬.৩, and the tax invoice already printed it.
             'bin_number'     => 'nullable|string|max:40',
+            'logo'           => self::LOGO_RULE,
         ]);
+        unset($validated['logo']);
 
         // Auto-generate a memorable-but-secure temporary password.
         $plainPassword = $this->generatePassword();
@@ -72,6 +89,7 @@ class CustomerManagementController extends Controller
             'is_active'                 => true,
             'password_change_required'  => true,
         ]);
+        $this->saveLogo($request, $customer);
 
         // Email credentials. Failures don't block creation — flash a warning instead.
         try {
@@ -99,6 +117,7 @@ class CustomerManagementController extends Controller
                 'address'        => $customer->address,
                 'bin_number'     => $customer->bin_number,
                 'is_active'      => $customer->is_active,
+                'logo_url'       => $customer->logo_url,
             ],
             'sectors'       => $this->sectorOptions(),
             'customerTypes' => Customer::TYPES,
@@ -119,10 +138,12 @@ class CustomerManagementController extends Controller
             'bin_number'     => 'nullable|string|max:40',
             'is_active'      => 'boolean',
             'reset_password' => 'sometimes|boolean',
+            'logo'           => self::LOGO_RULE,
+            'remove_logo'    => 'sometimes|boolean',
         ]);
 
         $resetPassword = (bool) ($validated['reset_password'] ?? false);
-        unset($validated['reset_password']);
+        unset($validated['reset_password'], $validated['logo'], $validated['remove_logo']);
 
         if ($resetPassword) {
             $plainPassword = $this->generatePassword();
@@ -131,6 +152,11 @@ class CustomerManagementController extends Controller
         }
 
         $customer->update($validated);
+        if ($request->boolean('remove_logo') && $customer->logo_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($customer->logo_path);
+            $customer->update(['logo_path' => null]);
+        }
+        $this->saveLogo($request, $customer);
 
         $flash = 'Customer updated.';
         if ($resetPassword) {

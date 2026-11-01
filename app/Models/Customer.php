@@ -38,8 +38,14 @@ class Customer extends Authenticatable
     protected $fillable = [
         'center_id', 'name', 'customer_type', 'sector_id',
         'contact_person', 'email', 'phone', 'address', 'bin_number', 'password', 'is_active',
-        'password_change_required',
+        'password_change_required', 'logo_path',
     ];
+
+    /** The organisation's logo on the public website's client list (BITAC, 2026-11-01); null = none. */
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->logo_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->logo_path) : null;
+    }
 
     /** Government Entity or Private Organization — drives IED's sector reports. */
     public const TYPES = [

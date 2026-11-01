@@ -1,9 +1,9 @@
 import AppLayout from '@/Layouts/AppLayout';
 import { Link, useForm } from '@inertiajs/react';
-import { FormEvent } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 export default function CustomerCreateEdit({ customer, sectors = [], customerTypes = {} }: any) {
-    const { data, setData, post, put, errors, processing } = useForm({
+    const { data, setData, post, transform, errors, processing } = useForm({
         name: customer?.name ?? '',
         customer_type: customer?.customer_type ?? '',
         sector_id: customer?.sector_id ?? '',
@@ -14,14 +14,27 @@ export default function CustomerCreateEdit({ customer, sectors = [], customerTyp
         bin_number: customer?.bin_number ?? '',
         is_active: customer?.is_active ?? true,
         reset_password: false as boolean,
+        logo: null as File | null,
+        remove_logo: false as boolean,
     });
+
+    // What the logo will look like — the new pick, else the saved one.
+    const [preview, setPreview] = useState<string | null>(customer?.logo_url ?? null);
+    useEffect(() => {
+        if (!data.logo) { setPreview(data.remove_logo ? null : customer?.logo_url ?? null); return; }
+        const url = URL.createObjectURL(data.logo);
+        setPreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [data.logo, data.remove_logo]);
 
     const submit = (e: FormEvent) => {
         e.preventDefault();
+        // A file goes as multipart, so the update is a POST spoofing PUT.
         if (customer) {
-            put(`/admin/customers/${customer.id}`);
+            transform((d) => ({ ...d, _method: 'put' }));
+            post(`/admin/customers/${customer.id}`, { forceFormData: true });
         } else {
-            post('/admin/customers');
+            post('/admin/customers', { forceFormData: true });
         }
     };
 
@@ -60,6 +73,29 @@ export default function CustomerCreateEdit({ customer, sectors = [], customerTyp
                                     required
                                 />
                                 {errors.name && <p className="form-error">{errors.name}</p>}
+                            </div>
+
+                            {/* Shown beside the name on the public website's client list. */}
+                            <div className="form-group">
+                                <label className="form-label">Logo <span className="form-label-optional">PNG, JPG or WebP, up to 2 MB — shown on the website's client list</span></label>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-20 h-20 rounded-xl border border-surface-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
+                                        {preview
+                                            ? <img src={preview} alt="" className="max-w-full max-h-full object-contain p-1.5" />
+                                            : <span className="text-2xl font-bold text-brand-700">{(data.name || '?').charAt(0)}</span>}
+                                    </div>
+                                    <div className="space-y-1.5 min-w-0">
+                                        <input type="file" accept="image/png,image/jpeg,image/webp" className="form-input text-sm"
+                                            onChange={(e) => setData((d) => ({ ...d, logo: e.target.files?.[0] ?? null, remove_logo: false }))} />
+                                        {customer?.logo_url && !data.logo && !data.remove_logo && (
+                                            <button type="button" className="text-xs font-semibold text-rose-600" onClick={() => setData('remove_logo', true)}>
+                                                Remove logo
+                                            </button>
+                                        )}
+                                        {data.remove_logo && <p className="text-xs text-surface-500">The logo will be removed when you save.</p>}
+                                    </div>
+                                </div>
+                                {errors.logo && <p className="form-error">{errors.logo}</p>}
                             </div>
 
                             {/* How IED reports on this client. A sector is offered only
