@@ -1012,6 +1012,22 @@ Route::middleware(['auth'])->group(function () {
         Route::get('billing/delivery-challans/{delivery}/pdf', [\App\Http\Controllers\BillingDeliveryChallanController::class, 'pdf'])->name('billing.delivery-challans.pdf');
     });
 
+    // ─── Billing & Accounts → Money Receipt (2026-11-01) ───────────────────
+    // A receipt for cash / cheque received, printed like the receipt book.
+    // Its own book — it does not touch the payment ledger.
+    Route::prefix('billing/money-receipts')->name('billing.money-receipts.')->group(function () {
+        $c = \App\Http\Controllers\MoneyReceiptController::class;
+        Route::middleware('permission:view payments')->group(function () use ($c) {
+            Route::get('/', [$c, 'index'])->name('index');
+            Route::get('/{receipt}/pdf', [$c, 'pdf'])->name('pdf');
+        });
+        Route::middleware('permission:record payments')->group(function () use ($c) {
+            Route::post('/', [$c, 'store'])->name('store');
+            Route::post('/{receipt}', [$c, 'update'])->name('update');
+            Route::post('/{receipt}/cancel', [$c, 'cancel'])->name('cancel');
+        });
+    });
+
     // ─── Billing & Accounts → AIT Records / VAT Records (2026-11-01) ──────
     // What clients deducted at source, kept by hand with the certificate.
     // One controller; the kind is the route's default.

@@ -144,6 +144,7 @@ class SystemResetController extends Controller
         'factory_visits',
         'letter_registers',
         'tax_records',
+        'money_receipts',
         'service_demand_logs',
         'maintenance_requests',
         'machine_maintenance_logs',

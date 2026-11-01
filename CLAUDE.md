@@ -1093,6 +1093,41 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   second delivery bills 100% again. Found while building this report; not changed (money path —
   BITAC to decide). There were no invoices on the local database to check against.
 
+### Money Receipt (2026-11-01)
+> BITAC: *"Billing & Accounts এ Money Receipt নামে একটি ট্যাব রাখতে হবে যাতে কোন প্রতিষ্ঠান নগদটাকা বা চেক দিলে
+> তার বিপরিতে মানি রিসিট দেওয়া যায় … প্রতিষ্ঠানের নাম ড্রপ ডাউন মেনু থেকে"* — laid out like their printed
+> receipt book (sample: receipt no. 84646, a training fee, ৩০ জন × ২৬০).
+
+- ⚠️ **A receipt book of its own — it does NOT touch the payment ledger** (BITAC's choice): no
+  `payments` row, no bill's dues move. Linking a bill (`invoice_id`, must be that client's) is a
+  reference only; the form says to record the payment on the bill. Much of what it covers (training,
+  testing fees) has no bill at all.
+- `money_receipts` (migration `..._000101`), `MoneyReceipt` (`HasCenter`, `METHODS` cash | cheque),
+  `MoneyReceiptController`, `App\Services\MoneyReceiptRenderer`, page `MoneyReceipt/Index.tsx`
+  (list + form modal + print). Routes **`/billing/money-receipts`** (+ store / `{receipt}` update /
+  `{receipt}/cancel` / `{receipt}/pdf`): reading and printing **`view payments`**, issuing, correcting
+  and cancelling **`record payments`**.
+- **Organisation** from the client dropdown — `payer_name` is a snapshot of its name — or, via "Not
+  on the list?", typed. **Receipt No.**: blank → `RCT-DHK-2026-0001` (`DocNumber`, per centre per
+  year); a number from the paper book may be typed (**unique**). Purpose (বাবদ), cash or cheque (a
+  cheque needs its number; date and bank optional), মারফত, amount, a free **details** line (printed).
+- ⚠️ **A receipt is CANCELLED, never deleted** (reason required) — a gap in a receipt book is what an
+  audit asks about. It stays listed, struck through, prints with **বাতিল (CANCELLED)**, cannot be
+  edited, and drops out of the totals (received / cash / cheque).
+- **The print** (`renderPlain`, A4 portrait, no pad): two copies — **প্রাপকের কপি** and **অফিস কপি** —
+  with a cut line. Each: রশিদ নং, আলাপনী (centre's `phone_bn`), the centre's `name_bn` + `address_bn`,
+  মানি রশিদ, তারিখ, then the book's own words ("… এর নিকট হইতে / অত্র কেন্দ্রের … বাবদ নগদ | চেক নং …
+  তারিখ … / মারফত … টাকা … পয়সা কথায় … প্রাপ্তি স্বীকার করিয়া এই রশিদ দেওয়া গেল।"), and blank ruled
+  spaces for **কোষাধ্যক্ষ** and **আয়ন ও ব্যয়ন কর্মকর্তা** to sign by hand. Filled-in values print in blue.
+- **`App\Support\BanglaWords::taka()`** is the amount in words — "সাত হাজার আটশত টাকা মাত্র", হাজার /
+  লক্ষ / কোটি, পয়সা when there are any. The 1–99 words are a table (Bangla has no rule for them).
+- ⚠️ Latin inside the Bangla lines (an English client name, a cheque number) is wrapped in Tinos a
+  size down, or it towers over the Nikosh around it; the wrapper skips HTML entities (`&amp;`).
+  ⚠️ An **em dash in a Nikosh span pulled in core Helvetica** — the cut line's label has none now;
+  the sheet embeds only Tinos + Nikosh.
+- Transactional → `TABLES_TO_WIPE` + `Reset.tsx` (Payments group). Verified on a copy, 24 checks +
+  the migration both ways, and the print looked at.
+
 ### AIT Records / VAT Records (2026-11-01)
 > BITAC: *"New submenu in Billing & Accounts — AIT records (with upload file), VAT records (with upload file)."*
 
