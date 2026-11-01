@@ -2179,7 +2179,7 @@ tail -f storage/logs/laravel.log
   **`portfolio.public.index`**; **`/portfolio` 301-redirects to `/`**, so old links and
   bookmarks still land. Every sub-page keeps its address (`/portfolio/about`, `/contact`, …).
 - **Everyone gets the website at `/`, signed in or not.** Staff reach the app from the site's
-  Staff link (or `/dashboard`); a signed-in user who opens `/login` or `/customer/login` is
+  **Organization Login** link (the staff sign-in, renamed from "Staff" at BITAC's request, 2026-11-01) (or `/dashboard`); a signed-in user who opens `/login` or `/customer/login` is
   still sent to their own dashboard by the guest middleware. Logging out lands on the website.
 - The PWA is unaffected: `manifest.json` starts at **`/dashboard`**, and the service worker is
   network-first for navigation, so a cached `/` cannot stick.
@@ -2286,7 +2286,7 @@ three new tables (migration `..._000064`):
   with an icon and a one-line note per entry (`children[].icon/.note`). On
   scroll the masthead tightens 80 → 64px and the caption line folds away.
   The phone drawer: plain rows, Gallery as two tiles, then **Stakeholder
-  Login** + Staff at the foot. On a phone the BITAC name
+  Login** + Organization Login at the foot. On a phone the BITAC name
   wraps to two lines instead of being cut to "…".
   - ⚠️ **Nothing extra goes in the menu bar.** A button put beside the seven
     links pushed the BITAC name into "…" and wrapped "About Us" / "Contact Us"
@@ -2508,7 +2508,7 @@ blank falls back to the Site text headline.
   columns were removed** at BITAC's request; don't bring them back. Phones are
   split on `,`/`;` with an ASCII `tel:` each (`telHref`), and the address links
   to the Contact page.
-- Columns: brand (logo, Customer login + Staff), **Explore**, **What we do**
+- Columns: brand (logo, Customer login + Organization Login), **Explore**, **What we do**
   (fed from `footer_services`, which `chrome()` now ships on every public page
   — titles only), **Important links**. Bottom bar: copyright with the ministry
   line, the website, and a **back to top** button.

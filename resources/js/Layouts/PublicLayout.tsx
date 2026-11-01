@@ -155,8 +155,8 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors">
                             <i className="fi fi-rr-handshake text-[10px] leading-none" />Stakeholder Login
                         </a>
-                        <a href="/login" className="hover:text-brand-300 transition-colors">
-                            <i className="fi fi-rr-user text-[10px] mr-1" />Staff
+                        <a href="/login" className="hover:text-brand-300 transition-colors whitespace-nowrap">
+                            <i className="fi fi-rr-user text-[10px] mr-1" />Organization Login
                         </a>
                     </div>
                 </div>
@@ -314,13 +314,13 @@ export default function PublicLayout({ title, bitac, links, transparentHeader = 
                             ))}
 
                             <div className="mt-3 pt-4 border-t border-surface-200 grid grid-cols-1 gap-2 pb-2">
-                                {/* Mirrors the top strip: Stakeholder Login, then Staff. */}
+                                {/* Mirrors the top strip: Stakeholder Login, then Organization Login (the staff sign-in). */}
                                 <a href="/customer/login"
                                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-600 text-white text-sm font-bold">
                                     <i className="fi fi-rr-handshake text-xs leading-none" /> Stakeholder Login
                                 </a>
                                 <a href="/login" className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-surface-200 text-surface-800 text-sm font-semibold">
-                                    <i className="fi fi-rr-user text-xs leading-none" /> Staff
+                                    <i className="fi fi-rr-user text-xs leading-none" /> Organization Login
                                 </a>
                             </div>
                         </nav>
@@ -458,7 +458,7 @@ function SiteFooter({ bitac, important, ministry }: {
                                 </a>
                                 <a href="/login"
                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white text-xs font-bold transition-colors">
-                                    <i className="fi fi-rr-user text-[11px] leading-none" />Staff
+                                    <i className="fi fi-rr-user text-[11px] leading-none" />Organization Login
                                 </a>
                             </div>
                         </div>
