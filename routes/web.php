@@ -1002,6 +1002,24 @@ Route::middleware(['auth'])->group(function () {
         Route::get('billing/delivery-challans/{delivery}/pdf', [\App\Http\Controllers\BillingDeliveryChallanController::class, 'pdf'])->name('billing.delivery-challans.pdf');
     });
 
+    // ─── Billing & Accounts → AIT Records / VAT Records (2026-11-01) ──────
+    // What clients deducted at source, kept by hand with the certificate.
+    // One controller; the kind is the route's default.
+    foreach (['ait', 'vat'] as $kind) {
+        $c = \App\Http\Controllers\TaxRecordController::class;
+        Route::prefix("billing/{$kind}-records")->name("billing.{$kind}-records.")->group(function () use ($c, $kind) {
+            Route::middleware('permission:view payments')->group(function () use ($c, $kind) {
+                Route::get('/', [$c, 'index'])->name('index')->defaults('kind', $kind);
+                Route::get('/{record}/file', [$c, 'file'])->name('file')->defaults('kind', $kind);
+            });
+            Route::middleware('permission:record payments')->group(function () use ($c, $kind) {
+                Route::post('/', [$c, 'store'])->name('store')->defaults('kind', $kind);
+                Route::post('/{record}', [$c, 'update'])->name('update')->defaults('kind', $kind);
+                Route::delete('/{record}', [$c, 'destroy'])->name('destroy')->defaults('kind', $kind);
+            });
+        });
+    }
+
     // ─── Payments ledger: advance, part payments, deductions, security ────
     // Collections are their own desk — see App\Services\PaymentLedger for the
     // three rules every figure here obeys.

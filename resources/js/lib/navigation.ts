@@ -170,6 +170,9 @@ export const mainGroups: NavGroup[] = [
             { label: 'Payments',         href: '/payments',       icon: 'fi-rr-sack-dollar',  permission: 'view payments' },
             { label: 'Receivables',      href: '/receivables',    icon: 'fi-rr-chart-pie',    permission: 'view payments' },
             { label: 'Delivered vs Received', href: '/delivered-vs-received', icon: 'fi-rr-chart-histogram', permission: 'view payments' },
+            // What clients deducted at source, with the certificates (2026-11-01).
+            { label: 'AIT Records',      href: '/billing/ait-records', icon: 'fi-rr-document-signed', permission: 'view payments' },
+            { label: 'VAT Records',      href: '/billing/vat-records', icon: 'fi-rr-stamp',           permission: 'view payments' },
         ],
     },
     {

@@ -1061,6 +1061,26 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   second delivery bills 100% again. Found while building this report; not changed (money path —
   BITAC to decide). There were no invoices on the local database to check against.
 
+### AIT Records / VAT Records (2026-11-01)
+> BITAC: *"New submenu in Billing & Accounts — AIT records (with upload file), VAT records (with upload file)."*
+
+- What a client **deducted at source** from BITAC's bills: AIT (with the tax deduction certificate)
+  and VAT (with the মূসক ৬.৬ certificate / treasury challan). ⚠️ **A register KEPT BY HAND, not
+  derived from the payment ledger's deductions** — BITAC's choice; the two can differ.
+- **One table, `tax_records`** (`kind` ait | vat, `customer_id`, optional `invoice_id` — must be that
+  client's bill — else a typed `bill_ref`, `record_date`, `certificate_no`, `amount`, `remarks`,
+  `file_path`/`file_name`, `created_by`; `HasCenter`; migration `..._000099`), `TaxRecord` (`KINDS`
+  holds each register's title / certificate label), **one controller** `TaxRecordController`, page
+  `TaxRecord/Index.tsx`.
+- Routes **`/billing/{ait|vat}-records`** (+ store / update / destroy / `{record}/file`), the kind a
+  **route default**; ⚠️ an entry is reached only through its own register (`own()` → 404). Reading
+  is **`view payments`** (the menu's gate too), adding / editing **`record payments`**; only whoever
+  recorded an entry (or the super admin) deletes it. The list: Sl · Date · Client · Bill No. ·
+  certificate · Amount · Remarks, the filtered **total**, search, client and date filters, 20 a page.
+- The file goes on the **private `local` disk** (`tax-records/{id}`), served only through the
+  register's own `file` route with `nosniff`. Transactional → `TABLES_TO_WIPE` + `Reset.tsx`
+  (Payments group), `tax-records` in `PRIVATE_STORAGE_DIRS_TO_WIPE`. Verified on a copy, 17 checks.
+
 ### Dates, rounding, access
 - ⚠️ **`invoices` has no `due_date` column** (`$fillable` lists one; the column never existed). Ageing and the displayed due date come from `PaymentLedger::dueDateFor()` = issue date + **`CREDIT_DAYS` (30)**. Change that constant, not the call sites.
 - `TOLERANCE` is 0.01 — rounding noise, not a debt. A real residue is closed with the seeded **Rounding Adjustment** deduction type, explicitly, rather than a silent threshold.

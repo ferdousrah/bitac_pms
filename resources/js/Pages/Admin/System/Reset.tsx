@@ -45,7 +45,7 @@ const GROUPS: { label: string; tables: string[] }[] = [
     {
         // Deduction TYPES are master data and are preserved.
         label: 'Payments & Receipts',
-        tables: ['payments', 'payment_deductions', 'payment_files'],
+        tables: ['payments', 'payment_deductions', 'payment_files', 'tax_records'],
     },
     {
         label: 'Gate Passes',

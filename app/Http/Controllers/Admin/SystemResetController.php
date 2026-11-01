@@ -143,6 +143,7 @@ class SystemResetController extends Controller
         'quotation_requests',
         'factory_visits',
         'letter_registers',
+        'tax_records',
         'service_demand_logs',
         'maintenance_requests',
         'machine_maintenance_logs',
@@ -182,6 +183,7 @@ class SystemResetController extends Controller
         'quotation-requests',
         'chat',
         'letter-registers',
+        'tax-records',
     ];
 
     public function index(Request $request)
