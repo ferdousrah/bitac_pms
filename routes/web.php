@@ -359,6 +359,9 @@ Route::middleware(['auth'])->group(function () {
     // ─── Production-letter registers — আগত / প্রেরিত চিঠির রেকর্ড (2026-10-31).
     // One controller for both desks; the desk is fixed by the route's default
     // and each desk's pair sits behind that desk's own permission.
+    // Each desk's single menu entry, "Documents Register", opens on the আগত register.
+    Route::redirect('ied/letters', '/ied/letters/incoming')->middleware('permission:view rfqs');
+    Route::redirect('pcd/letters', '/pcd/letters/incoming')->middleware('permission:view pcd-inbox|review pcd-inbox');
     foreach (['ied' => 'permission:view rfqs', 'pcd' => 'permission:view pcd-inbox|review pcd-inbox'] as $desk => $gate) {
         Route::prefix("{$desk}/letters/{direction}")->middleware($gate)->name("{$desk}.letter-register.")
             ->where(['direction' => 'incoming|outgoing'])

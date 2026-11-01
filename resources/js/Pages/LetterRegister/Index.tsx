@@ -81,12 +81,12 @@ export default function LetterRegisterIndex({ desk, deskLabel, direction, title,
     const hasFilters = !!(filters.search || filters.date_from || filters.date_to);
 
     return (
-        <AppLayout header={`${deskLabel} · ${title.en}`}>
+        <AppLayout header={`${deskLabel} · Documents Register`}>
             <Head title={`${title.en} — ${deskLabel}`} />
             <div className="space-y-5 animate-fade-in">
                 <div className="flex flex-col lg:flex-row lg:items-end gap-4 justify-between">
                     <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-brand-600">{deskLabel} · Production letters</div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-brand-600">{deskLabel} · Documents Register</div>
                         <h1 className="text-xl font-bold text-surface-900 font-bangla leading-snug">{title.bn}</h1>
                         <p className="text-sm text-surface-500">{title.en} — {entries.total} recorded</p>
                     </div>

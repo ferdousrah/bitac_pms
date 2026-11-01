@@ -858,8 +858,11 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **the 
 - **Column order follows BITAC** — the received register leads with প্রেরক, the sent one with প্রাপক
   (table, phone cards and the form all read `cols`). The **Sl is the row's place in the list**
   (paginator `from`), not stored. Search (sender / recipient / memo / remarks), date range, 20 a page
-  with page links, and an আগত | প্রেরিত switch on the page as well as the two menu items in each desk
-  (**Incoming Letters / Outgoing Letters** — IED beside Letters, PCD before Notes).
+  with page links, and an আগত | প্রেরিত switch on the page. **One menu entry per desk, "Documents
+  Register"** (BITAC, 2026-11-01 — it replaced the separate Incoming / Outgoing Letters items; IED
+  beside Letters, PCD before Notes): it points at **`/{ied|pcd}/letters`**, a redirect to the আগত
+  register behind the desk's own permission, so the entry lights for either register (the sidebar
+  matches by "URL starts with"). The page's header and eyebrow read "{desk} · Documents Register".
 - The scan goes on the **private `local` disk** (`letter-registers/{id}`), served only through the
   desk's own `file` route with `nosniff`. Anyone at the desk records or edits; **only whoever recorded
   a letter (or the super admin) deletes it**.
