@@ -1607,7 +1607,7 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   deliveries (`delivery_type` NULL) read full/partial from their quantity (`DeliveryOrder::type`).
 - **The challan** (`DeliveryChallanService`, restructured around one `render()`): a FULL delivery keeps
   BITAC's paper (Part No. | Description | Quantity, this challan's quantities); a PARTIAL one is
-  titled **PARTIAL DELIVERY CHALLAN (আংশিক)** and lists **every** job item with Ordered · Delivered
+  titled **PARTIAL DELIVERY CHALLAN** (no "(আংশিক)" — BITAC, 2026-11-02) and lists **every** job item with Ordered · Delivered
   earlier · This challan · Balance, closing with "the balance is still to be delivered" or "the whole
   order has been delivered". Older deliveries keep the old layout (titled partial when they were).
 - **PCD sees it**: a Full / Partial badge (`Components/Delivery/DeliveryTypeBadge`) and the lines on the

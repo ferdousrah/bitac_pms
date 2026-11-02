@@ -184,9 +184,7 @@ class DeliveryChallanService
 
         $line = fn (string $label, string $value) => '<div style="font-size: 11pt; margin-bottom: 3pt;">' . $label . ' ' . $value . '</div>';
 
-        $title = $partial
-            ? 'PARTIAL DELIVERY CHALLAN <span class="bn" style="font-family: nikosh; font-weight: normal; font-size: 12pt;">(আংশিক)</span>'
-            : 'DELIVERY CHALLAN';
+        $title = $partial ? 'PARTIAL DELIVERY CHALLAN' : 'DELIVERY CHALLAN';
 
         $head = '<div style="text-align: center; font-size: 14pt; font-weight: bold; margin: 2pt 0 14pt;">' . $title . '</div>'
             . '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 4pt;">'
