@@ -16,7 +16,7 @@ class DeliveryOrder extends Model
     public const TYPES = ['full' => 'Full delivery', 'partial' => 'Partial delivery'];
 
     protected $fillable = [
-        'center_id', 'work_order_id', 'customer_id', 'challan_number', 'quantity_delivered', 'delivery_type',
+        'center_id', 'work_order_id', 'invoice_id', 'customer_id', 'challan_number', 'quantity_delivered', 'delivery_type',
         'scheduled_date', 'delivery_address', 'vehicle_number', 'driver_name', 'notes',
         'status', 'delivered_at',
         // Signed by PCD's নির্বাহী প্রকৌশলী before the goods go — ChallanApproval.
@@ -58,8 +58,8 @@ class DeliveryOrder extends Model
     public function customer()  { return $this->belongsTo(Customer::class); }
     public function pod()       { return $this->hasOne(ProofOfDelivery::class, 'delivery_order_id'); }
     public function invoice()   { return $this->hasOne(Invoice::class, 'delivery_order_id'); }
-    /** The job's bill, whichever delivery it was raised from — a job is billed once. */
-    public function jobInvoice() { return $this->hasOne(Invoice::class, 'work_order_id', 'work_order_id'); }
+    /** The bill this challan went on — one bill may cover several challans (JobBilling). */
+    public function bill()      { return $this->belongsTo(Invoice::class, 'invoice_id'); }
     public function items()     { return $this->hasMany(DeliveryOrderItem::class)->orderBy('sort_order'); }
 
     /**

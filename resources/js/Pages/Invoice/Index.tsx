@@ -18,7 +18,7 @@ const statusLabel = (s: string) => (s ?? '').replace(/_/g, ' ');
 
 const formatCurrency = (amount: any) => `৳${Number(amount).toLocaleString('en-IN')}`;
 
-export default function InvoiceIndex({ invoices, filters }: any) {
+export default function InvoiceIndex({ invoices, filters, canRaise = false }: any) {
     const list = invoices?.data ?? [];
     const [search, setSearch] = useState(filters?.search ?? '');
 
@@ -41,6 +41,12 @@ export default function InvoiceIndex({ invoices, filters }: any) {
                         <h1 className="page-title">Invoices</h1>
                         <p className="page-subtitle">Track billing status and payment collection</p>
                     </div>
+                    {/* Delivery bills are raised from a delivered challan (Delivery Orders → Raise bill). */}
+                    {canRaise && (
+                        <Link href="/invoices/advance" className="btn-primary">
+                            <i className="fi fi-rr-plus text-xs leading-none" /> Advance bill
+                        </Link>
+                    )}
                 </div>
 
                 {/* Quick stat chips */}
@@ -110,6 +116,7 @@ export default function InvoiceIndex({ invoices, filters }: any) {
                                                         <span className="font-mono text-sm font-bold text-brand-600 group-hover:underline">
                                                             {inv.invoice_number}
                                                         </span>
+                                                        {inv.kind === 'advance' && <span className="badge badge-purple ml-1.5">Advance</span>}
                                                     </Link>
                                                 </td>
                                                 <td>
@@ -189,7 +196,10 @@ export default function InvoiceIndex({ invoices, filters }: any) {
                                                 #{inv.id}
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="font-mono font-semibold text-surface-900 text-sm">{inv.invoice_number}</div>
+                                                <div className="font-mono font-semibold text-surface-900 text-sm">
+                                                    {inv.invoice_number}
+                                                    {inv.kind === 'advance' && <span className="badge badge-purple ml-1.5">Advance</span>}
+                                                </div>
                                                 <div className="font-semibold text-surface-900 text-sm mt-0.5 truncate">{inv.customer}</div>
                                                 <span className="font-mono text-xs text-brand-600">{inv.wo_number}</span>
                                             </div>

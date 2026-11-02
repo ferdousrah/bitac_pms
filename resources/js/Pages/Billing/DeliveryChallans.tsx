@@ -123,7 +123,9 @@ export default function DeliveryChallans({ challans, filters, customers = [] }: 
                                             <td className="px-3 py-3">
                                                 {c.invoice
                                                     ? <Link href={`/invoices/${c.invoice.id}`} className="text-brand-600 hover:underline font-semibold">{c.invoice.number}</Link>
-                                                    : <span className="text-[11px] text-rose-600 font-semibold">Not billed yet</span>}
+                                                    : c.status === 'delivered'
+                                                        ? <Link href={`/invoices/raise?delivery=${c.id}`} className="text-[11px] text-rose-600 font-semibold hover:underline">Not billed yet — Raise bill</Link>
+                                                        : <span className="text-[11px] text-rose-600 font-semibold">Not billed yet</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 <button type="button" className="btn-outline btn-sm"

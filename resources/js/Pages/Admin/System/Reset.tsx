@@ -40,7 +40,7 @@ const GROUPS: { label: string; tables: string[] }[] = [
     },
     {
         label: 'Delivery, Billing & Certificates',
-        tables: ['delivery_orders', 'delivery_order_items', 'proof_of_deliveries', 'invoices', 'completion_certificates'],
+        tables: ['delivery_orders', 'delivery_order_items', 'proof_of_deliveries', 'invoices', 'invoice_items', 'completion_certificates'],
     },
     {
         // Deduction TYPES are master data and are preserved.

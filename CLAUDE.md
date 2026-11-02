@@ -1088,8 +1088,8 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   `issued_at`, receipts by `paid_on`. No dates = every job to date. A job with nothing in the
   range is left out.
 - ⚠️ **A job billed beyond its delivered value is flagged "Billed more than delivered".** Bills
-  raised before 2026-11-02 did exactly that — the full quotation on every partial delivery. A job
-  is now billed once, after full delivery (see "One bill per job" below), so new bills cannot.
+  raised before 2026-11-02 did exactly that — the full quotation on every partial delivery. Bills are
+  now priced per delivered line (JobBilling); an **advance bill** still reads as billed beyond delivery.
 
 ### Money Receipt (2026-11-01)
 > BITAC: *"Billing & Accounts এ Money Receipt নামে একটি ট্যাব রাখতে হবে যাতে কোন প্রতিষ্ঠান নগদটাকা বা চেক দিলে
@@ -1530,27 +1530,56 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
 
 - **Delivery challan** — unchanged. It exists from the moment the delivery order does (`DeliveryChallanService`), printable from the Delivery list and from the PCD job detail.
 - **The challan PDF is BITAC's printed challan, transcribed** (2026-09-30): DELIVERY CHALLAN title, No. / Date, Name, Address, Purchase Order No. + date (`customer_po_no` / `customer_wo_date`), Job No., a ruled **Part No. | Description | Quantity** table padded to 20 lines, and two hand-signed blocks — *Signature of receiver / Name / Designation / Phone Number* and *Signature / Executive Engineer / Production Control Division / Phone Number*. Lines come from `work_order_items` (PCD's copy), falling back to the quotation's. No vehicle/driver/notes/POD on it — the paper has none. ⚠️ Signature rules are **table-cell borders**: a border on a `<div>` inside a cell is drawn by mPDF the width of the text, or under every `<br>` line. The challan number on the Delivery list and a **Challan PDF** button on the delivery page both open it.
-- ⚠️ **Confirming a delivery no longer raises the bill.** `DeliveryController@complete` used to call `InvoiceService::createFromDelivery()` inline, so an invoice was issued as a side effect of someone signing for goods. That call moved to **`InvoiceController@storeFromDelivery`** (`POST delivery/{delivery}/bill`, `permission:create invoices`), reached by a **Raise bill** button on delivered rows of the Delivery list. `CustomerNotifyService::invoiceIssued` moved with it — the customer hears about a bill when there is one.
+- ⚠️ **Confirming a delivery no longer raises the bill.** `DeliveryController@complete` used to call `InvoiceService::createFromDelivery()` inline, so an invoice was issued as a side effect of someone signing for goods. Billing is now **`InvoiceController@raise`** (`POST invoices/raise`, `permission:create invoices`, rules in `JobBilling` — see below), reached by a **Raise bill** button on delivered rows of the Delivery list. `CustomerNotifyService::invoiceIssued` moved with it — the customer hears about a bill when there is one.
 - It **refuses with a redirect + flash, never `abort()`**: an unconfirmed delivery has nothing to bill, and a second click lands on the existing bill saying so.
 - ⚠️ **And nothing raises the মূসক ৬.৩ automatically either.** It was briefly wired to fire with the invoice; BITAC did not want that coupling. A tax challan is issued deliberately, from the bill, through the form — so a person has checked the destination, the vehicle and the signatory before a legal document goes out. `MusakChallanService` keeps only `computeLine()` (the arithmetic) and `linesFor()` (pricing a bill's lines for the form).
 - The chain still reads end to end in the UI: **Delivery → Raise bill → + মূসক ৬.৩**, each step a click, each one reversible only in the ways its own rules allow.
 - Fixed while working here: **`DeliveryController@complete` 500'd whenever no note was typed** — `notes` is `nullable`, so it is simply absent from `$validated`, and reading it straight threw. The form always sends an empty string, which is why it never showed in the UI; anything posting without the key (the API, a test) hit it.
 
-### ⚠️ One bill per job, after the WHOLE order is delivered (BITAC, 2026-11-02)
-- The bill is priced at the **quotation's total**, so billing each delivery charged the full job on
-  every partial challan. BITAC's choice (over billing each challan pro rata): **no bill until the job
-  is `delivered`**, then **one** bill covering every challan.
-- `storeFromDelivery` refuses a job not yet `delivered` ("… 16 of 30 delivered so far") and any job
-  that already has a bill (**`DeliveryOrder::jobInvoice()`** — hasOne on `work_order_id`, whichever
-  delivery it was raised from). The Delivery list shows **Bill after full delivery** on a delivered
-  row of a partly delivered job, **Raise bill** on every row once it is fully delivered (`job_delivered`),
-  and **Bill** on every row once billed. Billing → Delivery Challans' Billed / Not billed reads the job's bill.
-- **`Invoice::challanDeliveries()`** = the job's delivered challans, in order — the bill page's
-  Documents card (`delivery_challans`, an array now), **Send to customer** / **View & print all** (each
-  challan attached), the bill PDF's *Challan No* and the customer portal. A job billed per delivery
-  before this rule (more than one bill) keeps **its own** challan only.
-- `invoices.delivery_order_id` still points at the delivery the bill was raised from (the মূসক ৬.৩
-  prefill reads its vehicle and address).
+### Bills: advance, partial, full — `App\Services\JobBilling` (BITAC, 2026-11-02)
+> BITAC: *"Partial eo bill need hoy, Full eo, abr Advance bill o hoy."* (A one-bill-after-full-delivery
+> rule was tried the same day and withdrawn — never pushed.)
+
+- **Delivery bill** (`invoices.kind = delivery`): **one or more delivered, signed challans of the job not
+  billed yet** (`JobBilling::unbilled()`), ticked on **`GET invoices/raise?delivery=|work_order_id=`**
+  (`Invoice/Raise.tsx`, `create invoices`; entry = **Raise bill** on the Delivery list and on Billing →
+  Delivery Challans' "Not billed yet"). One challan = a partial bill; every challan = the full bill.
+  - Priced **per delivered line × the quotation's unit price** (`work_order_items.quotation_item_id`
+    → `quotation_items.unit_price`, VAT incl.; no link → the job's average per piece; a challan from
+    before delivery lines → its total × the average). The lines are stored in **`invoice_items`**.
+  - ⚠️ **`delivery_orders.invoice_id`** = the bill a challan went on — one bill per challan, many
+    challans per bill. `raise` ignores any posted id that is not this job's unbilled challan, so a
+    challan can never be billed twice. `DeliveryOrder::bill()` (belongsTo) is what every list reads;
+    the old `invoice()` hasOne on `invoices.delivery_order_id` stays for legacy rows (migration 000104
+    backfills `invoice_id` from it). `invoices.delivery_order_id` = the last challan on the bill.
+  - The last bill of a fully delivered job takes the quotation's remainder exactly (a < ৳1 paisa
+    drift goes on its last line). A job whose older bills already took the whole quotation (the
+    pre-2026-11-02 bill-the-quotation-per-delivery behaviour) is refused ("already billed in full").
+- **Advance bill** (`kind = advance`): before delivery, **`GET/POST invoices/advance`** (`Invoice/Advance.tsx`,
+  "Advance bill" on Bills / Invoices): an amount, or a % of the quotation, plus a note — one line
+  "Advance against Job … — 40% of the quotation. {note}". Capped at **`advance_room`** = quotation −
+  goods billed − advance not yet recovered.
+- **Recovery:** a delivery bill deducts the job's unrecovered advance from its goods value until it
+  is used up — `goods_value`, `advance_adjusted`, `total_amount = goods − adjusted`. A bill wholly
+  covered is stamped `paid`. So **Σ a job's bills = what was delivered, never past the quotation**.
+- ⚠️ **Advance BILL ≠ advance PAYMENT.** `payments.kind = advance` (Payments → Record advance, then
+  "Apply advance" on a bill) is cash received with no bill; an advance bill is a bill, paid like any
+  other through `against_bill`. They are independent.
+- **VAT / tax:** a bill's stored `subtotal/vat_amount/tax_amount` are of its own total
+  (`JobBilling::taxSplit`, the quotation's proportions), so they add up across a job's bills. The bill
+  page and PDF print the **goods** split (lines net of VAT in the same proportion), then *Value of goods*,
+  *Less: advance billed*, *TOTAL DUE*. The PDF's VAT label now reads the bill's own `vat_rate` (it printed
+  the config 15% whatever the quotation said). An advance bill prints **ADVANCE INVOICE**.
+- `Invoice::challanDeliveries()` = the bill's challans (bill page Documents card `delivery_challans`,
+  email / View & print all attach each, PDF *Challan No*, customer portal). মূসক ৬.৩ prefill
+  (`MusakChallanService::linesFor`) takes the bill's own lines; its "challan ≠ bill" warning compares
+  with the goods value.
+- `invoice_items` is transactional → `TABLES_TO_WIPE` + `Reset.tsx`.
+- ⚠️ Delivered vs Received will flag an advance-billed job "Billed more than delivered" until the goods
+  catch up — that is the advance, not an error.
+- Verified on a copy: advance ৳30,000 → partial (challan 1, ৳42,000 − ৳30,000 = ৳12,000) → full
+  (two challans on one bill, ৳33,000) = ৳75,000, the quotation; double billing refused, over-quotation
+  advance refused; PDFs, the bill page, the delivery lists; migration both ways.
 
 ## 📦 Full or partial delivery — the Partial Challan (2026-10-24)
 > BITAC: *"PCD te একত্রে সকল মালামাল ডেলিভারি অথবা আংশিক ডেলিভারি (Partial Challan) দেখানো যাবে।"*
@@ -1586,7 +1615,7 @@ Every bill already marked paid would have read **unpaid** on deploy, because the
   `lines`) and Billing → Delivery Challans.
 - Fixed on the way: **`delivery_orders.scheduled_date` is NOT NULL but the form calls it optional** —
   leaving it blank 500'd the save (it did before this change too). Blank now means today.
-- **Billing a job delivered in parts: ONE bill, after the last delivery** — see the next section.
+- **Billing a job delivered in parts:** partial, full or advance bills — see `JobBilling` above.
 
 ## ✍️ The delivery challan is signed by PCD's নির্বাহী প্রকৌশলী (2026-10-27)
 > BITAC: *"Delivery Challan create/initiate hoar por ata PCD'r XEN er kase jabe signature or approve er

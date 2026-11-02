@@ -66,6 +66,7 @@ class SystemResetController extends Controller
         'payment_deductions',
         'payments',
         'invoices',
+        'invoice_items',
 
         // QC / NCRs / rework
         'qc_checklist_items',

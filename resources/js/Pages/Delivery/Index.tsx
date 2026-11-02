@@ -209,22 +209,12 @@ export default function DeliveryIndex({ deliveries, filters, can = { create: tru
                                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-surface-600 hover:bg-surface-100 transition-colors">
                                                             <i className="fi fi-rr-receipt text-sm leading-none" /> Bill
                                                         </Link>
-                                                    ) : !d.job_delivered ? (
-                                                        // One bill per job, once the whole order is delivered.
-                                                        <span title="The bill is raised once the whole order is delivered"
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-surface-500 bg-surface-100 whitespace-nowrap">
-                                                            <i className="fi fi-rr-receipt text-xs leading-none" /> Bill after full delivery
-                                                        </span>
-                                                    ) : (
-                                                        <button type="button" title="Raise the bill for the whole job"
-                                                            onClick={() => {
-                                                                if (confirm('Raise the bill for the whole job? It covers every delivery challan of this job.')) {
-                                                                    router.post(`/delivery/${d.id}/bill`);
-                                                                }
-                                                            }}
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-brand-600 hover:bg-brand-500 transition-colors">
+                                                    ) : can.bill && (
+                                                        // Opens the job's unbilled challans: this one, or several on one bill.
+                                                        <Link href={`/invoices/raise?delivery=${d.id}`} title="Raise a bill for this challan (or several)"
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-brand-600 hover:bg-brand-500 transition-colors whitespace-nowrap">
                                                             <i className="fi fi-rr-receipt text-sm leading-none" /> Raise bill
-                                                        </button>
+                                                        </Link>
                                                     ))}
                                                 </div>
                                             </td>

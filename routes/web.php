@@ -969,16 +969,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('{delivery}/complete', [DeliveryController::class, 'complete'])->middleware('permission:complete delivery')->name('delivery.complete');
         // A one-time link / QR code for the receiver to sign on his phone.
         Route::post('{delivery}/receipt-link', [DeliveryController::class, 'receiptLink'])->middleware('permission:complete delivery')->name('delivery.receipt-link');
-        // Billing is its own act, done whenever accounts get to it — it is
-        // deliberately NOT a side effect of confirming the delivery.
-        Route::post('{delivery}/bill', [\App\Http\Controllers\InvoiceController::class, 'storeFromDelivery'])
-            ->middleware('permission:create invoices')
-            ->name('delivery.bill');
     });
 
     // Invoices
     Route::prefix('invoices')->middleware('permission:view invoices')->group(function () {
         Route::get('/', [InvoiceController::class, 'index'])->name('invoices.index');
+        // Raising a bill (App\Services\JobBilling): partial / full for delivered
+        // challans, or an advance before delivery. ⚠️ Declared BEFORE
+        // `{invoice}`, or "raise" / "advance" bind as an invoice and 404.
+        // Billing is its own act — deliberately NOT a side effect of confirming a delivery.
+        Route::middleware('permission:create invoices')->group(function () {
+            Route::get('raise', [InvoiceController::class, 'raiseForm'])->name('invoices.raise');
+            Route::post('raise', [InvoiceController::class, 'raise'])->name('invoices.raise.store');
+            Route::get('advance', [InvoiceController::class, 'advanceForm'])->name('invoices.advance');
+            Route::post('advance', [InvoiceController::class, 'storeAdvance'])->name('invoices.advance.store');
+        });
         Route::get('{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
         Route::get('{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
         Route::post('{invoice}/acknowledge', [InvoiceController::class, 'acknowledge'])->name('invoices.acknowledge');

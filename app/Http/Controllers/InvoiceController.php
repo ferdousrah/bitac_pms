@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\DeliveryOrder;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Models\WorkOrder;
+use App\Services\JobBilling;
 use App\Services\BitacLetterhead;
 use App\Http\Controllers\MusakChallanController;
 use App\Services\InvoiceService;
@@ -48,6 +50,7 @@ class InvoiceController extends Controller
             ->through(fn($i) => [
                 'id'             => $i->id,
                 'invoice_number' => $i->invoice_number,
+                'kind'           => $i->kind ?? 'delivery',
                 'wo_number'      => $i->workOrder->wo_number ?? '',
                 'work_order_id'  => $i->work_order_id,
                 'customer'       => $i->workOrder->customer->name ?? '',
@@ -63,6 +66,7 @@ class InvoiceController extends Controller
 
         return Inertia::render('Invoice/Index', [
             'invoices' => $invoices,
+            'canRaise' => (bool) $request->user()?->can('create invoices'),
             'filters' => [
                 'search' => $request->input('search', ''),
                 'status' => $request->input('status', ''),
@@ -72,45 +76,140 @@ class InvoiceController extends Controller
         ]);
     }
 
-    /**
-     * Raise the bill for a delivery.
-     *
-     * ⚠️ This used to happen inside `DeliveryController@complete`, so
-     * confirming a delivery silently issued an invoice. BITAC wanted them apart
-     * (2026-09-29): the **delivery challan** belongs to the delivery, but
-     * billing is accounts' own act, done whenever they get to it. The মূসক ৬.৩
-     * then comes off the bill, equally deliberately.
-     *
-     * Refusals are a redirect + flash, never `abort()` — a second click on a
-     * stale list must read as a message, not a crash.
-     */
-    public function storeFromDelivery(DeliveryOrder $delivery)
+    // ─── Raising a bill: partial / full / advance (App\Services\JobBilling) ──
+    //
+    // BITAC, 2026-11-02: *"Partial eo bill need hoy, Full eo, abr Advance bill o
+    // hoy."* A delivery bill takes one or more delivered challans of the job not
+    // billed yet, at the quotation's unit prices; an advance bill asks for an
+    // amount before delivery, and later bills recover it.
+    //
+    // ⚠️ Billing is accounts' own act, never a side effect of confirming a
+    // delivery (2026-09-29). Refusals are a redirect + flash, never `abort()`.
+
+    /** The challans of a job not billed yet, to tick onto one bill. */
+    public function raiseForm(Request $request)
     {
-        if ($delivery->status !== 'delivered') {
-            return back()->with('error', 'This delivery has not been confirmed yet, so there is nothing to bill.');
+        $delivery = $request->query('delivery') ? DeliveryOrder::find($request->query('delivery')) : null;
+        $wo = WorkOrder::with(['customer', 'quotation'])->find($request->query('work_order_id') ?: $delivery?->work_order_id);
+        if (! $wo) {
+            return redirect()->route('invoices.index')->with('error', 'Pick a job to bill.');
+        }
+        if ($delivery?->invoice_id) {
+            return redirect()->route('invoices.show', $delivery->invoice_id)
+                ->with('error', "Challan {$delivery->challan_number} is already on this bill.");
         }
 
-        if ($existing = $delivery->invoice ?? $delivery->jobInvoice) {
-            return redirect()->route('invoices.show', $existing)
-                ->with('error', "This job is already billed on {$existing->invoice_number}.");
+        $prices = JobBilling::unitPrices($wo);
+        $challans = JobBilling::unbilled($wo)->map(function ($d) use ($prices) {
+            $lines = JobBilling::deliveryLines($d, $prices);
+            return [
+                'id'             => $d->id,
+                'challan_number' => $d->challan_number,
+                'delivered_at'   => $d->delivered_at?->format('d M Y'),
+                'type'           => $d->type,
+                'value'          => round((float) $lines->sum('amount'), 2),
+                'lines'          => $lines->map(fn ($l) => collect($l)->only(['description', 'part_no', 'unit', 'quantity', 'unit_price', 'amount']))->values(),
+            ];
+        })->values();
+
+        return Inertia::render('Invoice/Raise', [
+            'job'      => $this->jobSummary($wo),
+            'standing' => JobBilling::standing($wo),
+            'challans' => $challans,
+            'selected' => $delivery ? [$delivery->id] : $challans->pluck('id')->all(),
+            'bills'    => $this->jobBills($wo),
+        ]);
+    }
+
+    public function raise(Request $request)
+    {
+        $data = $request->validate([
+            'work_order_id'  => 'required|exists:work_orders,id',
+            'delivery_ids'   => 'required|array|min:1',
+            'delivery_ids.*' => 'integer',
+        ], ['delivery_ids.required' => 'Tick at least one challan.']);
+
+        $wo = WorkOrder::with('quotation')->findOrFail($data['work_order_id']);
+        // Only this job's delivered challans that are on no bill yet — anything
+        // else posted is ignored, so a challan can never be billed twice.
+        $picked = JobBilling::unbilled($wo)->whereIn('id', array_map('intval', $data['delivery_ids']))->values();
+        if ($picked->isEmpty()) {
+            return back()->with('error', 'Those challans are already billed, or not delivered yet.');
         }
 
-        // ⚠️ One bill per job, after the WHOLE order is delivered (BITAC,
-        // 2026-11-02). The bill is priced at the quotation's total, so billing a
-        // partial delivery charged the full job — and the next delivery again.
-        $wo = $delivery->workOrder;
-        if ($wo->status !== 'delivered') {
-            $n = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
-            return back()->with('error', 'The bill is raised once the whole order is delivered — '
-                . $n($wo->deliveredQty()) . ' of ' . $n($wo->quantity) . ' delivered so far.');
+        $preview = JobBilling::preview($wo, $picked);
+        if ($preview['over_quotation']) {
+            return back()->with('error', 'This job\'s bills would come to more than its quotation (৳'
+                . number_format($preview['standing']['quotation_total'], 2) . ') — it was already billed in full.');
         }
 
-        $invoice = $this->service->createFromDelivery($delivery);
-
+        $invoice = JobBilling::raiseDeliveryBill($wo, $picked);
         \App\Services\CustomerNotifyService::invoiceIssued($invoice->fresh('customer', 'workOrder'));
 
-        return redirect()->route('invoices.show', $invoice)
-            ->with('success', "Bill {$invoice->invoice_number} raised.");
+        return redirect()->route('invoices.show', $invoice)->with('success', "Bill {$invoice->invoice_number} raised"
+            . ($invoice->advance_adjusted > 0 ? ' — ৳' . number_format($invoice->advance_adjusted, 2) . ' of the advance recovered on it.' : '.'));
+    }
+
+    /** An advance bill, before (or between) deliveries. */
+    public function advanceForm(Request $request)
+    {
+        $jobs = WorkOrder::with('customer')->whereNotNull('quotation_id')
+            ->whereNotIn('status', ['cancelled'])->latest('id')->limit(300)->get()
+            ->map(fn ($w) => ['id' => $w->id, 'label' => trim(($w->job_number ? "Job {$w->job_number} · " : '') . $w->wo_number . ' — ' . ($w->customer?->name ?? '')),
+                'room' => JobBilling::standing($w)['advance_room']])
+            ->filter(fn ($j) => $j['room'] > 0.01)->values();
+
+        $wo = $request->query('work_order_id') ? WorkOrder::with(['customer', 'quotation'])->find($request->query('work_order_id')) : null;
+
+        return Inertia::render('Invoice/Advance', [
+            'jobs'     => $jobs,
+            'job'      => $wo ? $this->jobSummary($wo) : null,
+            'standing' => $wo ? JobBilling::standing($wo) : null,
+            'bills'    => $wo ? $this->jobBills($wo) : [],
+        ]);
+    }
+
+    public function storeAdvance(Request $request)
+    {
+        $data = $request->validate([
+            'work_order_id' => 'required|exists:work_orders,id',
+            'amount'        => 'required|numeric|min:1',
+            'note'          => 'nullable|string|max:200',
+        ]);
+        $wo = WorkOrder::with('quotation')->findOrFail($data['work_order_id']);
+        $room = JobBilling::standing($wo)['advance_room'];
+        if ((float) $data['amount'] > $room + 0.01) {
+            return back()->withErrors(['amount' => 'At most ৳' . number_format($room, 2)
+                . ' — the quotation less what is already billed or held as advance.']);
+        }
+
+        $invoice = JobBilling::raiseAdvanceBill($wo, (float) $data['amount'], $data['note'] ?? null);
+        \App\Services\CustomerNotifyService::invoiceIssued($invoice->fresh('customer', 'workOrder'));
+
+        return redirect()->route('invoices.show', $invoice)->with('success', "Advance bill {$invoice->invoice_number} raised.");
+    }
+
+    private function jobSummary(WorkOrder $wo): array
+    {
+        return [
+            'id'          => $wo->id,
+            'job_number'  => $wo->job_number,
+            'wo_number'   => $wo->wo_number,
+            'customer'    => $wo->customer?->name,
+            'ordered'     => (float) $wo->quantity,
+            'delivered'   => $wo->deliveredQty(),
+            'status'      => $wo->status,
+            'status_label' => $wo->status_label,
+        ];
+    }
+
+    private function jobBills(WorkOrder $wo): array
+    {
+        return Invoice::where('work_order_id', $wo->id)->orderBy('id')->get()->map(fn ($i) => [
+            'id' => $i->id, 'invoice_number' => $i->invoice_number, 'kind' => $i->kind ?? 'delivery',
+            'total' => (float) $i->total_amount, 'goods' => $i->goodsValue(), 'adjusted' => (float) $i->advance_adjusted,
+            'status' => $i->status, 'issued' => $i->issued_at?->format('d M Y'),
+        ])->all();
     }
 
     // ─── The forwarding letter that travels with the bill ────────────────
@@ -409,12 +508,20 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer', 'markedPaidBy', 'musakChallans', 'customer', 'accountsSignedBy', 'deliveryOrder']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'workOrder.quotation', 'markedPaidBy', 'musakChallans', 'customer', 'accountsSignedBy', 'deliveryOrder', 'items']);
+        $goods = $invoice->isAdvance() ? (float) $invoice->total_amount : $invoice->goodsValue();
 
         return Inertia::render('Invoice/Show', [
             'invoice' => [
                 'id'                => $invoice->id,
                 'invoice_number'    => $invoice->invoice_number,
+                // advance | delivery, and what a delivery bill is made of (JobBilling).
+                'kind'              => $invoice->kind ?? 'delivery',
+                'items'             => $invoice->items->map(fn ($i) => $i->only(['description', 'part_no', 'unit', 'quantity', 'unit_price', 'amount']))->values(),
+                'goods_value'       => $goods,
+                'advance_adjusted'  => (float) $invoice->advance_adjusted,
+                // The VAT / tax inside the goods value — older bills show their stored figures.
+                'goods_split'       => $invoice->items->isNotEmpty() ? JobBilling::taxSplit($invoice->workOrder, $goods) : null,
                 'wo_number'         => $invoice->workOrder->wo_number ?? '',
                 'job_number'        => $invoice->workOrder->job_number ?? null,
                 'work_order_id'     => $invoice->work_order_id,

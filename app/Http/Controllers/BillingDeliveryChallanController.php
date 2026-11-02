@@ -21,7 +21,7 @@ class BillingDeliveryChallanController extends Controller
 {
     public function index(Request $request)
     {
-        $query = DeliveryOrder::with(['workOrder:id,wo_number,job_number,quantity,customer_id', 'workOrder.customer:id,name', 'invoice:id,delivery_order_id,invoice_number'])
+        $query = DeliveryOrder::with(['workOrder:id,wo_number,job_number,quantity,customer_id', 'workOrder.customer:id,name', 'bill:id,invoice_number'])
             ->whereNotNull('challan_number')
             // Accounts see a challan once PCD's নির্বাহী প্রকৌশলী has signed it
             // (BITAC, 2026-10-27) — not while it waits, nor one he rejected.
@@ -38,9 +38,9 @@ class BillingDeliveryChallanController extends Controller
         if ($from = $request->input('date_from')) $query->whereDate('scheduled_date', '>=', $from);
         if ($to = $request->input('date_to'))     $query->whereDate('scheduled_date', '<=', $to);
         if ($cid = $request->input('customer_id')) $query->whereHas('workOrder', fn ($w) => $w->where('customer_id', $cid));
-        // Billed = the JOB is billed (one bill per job, after full delivery).
-        if ($request->input('billed') === 'no')  $query->whereDoesntHave('invoice')->whereDoesntHave('jobInvoice');
-        if ($request->input('billed') === 'yes') $query->where(fn ($q) => $q->whereHas('invoice')->orWhereHas('jobInvoice'));
+        // Billed = the challan is on a bill (`delivery_orders.invoice_id`, JobBilling).
+        if ($request->input('billed') === 'no')  $query->whereNull('invoice_id');
+        if ($request->input('billed') === 'yes') $query->whereNotNull('invoice_id');
 
         return Inertia::render('Billing/DeliveryChallans', [
             'challans' => $query->paginate(20)->withQueryString()->through(fn (DeliveryOrder $d) => [
@@ -54,7 +54,7 @@ class BillingDeliveryChallanController extends Controller
                 'job'            => $d->workOrder?->job_number ? "Job {$d->workOrder->job_number}" : $d->workOrder?->wo_number,
                 'customer'       => $d->workOrder?->customer?->name ?? '—',
                 'vehicle_number' => $d->vehicle_number,
-                'invoice'        => ($bill = $d->invoice ?? $d->jobInvoice) ? ['id' => $bill->id, 'number' => $bill->invoice_number] : null,
+                'invoice'        => $d->bill ? ['id' => $d->bill->id, 'number' => $d->bill->invoice_number] : null,
             ]),
             'filters' => [
                 'search'      => $request->input('search', ''),

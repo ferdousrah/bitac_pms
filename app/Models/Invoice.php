@@ -11,6 +11,8 @@ class Invoice extends Model
 
     protected $fillable = [
         'center_id', 'work_order_id', 'customer_id', 'delivery_order_id', 'invoice_number',
+        // advance | delivery, and what a delivery bill is made of — App\Services\JobBilling.
+        'kind', 'goods_value', 'advance_adjusted',
         'subtotal', 'discount', 'vat_rate', 'vat_amount', 'tax_rate', 'tax_amount', 'total_amount',
         'status', 'issued_at', 'issued_date', 'due_date', 'payment_terms',
         'paid_at', 'paid_amount', 'payment_method', 'payment_reference',
@@ -28,6 +30,8 @@ class Invoice extends Model
     {
         return [
             'issued_at'         => 'datetime',
+            'goods_value'       => 'float',
+            'advance_adjusted'  => 'float',
             'paid_at'           => 'datetime',
             'paid_amount'       => 'decimal:2',
             'customer_ref_date' => 'date',
@@ -51,25 +55,28 @@ class Invoice extends Model
     public function signatory()     { return $this->belongsTo(User::class, 'signatory_user_id'); }
     public function accountsSignedBy() { return $this->belongsTo(User::class, 'accounts_signed_by'); }
 
-    /**
-     * The delivery challans this bill covers. A job is billed ONCE, after the
-     * whole order is delivered (BITAC, 2026-11-02), so the bill covers every
-     * challan of the job. A job billed per delivery before that rule (more than
-     * one bill) keeps its own challan only.
-     */
+    /** A bill raised before delivery, against the job (JobBilling). */
+    public const KINDS = ['advance' => 'Advance bill', 'delivery' => 'Delivery bill'];
+
+    public function items()         { return $this->hasMany(InvoiceItem::class)->orderBy('sort_order')->orderBy('id'); }
+    /** The challans this bill covers (`delivery_orders.invoice_id`). */
+    public function deliveries()    { return $this->hasMany(DeliveryOrder::class)->orderBy('delivered_at')->orderBy('id'); }
+
+    public function isAdvance(): bool { return $this->kind === 'advance'; }
+
+    /** The value of the goods on a delivery bill (VAT incl.) — older bills carry only their total. */
+    public function goodsValue(): float
+    {
+        return $this->isAdvance() ? 0.0 : (float) ($this->goods_value ?? $this->total_amount);
+    }
+
+    /** The delivery challans this bill covers, in order. */
     public function challanDeliveries(): \Illuminate\Support\Collection
     {
-        $own = $this->deliveryOrder;
-        if (self::withoutGlobalScopes()->where('work_order_id', $this->work_order_id)->count() > 1) {
-            return collect($own?->challan_number ? [$own] : []);
-        }
+        $mine = DeliveryOrder::withoutGlobalScopes()->where('invoice_id', $this->id)
+            ->whereNotNull('challan_number')->orderBy('delivered_at')->orderBy('id')->get();
 
-        return DeliveryOrder::withoutGlobalScopes()
-            ->where('work_order_id', $this->work_order_id)
-            ->where('status', 'delivered')
-            ->whereNotNull('challan_number')
-            ->orderBy('delivered_at')->orderBy('id')
-            ->get();
+        return $mine->isNotEmpty() || ! $this->deliveryOrder?->challan_number ? $mine : collect([$this->deliveryOrder]);
     }
 
     /** Has the accounts desk signed the bill itself (not the letter)? */

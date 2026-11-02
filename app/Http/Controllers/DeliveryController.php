@@ -20,7 +20,7 @@ class DeliveryController extends Controller
 
     public function index(Request $request)
     {
-        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice', 'jobInvoice', 'items', 'challanApprovedBy:id,name']);
+        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'bill', 'items', 'challanApprovedBy:id,name']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -64,9 +64,8 @@ class DeliveryController extends Controller
                 'delivered_at'        => $d->delivered_at?->format('d/m/Y H:i'),
                 // Billing is a separate act now, so the list has to show which
                 // deliveries are still waiting for one.
-                // One bill per job, once the whole order is delivered.
-                'invoice'             => ($d->invoice ?? $d->jobInvoice)?->only(['id', 'invoice_number']),
-                'job_delivered'       => ($d->workOrder->status ?? null) === 'delivered',
+                // The bill this challan went on (JobBilling — one bill may take several).
+                'invoice'             => $d->bill?->only(['id', 'invoice_number']),
                 // Signed by PCD's নির্বাহী প্রকৌশলী before it may go (ChallanApproval).
                 'challan_status'      => $d->challan_status ?? 'approved',
                 'challan_signed_by'   => $d->challanApprovedBy?->name,
@@ -80,6 +79,7 @@ class DeliveryController extends Controller
             'can' => [
                 'create'   => (bool) $request->user()?->can('create delivery'),
                 'complete' => (bool) $request->user()?->can('complete delivery'),
+                'bill'     => (bool) $request->user()?->can('create invoices'),
             ],
             'filters' => [
                 'search' => $request->input('search', ''),
@@ -379,13 +379,11 @@ class DeliveryController extends Controller
         // ⚠️ Confirming a delivery does NOT raise the bill (BITAC, 2026-09-29).
         // The delivery challan belongs to the delivery, but billing is its own
         // act and happens whenever accounts get to it — see
-        // `InvoiceController@storeFromDelivery`. The মূসক ৬.৩ then comes off
+        // `InvoiceController@raise` (App\Services\JobBilling). The মূসক ৬.৩ then comes off
         // the bill, equally deliberately.
         \App\Services\CustomerNotifyService::workOrderStateChanged($delivery->workOrder->fresh('customer'), $previousWoStatus);
 
         return redirect()->route('delivery.index')
-            ->with('success', $fully
-                ? 'Delivery confirmed — the whole order is delivered. Raise the bill when you are ready.'
-                : 'Delivery confirmed. The rest of the order is still to go — the bill is raised once everything is delivered.');
+            ->with('success', 'Delivery confirmed. Raise the bill for it (alone, or with other challans of the job) when you are ready.');
     }
 }

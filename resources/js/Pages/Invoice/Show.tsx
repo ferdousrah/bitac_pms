@@ -127,7 +127,7 @@ export default function InvoiceShow({
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                             <div>
                                 <div className="text-xs uppercase text-surface-400 font-semibold tracking-wide">
-                                    Invoice
+                                    {invoice.kind === 'advance' ? 'Advance bill' : 'Invoice'}
                                 </div>
                                 <h2 className="text-xl font-bold font-mono text-surface-900 mt-1">
                                     {invoice.invoice_number}
@@ -306,12 +306,40 @@ export default function InvoiceShow({
                     <div className="card-header">
                         <h3 className="text-base font-bold text-surface-900">Amount Details</h3>
                     </div>
+                    {/* What this bill is for — the challans' lines, or the advance (JobBilling). */}
+                    {invoice.items?.length > 0 && (
+                        <div className="overflow-x-auto border-b border-surface-100">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-[11px] uppercase tracking-wide text-surface-500 bg-surface-50">
+                                        <th className="px-5 py-2 text-left font-semibold">Item</th>
+                                        <th className="px-3 py-2 text-right font-semibold">Qty</th>
+                                        <th className="px-3 py-2 text-right font-semibold">Unit price</th>
+                                        <th className="px-5 py-2 text-right font-semibold">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-surface-100">
+                                    {invoice.items.map((it: any, i: number) => (
+                                        <tr key={i}>
+                                            <td className="px-5 py-2 text-surface-800">
+                                                {it.part_no && <span className="text-surface-400 mr-1.5">{it.part_no}</span>}{it.description}
+                                            </td>
+                                            <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{Number(it.quantity).toLocaleString('en-IN')} {it.unit}</td>
+                                            <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{formatAmount(it.unit_price)}</td>
+                                            <td className="px-5 py-2 text-right font-mono whitespace-nowrap">{formatAmount(it.amount)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <p className="px-5 py-2 text-[11px] text-surface-400">Quotation prices, VAT included.</p>
+                        </div>
+                    )}
                     <div className="card-body">
                         <div className="space-y-1 text-sm">
                             <div className="flex justify-between py-2 border-b border-surface-100">
                                 <span className="text-surface-600">Subtotal</span>
                                 <span className="font-mono text-surface-900">
-                                    {formatAmount(invoice.subtotal)}
+                                    {formatAmount(invoice.goods_split?.subtotal ?? invoice.subtotal)}
                                 </span>
                             </div>
                             {Number(invoice.discount) > 0 && (
@@ -323,15 +351,27 @@ export default function InvoiceShow({
                             <div className="flex justify-between py-2 border-b border-surface-100">
                                 <span className="text-surface-600">VAT ({invoice.vat_rate ?? 15}%)</span>
                                 <span className="font-mono text-surface-900">
-                                    {formatAmount(invoice.vat_amount)}
+                                    {formatAmount(invoice.goods_split?.vat_amount ?? invoice.vat_amount)}
                                 </span>
                             </div>
                             <div className="flex justify-between py-2 border-b border-surface-100">
                                 <span className="text-surface-600">Tax ({invoice.tax_rate ?? 0}%)</span>
                                 <span className="font-mono text-surface-900">
-                                    {formatAmount(invoice.tax_amount ?? 0)}
+                                    {formatAmount(invoice.goods_split?.tax_amount ?? invoice.tax_amount ?? 0)}
                                 </span>
                             </div>
+                            {Number(invoice.advance_adjusted) > 0 && (
+                                <>
+                                    <div className="flex justify-between py-2 border-b border-surface-100 font-semibold">
+                                        <span className="text-surface-800">Value of goods</span>
+                                        <span className="font-mono text-surface-900">{formatAmount(invoice.goods_value)}</span>
+                                    </div>
+                                    <div className="flex justify-between py-2 border-b border-surface-100 text-amber-700">
+                                        <span>Less: advance billed</span>
+                                        <span className="font-mono">- {formatAmount(invoice.advance_adjusted)}</span>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex justify-between py-3 mt-1 font-bold text-base border-t-2 border-surface-200">
                                 <span className="text-surface-900">Total</span>
                                 <span className="font-mono text-surface-900">

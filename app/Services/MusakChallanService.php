@@ -66,6 +66,19 @@ class MusakChallanService
         $taxRate = (float) ($invoice->tax_rate ?? 0);
         $divisor = 1 + ($vatRate + $taxRate) / 100;
 
+        // A bill raised by JobBilling has its own lines — what this bill is for.
+        if ($invoice->items()->exists()) {
+            return $invoice->items->map(fn ($line) => [
+                'description' => $line->description,
+                'unit'        => $line->unit,
+                'quantity'    => (float) $line->quantity,
+                'unit_price'  => round(((float) $line->unit_price) * (1 + $taxRate / 100) / ($divisor ?: 1), 2),
+                'tax_rate'    => $taxRate,
+                'sd_rate'     => 0,
+                'vat_rate'    => $vatRate,
+            ])->values();
+        }
+
         $units = $invoice->workOrder?->items->pluck('unit')->values() ?? collect();
 
         return collect($invoice->workOrder?->quotation?->items ?? [])

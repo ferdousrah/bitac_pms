@@ -381,7 +381,8 @@ class MusakChallanController extends Controller
             'vehicle'           => $invoice->deliveryOrder?->vehicle_number,
             'items'             => $items,
             'tax_rate'          => (float) ($invoice->tax_rate ?? 0),
-            'invoice_total'     => (float) $invoice->total_amount,
+            // A delivery bill's challan is for the goods on it, before any advance recovered.
+            'invoice_total'     => $invoice->isAdvance() ? (float) $invoice->total_amount : $invoice->goodsValue(),
         ];
     }
 

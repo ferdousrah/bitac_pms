@@ -9,53 +9,7 @@ use Illuminate\Support\Facades\Storage;
 
 class InvoiceService
 {
-    public function createFromDelivery(DeliveryOrder $delivery): Invoice
-    {
-        $workOrder  = $delivery->workOrder;
-        $quotation  = $workOrder->quotation;
-        $vatRate    = $quotation?->vat_rate !== null ? (float) $quotation->vat_rate : (float) config('app.vat_rate', 15);
-        $taxRate    = (float) ($quotation?->tax_rate ?? 0);
-
-        // BITAC quotations are VAT-inclusive — strip out embedded VAT so the
-        // invoice shows the legal split (subtotal + VAT + Tax = total).
-        // Tax (e.g. AIT) is additive on top of the VAT-inclusive total.
-        if ($quotation) {
-            $quoteTotal = (float) $quotation->total_amount;
-            // Reverse out the tax portion the quotation already added on top
-            $taxAmount  = (float) ($quotation->tax_amount ?? 0);
-            $grossVatIncl = $quoteTotal - $taxAmount;
-            $vatAmount  = $grossVatIncl * ($vatRate / (100 + $vatRate));
-            $subtotal   = $grossVatIncl - $vatAmount;
-            $total      = $grossVatIncl + $taxAmount;
-        } else {
-            $subtotal = $vatAmount = $taxAmount = $total = 0.0;
-        }
-
-        // The job's centre's own series — `INV-DHK-2026-0009` (App\Support\DocNumber).
-        $invoiceNumber = \App\Support\DocNumber::next('invoices', 'invoice_number', 'INV', $workOrder->center_id);
-
-        $invoice = Invoice::create([
-            'invoice_number'    => $invoiceNumber,
-            'work_order_id'     => $workOrder->id,
-            'delivery_order_id' => $delivery->id,
-            'customer_id'       => $workOrder->customer_id,
-            'subtotal'          => round($subtotal, 2),
-            'vat_rate'          => round($vatRate, 2),
-            'vat_amount'        => round($vatAmount, 2),
-            'tax_rate'          => round($taxRate, 2),
-            'tax_amount'        => round($taxAmount, 2),
-            'discount'          => 0,
-            'total_amount'      => round($total, 2),
-            'status'            => 'issued',
-            'issued_at'         => now(),
-        ]);
-
-        // ⚠️ Confirming a delivery does NOT raise a মূসক ৬.৩ (BITAC,
-        // 2026-09-29). A tax challan is issued deliberately, from the bill, so
-        // that someone has looked at the destination, the vehicle and the
-        // signatory first. The bill links straight to it.
-        return $invoice;
-    }
+    // Bills are raised by App\Services\JobBilling (partial / full / advance).
 
     /**
      * Render a BITAC-style Tax Invoice PDF via mPDF + letterhead.
@@ -65,7 +19,7 @@ class InvoiceService
      */
     public function generatePdf(Invoice $invoice): string
     {
-        $invoice->load(['workOrder.product', 'workOrder.customer', 'workOrder.quotation.items', 'deliveryOrder', 'accountsSignedBy.center']);
+        $invoice->load(['workOrder.product', 'workOrder.customer', 'workOrder.quotation.items', 'deliveryOrder', 'accountsSignedBy.center', 'items']);
 
         $wo        = $invoice->workOrder;
         $customer  = $wo->customer;
@@ -85,8 +39,9 @@ class InvoiceService
         $custCt  = $esc($customer?->contact_person ?? '');
         $custPhn = $esc($customer?->phone ?? '');
         $custBin = $esc($customer?->bin_number ?? '');
-        $chal    = $esc($invoice->challanDeliveries()->pluck('challan_number')->implode(', ') ?: '—');
-        $vatRate = (float) config('app.vat_rate', 15);
+        $chal    = $invoice->isAdvance() ? 'Advance — before delivery'
+            : $esc($invoice->challanDeliveries()->pluck('challan_number')->implode(', ') ?: '—');
+        $vatRate = $invoice->vat_rate !== null ? (float) $invoice->vat_rate : (float) config('app.vat_rate', 15);
 
         // ── Memo strip ─────────────────────────────────────────────
         $memoBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 14pt;">'
@@ -98,7 +53,7 @@ class InvoiceService
 
         // ── Title ──────────────────────────────────────────────────
         $titleBlock = '<div style="text-align: center; margin-bottom: 12pt;">'
-            . '<div style="font-size: 13pt; color: #000; font-weight: bold;">INVOICE</div>'
+            . '<div style="font-size: 13pt; color: #000; font-weight: bold;">' . ($invoice->isAdvance() ? 'ADVANCE INVOICE' : 'INVOICE') . '</div>'
             . '</div>';
 
         // ── Billed To / Invoice meta blocks ───────────────────────
@@ -130,7 +85,27 @@ class InvoiceService
         $idx = 0;
         $items = $quotation?->items ?? collect();
 
-        if ($items->isNotEmpty()) {
+        // A bill raised by JobBilling carries its own lines (what was delivered,
+        // or the advance). Prices are VAT-inclusive; they print net of VAT and
+        // tax in the same proportion as the totals below, so the column adds up.
+        $goods = $invoice->isAdvance() ? (float) $invoice->total_amount : $invoice->goodsValue();
+        $goodsSplit = \App\Services\JobBilling::taxSplit($wo, $goods);
+        $netFactor = $goods > 0 ? $goodsSplit['subtotal'] / $goods : 1;
+        $cell = 'border: 0.75pt solid #000; padding: 5pt 6pt; font-size: 9pt; vertical-align: top;';
+
+        if ($invoice->items->isNotEmpty()) {
+            foreach ($invoice->items as $it) {
+                $idx++;
+                $desc = $esc(trim(($it->part_no ? "[{$it->part_no}] " : '') . ($it->description ?? '—')));
+                $rows .= '<tr>'
+                    . '<td style="' . $cell . ' text-align: center;">' . str_pad($idx, 2, '0', STR_PAD_LEFT) . '</td>'
+                    . '<td style="' . $cell . ' padding-left: 8pt;">' . nl2br($desc, false) . '</td>'
+                    . '<td style="' . $cell . ' text-align: center;">' . $fmt($it->quantity) . ' ' . $esc($it->unit) . '</td>'
+                    . '<td style="' . $cell . ' text-align: right; font-family: tinos;">' . $fmt($it->unit_price * $netFactor) . '</td>'
+                    . '<td style="' . $cell . ' text-align: right; font-family: tinos;">' . $fmt($it->amount * $netFactor) . '</td>'
+                    . '</tr>';
+            }
+        } elseif ($items->isNotEmpty()) {
             $totalQty = 0;
             $vatAlreadyEmbedded = true; // BITAC quotations are VAT-inclusive
             foreach ($items as $it) {
@@ -178,6 +153,16 @@ class InvoiceService
 
         // ── Totals block + amount in words ────────────────────────
         $discount = (float) ($invoice->discount ?? 0);
+        // Older bills have no lines of their own: their figures are the stored ones.
+        $split = $invoice->items->isNotEmpty() ? $goodsSplit
+            : ['subtotal' => $invoice->subtotal, 'vat_amount' => $invoice->vat_amount, 'tax_rate' => $invoice->tax_rate, 'tax_amount' => $invoice->tax_amount];
+        $adjusted = (float) ($invoice->advance_adjusted ?? 0);
+        $tdL = 'padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;';
+        $tdR = 'padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;';
+        $advanceRows = $adjusted > 0
+            ? '<tr><td style="' . $tdL . ' font-weight: bold;">Value of goods</td><td style="' . $tdR . ' font-weight: bold;">৳ ' . $fmt($goods) . '</td></tr>'
+              . '<tr><td style="' . $tdL . ' color: #b45309;">Less: advance billed</td><td style="' . $tdR . ' color: #b45309;">- ৳ ' . $fmt($adjusted) . '</td></tr>'
+            : '';
         $amountWords = $this->amountInWords((float) $invoice->total_amount);
 
         $totalsBlock = '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin-bottom: 12pt;">'
@@ -188,14 +173,15 @@ class InvoiceService
             .   '</td>'
             .   '<td width="45%" style="border: 0.75pt solid #000; padding: 0; vertical-align: top;">'
             .     '<table width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">'
-            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt;">Subtotal</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt;">৳ ' . $fmt($invoice->subtotal) . '</td></tr>'
+            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt;">Subtotal</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt;">৳ ' . $fmt($split['subtotal']) . '</td></tr>'
             .       ($discount > 0
                        ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; color: #dc2626;">Discount</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; color: #dc2626;">- ৳ ' . $fmt($discount) . '</td></tr>'
                        : '')
-            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">VAT (' . $fmt($vatRate) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->vat_amount) . '</td></tr>'
-            .       (((float) ($invoice->tax_amount ?? 0)) > 0
-                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">Tax (' . $fmt($invoice->tax_rate ?? 0) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($invoice->tax_amount) . '</td></tr>'
+            .       '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">VAT (' . $fmt($vatRate) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($split['vat_amount']) . '</td></tr>'
+            .       (((float) ($split['tax_amount'] ?? 0)) > 0
+                       ? '<tr><td style="padding: 4pt 8pt; font-size: 10pt; border-top: 0.5pt solid #ccc;">Tax (' . $fmt($split['tax_rate'] ?? 0) . '%)</td><td style="padding: 4pt 8pt; text-align: right; font-family: tinos; font-size: 10pt; border-top: 0.5pt solid #ccc;">৳ ' . $fmt($split['tax_amount']) . '</td></tr>'
                        : '')
+            .       $advanceRows
             .       '<tr style="background: #f3f4f6;"><td style="padding: 6pt 8pt; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">TOTAL DUE</td><td style="padding: 6pt 8pt; text-align: right; font-family: tinos; font-size: 11pt; font-weight: bold; border-top: 0.75pt solid #000;">৳ ' . $fmt($invoice->total_amount) . '</td></tr>'
             .     '</table>'
             .   '</td>'
