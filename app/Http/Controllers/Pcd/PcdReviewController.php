@@ -46,7 +46,7 @@ class PcdReviewController extends Controller
                 'due_date'       => $wo->due_date?->format('d M Y'),
                 'amount'         => (float) ($wo->quotation?->total_amount ?? 0),
                 'handed_over_at' => $wo->pcd_handoff_at?->format('d M Y, h:i A'),
-                'waiting_days'   => $wo->pcd_handoff_at?->diffInDays(now()),
+                'waiting_days'   => $wo->pcd_handoff_at ? (int) $wo->pcd_handoff_at->diffInDays(now()) : null,
                 'notes'          => $wo->notes,
             ]);
 
@@ -68,7 +68,7 @@ class PcdReviewController extends Controller
                     ->map(fn ($s) => $s->section?->name)->filter()->values()->all(),
                 'due_date'      => $wo->due_date?->format('d M Y'),
                 'requested_at'  => $wo->release_requested_at?->format('d M Y, h:i A'),
-                'waiting_days'  => $wo->release_requested_at?->diffInDays(now()),
+                'waiting_days'  => $wo->release_requested_at ? (int) $wo->release_requested_at->diffInDays(now()) : null,
             ]);
 
         // Delivery challans waiting for his signature — the third thing this

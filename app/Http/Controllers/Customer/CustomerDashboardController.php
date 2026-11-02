@@ -14,11 +14,17 @@ class CustomerDashboardController extends Controller
     {
         $customer = auth('customer')->user();
 
+        // ⚠️ The status lists were from an older workflow — a job at IED, PCD or
+        // on the shop floor counted as no active order at all.
+        $orders = fn () => WorkOrder::where('customer_id', $customer->id);
+        // What the client owes is the payment ledger's answer — a part-paid
+        // bill is not owed in full, and a paid one owes nothing.
+        $ledger = \App\Services\PaymentLedger::forCustomer($customer);
         $stats = [
-            'active_orders'      => WorkOrder::where('customer_id', $customer->id)->whereIn('status', ['in_production', 'qc_hold', 'approved'])->count(),
-            'in_production'      => WorkOrder::where('customer_id', $customer->id)->where('status', 'in_production')->count(),
-            'ready_for_delivery' => WorkOrder::where('customer_id', $customer->id)->where('status', 'ready_for_delivery')->count(),
-            'unpaid_invoices'    => Invoice::where('customer_id', $customer->id)->whereIn('status', ['issued', 'acknowledged'])->count(),
+            'active_orders'      => $orders()->whereNotIn('status', ['delivered', 'cancelled'])->count(),
+            'in_production'      => $orders()->whereIn('status', ['released_to_shops', 'in_production'])->count(),
+            'ready_for_delivery' => $orders()->whereIn('status', ['qc_passed', 'ready_for_delivery'])->count(),
+            'unpaid_invoices'    => Invoice::where('customer_id', $customer->id)->whereNotIn('status', ['paid', 'draft', 'cancelled'])->count(),
         ];
 
         // Lifetime context — gives the customer a sense of relationship history
@@ -28,7 +34,7 @@ class CustomerDashboardController extends Controller
             'total_projects'    => WorkOrder::where('customer_id', $customer->id)->count(),
             'total_delivered'   => WorkOrder::where('customer_id', $customer->id)->where('status', 'delivered')->count(),
             'total_billed'      => (float) Invoice::where('customer_id', $customer->id)->sum('total_amount'),
-            'outstanding_due'   => (float) Invoice::where('customer_id', $customer->id)->whereIn('status', ['issued', 'acknowledged'])->sum('total_amount'),
+            'outstanding_due'   => (float) $ledger['due'],
             'rfqs_submitted'    => Rfq::where('customer_id', $customer->id)->count(),
             'rfqs_pending'      => Rfq::where('customer_id', $customer->id)->where('status', 'pending')->count(),
             'member_since'      => $customer->created_at?->format('M Y'),

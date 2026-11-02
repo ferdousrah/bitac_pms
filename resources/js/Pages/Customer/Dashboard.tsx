@@ -149,7 +149,7 @@ export default function CustomerDashboard({ customer, stats, lifetime, recentOrd
                                         <div className="inline-flex w-10 h-10 rounded-xl bg-surface-100 text-surface-400 items-center justify-center mb-2">
                                             <i className="fi fi-rr-receipt text-sm leading-none" />
                                         </div>
-                                        <p className="text-xs text-surface-500">No invoices yet. Invoices are auto-generated once an order is delivered.</p>
+                                        <p className="text-xs text-surface-500">No bills yet. BITAC's accounts send them as your work is delivered (or in advance, where agreed).</p>
                                     </div>
                                 ) : (
                                     <ul className="divide-y divide-surface-100">

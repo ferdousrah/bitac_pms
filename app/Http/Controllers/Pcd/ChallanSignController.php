@@ -40,7 +40,7 @@ class ChallanSignController extends Controller
                 'vehicle'        => $d->vehicle_number,
                 'raised_by'      => $d->createdBy?->name,
                 'raised_at'      => $d->created_at?->format('d M Y, h:i A'),
-                'waiting_days'   => $d->created_at?->diffInDays(now()),
+                'waiting_days'   => $d->created_at ? (int) $d->created_at->diffInDays(now()) : null,
                 'pdf_url'        => "/pcd/inbox/challans/{$d->id}/pdf?preview=base64",
             ])->values();
     }
