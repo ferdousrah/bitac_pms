@@ -58,6 +58,8 @@ class DeliveryOrder extends Model
     public function customer()  { return $this->belongsTo(Customer::class); }
     public function pod()       { return $this->hasOne(ProofOfDelivery::class, 'delivery_order_id'); }
     public function invoice()   { return $this->hasOne(Invoice::class, 'delivery_order_id'); }
+    /** The job's bill, whichever delivery it was raised from — a job is billed once. */
+    public function jobInvoice() { return $this->hasOne(Invoice::class, 'work_order_id', 'work_order_id'); }
     public function items()     { return $this->hasMany(DeliveryOrderItem::class)->orderBy('sort_order'); }
 
     /**

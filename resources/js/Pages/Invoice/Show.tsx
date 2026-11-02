@@ -12,9 +12,13 @@ const statusBadge: Record<string, string> = {
     issued: 'badge-blue',
     sent: 'badge-blue',
     acknowledged: 'badge-blue',
+    partially_paid: 'badge-amber',
     paid: 'badge-green',
     overdue: 'badge-red',
 };
+
+// `partially_paid` is a key, not words.
+const statusLabel = (s: string) => (s ?? '').replace(/_/g, ' ');
 
 const paymentMethodLabel: Record<string, string> = {
     cash: 'Cash',
@@ -33,6 +37,7 @@ export default function InvoiceShow({
 }: any) {
     const [pdf, setPdf] = useState<string | null>(null);
     const [showMail, setShowMail] = useState(false);
+    const hasChallans = (invoice.delivery_challans ?? []).length > 0;
     const mail = useForm<any>({
         to: invoice.customer_email ?? '',
         cc: '',
@@ -141,7 +146,7 @@ export default function InvoiceShow({
                                     {formatAmount(invoice.total_amount, 2)}
                                 </div>
                                 <span className={`badge mt-2 ${statusBadge[invoice.status] ?? 'badge-slate'}`}>
-                                    {invoice.status}
+                                    {statusLabel(invoice.status)}
                                 </span>
                             </div>
                         </div>
@@ -497,16 +502,21 @@ export default function InvoiceShow({
                             )}
                         </div>
                         <div className="p-3 rounded-xl border border-surface-200">
-                            <p className="font-semibold text-surface-900">Delivery challan</p>
-                            {invoice.delivery_challan ? (
-                                <>
-                                    <p className="text-xs text-surface-500 mt-0.5">
-                                        {invoice.delivery_challan.challan_number} · {Number(invoice.delivery_challan.quantity).toLocaleString('en-IN')} pcs
-                                    </p>
-                                    <button type="button"
-                                        onClick={() => setPdf(`/billing/delivery-challans/${invoice.delivery_challan.id}/pdf?preview=base64`)}
-                                        className="mt-2 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">PDF</button>
-                                </>
+                            <p className="font-semibold text-surface-900">
+                                Delivery challan{(invoice.delivery_challans ?? []).length > 1 ? `s (${invoice.delivery_challans.length})` : ''}
+                            </p>
+                            {(invoice.delivery_challans ?? []).length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {invoice.delivery_challans.map((c: any) => (
+                                        <button key={c.id} type="button"
+                                            title={`${Number(c.quantity).toLocaleString('en-IN')} pcs${c.type === 'partial' ? ' · partial' : ''}`}
+                                            onClick={() => setPdf(`/billing/delivery-challans/${c.id}/pdf?preview=base64`)}
+                                            className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
+                                            <i className="fi fi-rr-file-pdf text-[10px] mr-1" />{c.challan_number}
+                                            <span className="font-normal text-indigo-500"> · {Number(c.quantity).toLocaleString('en-IN')} pcs</span>
+                                        </button>
+                                    ))}
+                                </div>
                             ) : (
                                 <p className="text-xs text-surface-400 mt-0.5">No delivery linked to this bill.</p>
                             )}
@@ -591,12 +601,13 @@ export default function InvoiceShow({
                                     <input type="checkbox" checked readOnly className="rounded border-surface-300" />
                                     Bill {invoice.invoice_number} (always sent)
                                 </label>
-                                <label className={`flex items-center gap-2 text-sm ${invoice.delivery_challan ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
-                                    <input type="checkbox" disabled={!invoice.delivery_challan}
-                                        checked={!!invoice.delivery_challan && mail.data.include_challan}
+                                <label className={`flex items-center gap-2 text-sm ${hasChallans ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
+                                    <input type="checkbox" disabled={!hasChallans}
+                                        checked={hasChallans && mail.data.include_challan}
                                         onChange={(e) => mail.setData('include_challan', e.target.checked)}
                                         className="rounded border-surface-300" />
-                                    Delivery challan {invoice.delivery_challan ? `— ${invoice.delivery_challan.challan_number}` : '— no delivery linked'}
+                                    Delivery challan{(invoice.delivery_challans ?? []).length > 1 ? 's' : ''}{' '}
+                                    {hasChallans ? `— ${invoice.delivery_challans.map((c: any) => c.challan_number).join(', ')}` : '— no delivery linked'}
                                 </label>
                                 <label className={`flex items-center gap-2 text-sm ${invoice.musak_challan ? 'text-surface-700 cursor-pointer' : 'text-surface-400'}`}>
                                     <input type="checkbox" disabled={!invoice.musak_challan}

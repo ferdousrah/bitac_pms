@@ -100,7 +100,7 @@ class CustomerInvoiceController extends Controller
                 'work_order_id'     => $invoice->work_order_id,
                 'product'           => $invoice->workOrder->product->name ?? '',
                 'quantity'          => $invoice->workOrder->quantity ?? null,
-                'challan_number'    => $invoice->deliveryOrder->challan_number ?? null,
+                'challan_number'    => $invoice->challanDeliveries()->pluck('challan_number')->implode(', ') ?: null,
                 'subtotal'          => $invoice->subtotal,
                 'discount'          => $invoice->discount ?? 0,
                 'vat_amount'        => $invoice->vat_amount,

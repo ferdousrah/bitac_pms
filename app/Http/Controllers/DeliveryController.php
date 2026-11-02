@@ -20,7 +20,7 @@ class DeliveryController extends Controller
 
     public function index(Request $request)
     {
-        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice', 'items', 'challanApprovedBy:id,name']);
+        $query = DeliveryOrder::with(['workOrder.product', 'workOrder.customer', 'invoice', 'jobInvoice', 'items', 'challanApprovedBy:id,name']);
 
         // Search
         if ($search = $request->input('search')) {
@@ -64,7 +64,9 @@ class DeliveryController extends Controller
                 'delivered_at'        => $d->delivered_at?->format('d/m/Y H:i'),
                 // Billing is a separate act now, so the list has to show which
                 // deliveries are still waiting for one.
-                'invoice'             => $d->invoice?->only(['id', 'invoice_number']),
+                // One bill per job, once the whole order is delivered.
+                'invoice'             => ($d->invoice ?? $d->jobInvoice)?->only(['id', 'invoice_number']),
+                'job_delivered'       => ($d->workOrder->status ?? null) === 'delivered',
                 // Signed by PCD's নির্বাহী প্রকৌশলী before it may go (ChallanApproval).
                 'challan_status'      => $d->challan_status ?? 'approved',
                 'challan_signed_by'   => $d->challanApprovedBy?->name,
@@ -324,7 +326,7 @@ class DeliveryController extends Controller
         }
 
         // The receiver signs for the goods one of two ways (BITAC, 2026-10-27):
-        //  - `link`: on his phone / BITAC's tablet — the signature is already
+        //  - `link`: on their phone / BITAC's tablet — the signature is already
         //    here, from the public page (App\Services\DeliveryReceipt);
         //  - `photo`: by pen on the paper challan, which PCD photographs.
         $mode = $request->input('mode') === 'photo' ? 'photo' : 'link';
@@ -332,7 +334,7 @@ class DeliveryController extends Controller
 
         if ($mode === 'link') {
             if (! $pod || ! $pod->isSignature()) {
-                return back()->with('error', 'The receiver has not signed yet — let him open the link, or upload a photo of the signed challan.');
+                return back()->with('error', 'The receiver has not signed yet — ask them to open the link, or upload a photo of the signed challan.');
             }
             $request->validate(['notes' => 'nullable|string|max:1000']);
             $pod->update(['notes' => $request->input('notes') ?: null]);
@@ -382,6 +384,8 @@ class DeliveryController extends Controller
         \App\Services\CustomerNotifyService::workOrderStateChanged($delivery->workOrder->fresh('customer'), $previousWoStatus);
 
         return redirect()->route('delivery.index')
-            ->with('success', 'Delivery confirmed. Raise the bill from this delivery when you are ready.');
+            ->with('success', $fully
+                ? 'Delivery confirmed — the whole order is delivered. Raise the bill when you are ready.'
+                : 'Delivery confirmed. The rest of the order is still to go — the bill is raised once everything is delivered.');
     }
 }

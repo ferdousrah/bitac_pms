@@ -185,7 +185,7 @@ export default function DeliveryComplete({ delivery, receipt, receiptBlocker }: 
                                         )}
                                         <div className="flex-1 min-w-0 space-y-3 w-full">
                                             <div>
-                                                <div className="text-sm font-bold text-surface-900">Let the receiver scan this with his phone camera</div>
+                                                <div className="text-sm font-bold text-surface-900">Let the receiver scan this with their phone camera</div>
                                                 <p className="text-xs text-surface-500 mt-0.5">
                                                     He types his name, designation and mobile, and signs with his finger. On a BITAC tablet,
                                                     just open the link. Valid until {receipt.expires_at}, once.
@@ -214,7 +214,7 @@ export default function DeliveryComplete({ delivery, receipt, receiptBlocker }: 
                                             <i className="fi fi-rr-qrcode text-2xl leading-none" />
                                         </div>
                                         <p className="text-sm text-surface-600 mt-3 max-w-sm mx-auto">
-                                            Make a one-time link. The receiver scans its QR code with his phone — or opens it on BITAC's tablet — and signs there.
+                                            Make a one-time link. The receiver scans its QR code with their phone — or opens it on BITAC's tablet — and signs there.
                                         </p>
                                         <button type="button" onClick={makeLink} className="btn-primary mt-4">
                                             <i className="fi fi-rr-qrcode text-xs leading-none" /> Create signing link

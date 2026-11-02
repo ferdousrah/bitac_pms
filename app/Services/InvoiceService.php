@@ -85,7 +85,7 @@ class InvoiceService
         $custCt  = $esc($customer?->contact_person ?? '');
         $custPhn = $esc($customer?->phone ?? '');
         $custBin = $esc($customer?->bin_number ?? '');
-        $chal    = $esc($delivery?->challan_number ?? '—');
+        $chal    = $esc($invoice->challanDeliveries()->pluck('challan_number')->implode(', ') ?: '—');
         $vatRate = (float) config('app.vat_rate', 15);
 
         // ── Memo strip ─────────────────────────────────────────────

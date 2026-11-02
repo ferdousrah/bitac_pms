@@ -8,9 +8,13 @@ const statusBadge: Record<string, string> = {
     issued: 'badge-blue',
     sent: 'badge-blue',
     acknowledged: 'badge-blue',
+    partially_paid: 'badge-amber',
     paid: 'badge-green',
     overdue: 'badge-red',
 };
+
+// `partially_paid` is a key, not words.
+const statusLabel = (s: string) => (s ?? '').replace(/_/g, ' ');
 
 const formatCurrency = (amount: any) => `৳${Number(amount).toLocaleString('en-IN')}`;
 
@@ -126,7 +130,7 @@ export default function InvoiceIndex({ invoices, filters }: any) {
                                                     <span
                                                         className={`badge ${statusBadge[displayStatus] ?? 'badge-slate'}`}
                                                     >
-                                                        {displayStatus}
+                                                        {statusLabel(displayStatus)}
                                                     </span>
                                                 </td>
                                                 <td className="text-surface-600 text-xs">
@@ -191,7 +195,7 @@ export default function InvoiceIndex({ invoices, filters }: any) {
                                             </div>
                                         </div>
                                         <span className={`badge ${statusBadge[displayStatus] ?? 'badge-slate'}`}>
-                                            {displayStatus}
+                                            {statusLabel(displayStatus)}
                                         </span>
                                     </div>
 

@@ -90,9 +90,19 @@ class InvoiceController extends Controller
             return back()->with('error', 'This delivery has not been confirmed yet, so there is nothing to bill.');
         }
 
-        if ($existing = $delivery->invoice) {
+        if ($existing = $delivery->invoice ?? $delivery->jobInvoice) {
             return redirect()->route('invoices.show', $existing)
-                ->with('error', "This delivery is already billed on {$existing->invoice_number}.");
+                ->with('error', "This job is already billed on {$existing->invoice_number}.");
+        }
+
+        // ⚠️ One bill per job, after the WHOLE order is delivered (BITAC,
+        // 2026-11-02). The bill is priced at the quotation's total, so billing a
+        // partial delivery charged the full job — and the next delivery again.
+        $wo = $delivery->workOrder;
+        if ($wo->status !== 'delivered') {
+            $n = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
+            return back()->with('error', 'The bill is raised once the whole order is delivered — '
+                . $n($wo->deliveredQty()) . ' of ' . $n($wo->quantity) . ' delivered so far.');
         }
 
         $invoice = $this->service->createFromDelivery($delivery);
@@ -311,8 +321,8 @@ class InvoiceController extends Controller
             ];
         }
 
-        $delivery = $invoice->deliveryOrder;
-        if ($challan && $delivery?->challan_number) {
+        // Every challan the bill covers — a job delivered in parts has several.
+        foreach ($challan ? $invoice->challanDeliveries() : [] as $delivery) {
             $files[] = [
                 'data' => $grab(app(\App\Http\Controllers\Pcd\PcdDeliveryController::class)
                     ->challan(new Request(['preview' => 'base64']), $delivery)),
@@ -435,11 +445,12 @@ class InvoiceController extends Controller
                 'musak_challan'     => $invoice->musakChallans->first()?->only(['id', 'challan_no']),
                 // The delivery this bill was raised for, and the PCD Gate Pass
                 // Out of the job — they go to the client with the bill too.
-                'delivery_challan'  => $invoice->deliveryOrder?->challan_number ? [
-                    'id'             => $invoice->deliveryOrder->id,
-                    'challan_number' => $invoice->deliveryOrder->challan_number,
-                    'quantity'       => (float) $invoice->deliveryOrder->quantity_delivered,
-                ] : null,
+                'delivery_challans' => $invoice->challanDeliveries()->map(fn ($d) => [
+                    'id'             => $d->id,
+                    'challan_number' => $d->challan_number,
+                    'quantity'       => (float) $d->quantity_delivered,
+                    'type'           => $d->type,
+                ])->values(),
                 'gate_passes'       => BillingGatePassController::forWorkOrder($invoice->workOrder)
                     ->map(fn ($g) => ['id' => $g->id, 'pass_no' => $g->pass_no, 'pass_date' => $g->pass_date?->format('d M Y')])->values(),
                 'customer_email'    => $invoice->customer?->email ?? $invoice->workOrder?->customer?->email,

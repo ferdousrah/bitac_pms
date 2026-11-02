@@ -38,8 +38,9 @@ class BillingDeliveryChallanController extends Controller
         if ($from = $request->input('date_from')) $query->whereDate('scheduled_date', '>=', $from);
         if ($to = $request->input('date_to'))     $query->whereDate('scheduled_date', '<=', $to);
         if ($cid = $request->input('customer_id')) $query->whereHas('workOrder', fn ($w) => $w->where('customer_id', $cid));
-        if ($request->input('billed') === 'no')  $query->whereDoesntHave('invoice');
-        if ($request->input('billed') === 'yes') $query->whereHas('invoice');
+        // Billed = the JOB is billed (one bill per job, after full delivery).
+        if ($request->input('billed') === 'no')  $query->whereDoesntHave('invoice')->whereDoesntHave('jobInvoice');
+        if ($request->input('billed') === 'yes') $query->where(fn ($q) => $q->whereHas('invoice')->orWhereHas('jobInvoice'));
 
         return Inertia::render('Billing/DeliveryChallans', [
             'challans' => $query->paginate(20)->withQueryString()->through(fn (DeliveryOrder $d) => [
@@ -53,7 +54,7 @@ class BillingDeliveryChallanController extends Controller
                 'job'            => $d->workOrder?->job_number ? "Job {$d->workOrder->job_number}" : $d->workOrder?->wo_number,
                 'customer'       => $d->workOrder?->customer?->name ?? '—',
                 'vehicle_number' => $d->vehicle_number,
-                'invoice'        => $d->invoice ? ['id' => $d->invoice->id, 'number' => $d->invoice->invoice_number] : null,
+                'invoice'        => ($bill = $d->invoice ?? $d->jobInvoice) ? ['id' => $bill->id, 'number' => $bill->invoice_number] : null,
             ]),
             'filters' => [
                 'search'      => $request->input('search', ''),

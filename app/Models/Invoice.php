@@ -51,6 +51,27 @@ class Invoice extends Model
     public function signatory()     { return $this->belongsTo(User::class, 'signatory_user_id'); }
     public function accountsSignedBy() { return $this->belongsTo(User::class, 'accounts_signed_by'); }
 
+    /**
+     * The delivery challans this bill covers. A job is billed ONCE, after the
+     * whole order is delivered (BITAC, 2026-11-02), so the bill covers every
+     * challan of the job. A job billed per delivery before that rule (more than
+     * one bill) keeps its own challan only.
+     */
+    public function challanDeliveries(): \Illuminate\Support\Collection
+    {
+        $own = $this->deliveryOrder;
+        if (self::withoutGlobalScopes()->where('work_order_id', $this->work_order_id)->count() > 1) {
+            return collect($own?->challan_number ? [$own] : []);
+        }
+
+        return DeliveryOrder::withoutGlobalScopes()
+            ->where('work_order_id', $this->work_order_id)
+            ->where('status', 'delivered')
+            ->whereNotNull('challan_number')
+            ->orderBy('delivered_at')->orderBy('id')
+            ->get();
+    }
+
     /** Has the accounts desk signed the bill itself (not the letter)? */
     public function isAccountsSigned(): bool
     {
