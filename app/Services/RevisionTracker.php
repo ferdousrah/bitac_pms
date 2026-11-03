@@ -89,6 +89,7 @@ class RevisionTracker
                 'estimate_no'      => $entity->estimate_no,
                 'rfq_id'           => $entity->rfq_id,
                 'rfq_item_id'      => $entity->rfq_item_id,
+                'rfq_item_part_id' => $entity->rfq_item_part_id,
                 'customer_id'      => $entity->customer_id,
                 'job_name'         => $entity->job_name,
                 'part_no'          => $entity->part_no,

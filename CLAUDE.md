@@ -442,7 +442,36 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **the 
 - A job item can be broken into the **parts** it covers. Table `rfq_item_parts` (`rfq_item_id`, `name`, `sort_order`), model `RfqItemPart`, relation `RfqItem::parts()`.
 - **Only the name is stored.** The **Part No. is positional** — `1/3`, `2/3`, `3/3` — derived from the row's index + sibling count, never typed and never persisted, so removing a part renumbers the rest with no gaps. Same `n/total` convention as `work_order_items.part_no`. Helper: `RfqItemPart::formatNo($index, $total)` (PHP) / `partNo(i, total)` (Create.tsx).
 - UI: a repeater directly under **Part / Job Description** in `Rfq/Create.tsx` (Add Part / remove, auto-numbered chip + name input). Rendered on `Rfq/Show.tsx` via the `PartsList` component (desktop table + mobile card). `edit()` ships `parts[].name`; `show()` ships `parts[].{id,name,part_no}`.
-- Persisted by `RfqController::syncItemParts()` — wipes and rewrites in order, **dropping blank names**. Called from `store()`, `update()` and `autosave()`.
+- Persisted by `RfqController::syncItemParts()` — **updated in place**, in order, **dropping blank names**. Called from `store()`, `update()` and `autosave()`.
+
+### ⚠️ Editing an RFQ must not cut its cost estimates loose (2026-11-03)
+> Reported from production (RFQ #44): *"edit e click korle ager cost estimate er sob kisu 0 hoye jasse."*
+
+- `update()` used to **delete every job (`rfq_items`) and part and create them again**. A cost
+  estimate points at both (`rfq_item_id` / `rfq_item_part_id`, **SET NULL** on delete), so every
+  save left the estimates existing but **attached to nothing** — the RFQ read ৳0 and a quotation
+  made then would have been priced from nothing. (`work_order_items.rfq_item_id` has no FK and was
+  left dangling.)
+- Now jobs and parts are **edited in place, matched by id**: `edit()` ships `items[].id` and
+  `parts[].id`, the form (`RFQ/Create.tsx`) sends them back, `formRules` validates `items.*.id` /
+  `items.*.parts.*.id`, and **`matchRows($existing, $submitted, byId)`** pairs each row with the one
+  it edits (no id / a foreign id = new; an existing row nobody sent = removed). A kept job's file
+  rows are rewritten from what the form re-sends (the old cleanup is unchanged). `autosave()` still
+  matches **by position** — it never learns the ids it creates — and its parts no longer wipe either.
+- **`removalBlocker()`**: removing a job or part that has a cost estimate, or a job on a work order,
+  is **refused** (`errors.items`, shown under the jobs) before anything is touched — rename it
+  instead. An **old cached bundle (PWA) that sends no ids** therefore reads as "remove everything,
+  add new" and is refused on a costed RFQ rather than repeating the damage.
+- Migration **`..._000105_reattach_estimates_cut_loose_by_rfq_edit`** repairs what was already cut
+  loose: the job from the estimate's **revision snapshot** (`rfq_item_id`; old ids in order = jobs in
+  order), the part from its positional **`part_no`** (`3/11`, which must match the job's part count
+  now). An RFQ whose old ids don't line up one-for-one with its jobs is **left alone and logged**
+  (`[reattach estimates]` in the log and the deploy output). Snapshots now carry
+  `rfq_item_part_id` too (`RevisionTracker`).
+- Verified on a copy, 26 checks: unchanged save, rename / quantity / add part / add job, removing a
+  costed part or job refused, removing uncosted ones works, an id-less payload refused, the old
+  damage reproduced then repaired (each estimate back on its own job and part, totals restored), a
+  mismatch left alone.
 
 ### RFQ drafts + autosave
 - `rfqs.status` widened **enum → varchar(20)** and gained **`draft`**. A draft is an RFQ that has NOT entered the pipeline: no `RfqCreated` event (so no auto-estimate/duplicate detection), no PCD notification. Those side effects live in `RfqController::announceNewRfq()`, fired on real create **and** when a draft is later submitted.

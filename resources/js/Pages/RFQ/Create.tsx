@@ -31,11 +31,13 @@ type AttachedFile = {
 
 // A part within a job item. Only the name is captured — the part number is
 // positional (1/3, 2/3, 3/3) and recomputed whenever a row is added/removed.
-type Part = { name: string; quantity: string; unit: string };
+// `id` is the saved part being edited — kept so its cost estimate stays attached.
+type Part = { id?: number; name: string; quantity: string; unit: string };
 
 const emptyPart = (unit: string): Part => ({ name: '', quantity: '1', unit });
 
 type Item = {
+    id?: number;           // the saved job being edited (see Part.id)
     product_id: string;
     job_description: string;
     parts: Part[];
@@ -68,9 +70,11 @@ const emptyItem = (): Item => ({
 export default function RFQCreate({ customers, products, jobCategories, rfq }: any) {
     const initialItems: Item[] = rfq?.items?.length
         ? rfq.items.map((i: any) => ({
+            id:                 i.id,
             product_id:         String(i.product_id ?? ''),
             job_description:    i.job_description ?? '',
             parts:              (i.parts ?? []).map((p: any) => ({
+                                    id:       p.id,
                                     name:     p.name ?? '',
                                     quantity: String(p.quantity ?? '1'),
                                     unit:     p.unit ?? (i.unit ?? 'pcs'),
@@ -317,10 +321,12 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                 else samplePhotoFileIds.push(a.userFileId);
             });
             return {
+                id: item.id ?? '',
                 product_id: item.product_id,
                 job_description: item.job_description,
                 // Blank rows are dropped server-side too, but don't ship noise
-                parts: item.parts.filter((pt: Part) => pt.name.trim() !== ''),
+                parts: item.parts.filter((pt: Part) => pt.name.trim() !== '')
+                    .map((pt: Part) => ({ ...pt, id: pt.id ?? '' })),
                 quantity: item.quantity,
                 unit: item.unit,
                 notes: item.notes,

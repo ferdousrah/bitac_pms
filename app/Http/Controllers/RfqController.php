@@ -315,12 +315,14 @@ class RfqController extends Controller
                 'rfq_letter_ext'     => $rfq->rfq_letter_path ? strtolower(pathinfo($rfq->rfq_letter_path, PATHINFO_EXTENSION)) : null,
                 'status'             => $rfq->status,
                 'items'              => $rfq->items->map(fn($i) => [
+                    'id'                 => $i->id,
                     'product_id'         => $i->product_id,
                     'job_description'    => $i->job_description,
                     'quantity'           => $i->quantity,
                     'unit'               => $i->unit,
                     'notes'              => $i->notes,
                     'parts'              => $i->parts->map(fn($p) => [
+                        'id'       => $p->id,
                         'name'     => $p->name,
                         'quantity' => $p->quantity,
                         'unit'     => $p->unit,
@@ -366,7 +368,18 @@ class RfqController extends Controller
             }
         }
 
-        DB::transaction(function () use ($rfq, $validated, $request, $isSubmit) {
+        // Jobs and parts are edited in place, matched by their ids. They used
+        // to be deleted and created again on every save, which blanked the
+        // job/part link on every cost estimate (the foreign keys SET NULL) —
+        // the RFQ then read ৳0 everywhere. Removing a row that has been
+        // costed is refused, before anything is touched.
+        $existingItems = $rfq->items()->orderBy('id')->with('parts')->get();
+        [$itemPairs, $removedItems] = $this->matchRows($existingItems, $validated['items'] ?? [], byId: true);
+        if ($blocker = $this->removalBlocker($existingItems, $itemPairs, $removedItems)) {
+            return back()->withErrors(['items' => $blocker])->withInput();
+        }
+
+        DB::transaction(function () use ($rfq, $validated, $request, $isSubmit, $existingItems, $itemPairs, $removedItems) {
             $rfq->update([
                 'customer_id'        => $validated['customer_id'],
                 'job_category_id'    => $validated['job_category_id'] ?? null,
@@ -408,7 +421,7 @@ class RfqController extends Controller
             }
 
             // Delete OLD files (from rfq_item_files + item-level legacy paths) UNLESS reused
-            foreach ($rfq->items as $old) {
+            foreach ($existingItems as $old) {
                 foreach ($old->files as $oldFile) {
                     if (!in_array($oldFile->stored_path, $keepPaths)) {
                         // Only delete the physical file if it's not from the user's gallery
@@ -425,10 +438,10 @@ class RfqController extends Controller
                     Storage::disk('public')->delete($old->sample_photo_path);
                 }
             }
-            $rfq->items()->delete(); // cascade deletes rfq_item_files
+            $removedItems->each->delete(); // cascade deletes their rfq_item_files + parts
 
-            foreach ($validated['items'] ?? [] as $idx => $item) {
-                $rfqItem = $rfq->items()->create([
+            foreach ($itemPairs as $idx => [$item, $rfqItem]) {
+                $attrs = [
                     'product_id'         => ($item['product_id'] ?? null) ?: null,
                     'job_description'    => $item['job_description'] ?? null,
                     'quantity'           => $item['quantity'] ?? 0,
@@ -437,9 +450,17 @@ class RfqController extends Controller
                     'reference_type'     => $item['reference_type'] ?? 'none',
                     'sample_received'    => !empty($item['sample_received']),
                     'sample_description' => $item['sample_description'] ?? null,
-                ]);
+                ];
+                if ($rfqItem) {
+                    $rfqItem->update($attrs);
+                    // The form re-sends every attachment it keeps, so the
+                    // item's file rows are written afresh below.
+                    $rfqItem->files()->delete();
+                } else {
+                    $rfqItem = $rfq->items()->create($attrs);
+                }
 
-                $this->syncItemParts($rfqItem, $item['parts'] ?? []);
+                $this->syncItemParts($rfqItem, $item['parts'] ?? [], byId: true);
 
                 $this->attachItemFiles($rfqItem, $request, "items.{$idx}.drawings", $item['drawing_file_ids'] ?? [], 'drawing');
                 $this->attachItemFiles($rfqItem, $request, "items.{$idx}.sample_photos", $item['sample_photo_file_ids'] ?? [], 'sample_photo');
@@ -887,6 +908,10 @@ HTML;
             'remove_rfq_letter'  => $forUpdate ? 'nullable|boolean' : null,
             'save_as_draft'      => 'nullable|boolean',
             'items'              => $isDraft ? 'nullable|array' : 'required|array|min:1',
+            // The row being edited — a job and its parts keep their ids so the
+            // cost estimates hanging off them stay attached.
+            'items.*.id'              => 'nullable|integer',
+            'items.*.parts.*.id'      => 'nullable|integer',
             'items.*.job_description' => 'nullable|string|max:500',
             'items.*.product_id'      => 'nullable|exists:products,id',
             'items.*.quantity'        => $isDraft ? 'nullable|numeric|min:0' : 'required|numeric|min:0.01',
@@ -916,26 +941,96 @@ HTML;
     }
 
     /**
-     * Replace an item's parts with the submitted list, preserving order.
+     * Bring an item's parts in line with the submitted list, preserving order.
      * Blank names are dropped — an empty repeater row is not a part.
+     *
+     * ⚠️ Parts are UPDATED in place, never wiped and recreated: a part's cost
+     * estimate points at its id (rfq_item_part_id, SET NULL on delete), so a
+     * new id is an estimate that no longer belongs to anything.
      */
-    private function syncItemParts(\App\Models\RfqItem $rfqItem, array $parts): void
+    private function syncItemParts(\App\Models\RfqItem $rfqItem, array $parts, bool $byId = false): void
     {
-        $rfqItem->parts()->delete();
+        $rows = array_values(array_filter($parts, fn ($p) => trim((string) (is_array($p) ? ($p['name'] ?? '') : $p)) !== ''));
+        [$pairs, $removed] = $this->matchRows($rfqItem->parts()->get(), $rows, $byId);
 
-        $sort = 0;
-        foreach ($parts as $part) {
-            $name = trim((string) (is_array($part) ? ($part['name'] ?? '') : $part));
-            if ($name === '') continue;
-            $rfqItem->parts()->create([
-                'name'       => $name,
+        $removed->each->delete();
+
+        foreach ($pairs as $sort => [$part, $existing]) {
+            $attrs = [
+                'name'       => trim((string) (is_array($part) ? $part['name'] : $part)),
                 // Absolute piece count for the whole order — the part's cost
                 // estimate is raised against this quantity.
                 'quantity'   => is_array($part) ? (($part['quantity'] ?? null) !== null ? (float) $part['quantity'] : 1) : 1,
                 'unit'       => is_array($part) ? (($part['unit'] ?? null) ?: $rfqItem->unit ?: 'pcs') : ($rfqItem->unit ?: 'pcs'),
-                'sort_order' => $sort++,
-            ]);
+                'sort_order' => $sort,
+            ];
+            $existing ? $existing->update($attrs) : $rfqItem->parts()->create($attrs);
         }
+    }
+
+    /**
+     * Pair each submitted row with the existing row it edits.
+     *
+     * By id (the edit form sends each row's id): a row with no id, or an id
+     * that is not one of these rows, is new; an existing row nobody sent is
+     * removed. By position (autosave, which never learns the ids it creates):
+     * row i edits existing row i.
+     *
+     * @return array{0: array<int, array{0: mixed, 1: ?\Illuminate\Database\Eloquent\Model}>, 1: \Illuminate\Support\Collection}
+     */
+    private function matchRows(\Illuminate\Support\Collection $existing, array $submitted, bool $byId): array
+    {
+        $existing = $existing->values();
+        $byKey = $existing->keyBy('id');
+        $used = [];
+        $pairs = [];
+
+        foreach (array_values($submitted) as $idx => $row) {
+            if ($byId) {
+                $id = is_array($row) ? (int) ($row['id'] ?? 0) : 0;
+                $match = ($id && $byKey->has($id) && ! isset($used[$id])) ? $byKey[$id] : null;
+            } else {
+                $match = $existing[$idx] ?? null;
+            }
+            if ($match) $used[$match->id] = true;
+            $pairs[] = [$row, $match];
+        }
+
+        return [$pairs, $existing->reject(fn ($r) => isset($used[$r->id]))->values()];
+    }
+
+    /**
+     * Why this save may not remove the jobs / parts it leaves out, or null.
+     * A costed job or part (or a job already on a work order) cannot simply
+     * vanish from the RFQ — its estimate would be left belonging to nothing.
+     */
+    private function removalBlocker(\Illuminate\Support\Collection $existingItems, array $itemPairs, \Illuminate\Support\Collection $removedItems): ?string
+    {
+        $estimates = fn (string $col, $ids) => \App\Models\CostEstimate::withoutGlobalScopes()->whereIn($col, $ids)->exists();
+        $position  = $existingItems->pluck('id')->flip();
+        $label     = fn ($item) => 'Job ' . ($position[$item->id] + 1) . ' ("' . \Illuminate\Support\Str::limit(trim(strtok((string) $item->job_description, "\n")) ?: 'untitled', 40) . '")';
+
+        foreach ($removedItems as $item) {
+            if ($estimates('rfq_item_id', [$item->id])) {
+                return "{$label($item)} has a cost estimate, so it cannot be removed from the RFQ. Change its description instead.";
+            }
+            if (DB::table('work_order_items')->where('rfq_item_id', $item->id)->exists()) {
+                return "{$label($item)} is on a work order, so it cannot be removed from the RFQ.";
+            }
+        }
+
+        foreach ($itemPairs as [$row, $item]) {
+            if (! $item) continue;
+            $rows = array_values(array_filter($row['parts'] ?? [], fn ($p) => trim((string) (is_array($p) ? ($p['name'] ?? '') : $p)) !== ''));
+            [, $removedParts] = $this->matchRows($item->parts, $rows, byId: true);
+            foreach ($removedParts as $part) {
+                if ($estimates('rfq_item_part_id', [$part->id])) {
+                    return "Part \"{$part->name}\" of {$label($item)} has a cost estimate, so it cannot be removed. Rename it instead.";
+                }
+            }
+        }
+
+        return null;
     }
 
     private function attachItemFiles(\App\Models\RfqItem $rfqItem, Request $request, string $filesField, array $fileIds, string $type): void
