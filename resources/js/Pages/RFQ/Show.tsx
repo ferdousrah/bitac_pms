@@ -60,15 +60,20 @@ function ItemEstimateCell({ item }: { item: any }) {
     const fmt = (n: number) => `৳${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     const cost = item.job_cost;
 
-    // Part-wise costing: the job's cost is the sum of its parts' estimates.
-    // The parts themselves (and the links to cost them) live in the
-    // description column, so this cell just reports the roll-up.
+    // Part-wise costing: the parts are priced for ONE unit of the job, so the
+    // job total is their sum × the job quantity. The parts themselves (and the
+    // links to cost them) live in the description column, so this cell just
+    // reports the roll-up.
     if (cost?.mode === 'parts') {
         return (
             <div className="space-y-1">
                 <div className="font-bold text-surface-900 text-sm">{fmt(cost.total)}</div>
+                <div className="text-[10px] text-surface-400">job total</div>
+                <div className="text-[11px] text-surface-600 tabular-nums">
+                    {fmt(cost.unit)} <span className="text-surface-400">per {item.unit || 'pcs'} × {Number(cost.quantity)}</span>
+                </div>
                 <div className="text-[10px] text-surface-400">
-                    sum of {cost.costed} part{cost.costed !== 1 && 's'}
+                    per {item.unit || 'pcs'} = sum of {cost.costed} part{cost.costed !== 1 && 's'}
                 </div>
                 {cost.missing > 0 && (
                     <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">

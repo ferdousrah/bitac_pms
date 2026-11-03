@@ -132,8 +132,8 @@ class MaterialRequisitionController extends Controller
      * would requisition the material for one part of a multi-part job.
      *
      * An estimate's material quantity is per unit of what it costs, so the
-     * requisition needs `quantity × job_quantity` (a part's quantity is already
-     * the total pieces for the order).
+     * requisition needs `quantity × job_quantity` — and a part is costed for
+     * ONE unit of the job, so a part's lines are × the job quantity as well.
      */
     private function materialLinesFromEstimates(WorkOrder $wo): array
     {
@@ -142,10 +142,10 @@ class MaterialRequisitionController extends Controller
             $b = $item->jobCostBreakdown();
             if ($b['mode'] === 'parts') {
                 foreach ($b['parts'] as $row) {
-                    if ($row['estimate']) $estimates->push([$row['estimate'], "part {$row['part_no']}"]);
+                    if ($row['estimate']) $estimates->push([$row['estimate'], "part {$row['part_no']}", $b['quantity']]);
                 }
             } elseif ($b['estimate']) {
-                $estimates->push([$b['estimate'], null]);
+                $estimates->push([$b['estimate'], null, 1]);
             }
         }
 
@@ -153,12 +153,12 @@ class MaterialRequisitionController extends Controller
         if ($estimates->isEmpty()) {
             $legacy = ($wo->quotation_id ? CostEstimate::where('quotation_id', $wo->quotation_id)->latest('id')->first() : null)
                 ?? ($wo->rfq_id ? CostEstimate::where('rfq_id', $wo->rfq_id)->latest('id')->first() : null);
-            if ($legacy) $estimates->push([$legacy, null]);
+            if ($legacy) $estimates->push([$legacy, null, 1]);
         }
 
         $rows = [];
-        foreach ($estimates as [$estimate, $partLabel]) {
-            $jobQty = max(1, (float) ($estimate->job_quantity ?: 1));
+        foreach ($estimates as [$estimate, $partLabel, $perJob]) {
+            $jobQty = max(1, (float) ($estimate->job_quantity ?: 1)) * $perJob;
             $lines = $estimate->lines()->where('section', 'material')->with('material:id,name,unit')->get();
             foreach ($lines as $l) {
                 // A line costed as a typed item (no master material) is asked for by that name.

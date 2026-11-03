@@ -13,7 +13,7 @@ export default function CostEstimateForm({ estimate, rfq, rfqItem, rfqItemPart, 
         })) ?? [newLine(section)];
 
     // Pre-fill from RFQ item context if creating. Costing a single PART takes
-    // its quantity from the part (an absolute piece count for the order), and
+    // its quantity from the part (what one unit of the job takes), and
     // its part number is positional so it comes ready-made from the server.
     const defaultJobName = estimate?.job_name
         ?? rfqItem?.job_description

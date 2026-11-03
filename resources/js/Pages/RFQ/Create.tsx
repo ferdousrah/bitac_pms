@@ -703,7 +703,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                                 <div className="flex items-center gap-2">
                                                     <i className="fi fi-rr-cubes text-indigo-500 text-xs leading-none" />
                                                     <span className="text-xs font-semibold text-surface-700">Parts</span>
-                                                    <span className="text-[10px] text-surface-400">quantity = total pieces for the order</span>
+                                                    <span className="text-[10px] text-surface-400">quantity = what ONE {item.unit || 'unit'} of the job takes</span>
                                                     {item.parts.length > 0 && (
                                                         <span className="badge badge-slate text-[10px]">{item.parts.length}</span>
                                                     )}
@@ -734,7 +734,7 @@ export default function RFQCreate({ customers, products, jobCategories, rfq }: a
                                                                 className="form-input flex-1 !py-1.5 text-sm" />
                                                             <input type="number" min="0" step="0.01" value={pt.quantity}
                                                                 onChange={e => setPartField(index, pIndex, 'quantity', e.target.value)}
-                                                                title="Total pieces for the whole order"
+                                                                title={`Quantity for one ${item.unit || 'unit'} of the job — the job total is this × the job quantity`}
                                                                 className="form-input w-20 !py-1.5 text-sm shrink-0" />
                                                             <select value={pt.unit}
                                                                 onChange={e => setPartField(index, pIndex, 'unit', e.target.value)}

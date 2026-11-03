@@ -267,9 +267,27 @@ class JobCostingController extends Controller
                 . '</tr>';
         }
 
+        // Parts are costed for one unit of the job: show that row, then × the quantity.
+        if ($job['parts_per_unit']) {
+            $u = $job['unit_totals'];
+            $rows .= '<tr style="background:#f8fafc;">'
+                . '<td colspan="3" style="' . $cell . ' text-align:right; font-weight:bold;">Per ' . $esc($job['job_unit']) . ' (sum of parts)</td>'
+                . '<td style="' . $num . '">' . $fmt($u['material']) . '</td>'
+                . '<td style="' . $num . '">' . $fmt($u['machining']) . '</td>'
+                . '<td style="' . $num . '">' . $fmt($u['surface']) . '</td>'
+                . '<td style="' . $num . '">' . $fmt($u['other']) . '</td>'
+                . '<td style="' . $num . '">' . $fmt($u['overhead'] + $u['extra']) . '</td>'
+                . '<td style="' . $num . '">' . $fmt($u['vat'] + $u['tax']) . '</td>'
+                . '<td style="' . $num . '">' . $fmt($u['adjustment']) . '</td>'
+                . '<td style="' . $cell . '"></td>'
+                . '<td style="' . $num . ' font-weight:bold;">' . $fmt($job['per_job_unit']) . '</td>'
+                . '</tr>';
+        }
+
         $t = $job['totals'];
         $rows .= '<tr style="background:#eef2ff;">'
-            . '<td colspan="3" style="' . $cell . ' text-align:right; font-weight:bold;">Job Total</td>'
+            . '<td colspan="3" style="' . $cell . ' text-align:right; font-weight:bold;">Job Total'
+            . ($job['parts_per_unit'] ? ' (× ' . $fmt($job['job_quantity']) . ' ' . $esc($job['job_unit']) . ')' : '') . '</td>'
             . '<td style="' . $num . ' font-weight:bold;">' . $fmt($t['material']) . '</td>'
             . '<td style="' . $num . ' font-weight:bold;">' . $fmt($t['machining']) . '</td>'
             . '<td style="' . $num . ' font-weight:bold;">' . $fmt($t['surface']) . '</td>'
@@ -304,7 +322,7 @@ class JobCostingController extends Controller
             . $missing
             . '<table width="100%" style="margin-top:10pt; font-size:10pt;">'
             . '<tr><td align="right"><b>Job Total:</b> ৳' . $fmt($job['job_total']) . '</td></tr>'
-            . '<tr><td align="right"><b>Per ' . $esc($job['job_unit']) . ' (Job Total ÷ ' . $fmt($job['job_quantity']) . '):</b> ৳' . $fmt($job['per_job_unit']) . '</td></tr>'
+            . '<tr><td align="right"><b>Per ' . $esc($job['job_unit']) . ($job['parts_per_unit'] ? ' (sum of parts)' : ' (Job Total ÷ ' . $fmt($job['job_quantity']) . ')') . ':</b> ৳' . $fmt($job['per_job_unit']) . '</td></tr>'
             . '</table>'
             . '<p style="font-size:7.5pt; color:#666; margin-top:10pt;">Consolidated from the individual part cost estimates. Section figures are extended by each estimate\'s quantity and multiplier; "Adjust." is any manual rounding applied to an estimate\'s grand total. Amounts include VAT &amp; Tax.</p>';
 
@@ -361,6 +379,13 @@ class JobCostingController extends Controller
         }
         $totals = array_map(fn ($v) => round($v, 2), $totals);
 
+        // Parts are costed for ONE unit of the job: the rows add up to one
+        // unit, and the job is that × its quantity. A whole-job estimate
+        // already covers the full quantity.
+        $perJob    = $cost['mode'] === 'parts' ? (float) $cost['quantity'] : 1.0;
+        $unitTotals = $totals;
+        $totals    = array_map(fn ($v) => round($v * $perJob, 2), $totals);
+
         $jobQty    = (float) $rfqItem->quantity;
         $jobTotal  = (float) $cost['total'];
         $submittable = collect($rows)->filter(fn ($r) => $r['estimate'] && $r['estimate']['approval_status'] === 'not_submitted')->count();
@@ -378,8 +403,10 @@ class JobCostingController extends Controller
             'missing'         => $parts->isNotEmpty() ? $cost['missing'] : 0,
             'rows'            => $rows,
             'totals'          => $totals,
+            'parts_per_unit'  => $cost['mode'] === 'parts',
+            'unit_totals'     => $unitTotals,
             'job_total'       => round($jobTotal, 2),
-            'per_job_unit'    => $jobQty > 0 ? round($jobTotal / $jobQty, 2) : round($jobTotal, 2),
+            'per_job_unit'    => $cost['mode'] === 'parts' ? $cost['unit'] : ($jobQty > 0 ? round($jobTotal / $jobQty, 2) : round($jobTotal, 2)),
             'submittable'     => $submittable,
         ];
     }

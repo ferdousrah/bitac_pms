@@ -58,9 +58,10 @@ class RfqItem extends Model
      * consumer (quotation, RFQ screen, reports).
      *
      * Costing is PART-WISE when the job has parts: each part carries its own
-     * estimate and the job total is the plain SUM of them. Part quantities
-     * are absolute (total pieces for the order), so the sum is NOT multiplied
-     * by the job quantity again.
+     * estimate, and a part's quantity is what ONE unit of the job takes (BITAC,
+     * 2026-11-03: one steam coil = 28 pipes, 7 U-bends …). So the sum of the
+     * part estimates is the price of one job unit (`unit`), and the job total
+     * is that × the job quantity.
      *
      * A job with no parts — and every estimate raised before parts existed —
      * falls back to the old behaviour: the latest item-level estimate.
@@ -68,7 +69,7 @@ class RfqItem extends Model
      * Returns the breakdown as well as the total so callers can warn about
      * parts that have not been costed yet instead of quoting short.
      *
-     *   mode: 'parts'  → total is the sum of part estimates
+     *   mode: 'parts'  → unit is the sum of part estimates, total = unit × quantity
      *         'item'   → total came from a single item-level estimate
      *         'none'   → nothing costed yet
      */
@@ -90,9 +91,12 @@ class RfqItem extends Model
 
         // Parts exist and at least one is costed → part-wise costing.
         if ($costed->isNotEmpty()) {
+            $unit = round((float) $costed->sum('grand_total'), 2);
             return [
                 'mode'       => 'parts',
-                'total'      => round((float) $costed->sum('grand_total'), 2),
+                'unit'       => $unit,
+                'quantity'   => $this->jobQuantity(),
+                'total'      => round($unit * $this->jobQuantity(), 2),
                 'parts'      => $rows->all(),
                 'part_count' => $rows->count(),
                 'costed'     => $costed->count(),
@@ -107,15 +111,26 @@ class RfqItem extends Model
         $itemEstimates = $this->itemLevelEstimates()->get();
         $estimate = $itemEstimates->firstWhere('status', '!=', 'draft') ?? $itemEstimates->first();
 
+        // A whole-job estimate already covers the full quantity.
+        $total = $estimate ? round((float) $estimate->grand_total, 2) : 0.0;
+
         return [
             'mode'       => $estimate ? 'item' : 'none',
-            'total'      => $estimate ? round((float) $estimate->grand_total, 2) : 0.0,
+            'unit'       => round($total / $this->jobQuantity(), 2),
+            'quantity'   => $this->jobQuantity(),
+            'total'      => $total,
             'parts'      => $rows->all(),
             'part_count' => $rows->count(),
             'costed'     => 0,
             'missing'    => $rows->count(),
             'estimate'   => $estimate,
         ];
+    }
+
+    /** The job quantity, never below 1 — a blank quantity costs one unit. */
+    public function jobQuantity(): float
+    {
+        return max(1.0, (float) $this->quantity);
     }
 
     /** Convenience: just the money. */

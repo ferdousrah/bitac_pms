@@ -105,7 +105,9 @@ export default function JobCostingEdit({ job, entries, materials, operations, cu
     const liveTotals = useMemo(() => parts.map((p, i) =>
         p.estimate_id || started.has(i) ? grandOf(p.data) : 0
     ), [parts, started]);
-    const jobTotal = liveTotals.reduce((s, v) => s + v, 0);
+    // Parts are costed for ONE unit of the job; the job is that × its quantity.
+    const unitTotal = liveTotals.reduce((s, v) => s + v, 0);
+    const jobTotal = unitTotal * (Number(job.job_quantity) || 1);
     const uncosted = parts.filter((p, i) => !p.estimate_id && !(started.has(i) && hasContent(i))).length;
 
     // Errors come back as estimates.N.field where N indexes the SENT array.
@@ -270,6 +272,7 @@ export default function JobCostingEdit({ job, entries, materials, operations, cu
                         <div>
                             <div className="text-[10px] uppercase tracking-wider text-white/50 font-semibold">Job total (live)</div>
                             <div className="text-xl font-bold tabular-nums">{fmt(jobTotal)}</div>
+                            <div className="text-[11px] text-white/60 tabular-nums">{fmt(unitTotal)} per {job.job_unit} × {job.job_quantity}</div>
                         </div>
                         <div className="text-xs text-white/60">
                             {hasChanges

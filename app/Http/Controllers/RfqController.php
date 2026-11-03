@@ -251,6 +251,8 @@ class RfqController extends Controller
                         $c = $i->jobCostBreakdown();
                         return [
                             'mode'    => $c['mode'],
+                            'unit'    => $c['unit'],
+                            'quantity'=> $c['quantity'],
                             'total'   => $c['total'],
                             'costed'  => $c['costed'],
                             'missing' => $c['missing'],

@@ -98,8 +98,12 @@ class QuotationController extends Controller
             // (no separate VAT row — see sample re-quotation 36.06.2692.028.51.028(2).26.92).
             // The job total already honours each estimate's manual grand-total
             // override, so a rounded figure flows straight through.
+            // A part-costed job's parts are priced for ONE unit, so that sum is
+            // the unit price; a whole-job estimate is split by the quantity.
             $unitPrice = null;
-            if ($cost['mode'] !== 'none') {
+            if ($cost['mode'] === 'parts') {
+                $unitPrice = $cost['unit'];
+            } elseif ($cost['mode'] !== 'none') {
                 $jobQty = (float) $i->quantity;
                 $unitPrice = $jobQty > 0
                     ? round($cost['total'] / $jobQty, 2)
@@ -769,7 +773,9 @@ class QuotationController extends Controller
                 if ($newGroup) {
                     $item = $rfq->items()->orderBy('id')->skip($idx)->first();
                     $cost = $item?->jobCostBreakdown();
-                    if ($cost && $cost['mode'] !== 'none' && $qty > 0) {
+                    if ($cost && $cost['mode'] === 'parts') {
+                        $unitPrice = $cost['unit'];
+                    } elseif ($cost && $cost['mode'] !== 'none' && $qty > 0) {
                         $unitPrice = round($cost['total'] / $qty, 2);
                     }
                 }

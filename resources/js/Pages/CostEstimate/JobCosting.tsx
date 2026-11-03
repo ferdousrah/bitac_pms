@@ -89,7 +89,9 @@ export default function JobCosting({ job }: any) {
                         <div className="px-5 py-3.5">
                             <div className="text-[10px] uppercase tracking-wider font-semibold text-surface-500">Per {job.job_unit}</div>
                             <div className="text-2xl font-bold text-surface-900 tabular-nums">{fmt(job.per_job_unit)}</div>
-                            <div className="text-[11px] text-surface-400">job total ÷ {job.job_quantity}</div>
+                            <div className="text-[11px] text-surface-400">
+                                {job.parts_per_unit ? `sum of parts · × ${job.job_quantity} = job total` : `job total ÷ ${job.job_quantity}`}
+                            </div>
                         </div>
                         <div className="px-5 py-3.5">
                             <div className="text-[10px] uppercase tracking-wider font-semibold text-surface-500">Net production cost</div>
@@ -232,8 +234,29 @@ export default function JobCosting({ job }: any) {
                                     })}
                                 </tbody>
                                 <tfoot>
-                                    <tr className="border-t-2 border-surface-200 bg-indigo-50/40 font-bold">
-                                        <td className="px-4 py-3 text-surface-900">Job total</td>
+                                    {/* Parts are costed for one unit of the job: their sum, then × the quantity. */}
+                                    {job.parts_per_unit && (() => {
+                                        const u = job.unit_totals;
+                                        return (
+                                            <tr className="border-t-2 border-surface-200 bg-surface-50 font-semibold">
+                                                <td className="px-4 py-3 text-surface-700">Per {job.job_unit} <span className="font-normal text-surface-400">(sum of parts)</span></td>
+                                                <td className="px-3 py-3" />
+                                                <td className="px-3 py-3 text-right tabular-nums">{fmt(u.material)}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums">{fmt(u.machining)}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums">{fmt(u.surface)}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums">{fmt(u.other)}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums">{fmt(u.overhead + u.extra)}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums">{fmt(u.vat + u.tax)}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums">{u.adjustment ? fmt(u.adjustment) : '—'}</td>
+                                                <td className="px-3 py-3" />
+                                                <td className="px-4 py-3 text-right tabular-nums text-surface-900">{fmt(job.per_job_unit)}</td>
+                                            </tr>
+                                        );
+                                    })()}
+                                    <tr className={`${job.parts_per_unit ? '' : 'border-t-2 border-surface-200 '}bg-indigo-50/40 font-bold`}>
+                                        <td className="px-4 py-3 text-surface-900">
+                                            Job total{job.parts_per_unit && <span className="font-normal text-surface-500"> (× {job.job_quantity} {job.job_unit})</span>}
+                                        </td>
                                         <td className="px-3 py-3" />
                                         <td className="px-3 py-3 text-right tabular-nums">{fmt(t.material)}</td>
                                         <td className="px-3 py-3 text-right tabular-nums">{fmt(t.machining)}</td>
