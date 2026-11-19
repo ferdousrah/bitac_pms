@@ -52,8 +52,8 @@ const STAT_ICON_STYLES: Record<string, string> = {
     brand:  'bg-gradient-to-br from-brand-400 to-brand-600 text-white',
 };
 
-function StatCard({ label, value, color, icon, href, alert }: {
-    label: string; value: number; color: string; icon: string; href?: string; alert?: boolean;
+function StatCard({ label, value, color, icon, href, alert, display }: {
+    label: string; value: number; color: string; icon: string; href?: string; alert?: boolean; display?: string;
 }) {
     const animated = useCountUp(value);
     const AnimIcon = ANIM_ICON_MAP[icon];
@@ -74,7 +74,7 @@ function StatCard({ label, value, color, icon, href, alert }: {
                     : <i className={`fi ${icon} leading-none`} />}
             </div>
             <div className="min-w-0">
-                <div className="stat-value tabular-nums">{animated}</div>
+                <div className="stat-value tabular-nums">{display ?? animated}</div>
                 <p className="stat-label">{label}</p>
             </div>
         </motion.div>
@@ -83,23 +83,38 @@ function StatCard({ label, value, color, icon, href, alert }: {
 }
 
 /* ─── Color palette ─────────────────────────────────────────────── */
+// Keyed by the stage labels DashboardMetrics::STAGES sends.
 const PIPELINE_COLORS: Record<string, string> = {
-    'Draft':         '#94a3b8',
-    'Approved':      '#60a5fa',
-    'In Production': '#fbbf24',
-    'QC Hold':       '#fb923c',
-    'QC Passed':     '#34d399',
-    'Ready':         '#818cf8',
-    'Delivered':     '#22c55e',
-    'Cancelled':     '#f87171',
+    'IED acceptance':    '#f59e0b',
+    'PCD planning':      '#8b5cf6',
+    'In the shops':      '#3b82f6',
+    'Inspection':        '#fb923c',
+    'Ready / part sent': '#14b8a6',
 };
 
-const STATUS_BADGE_MAP: Record<string, string> = {
-    draft: 'badge-slate', approved: 'badge-blue', in_production: 'badge-amber',
-    released_to_shops: 'badge-blue',
-    qc_hold: 'badge-amber', qc_passed: 'badge-green',
-    ready_for_delivery: 'badge-purple', delivered: 'badge-green', cancelled: 'badge-red',
-    in_rework: 'badge-red',
+// The work order's own status_color (WorkOrder::getStatusColorAttribute) ->
+// the badge classes the stylesheet actually defines.
+const COLOR_BADGE: Record<string, string> = {
+    amber: 'badge-amber', yellow: 'badge-amber', orange: 'badge-amber',
+    blue: 'badge-blue', indigo: 'badge-blue', sky: 'badge-blue',
+    violet: 'badge-purple', purple: 'badge-purple',
+    green: 'badge-green', teal: 'badge-green', emerald: 'badge-green',
+    red: 'badge-red', rose: 'badge-red', gray: 'badge-slate', slate: 'badge-slate',
+};
+const statusBadge = (wo: any) => COLOR_BADGE[wo.status_color] ?? 'badge-slate';
+
+const fmtTk = (n: number | null | undefined) =>
+    `৳${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+// Written out in full: Tailwind only ships classes it can see in the source.
+const STAGE_TONE: Record<string, string> = {
+    amber:   'border-amber-200 bg-amber-50 text-amber-700',
+    violet:  'border-violet-200 bg-violet-50 text-violet-700',
+    blue:    'border-blue-200 bg-blue-50 text-blue-700',
+    orange:  'border-orange-200 bg-orange-50 text-orange-700',
+    teal:    'border-teal-200 bg-teal-50 text-teal-700',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    green:   'border-green-200 bg-green-50 text-green-700',
 };
 
 const PRIORITY_BADGE_MAP: Record<string, string> = {
@@ -380,7 +395,7 @@ function CustomDonut({ data, total, activeIdx, progress, onSliceClick }: DonutPr
 }
 
 /* ─── Main Dashboard ────────────────────────────────────────────── */
-export default function DashboardIndex({ stats, recentWorkOrders, charts }: any) {
+export default function DashboardIndex({ stats, stages = [], waiting = [], money = null, recentWorkOrders, charts }: any) {
     // Pie click-to-explode state. -1 means none active.
     const [activePieIdx, setActivePieIdx] = useState<number>(-1);
     // The slice that is *currently being rendered* as active — kept around
@@ -437,13 +452,102 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
 
                 {/* ── KPI Stat Cards ── */}
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                    <StatCard label="Active Jobs"      value={stats.active_work_orders}  color="blue"   icon="fi-rr-settings"         href="/work-orders?status=in_production" />
-                    <StatCard label="Delivered Today"  value={stats.delivered_today}      color="green"  icon="fi-rr-truck-side"       href="/work-orders?status=delivered" />
-                    <StatCard label="Pending QC"       value={stats.pending_qc}           color="amber"  icon="fi-rr-shield-check"     href="/qc"           alert={stats.pending_qc > 3} />
-                    <StatCard label="Overdue Jobs"     value={stats.overdue_work_orders}  color="red"    icon="fi-rr-clock"            href="/work-orders"  alert={stats.overdue_work_orders > 0} />
-                    <StatCard label="Open NCRs"        value={stats.open_ncrs}            color="orange" icon="fi-rr-triangle-warning" href="/ncrs"         alert={stats.open_ncrs > 2} />
-                    <StatCard label="Outstanding Invoices" value={stats.draft_invoices}   color="teal"   icon="fi-rr-receipt"          href="/invoices" />
+                    <StatCard label="Jobs in Hand"     value={stats.active_jobs}      color="blue"   icon="fi-rr-settings"         href="/work-orders" />
+                    <StatCard label="Delivered Today"  value={stats.delivered_today}  color="green"  icon="fi-rr-truck-side"       href="/delivery" />
+                    <StatCard label="At Inspection"    value={stats.at_qc}            color="amber"  icon="fi-rr-shield-check"     href="/qc"           alert={stats.at_qc > 3} />
+                    <StatCard label="Overdue Jobs"     value={stats.overdue}          color="red"    icon="fi-rr-clock"            href="/work-orders"  alert={stats.overdue > 0} />
+                    <StatCard label="Open NCRs"        value={stats.open_ncrs}        color="orange" icon="fi-rr-triangle-warning" href="/ncrs"         alert={stats.open_ncrs > 2} />
+                    {stats.receivable_due !== null && stats.receivable_due !== undefined
+                        ? <StatCard label="Net Receivable" value={0} display={fmtTk(stats.receivable_due)} color="teal" icon="fi-rr-receipt" href="/receivables" />
+                        : <StatCard label="Machines Running" value={stats.machines_running} color="teal" icon="fi-rr-settings" />}
                 </div>
+
+                {/* ── Waiting for you ── */}
+                {waiting.length > 0 && (
+                    <div className="card animate-fade-in">
+                        <div className="card-header flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-bold text-surface-800">Waiting for you</h3>
+                                <p className="text-xs text-surface-400 mt-0.5">What needs your action now</p>
+                            </div>
+                            <span className="badge badge-amber">{waiting.reduce((s: number, w: any) => s + w.count, 0)}</span>
+                        </div>
+                        <div className="card-body grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                            {waiting.map((w: any) => (
+                                <Link key={w.label} href={w.href}
+                                    className="flex items-center gap-3 rounded-xl border border-surface-200 px-3.5 py-3 hover:border-brand-300 hover:bg-brand-50/40 transition-colors">
+                                    <span className="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                                        <i className={`fi ${w.icon} text-sm leading-none`} />
+                                    </span>
+                                    <span className="flex-1 min-w-0 text-sm font-medium text-surface-700">{w.label}</span>
+                                    <span className="text-lg font-bold tabular-nums text-surface-900">{w.count}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Job flow: where every open job is ── */}
+                <div className="card animate-fade-in">
+                    <div className="card-header">
+                        <h3 className="text-sm font-bold text-surface-800">Job Flow</h3>
+                        <p className="text-xs text-surface-400 mt-0.5">IED → PCD → shops → inspection → delivery → bill — where every job in hand is</p>
+                    </div>
+                    <div className="card-body grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+                        {stages.map((st: any, i: number) => (
+                            <Link key={st.key} href={st.href}
+                                className={`relative rounded-xl border px-3.5 py-3 transition-transform hover:-translate-y-0.5 ${STAGE_TONE[st.color] ?? STAGE_TONE.blue}`}>
+                                <div className="text-[10px] font-bold uppercase tracking-wider opacity-80">{i + 1}. {st.label}</div>
+                                <div className="text-2xl font-bold tabular-nums mt-1 text-surface-900">{st.count}</div>
+                                <div className="text-[11px] opacity-80">{st.unit ?? (st.count === 1 ? 'job' : 'jobs')}</div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+
+                {/* ── Business: target, orders, pipeline, collection ── */}
+                {money && (
+                    <div className="card animate-fade-in">
+                        <div className="card-header flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                                <h3 className="text-sm font-bold text-surface-800">Business — FY {money.target.year}</h3>
+                                <p className="text-xs text-surface-400 mt-0.5">From IED Reports, Receivables and the bills — the same figures those pages show</p>
+                            </div>
+                            <Link href="/ied/reports?view=target" className="text-xs font-semibold text-brand-600 hover:text-brand-800">Target vs Achievement →</Link>
+                        </div>
+                        <div className="card-body space-y-5">
+                            <div>
+                                <div className="flex items-baseline justify-between gap-3 flex-wrap text-sm">
+                                    <span className="text-surface-600">Work orders received <b className="text-surface-900">{fmtTk(money.target.achieved)}</b>
+                                        {money.target.target > 0 && <> of target <b className="text-surface-900">{fmtTk(money.target.target)}</b></>}</span>
+                                    <span className="font-bold tabular-nums text-surface-900">
+                                        {money.target.percent !== null ? `${money.target.percent}%` : 'No target set'}
+                                    </span>
+                                </div>
+                                <div className="mt-2 h-2.5 rounded-full bg-surface-100 overflow-hidden">
+                                    <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all"
+                                        style={{ width: `${Math.min(100, money.target.percent ?? 0)}%` }} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                                {[
+                                    { label: 'Orders this month', value: fmtTk(money.orders_month), sub: `${money.orders_month_count} work order${money.orders_month_count === 1 ? '' : 's'}`, href: '/ied/reports?view=target' },
+                                    { label: 'Quoted this month', value: fmtTk(money.quoted_month), sub: 'at the price that stands', href: '/ied/reports?view=quotations' },
+                                    { label: 'Awaiting order', value: fmtTk(money.pipeline_value), sub: `${money.pipeline_jobs} quotation${money.pipeline_jobs === 1 ? '' : 's'}${money.pipeline_oldest ? ` · oldest ${money.pipeline_oldest} days` : ''}`, href: '/ied/reports?view=pipeline' },
+                                    { label: 'Billed this month', value: fmtTk(money.invoiced_month), sub: 'bills issued', href: '/invoices' },
+                                    { label: 'Received this month', value: fmtTk(money.received_month), sub: 'cash, net of deductions', href: '/payments' },
+                                    { label: 'Net receivable', value: fmtTk(money.net_receivable), sub: `due ${fmtTk(money.receivable_due)} − advance ${fmtTk(money.advance_in_hand)} · ${fmtTk(money.overdue)} overdue`, href: '/receivables' },
+                                ].map((m) => (
+                                    <Link key={m.label} href={m.href} className="rounded-xl border border-surface-200 px-3.5 py-3 hover:border-brand-300 transition-colors">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-surface-500">{m.label}</div>
+                                        <div className="text-lg font-bold tabular-nums text-surface-900 mt-1">{m.value}</div>
+                                        <div className="text-[11px] text-surface-400 mt-0.5">{m.sub}</div>
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Charts Row 1 ── */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -508,7 +612,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                             <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-violet-100/30 blur-3xl pointer-events-none" />
                             <div className="card-header flex items-center justify-between relative">
                                 <div>
-                                    <h3 className="text-sm font-bold text-surface-800">Work Order Pipeline</h3>
+                                    <h3 className="text-sm font-bold text-surface-800">Jobs by Stage</h3>
                                     <p className="text-xs text-surface-400 mt-0.5">
                                         {activePieIdx >= 0 ? `Focused on ${charts.pipeline[activePieIdx]?.status}` : 'Tap any slice to focus'}
                                     </p>
@@ -793,7 +897,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                         <td className="text-surface-800 font-medium">{wo.product}</td>
                                         <td className="text-surface-500">{wo.customer}</td>
                                         <td>
-                                            <span className={`badge ${STATUS_BADGE_MAP[wo.status] ?? 'badge-slate'}`}>
+                                            <span className={`badge ${statusBadge(wo)}`}>
                                                 {wo.status_label}
                                             </span>
                                         </td>
@@ -842,7 +946,7 @@ export default function DashboardIndex({ stats, recentWorkOrders, charts }: any)
                                         <div className="font-bold text-surface-900 text-sm">Job #{wo.job_number ?? '—'}</div>
                                         <div className="text-[10px] text-surface-400 font-mono">{wo.wo_number}</div>
                                     </div>
-                                    <span className={`badge ${STATUS_BADGE_MAP[wo.status] ?? 'badge-slate'}`}>
+                                    <span className={`badge ${statusBadge(wo)}`}>
                                         {wo.status_label}
                                     </span>
                                 </div>

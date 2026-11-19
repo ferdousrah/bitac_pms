@@ -2,17 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\AuditLog;
-use App\Models\DeliveryOrder;
-use App\Models\DowntimeEvent;
-use App\Models\Invoice;
 use App\Models\Machine;
-use App\Models\Ncr;
-use App\Models\OperationStep;
-use App\Models\Quotation;
-use App\Models\WorkCentre;
 use App\Models\WorkOrder;
-use App\Models\WorkOrderSection;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
@@ -25,88 +16,50 @@ class LiveDashboardService
         // next centre was shown its figures.
         $centre = app()->bound('current_center_id') ? app('current_center_id') : null;
 
-        return Cache::remember('live_dashboard' . ($centre ? ".{$centre}" : '.all'), 8, fn() => $this->buildData());
+        // …and per whether the viewer may see the money, or the first person to
+        // fill the cache decides what everyone after them is shown.
+        $money = self::seesMoney();
+
+        return Cache::remember('live_dashboard' . ($centre ? ".{$centre}" : '.all') . ($money ? '' : '.nomoney'), 8,
+            fn() => $this->buildData($money));
     }
 
-    private function buildData(): array
+    public static function seesMoney(): bool
     {
-        $today      = Carbon::today();
-        $weekStart  = Carbon::now()->startOfWeek();
-        $monthStart = Carbon::now()->startOfMonth();
+        $u = auth()->user();
+        return $u && ($u->can('view payments') || $u->can('view reports') || $u->can('view all centres'));
+    }
 
-        // ─── Production KPIs ──────────────────────────────────────────
-        // "Active" = anything moving through production / QC / pre-delivery.
-        // released_to_shops is the most common in-flight state in the new
-        // Production module, so it must be included.
-        $activeStatuses = ['released_to_shops', 'in_production', 'qc_hold', 'qc_passed', 'ready_for_delivery'];
-
-        $activeJobsCount     = WorkOrder::whereIn('status', $activeStatuses)->count();
-        // Delivered today = POD-stamped delivery orders (real signal, not WO.updated_at).
-        $completedTodayCount = DeliveryOrder::whereDate('delivered_at', $today)->count();
-        $pendingQcCount      = WorkOrder::where('status', 'qc_hold')->count();
-        $overdueCount        = WorkOrder::whereNotIn('status', ['delivered', 'cancelled'])
-                                        ->whereNotNull('due_date')
-                                        ->where('due_date', '<', $today)->count();
-        // Machines running = distinct machines with at least one operation_step in_progress.
-        $machinesRunning     = OperationStep::where('status', 'in_progress')
-                                            ->whereNotNull('machine_id')
-                                            ->distinct('machine_id')
-                                            ->count('machine_id');
-        $openNcrs            = Ncr::whereIn('status', ['open', 'in_rework'])->count();
+    private function buildData(bool $withMoney): array
+    {
+        $metrics = app(DashboardMetrics::class);
+        // ─── Production KPIs — the same figures as /dashboard (DashboardMetrics).
+        $k = $metrics->kpis();
+        // The list below: jobs from the shop floor to the last delivery.
+        $activeStatuses = array_merge(DashboardMetrics::STAGES['shops']['statuses'],
+            DashboardMetrics::STAGES['qc']['statuses'], DashboardMetrics::STAGES['delivery']['statuses']);
 
         $kpiCards = [
-            ['key' => 'active_jobs',       'value' => $activeJobsCount,     'label' => 'Active Jobs',       'color' => 'blue',   'alert' => false],
-            ['key' => 'completed_today',   'value' => $completedTodayCount, 'label' => 'Completed Today',   'color' => 'green',  'alert' => false],
-            ['key' => 'pending_qc',        'value' => $pendingQcCount,      'label' => 'Pending QC',        'color' => 'amber',  'alert' => $pendingQcCount > 3],
-            ['key' => 'overdue_jobs',      'value' => $overdueCount,        'label' => 'Overdue Jobs',      'color' => 'red',    'alert' => $overdueCount > 0],
-            ['key' => 'machines_running',  'value' => $machinesRunning,     'label' => 'Machines Running',  'color' => 'teal',   'alert' => false],
-            ['key' => 'open_ncrs',         'value' => $openNcrs,            'label' => 'Open NCRs',         'color' => 'orange', 'alert' => $openNcrs > 2],
+            ['key' => 'active_jobs',      'value' => $k['active_jobs'],      'label' => 'Jobs in Hand',     'color' => 'blue',   'alert' => false],
+            ['key' => 'completed_today',  'value' => $k['delivered_today'],  'label' => 'Delivered Today',  'color' => 'green',  'alert' => false],
+            ['key' => 'pending_qc',       'value' => $k['at_qc'],            'label' => 'At Inspection',    'color' => 'amber',  'alert' => $k['at_qc'] > 3],
+            ['key' => 'overdue_jobs',     'value' => $k['overdue'],          'label' => 'Overdue Jobs',     'color' => 'red',    'alert' => $k['overdue'] > 0],
+            ['key' => 'machines_running', 'value' => $k['machines_running'], 'label' => 'Machines Running', 'color' => 'teal',   'alert' => false],
+            ['key' => 'open_ncrs',        'value' => $k['open_ncrs'],        'label' => 'Open NCRs',        'color' => 'orange', 'alert' => $k['open_ncrs'] > 2],
         ];
 
-        // ─── Financial Overview ───────────────────────────────────────
-        $invoicedToday   = (float) Invoice::whereDate('created_at', $today)->sum('total_amount');
-        $invoicedMonth   = (float) Invoice::where('created_at', '>=', $monthStart)->sum('total_amount');
-        $outstandingAmt  = (float) Invoice::whereIn('status', ['issued', 'acknowledged'])->sum('total_amount');
-        // One figure per job at the price that stands — a re-quotation replaces
-        // the version before it rather than adding to it (Quotation::applyStanding).
-        $quotedMonth     = (float) Quotation::applyStanding(Quotation::query())
-                                            ->whereRaw(Quotation::quotedDateSql() . ' >= ?', [$monthStart->toDateString()])
-                                            ->sum('quotations.total_amount');
-        $convertedMonth  = (float) Quotation::where('status', 'converted')
-                                            ->where('updated_at', '>=', $monthStart)->sum('total_amount');
-        $approvedQuotes  = Quotation::where('status', 'approved')->count();
-        $pendingQuotes   = Quotation::where('status', 'pending_approval')->count();
-        $convRate = $quotedMonth > 0 ? round(($convertedMonth / $quotedMonth) * 100, 1) : 0.0;
-
-        // 7-day revenue trend (today + previous 6 days)
-        $revenueTrend = collect(range(6, 0))->map(function ($daysBack) {
-            $d = Carbon::today()->subDays($daysBack);
-            $sum = (float) Invoice::whereDate('created_at', $d)->sum('total_amount');
-            return [
-                'date'  => $d->format('M d'),
-                'day'   => $d->format('D'),
-                'value' => $sum,
+        // ─── Financial Overview — read from the reports, never re-derived.
+        $financial = null;
+        if ($withMoney) {
+            $trend = collect($metrics->billingTrend());
+            $max   = max(1, $trend->max('value'));
+            $financial = $metrics->money() + [
+                'revenue_trend' => $trend->map(fn ($r) => $r + ['pct' => round($r['value'] / $max * 100)])->values(),
             ];
-        });
-
-        $maxRevenue = max(1, $revenueTrend->max('value'));
-
-        $financial = [
-            'invoiced_today'    => $invoicedToday,
-            'invoiced_month'    => $invoicedMonth,
-            'outstanding'       => $outstandingAmt,
-            'quoted_month'      => $quotedMonth,
-            'converted_month'   => $convertedMonth,
-            'conversion_rate'   => $convRate,
-            'approved_quotes'   => $approvedQuotes,
-            'pending_quotes'    => $pendingQuotes,
-            'revenue_trend'     => $revenueTrend->map(fn($r) => array_merge($r, [
-                'pct' => round(($r['value'] / $maxRevenue) * 100),
-            ]))->values(),
-        ];
+        }
 
         // ─── Machine Health Overview ──────────────────────────────────
-        $machines = Machine::with(['workCentre'])->get();
+        $machines = DashboardMetrics::machines()->with(['section'])->get();
         $totalMachines = $machines->count();
 
         $stateBreakdown = [
@@ -130,7 +83,7 @@ class LiveDashboardService
                 'id'           => $m->id,
                 'name'         => $m->name,
                 'code'         => $m->machine_code,
-                'work_centre'  => $m->workCentre->name ?? '—',
+                'work_centre'  => $m->section->name ?? '—',
                 'health_score' => $m->health_score,
                 'health_label' => $m->health_label,
                 'state'        => $m->current_state,
@@ -150,28 +103,15 @@ class LiveDashboardService
                 'next_date'  => $m->next_maintenance_date?->toDateString(),
             ])->values();
 
-        $downtimeTodaySec = (int) DowntimeEvent::whereDate('started_at', $today)
-            ->get()
-            ->sum(function ($d) {
-                $end = $d->ended_at ?? now();
-                return $d->started_at->diffInSeconds($end);
-            });
-
-        $downtimeWeekSec = (int) DowntimeEvent::where('started_at', '>=', $weekStart)
-            ->get()
-            ->sum(function ($d) {
-                $end = $d->ended_at ?? now();
-                return $d->started_at->diffInSeconds($end);
-            });
-
         $machinesData = [
             'total'              => $totalMachines,
             'state_breakdown'    => $stateBreakdown,
             'avg_health'         => $avgHealth,
             'critical_machines'  => $criticalMachines,
             'maintenance_due'    => $maintenanceDue,
-            'downtime_today_h'   => round($downtimeTodaySec / 3600, 1),
-            'downtime_week_h'    => round($downtimeWeekSec / 3600, 1),
+            // Open maintenance requests replaced the old downtime log, which
+            // nothing has written since the shop-floor module was retired.
+            'maintenance'        => $metrics->maintenance(),
             'utilization_pct'    => $totalMachines > 0
                 ? round(($stateBreakdown['running'] / $totalMachines) * 100)
                 : 0,
@@ -184,14 +124,14 @@ class LiveDashboardService
         //   - Else if WO is qc_passed / ready_for_delivery → "Ready for dispatch"
         // This keeps WOs visible even when they're parked between sections.
         $activeJobsList = WorkOrder::with([
-            'product', 'customer',
+            'product', 'customer', 'items',
             'sections.section',
             'operationSheets.steps.machine.workCentre',
             'operationSheets.steps.operator',
             'ncrs' => fn($q) => $q->whereIn('status', ['open', 'in_rework']),
         ])
             ->whereIn('status', $activeStatuses)
-            ->orderByRaw("FIELD(status, 'in_production', 'released_to_shops', 'qc_hold', 'qc_passed', 'ready_for_delivery')")
+            ->orderByRaw("FIELD(status, 'in_production', 'released_to_shops', 'qc_hold', 'qc_passed', 'ready_for_delivery', 'partially_delivered')")
             ->get();
 
         $activeJobs = $activeJobsList->map(function ($wo) {
@@ -218,6 +158,7 @@ class LiveDashboardService
                 $wo->status === 'qc_hold'       => 'Awaiting inspection',
                 $wo->status === 'qc_passed'     => 'Ready for dispatch',
                 $wo->status === 'ready_for_delivery' => 'Ready for dispatch',
+                $wo->status === 'partially_delivered' => 'Part delivered — rest to follow',
                 default                         => '—',
             };
 
@@ -225,7 +166,7 @@ class LiveDashboardService
                 'id'              => $wo->id,
                 'wo_number'       => $wo->wo_number,
                 'job_number'      => $wo->job_number,
-                'product'         => $wo->product->name ?? '',
+                'product'         => $wo->product->name ?? ((string) $wo->items->first()?->description),
                 'customer'        => $wo->customer->name ?? '',
                 'current_step'    => $currentStepLabel,
                 'work_centre'     => $step?->machine?->workCentre?->name
@@ -241,85 +182,11 @@ class LiveDashboardService
             ];
         })->values();
 
-        // ─── Work Centres ─────────────────────────────────────────────
-        // Each WC's active jobs come from in-progress operation_steps whose
-        // machine sits in that WC. We pre-aggregate so each WC card shows the
-        // jobs currently being worked on its floor.
-        $inProgressSteps = OperationStep::with([
-            'machine.workCentre',
-            'operator',
-            'operationSheet.workOrder.product',
-        ])->where('status', 'in_progress')->get();
+        // ─── Shops (the old work_centres table no longer describes the floor)
+        $workCentreStatus = $metrics->shops();
 
-        $stepsByWc = $inProgressSteps->groupBy(fn($s) => $s->machine?->work_centre_id);
-
-        $workCentreStatus = WorkCentre::with('machines')
-            ->where('is_active', true)->get()->map(function ($wc) use ($stepsByWc) {
-                $totalMachines = $wc->machines->count();
-                $hasBreakdown  = $wc->machines->where('current_state', 'breakdown')->isNotEmpty();
-
-                // Machine-state breakdown from machines.current_state — gives a
-                // real signal even when no operation_steps are running.
-                $stateMix = [
-                    'running'     => $wc->machines->where('current_state', 'running')->count(),
-                    'setup'       => $wc->machines->where('current_state', 'setup')->count(),
-                    'idle'        => $wc->machines->where('current_state', 'idle')->count(),
-                    'maintenance' => $wc->machines->where('current_state', 'maintenance')->count(),
-                    'breakdown'   => $wc->machines->where('current_state', 'breakdown')->count(),
-                    'offline'     => $wc->machines->where('current_state', 'offline')->count(),
-                ];
-
-                $wcSteps = $stepsByWc->get($wc->id, collect());
-                $activeMachineIds = $wcSteps->pluck('machine_id')->unique()->filter()->values();
-                $activeJobs       = $activeMachineIds->count();
-
-                $activeJobsList = $wcSteps->map(fn($s) => [
-                    'wo_number'  => $s->operationSheet?->workOrder?->wo_number ?? '',
-                    'job_number' => $s->operationSheet?->workOrder?->job_number,
-                    'product'    => $s->operationSheet?->workOrder?->product?->name ?? '',
-                    'operator'   => $s->operator?->name ?? '',
-                ])->values();
-
-                return [
-                    'id'              => $wc->id,
-                    'name'            => $wc->name,
-                    'total_machines'  => $totalMachines,
-                    // Frontend "X/Y running" reads from running (machine.current_state),
-                    // not from operation_steps — gives a real signal regardless of
-                    // whether an op_step happens to be in_progress right now.
-                    'active_machines' => $stateMix['running'],
-                    'active_jobs_count' => $activeJobs,
-                    'state_mix'       => $stateMix,
-                    'active_jobs'     => $activeJobsList,
-                    'status_color'    => $hasBreakdown ? 'red' : ($stateMix['running'] > 0 ? 'green' : 'gray'),
-                ];
-            });
-
-        // ─── Recent Alerts ────────────────────────────────────────────
-        $recentAlerts = AuditLog::with('user')
-            ->whereIn('action', [
-                'job_started', 'job_stopped', 'qc_hold', 'qc_passed',
-                'ncr_created', 'downtime_logged', 'wo_overdue',
-            ])
-            ->latest()
-            ->limit(15)
-            ->get()
-            ->map(function ($log) {
-                $color = match($log->action) {
-                    'job_stopped', 'qc_passed'     => 'green',
-                    'ncr_created', 'downtime_logged', 'wo_overdue' => 'red',
-                    'qc_hold'                       => 'amber',
-                    default                         => 'blue',
-                };
-                return [
-                    'id'        => $log->id,
-                    'action'    => $log->action,
-                    'message'   => $log->new_values['message'] ?? $log->action,
-                    'color'     => $color,
-                    'time'      => $log->created_at->format('H:i'),
-                    'timestamp' => $log->created_at->toIso8601String(),
-                ];
-            });
+        // ─── Recent activity, from the audit trail
+        $recentAlerts = $metrics->activity();
 
         return [
             'kpi_cards'          => $kpiCards,

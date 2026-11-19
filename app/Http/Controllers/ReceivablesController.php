@@ -43,6 +43,15 @@ class ReceivablesController extends Controller
     }
 
     /**
+     * The receivables totals with no filters — what the dashboards show, from
+     * the same build() as this page, so the two can never disagree.
+     */
+    public function totals(): array
+    {
+        return $this->build(new Request())['totals'];
+    }
+
+    /**
      * The printed report — the same figures, on the BITAC pad.
      *
      * ⚠️ Landscape. Seven money columns plus a client name do not fit A4

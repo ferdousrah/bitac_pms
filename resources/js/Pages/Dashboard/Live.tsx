@@ -15,6 +15,7 @@ interface ActiveJob {
 
 interface WorkCentreStatus {
     id: number; name: string; total_machines: number; active_machines: number;
+    active_jobs_count: number;
     active_jobs: { wo_number: string; product: string; operator: string }[];
     status_color: string;
 }
@@ -24,9 +25,17 @@ interface Alert { id: number; action: string; message: string; color: string; ti
 interface RevenuePoint { date: string; day: string; value: number; pct: number }
 
 interface Financial {
-    invoiced_today: number; invoiced_month: number; outstanding: number;
-    quoted_month: number; converted_month: number; conversion_rate: number;
-    approved_quotes: number; pending_quotes: number; revenue_trend: RevenuePoint[];
+    invoiced_month: number; received_month: number;
+    receivable_due: number; advance_in_hand: number; net_receivable: number; overdue: number;
+    quoted_month: number; orders_month: number; orders_month_count: number;
+    pipeline_jobs: number; pipeline_value: number; pipeline_oldest: number | null;
+    target: { year: string; target: number; achieved: number; percent: number | null };
+    revenue_trend: RevenuePoint[];
+}
+
+interface MaintenanceOpen {
+    electrical: number; mechanical: number; pending: number;
+    list: { id: number; machine: string; code: string | null; category: string; status: string; urgency: string; days: number }[];
 }
 
 interface CriticalMachine {
@@ -45,13 +54,13 @@ interface MachinesData {
     avg_health: number;
     critical_machines: CriticalMachine[];
     maintenance_due: MaintenanceDue[];
-    downtime_today_h: number; downtime_week_h: number;
+    maintenance: MaintenanceOpen;
     utilization_pct: number;
 }
 
 interface Props {
     kpi_cards: KPICard[];
-    financial: Financial;
+    financial: Financial | null;
     machines_data: MachinesData;
     active_jobs: ActiveJob[];
     work_centre_status: WorkCentreStatus[];
@@ -188,6 +197,7 @@ const alertBorder: Record<string, string> = {
     red:   'border-l-red-500',
     amber: 'border-l-amber-500',
     blue:  'border-l-blue-500',
+    purple: 'border-l-purple-500',
 };
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
@@ -620,7 +630,8 @@ export default function LiveDashboard({
                     </div>
                 </div>
 
-                {/* ─── FINANCIAL OVERVIEW ──────────────────────────── */}
+                {/* ─── FINANCIAL OVERVIEW (only for whoever may see the money) ── */}
+                {financial && (
                 <div className={`rounded-2xl border overflow-hidden shadow-xl transition-all duration-300 ease-out
                                 hover:shadow-2xl hover:border-brand-400/40
                                 ${t.cardBg} ${t.cardBorder}`}>
@@ -628,7 +639,7 @@ export default function LiveDashboard({
                         icon="fi-rr-chart-pie-alt"
                         color={mood === 'night' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}
                         title="Financial Overview"
-                        subtitle="Revenue, billing & sales pipeline"
+                        subtitle="Orders, billing, collection and the sales pipeline"
                         action={
                             <span className={`text-[10px] px-2.5 py-1 rounded-lg uppercase tracking-wider font-semibold border ${
                                 mood === 'night' ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' : 'text-emerald-700 bg-emerald-50 border-emerald-200'
@@ -637,12 +648,12 @@ export default function LiveDashboard({
                     />
                     <div className="p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5">
                         <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
-                            <FinStat t={t} icon="fi-rr-receipt"           label="Invoiced Today"   value={formatBDT(financial.invoiced_today)}  accent={mood === 'night' ? 'text-emerald-300' : 'text-emerald-700'} />
-                            <FinStat t={t} icon="fi-rr-money-bill-wave"   label="Invoiced (Month)" value={formatBDT(financial.invoiced_month)}  accent={mood === 'night' ? 'text-emerald-300' : 'text-emerald-700'} />
-                            <FinStat t={t} icon="fi-rr-hourglass-end"     label="Outstanding"      value={formatBDT(financial.outstanding)}     accent={mood === 'night' ? 'text-amber-300' : 'text-amber-700'} sublabel="Issued · awaiting receipt" />
-                            <FinStat t={t} icon="fi-rr-document-signed"   label="Quoted (Month)"   value={formatBDT(financial.quoted_month)}    accent={mood === 'night' ? 'text-blue-300' : 'text-blue-700'} />
-                            <FinStat t={t} icon="fi-rr-handshake"         label="Converted"        value={formatBDT(financial.converted_month)} accent={mood === 'night' ? 'text-teal-300' : 'text-teal-700'} sublabel={`${financial.conversion_rate}% conversion`} />
-                            <FinStat t={t} icon="fi-rr-time-quarter-past" label="Pipeline"         value={`${financial.approved_quotes + financial.pending_quotes}`} accent={mood === 'night' ? 'text-purple-300' : 'text-purple-700'} sublabel={`${financial.pending_quotes} pending · ${financial.approved_quotes} approved`} />
+                            <FinStat t={t} icon="fi-rr-handshake"         label="Orders (Month)"   value={formatBDT(financial.orders_month)}    accent={mood === 'night' ? 'text-teal-300' : 'text-teal-700'} sublabel={`${financial.orders_month_count} work order${financial.orders_month_count === 1 ? '' : 's'}`} />
+                            <FinStat t={t} icon="fi-rr-document-signed"   label="Quoted (Month)"   value={formatBDT(financial.quoted_month)}    accent={mood === 'night' ? 'text-blue-300' : 'text-blue-700'} sublabel="At the price that stands" />
+                            <FinStat t={t} icon="fi-rr-time-quarter-past" label="Awaiting Order"   value={formatBDT(financial.pipeline_value)}  accent={mood === 'night' ? 'text-purple-300' : 'text-purple-700'} sublabel={`${financial.pipeline_jobs} quotation${financial.pipeline_jobs === 1 ? '' : 's'}${financial.pipeline_oldest ? ` · oldest ${financial.pipeline_oldest}d` : ''}`} />
+                            <FinStat t={t} icon="fi-rr-receipt"           label="Billed (Month)"   value={formatBDT(financial.invoiced_month)}  accent={mood === 'night' ? 'text-emerald-300' : 'text-emerald-700'} />
+                            <FinStat t={t} icon="fi-rr-money-bill-wave"   label="Received (Month)" value={formatBDT(financial.received_month)}  accent={mood === 'night' ? 'text-emerald-300' : 'text-emerald-700'} sublabel="Cash, net of deductions" />
+                            <FinStat t={t} icon="fi-rr-hourglass-end"     label="Net Receivable"   value={formatBDT(financial.net_receivable)}  accent={mood === 'night' ? 'text-amber-300' : 'text-amber-700'} sublabel={`Due ${formatBDT(financial.receivable_due)} − advance ${formatBDT(financial.advance_in_hand)}`} />
                         </div>
 
                         <div className={`lg:col-span-5 rounded-xl p-4 border transition-all duration-300 ease-out
@@ -650,20 +661,23 @@ export default function LiveDashboard({
                                           ${t.cardSection}`}>
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <div className={`text-[10px] font-bold uppercase tracking-wider ${t.label}`}>7-Day Revenue Trend</div>
+                                    <div className={`text-[10px] font-bold uppercase tracking-wider ${t.label}`}>Bills Raised — 7 Days</div>
                                     <div className={`text-lg font-bold mt-0.5 ${t.textStrong}`}>
                                         {formatBDT(financial.revenue_trend.reduce((s, p) => s + p.value, 0))}
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className={`text-[10px] font-bold uppercase tracking-wider ${t.label}`}>Conversion</div>
+                                    <div className={`text-[10px] font-bold uppercase tracking-wider ${t.label}`}>Target FY {financial.target.year}</div>
                                     <div className={`text-lg font-bold mt-0.5 ${
-                                        financial.conversion_rate >= 50
-                                            ? (mood === 'night' ? 'text-emerald-300' : 'text-emerald-700')
-                                            : financial.conversion_rate >= 25
-                                                ? (mood === 'night' ? 'text-amber-300' : 'text-amber-700')
-                                                : (mood === 'night' ? 'text-red-300' : 'text-red-700')
-                                    }`}>{financial.conversion_rate}%</div>
+                                        financial.target.percent === null
+                                            ? t.labelMuted
+                                            : financial.target.percent >= 75
+                                                ? (mood === 'night' ? 'text-emerald-300' : 'text-emerald-700')
+                                                : financial.target.percent >= 40
+                                                    ? (mood === 'night' ? 'text-amber-300' : 'text-amber-700')
+                                                    : (mood === 'night' ? 'text-red-300' : 'text-red-700')
+                                    }`}>{financial.target.percent === null ? 'Not set' : `${financial.target.percent}%`}</div>
+                                    <div className={`text-[10px] tabular-nums ${t.labelMuted}`}>{formatBDT(financial.target.achieved)} of {formatBDT(financial.target.target)}</div>
                                 </div>
                             </div>
                             <div className="flex items-end justify-between gap-1.5 h-28">
@@ -683,6 +697,7 @@ export default function LiveDashboard({
                         </div>
                     </div>
                 </div>
+                )}
 
                 {/* ─── MACHINE HEALTH ──────────────────────────────── */}
                 <div className={`rounded-2xl border overflow-hidden shadow-xl transition-all duration-300 ease-out
@@ -732,12 +747,12 @@ export default function LiveDashboard({
                             <HealthGauge score={machines_data.avg_health} t={t} />
                             <div className={`grid grid-cols-2 gap-3 mt-4 w-full pt-3 border-t ${t.sectionDivider}`}>
                                 <div className="text-center">
-                                    <div className={`text-[9px] uppercase tracking-wider font-bold ${t.labelMuted}`}>Downtime Today</div>
-                                    <div className={`text-lg font-bold tabular-nums mt-0.5 ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{machines_data.downtime_today_h}h</div>
+                                    <div className={`text-[9px] uppercase tracking-wider font-bold ${t.labelMuted}`}>Electrical Open</div>
+                                    <div className={`text-lg font-bold tabular-nums mt-0.5 ${mood === 'night' ? 'text-sky-300' : 'text-sky-700'}`}>{machines_data.maintenance.electrical}</div>
                                 </div>
                                 <div className="text-center">
-                                    <div className={`text-[9px] uppercase tracking-wider font-bold ${t.labelMuted}`}>This Week</div>
-                                    <div className={`text-lg font-bold tabular-nums mt-0.5 ${mood === 'night' ? 'text-orange-300' : 'text-orange-700'}`}>{machines_data.downtime_week_h}h</div>
+                                    <div className={`text-[9px] uppercase tracking-wider font-bold ${t.labelMuted}`}>Mechanical Open</div>
+                                    <div className={`text-lg font-bold tabular-nums mt-0.5 ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{machines_data.maintenance.mechanical}</div>
                                 </div>
                             </div>
                         </div>
@@ -779,6 +794,24 @@ export default function LiveDashboard({
                                 <div className={`text-center py-8 text-xs ${mood === 'night' ? 'text-emerald-400' : 'text-emerald-600'}`}>
                                     <i className="fi fi-rr-shield-check text-2xl block mb-1.5" />
                                     All machines healthy
+                                </div>
+                            )}
+                            {machines_data.maintenance.list.length > 0 && (
+                                <div className={`mt-4 pt-3 border-t ${t.sectionDivider}`}>
+                                    <div className={`text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 ${t.label}`}>
+                                        <i className={`fi fi-rr-tools ${mood === 'night' ? 'text-sky-400' : 'text-sky-600'}`} /> Open Maintenance Requests
+                                    </div>
+                                    <div className="space-y-1">
+                                        {machines_data.maintenance.list.map((r) => (
+                                            <div key={r.id} className={`text-xs flex items-center gap-2 ${t.textMuted}`}>
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${r.category === 'electrical'
+                                                    ? (mood === 'night' ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-700')
+                                                    : (mood === 'night' ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-700')}`}>{r.category === 'electrical' ? 'Elec' : 'Mech'}</span>
+                                                <span className="truncate flex-1">{r.code ? `${r.code} · ` : ''}{r.machine}</span>
+                                                <span className={t.labelMuted}>{r.status.replace(/_/g, ' ')} · {r.days}d</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                             {machines_data.maintenance_due.length > 0 && (
@@ -823,7 +856,7 @@ export default function LiveDashboard({
                                     <th className="px-4 py-3 text-left">Product</th>
                                     <th className="px-4 py-3 text-left">Customer</th>
                                     <th className="px-4 py-3 text-left">Current Step</th>
-                                    <th className="px-4 py-3 text-left">Work Centre</th>
+                                    <th className="px-4 py-3 text-left">Shop</th>
                                     <th className="px-4 py-3 text-left">Operator</th>
                                     <th className="px-4 py-3 text-left">Elapsed</th>
                                     <th className="px-4 py-3 text-left">Status</th>
@@ -902,15 +935,15 @@ export default function LiveDashboard({
                     </div>
                 </div>
 
-                {/* ─── WORK CENTRES + ALERTS ───────────────────────── */}
+                {/* ─── SHOPS + ACTIVITY ────────────────────────────── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">
                     <div className={`rounded-2xl border overflow-hidden shadow-xl transition-all duration-300 ease-out
                                 hover:shadow-2xl hover:border-brand-400/40
                                 ${t.cardBg} ${t.cardBorder}`}>
                         <SectionHeader t={t}
-                            icon="fi-rr-factory"
+                            icon="fi-rr-industry-windows"
                             color={mood === 'night' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}
-                            title="Work Centre Status" subtitle="Live machine occupancy per shop" />
+                            title="Shops" subtitle="Jobs at each shop now, and its machines" />
                         <div className="p-3 sm:p-4 space-y-2.5 sm:space-y-3 max-h-[26rem] overflow-y-auto">
                             {work_centre_status.map((wc) => {
                                 const pct = wc.total_machines > 0 ? Math.round((wc.active_machines / wc.total_machines) * 100) : 0;
@@ -930,7 +963,9 @@ export default function LiveDashboard({
                                                                   ${wcBg}`}>
                                         <div className="flex items-center justify-between mb-2">
                                             <span className={`font-semibold text-base ${t.textStrong}`}>{wc.name}</span>
-                                            <span className={`text-sm font-mono font-semibold tabular-nums ${wcCount}`}>{wc.active_machines}/{wc.total_machines} running</span>
+                                            <span className={`text-sm font-mono font-semibold tabular-nums ${wcCount}`}>
+                                                {wc.active_jobs_count} job{wc.active_jobs_count === 1 ? '' : 's'} · {wc.active_machines}/{wc.total_machines} running
+                                            </span>
                                         </div>
                                         <div className={`h-1.5 rounded-full overflow-hidden mb-2 ${t.barTrack}`}>
                                             <div className={`h-full transition-all duration-700 ${
@@ -961,7 +996,7 @@ export default function LiveDashboard({
                                                         <span className={`font-bold ${mood === 'night' ? 'text-amber-300' : 'text-amber-700'}`}>{job.job_number ?? '—'}</span>
                                                         <span className={t.labelMuted}>·</span>
                                                         <span className="truncate">{job.product}</span>
-                                                        <span className={`ml-auto ${t.labelMuted}`}>({job.operator})</span>
+                                                        {job.operator && <span className={`ml-auto ${t.labelMuted}`}>({job.operator})</span>}
                                                     </div>
                                                 ))}
                                             </div>
@@ -971,7 +1006,7 @@ export default function LiveDashboard({
                             })}
                             {work_centre_status.length === 0 && (
                                 <div className={`text-center py-10 text-sm ${t.labelMuted}`}>
-                                    <i className="fi fi-rr-factory text-3xl block mb-2 opacity-50" />No work centres
+                                    <i className="fi fi-rr-industry-windows text-3xl block mb-2 opacity-50" />No shops
                                 </div>
                             )}
                         </div>
@@ -983,7 +1018,7 @@ export default function LiveDashboard({
                         <SectionHeader t={t}
                             icon="fi-rr-bell"
                             color={mood === 'night' ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-700'}
-                            title="Live Alert Feed" subtitle="Last 15 production events" />
+                            title="Recent Activity" subtitle="Jobs, deliveries, bills and payments — from the audit log" />
                         <div className="overflow-y-auto max-h-[26rem]">
                             {recent_alerts.map((alert) => (
                                 <div key={alert.id}
@@ -996,7 +1031,7 @@ export default function LiveDashboard({
                             ))}
                             {recent_alerts.length === 0 && (
                                 <div className={`px-5 py-12 text-center text-sm ${t.labelMuted}`}>
-                                    <i className="fi fi-rr-bell text-3xl block mb-2 opacity-50" />No recent alerts
+                                    <i className="fi fi-rr-bell text-3xl block mb-2 opacity-50" />No recent activity
                                 </div>
                             )}
                         </div>

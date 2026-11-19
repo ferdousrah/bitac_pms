@@ -80,6 +80,13 @@ function NavLink({ item, isActive, collapsed }: { item: NavItem; isActive: boole
     );
 }
 
+/** The Live Dashboard needs `view live dashboard` — its buttons are not offered without it. */
+function LiveDashboardGate({ children }: PropsWithChildren) {
+    const { auth, isSuperAdmin } = usePage().props as any;
+    const can = isSuperAdmin || (auth?.user?.permissions ?? []).includes('view live dashboard');
+    return can ? <>{children}</> : null;
+}
+
 export default function AppLayout({ header, children }: PropsWithChildren<{ header?: ReactNode }>) {
     const { auth, currentCenter, isSuperAdmin, canSwitchCenter, availableCenters, unreadNotifications, appSettings, productionSections } = usePage().props as any;
     const theme = (appSettings ?? {}) as Partial<AppSettings>;
@@ -371,6 +378,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                         />
                     ))}
                 </nav>
+                <LiveDashboardGate>
                 <div className="p-3 border-t border-white/5 shrink-0">
                     <a href="/dashboard/live" target="_blank" rel="noopener noreferrer" title="Live Dashboard"
                         className={`group relative flex items-center justify-center w-full rounded-xl overflow-hidden
@@ -395,6 +403,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                         )}
                     </a>
                 </div>
+                </LiveDashboardGate>
 
                 {/* Collapse / Expand toggle — floats on right edge */}
                 <button
@@ -1039,6 +1048,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                             })}
 
                             {/* Live Dashboard link */}
+                            <LiveDashboardGate>
                             <div className="px-3 pt-4">
                                 <a
                                     href="/dashboard/live"
@@ -1055,6 +1065,7 @@ export default function AppLayout({ header, children }: PropsWithChildren<{ head
                                     Live Dashboard
                                 </a>
                             </div>
+                            </LiveDashboardGate>
                         </div>
                     </div>
                 </>
@@ -1549,6 +1560,7 @@ function MobileDrawer({ open, onClose, auth, currentCenter, currentUrl, unreadCo
 
                 {/* ── Footer ──────────────────────────────────────────── */}
                 <div className="border-t border-surface-100 p-3 space-y-2 shrink-0">
+                    <LiveDashboardGate>
                     <a href="/dashboard/live" target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-2 w-full py-3 rounded-xl
                                    bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold shadow-premium">
@@ -1558,6 +1570,7 @@ function MobileDrawer({ open, onClose, auth, currentCenter, currentUrl, unreadCo
                         </span>
                         Live Dashboard
                     </a>
+                    </LiveDashboardGate>
                     {canInstall && (
                         <motion.button
                             whileHover="hover"

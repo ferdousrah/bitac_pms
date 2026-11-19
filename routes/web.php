@@ -98,9 +98,13 @@ Route::post('customer/logout', [CustomerLoginController::class, 'logout'])
     ->name('customer.logout');
 
 // ======================================================================
-// Public Live Operations Dashboard (no auth required)
+// Live Operations Dashboard — staff only.
+// ⚠️ It used to need no sign-in at all, and it shows the receivables, the
+// month's quotations and the clients' names. An office TV signs in once
+// ("remember me") with an account holding `view live dashboard`.
 // ======================================================================
 Route::get('/dashboard/live', [LiveDashboardController::class, 'index'])
+    ->middleware(['auth', 'permission:view live dashboard'])
     ->name('dashboard.live');
 
 // ======================================================================

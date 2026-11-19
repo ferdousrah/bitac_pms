@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\DeliveryOrder;
-use App\Models\Invoice;
 use App\Models\Ncr;
 use App\Models\QcInspection;
 use App\Models\WorkOrder;
+use App\Services\DashboardMetrics;
 use Carbon\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,25 +18,15 @@ class DashboardController extends Controller
         $user  = auth()->user();
         $today = Carbon::today();
 
-        // ── KPI Stats ────────────────────────────────────────────────
-        // Active = anything currently moving through production / QC / pre-delivery.
-        // Includes `released_to_shops` because that's the main in-flight state
-        // in the new Production module.
-        $activeStatuses = ['released_to_shops', 'in_production', 'qc_hold', 'qc_passed', 'ready_for_delivery'];
+        // ── KPIs, job flow, what is waiting on me — one service for both dashboards.
+        $metrics = app(DashboardMetrics::class);
+        $kpis    = $metrics->kpis();
+        $stages  = $metrics->jobStages();
 
-        $stats = [
-            'active_work_orders'  => WorkOrder::whereIn('status', $activeStatuses)->count(),
-            'overdue_work_orders' => WorkOrder::whereNotIn('status', ['delivered', 'cancelled'])
-                                              ->whereNotNull('due_date')
-                                              ->where('due_date', '<', $today)->count(),
-            'pending_qc'          => WorkOrder::where('status', 'qc_hold')->count(),
-            'open_ncrs'           => Ncr::whereIn('status', ['open', 'in_rework'])->count(),
-            // "Outstanding" invoices = anything not yet paid. More useful than 'draft'.
-            'draft_invoices'      => Invoice::whereIn('status', ['issued', 'acknowledged'])->count(),
-            // Delivered today derived from the real delivery signal — POD-stamped
-            // delivery_orders, not WO.updated_at (which churns on any edit).
-            'delivered_today'     => DeliveryOrder::whereDate('delivered_at', $today)->count(),
-        ];
+        // Money only for whoever works with it — a shop engineer's dashboard
+        // carries no receivables or quotation figures.
+        $seesMoney = $user->can('view payments') || $user->can('view reports') || $user->can('view all centres');
+        $money     = $seesMoney ? $metrics->money() : null;
 
         // ── Recent Work Orders ────────────────────────────────────────
         $recentWorkOrders = WorkOrder::with([
@@ -57,7 +47,7 @@ class DashboardController extends Controller
                     // is actually doing a rework loop.
                     'status'       => $inRework ? 'in_rework' : $wo->status,
                     'status_label' => $inRework ? 'In Rework' : $wo->status_label,
-                    'status_color' => $inRework ? 'rose' : $wo->status_color,
+                    'status_color' => $inRework ? 'red' : $wo->status_color,
                     'priority'     => $wo->priority,
                     'due_date'     => $wo->due_date?->format('d/m/Y'),
                     'is_overdue'   => $wo->is_overdue,
@@ -81,23 +71,11 @@ class DashboardController extends Controller
             ];
         })->values();
 
-        // ── Chart 2: Work Order Pipeline (current status distribution) ─
-        $statusLabels = [
-            'draft'              => 'Draft',
-            'approved'           => 'Approved',
-            'in_production'      => 'In Production',
-            'qc_hold'            => 'QC Hold',
-            'qc_passed'          => 'QC Passed',
-            'ready_for_delivery' => 'Ready',
-            'delivered'          => 'Delivered',
-            'cancelled'          => 'Cancelled',
-        ];
-        $pipeline = WorkOrder::selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')->get()
-            ->map(fn($r) => [
-                'status' => $statusLabels[$r->status] ?? $r->status,
-                'count'  => $r->count,
-            ])->values();
+        // ── Chart 2: open jobs by workflow stage (IED → PCD → shops → QC → delivery)
+        $pipeline = collect($stages)->whereIn('key', array_keys(DashboardMetrics::STAGES))
+            ->where('count', '>', 0)
+            ->map(fn ($st) => ['status' => $st['label'], 'key' => $st['key'], 'count' => $st['count'], 'href' => $st['href']])
+            ->values();
 
         // ── Chart 3: QC Pass Rate Trend (last 6 months) ──────────────
         $qcTrend = collect(range(5, 0))->map(function ($i) {
@@ -150,7 +128,10 @@ class DashboardController extends Controller
         })->values();
 
         return Inertia::render('Dashboard/Index', [
-            'stats'            => $stats,
+            'stats'            => $kpis + ['receivable_due' => $money['net_receivable'] ?? null],
+            'stages'           => $stages,
+            'waiting'          => $metrics->waitingFor($user),
+            'money'            => $money,
             'recentWorkOrders' => $recentWorkOrders,
             'userRole'         => $user->getRoleNames()->first(),
             'charts'           => [

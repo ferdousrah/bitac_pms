@@ -527,8 +527,8 @@ BITAC paper-form layout for routing a job through shops. Editable by PCD: **the 
   shows every version; the total adds each job once).
 - Work-order figures (Target vs Achievement, Stakeholder, Sector Wise Job) need no rule: `work_orders.quotation_id` is the version the order was
   issued against, and a `converted` quotation cannot be revised.
-- ⚠️ `LiveDashboardService::getData()` caches for **8 s**, per centre (`live_dashboard.{id}` /
-  `live_dashboard.all`) — a test that changes data and re-reads it must forget that key.
+- ⚠️ `LiveDashboardService::getData()` caches for **8 s**, per centre and per money visibility
+  (`live_dashboard.{id}` / `live_dashboard.all`, `.nomoney`) — a test that changes data and re-reads it must forget that key.
 
 ### Deleting a draft quotation (`QuotationController@destroy`)
 - **Only `draft`** can be deleted (anything submitted/approved/sent is revised, never deleted); refusal is a redirect + flash. Allowed for the creator, a super admin, or anyone with `edit quotations`. UI: trash icon on draft rows in the Quotation list, **Delete** in the Draft card on Show, **Delete Draft** on the edit form — all `confirm()` first.
@@ -2024,6 +2024,45 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - Verified, 19 checks inside a rolled-back transaction: console silent, status change, ordinary
   update, touch, password, create / delete, sign-in / out / failed, the real IP through a private
   proxy and a forged one refused, the page's filters, client naming and search.
+
+## 📊 Both dashboards read the current workflow (2026-11-19)
+> BITAC: *"Dashboard r live dashboard 2tai software development er surute kora, er moddhe tu software e
+> onek changes asse."* Both still counted the first version's statuses and tables.
+
+- **`App\Services\DashboardMetrics` is the one source for `/dashboard` and `/dashboard/live`.** ⚠️ It
+  computes no money of its own: receivables come from **`ReceivablesController::totals()`** (the page's
+  own `build()`), the pipeline from **`IedReportService::pipeline()`**, the year's target from
+  **`TargetAchievementService::forYear()`** — the dashboards are windows onto those reports.
+- **`STAGES`** — where an open job is: IED acceptance (`ied_pending`, legacy draft/approved) · PCD planning
+  (`pcd_review` / `pcd_pending` / `pcd_release_pending`) · In the shops · Inspection (`qc_hold`) ·
+  Ready / part sent (`qc_passed` / `ready_for_delivery` / `partially_delivered`), then **Delivered, not
+  billed** (signed challans with no `invoice_id`) and **To complete** (delivered, no `completed_at`).
+- What was wrong before: **Active jobs** left out `partially_delivered` and everything at IED/PCD (it is
+  now *Jobs in Hand* = not delivered / cancelled); **Outstanding** summed whole `issued` bills, ignoring
+  part payments and advances (production read ৳4.07 L with ৳4.03 L of it held as an advance — it is
+  **Net receivable** now, due − advance); **Conversion** divided this month's orders by this month's
+  quotes (replaced by **Target vs Achievement** for the FY and **Orders this month**); **Pipeline** counted
+  internally approved quotations (now IED's *awaiting order*); **Machines running** read op steps' machine
+  ids (now `machines.current_state`); **Work centres** read the retired `work_centres` table (now the
+  **shops**, a bench's machines counted for its shop); **Downtime** and the **alert feed** read the retired
+  shop-floor log (now open **maintenance requests** and the **audit trail**); the pipeline donut printed raw
+  status keys (now stages).
+- ⚠️ **Machines are NOT centre-filtered by CenterScope here**: every machine on production has
+  `center_id` NULL and the scope hides NULL rows once a centre is picked, so a Dhaka user saw none.
+  `DashboardMetrics::machines()` = the centre's machines **plus** the unassigned ones. (Admin → Machines
+  for a centre-fixed user has the same blind spot — not changed.)
+- `/dashboard` adds **Waiting for you** (`waitingFor()`: approvals, IED inbox, PCD Inbox, jobs to plan,
+  demands, MRs, notes, maintenance, challans to bill — each only for whose job it is), the **Job Flow**
+  strip and a **Business** card. ⚠️ **Money only for `view payments` / `view reports` / `view all
+  centres`** — a shop engineer's dashboard carries none, and the live page leaves Financial out for him.
+- ⚠️ **`/dashboard/live` needed no sign-in at all** while showing the receivables, quotations and client
+  names. It is `auth` + **`view live dashboard`** now (super-admin, management, shop-incharge, IED Staff,
+  Head Office hold it; **Executive Engineer (PCD) does not** — grant in Admin → Roles if wanted). Its
+  buttons in the layout sit in `LiveDashboardGate`. An office TV signs in once with "remember me".
+- `LiveDashboardService` caches 8 s **per centre AND per money visibility** (`live_dashboard.{id}` /
+  `.all`, plus `.nomoney`) — one key would show the first viewer's figures to the next.
+- Verified on a copy of production: 13 checks (stages, money gated, Dhaka sees 64 machines, guest → sign
+  in, shop engineer 403, management 200) and both pages looked at in a browser.
 
 ## ☠️ Nobody deletes a staff account that has worked (2026-10-06)
 
