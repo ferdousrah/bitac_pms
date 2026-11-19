@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Payment extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     /** Cash really arrived (so an applied advance is not counted twice). */
     public const CASH_KINDS = ['advance', 'against_bill', 'security_release'];

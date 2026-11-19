@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class WorkOrder extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'center_id', 'wo_number', 'job_number', 'rfq_id', 'quotation_id', 'customer_id', 'product_id',

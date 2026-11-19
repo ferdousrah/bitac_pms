@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Invoice extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'center_id', 'work_order_id', 'customer_id', 'delivery_order_id', 'invoice_number',

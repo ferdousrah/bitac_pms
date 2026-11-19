@@ -11,7 +11,7 @@ class Customer extends Authenticatable
     // for Mail/Resend notifications without the database-notifications half —
     // we already expose our own `notifications()` relation pointing at the
     // CustomerNotification model, which would collide with the full trait.
-    use RoutesNotifications;
+    use RoutesNotifications, \App\Traits\Audited;
 
     /*
      * ⚠️ A client is ONE record across BITAC (2026-10-26) — Railway works with

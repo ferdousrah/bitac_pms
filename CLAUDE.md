@@ -1982,6 +1982,49 @@ three windows meet exactly, with no gap or overlap (verified day by day across f
 - ⚠️ The unique on the settings table is now **`(center_id, document_type, level)`** (`qas_center_doc_level_unique`) — without the type, a work-order level 1 would collide with a quotation level 1 at the same centre. `center_id` stays leftmost so it still backs the centre foreign key. `ApprovalChainController::destroy` re-sequences **within one document type**, or deleting a quotation step would renumber the work-order chain.
 - The inbox Show page renders the chain with each step's state, badges the viewer's own row, and disables Accept/Reject with the reason when it is not their turn.
 
+## 🕵 The Audit Log records every change (2026-11-19)
+> Reported from production: *"audit log e kono data ashtesena"* — System → Audit Log showed three
+> `qc_passed` rows and nothing else.
+
+- ⚠️ **It was not a display bug — almost nothing wrote to it.** `AuditService::log()` had six callers
+  (QC pass / hold / NCR closed, the legacy shop-floor start / stop / downtime), and the page's own
+  filter offered Created / Updated / Deleted / Status Changed events that nothing ever wrote.
+- **`App\Traits\Audited`** on the records that matter — Rfq, Quotation, CostEstimate, WorkOrder,
+  DeliveryOrder, Invoice, Payment, GatePass, MaterialRequisition, MusakChallan, MoneyReceipt,
+  RfqLetter, OfficeNote, TaxRecord, QuotationApprovalSetting, GatePassApprover, User, Customer,
+  Center. Each create / real change / delete is a row: `created` · `updated` · `status_changed`
+  (any change touching `status`) · `deleted`, with the changed fields old → new in
+  `old_values` / `new_values` and a readable `new_values.message` ("Quotation #32 v1: status
+  approved → sent_to_customer"). The record's own number names it (`auditReference()`), the
+  record's own `center_id` is the row's centre.
+  - ⚠️ **Passwords and remember tokens are never recorded** — a password change reads `••••` →
+    `(changed)`. Timestamps alone are not a change (a `touch()` writes nothing).
+  - ⚠️ **Not written from the console** (migrations, seeders, tinker — a deploy must not write
+    thousands of rows as somebody) unless `AuditService::$recordInConsole` is set (tests), and **not
+    from the RFQ form's autosave** (`rfqs.autosave`, every 2.5 s).
+  - ⚠️ A query-builder `->where()->update()` fires no model event, so it is not audited — the
+    migrations' raw backfills, `syncInvoiceStatus`-style bulk writes. Use the model when it matters.
+  - A failed write is logged and swallowed: the audit trail must never break the act it records.
+- **`App\Listeners\RecordAuthEvent`** — `login`, `logout`, `login_failed`, staff and client portal.
+  ⚠️ A failed sign-in carries the account TRIED as the record (`model_id`), never as the person
+  (`user_id` NULL) — otherwise the log reads as though the officer did it.
+- **The page** (`AuditLogController`, `Admin/AuditLog/Index.tsx`): event and record filters built from
+  what is actually in the log, search over the description too (`CAST(new_values AS CHAR) LIKE`, for
+  MySQL's JSON and MariaDB's longtext alike), page links (50 a page — it had none), the description
+  wraps. ⚠️ **A client-portal row's `user_id` is a `customers` id** — reading `->user` named whichever
+  staff member has that id; it reads the client now ("… (client)").
+- ⚠️ **The IP was always Coolify's proxy (`10.0.1.x`).** `bootstrap/app.php` now `trustProxies` —
+  **private-network hops only**, so a request straight from the internet cannot pick its own IP.
+- ⚠️ **Found on the way: every listener in `app/Listeners` ran TWICE.** Laravel 11 discovers them
+  from the `handle()` type-hint, and `AppServiceProvider` registered them by hand as well — so each
+  new RFQ ran the auto-estimate and duplicate check twice and **sent every "New RFQ / Manual estimate
+  needed" notification twice** (visible on production: paired `rfq_automation_logs`, paired
+  notifications). The manual `Event::listen` lines are gone; `php artisan event:list` shows each once.
+  **Don't register a listener in app/Listeners by hand.**
+- Verified, 19 checks inside a rolled-back transaction: console silent, status change, ordinary
+  update, touch, password, create / delete, sign-in / out / failed, the real IP through a private
+  proxy and a forged one refused, the page's filters, client naming and search.
+
 ## ☠️ Nobody deletes a staff account that has worked (2026-10-06)
 
 > Reported from the live system: a shop engineer's **Profile Settings** offered **Delete Account** — "permanently delete your account and all of its data".

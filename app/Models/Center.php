@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Storage;
 
 class Center extends Model
 {
+    use \App\Traits\Audited;
+
     protected $fillable = [
         'name', 'code', 'address', 'phone', 'email', 'is_active',
         // BITAC's VAT registration — নিবন্ধিত ব্যক্তির বিআইএন on মূসক ৬.৩.

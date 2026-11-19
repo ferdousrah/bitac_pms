@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 
 class GatePass extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         // `origin` = the desk that raised it: ied | pcd.

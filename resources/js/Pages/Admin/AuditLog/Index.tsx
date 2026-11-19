@@ -1,5 +1,5 @@
 import AppLayout from '@/Layouts/AppLayout';
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 const eventBadgeClass: Record<string, string> = {
@@ -9,13 +9,23 @@ const eventBadgeClass: Record<string, string> = {
     status_changed: 'badge-amber',
     approved: 'badge-green',
     rejected: 'badge-red',
+    login: 'badge-purple',
+    logout: 'badge-slate',
+    login_failed: 'badge-red',
+    qc_passed: 'badge-green',
+    qc_hold: 'badge-amber',
 };
 
-export default function AuditLogIndex({ logs, filters }: any) {
+const eventLabel = (e: string) => e.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+
+export default function AuditLogIndex({ logs, filters, events = [], models = [] }: any) {
     const [search, setSearch] = useState(filters?.search ?? '');
     const [event, setEvent] = useState(filters?.event ?? '');
+    const [model, setModel] = useState(filters?.model ?? '');
 
-    const apply = () => router.get('/admin/audit-log', { search, event }, { preserveState: true });
+    const go = (next: Record<string, string>) =>
+        router.get('/admin/audit-log', { search, event, model, ...next }, { preserveState: true });
+    const apply = () => go({});
 
     const rows = logs.data ?? [];
 
@@ -45,19 +55,22 @@ export default function AuditLogIndex({ logs, filters }: any) {
                                 <label className="form-label">Event Type</label>
                                 <select
                                     value={event}
-                                    onChange={e => {
-                                        setEvent(e.target.value);
-                                        router.get('/admin/audit-log', { search, event: e.target.value }, { preserveState: true });
-                                    }}
+                                    onChange={e => { setEvent(e.target.value); go({ event: e.target.value }); }}
                                     className="form-select"
                                 >
                                     <option value="">All events</option>
-                                    <option value="created">Created</option>
-                                    <option value="updated">Updated</option>
-                                    <option value="deleted">Deleted</option>
-                                    <option value="status_changed">Status Changed</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="rejected">Rejected</option>
+                                    {events.map((ev: string) => <option key={ev} value={ev}>{eventLabel(ev)}</option>)}
+                                </select>
+                            </div>
+                            <div className="sm:w-48 form-group">
+                                <label className="form-label">Record</label>
+                                <select
+                                    value={model}
+                                    onChange={e => { setModel(e.target.value); go({ model: e.target.value }); }}
+                                    className="form-select"
+                                >
+                                    <option value="">All records</option>
+                                    {models.map((m: string) => <option key={m} value={m}>{m}</option>)}
                                 </select>
                             </div>
                             <button onClick={apply} className="btn-primary btn-sm">
@@ -77,7 +90,10 @@ export default function AuditLogIndex({ logs, filters }: any) {
                             </div>
                             <div>
                                 <h2 className="text-lg font-bold text-surface-900">Activity Log</h2>
-                                <p className="text-sm text-surface-500">System-wide audit trail</p>
+                                <p className="text-sm text-surface-500">
+                                    System-wide audit trail{logs?.total ? ` · ${Number(logs.total).toLocaleString('en-IN')} entries` : ''}
+                                    {logs?.last_page > 1 ? ` · page ${logs.current_page} of ${logs.last_page}` : ''}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -118,11 +134,11 @@ export default function AuditLogIndex({ logs, filters }: any) {
                                             </td>
                                             <td>
                                                 <span className={`badge ${eventBadgeClass[log.event] ?? 'badge-slate'}`}>
-                                                    {log.event}
+                                                    {eventLabel(log.event)}
                                                 </span>
                                             </td>
                                             <td className="text-xs text-surface-500">{log.auditable_type?.split('\\').pop()}</td>
-                                            <td className="text-surface-700 max-w-xs truncate">{log.description}</td>
+                                            <td className="text-surface-700 text-sm max-w-xl whitespace-normal break-words">{log.description}</td>
                                             <td className="text-xs text-surface-400 font-mono">{log.ip_address}</td>
                                         </tr>
                                     ))}
@@ -146,7 +162,7 @@ export default function AuditLogIndex({ logs, filters }: any) {
                                 <div key={log.id} className="rounded-xl border border-surface-200 p-4 space-y-2">
                                     <div className="flex items-center justify-between">
                                         <span className={`badge ${eventBadgeClass[log.event] ?? 'badge-slate'}`}>
-                                            {log.event}
+                                            {eventLabel(log.event)}
                                         </span>
                                         <span className="text-xs text-surface-400">{log.created_at}</span>
                                     </div>
@@ -168,6 +184,30 @@ export default function AuditLogIndex({ logs, filters }: any) {
                         )}
                     </div>
                 </div>
+
+                {logs?.links && logs.last_page > 1 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        {logs.links.map((link: any, i: number) => (
+                            link.url ? (
+                                <Link
+                                    key={i}
+                                    href={link.url}
+                                    preserveScroll
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${link.active
+                                        ? 'bg-brand-500 text-white border-brand-500'
+                                        : 'bg-white text-surface-600 border-surface-200 hover:bg-surface-50'}`}
+                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                />
+                            ) : (
+                                <span
+                                    key={i}
+                                    className="px-3 py-1.5 text-xs text-surface-300"
+                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                />
+                            )
+                        ))}
+                    </div>
+                )}
             </div>
         </AppLayout>
     );

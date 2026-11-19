@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class RfqLetter extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'center_id', 'rfq_id', 'customer_id',

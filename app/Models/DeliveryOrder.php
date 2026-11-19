@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class DeliveryOrder extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     /** A delivery in any of these has goods committed to it (not free to send again). */
     public const COMMITTED = ['scheduled', 'dispatched', 'delivered'];

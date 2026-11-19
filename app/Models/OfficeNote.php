@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class OfficeNote extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'center_id', 'section_id', 'department_name', 'note_no', 'note_date', 'subject', 'body',

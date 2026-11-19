@@ -17,7 +17,7 @@ class MaterialRequisition extends Model
 {
     // ⚠️ Centre-scoped since 2026-10-26 — it had no centre at all, so every
     // centre would have seen every centre's requisitions.
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     /** Status → label, in the order a requisition moves through them. */
     public const STATUSES = [

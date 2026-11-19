@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Quotation extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'center_id', 'rfq_id', 'customer_id', 'work_order_id', 'job_category_id', 'created_by', 'version',

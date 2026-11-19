@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class MoneyReceipt extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     public const METHODS = ['cash' => 'Cash', 'cheque' => 'Cheque'];
 

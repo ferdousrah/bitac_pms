@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class MusakChallan extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'center_id', 'invoice_id', 'delivery_order_id', 'work_order_id', 'customer_id',

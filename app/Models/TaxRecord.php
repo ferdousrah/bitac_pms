@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class TaxRecord extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     /** kind => what the screens call it. */
     public const KINDS = [

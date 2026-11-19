@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class GatePassApprover extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     public const DESKS = ['ied' => 'IED', 'pcd' => 'PCD'];
 

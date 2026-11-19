@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class QuotationApprovalSetting extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     /** Quotations and cost estimates share `quotation`; work orders have their own. */
     public const DOC_QUOTATION  = 'quotation';

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CostEstimate extends Model
 {
-    use HasCenter;
+    use HasCenter, \App\Traits\Audited;
 
     protected $fillable = [
         'estimate_no', 'rfq_id', 'rfq_item_id', 'rfq_item_part_id', 'center_id', 'quotation_id', 'customer_id',

@@ -29,9 +29,10 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
-        // RFQ Automation event listeners
-        Event::listen(\App\Events\RfqCreated::class, \App\Listeners\TriggerAutoEstimation::class);
-        Event::listen(\App\Events\RfqCreated::class, \App\Listeners\DetectDuplicateRfq::class);
+        // ⚠️ Listeners in app/Listeners are DISCOVERED from their handle()
+        // type-hint (RfqCreated → TriggerAutoEstimation / DetectDuplicateRfq,
+        // Login|Logout|Failed → RecordAuthEvent). Registering them here as well
+        // ran each one twice — every new RFQ sent every notification twice.
 
         // Super-admin bypasses all permission checks
         Gate::before(function ($user, $ability) {

@@ -11,6 +11,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // On Coolify every request arrives from its proxy (10.0.1.x), so
+        // request()->ip() — the audit log's IP — was the proxy's, never the
+        // user's. Trust the forwarded address, but only from a private-network
+        // hop: a request straight from the internet cannot pick its own IP.
+        $middleware->trustProxies(at: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1']);
+
         $middleware->web(append: [
             // A deactivated (or handed-over) staff account is signed out at once.
             \App\Http\Middleware\SignOutInactiveStaff::class,
